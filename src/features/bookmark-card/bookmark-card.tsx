@@ -42,17 +42,11 @@ export function BookmarkCard({ folder, nested = false }: BookmarkCardProps) {
     [adapter]
   )
 
-  // Get fallback URL (Google S2) when using Chrome adapter
   const getFallbackFaviconUrl = React.useCallback(
     (pageUrl: string) => {
-      try {
-        const domain = new URL(pageUrl).hostname
-        return `https://www.google.com/s2/favicons?domain=${domain}&sz=32`
-      } catch {
-        return undefined
-      }
+      return adapter?.favicon.getFallbackUrl?.(pageUrl)
     },
-    []
+    [adapter]
   )
 
   return (

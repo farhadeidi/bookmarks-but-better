@@ -35,6 +35,7 @@ export interface StorageAdapter {
 
 export interface FaviconProvider {
   getUrl(pageUrl: string): string
+  getFallbackUrl?(pageUrl: string): string
   isAvailable(): boolean
 }
 

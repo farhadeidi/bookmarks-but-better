@@ -71,8 +71,6 @@ export function BookmarkItem({
           render={
             <a
               href={bookmark.url}
-              target="_blank"
-              rel="noopener noreferrer"
               className="flex items-center justify-center rounded-lg p-2 transition-colors hover:bg-accent"
             />
           }

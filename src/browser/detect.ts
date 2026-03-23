@@ -6,7 +6,7 @@ import { StandaloneBookmarkAdapter } from "./standalone/bookmarks"
 import { StandaloneStorageAdapter } from "./standalone/storage"
 import { StandaloneFaviconAdapter } from "./standalone/favicon"
 
-const ADAPTER_PREF_KEY = "adapter-mode"
+const ADAPTER_PREF_KEY = "adapterMode"
 
 function isChromeExtension(): boolean {
   try {

@@ -27,6 +27,8 @@ export function SettingsDialog() {
   const tree = useBookmarkStore((s) => s.tree)
   const adapter = useBookmarkStore((s) => s.adapter)
   const refresh = useBookmarkStore((s) => s.refresh)
+  const adapterMode = usePreferencesStore((s) => s.adapterMode)
+  const setAdapterMode = usePreferencesStore((s) => s.setAdapterMode)
   const { theme, setTheme } = useTheme()
 
   const handleExport = () => {
@@ -110,6 +112,28 @@ export function SettingsDialog() {
               checked={nestedFolders}
               onCheckedChange={(checked) => setNestedFolders(checked)}
             />
+          </div>
+
+          {/* Adapter mode */}
+          <div className="flex flex-col gap-2">
+            <Label className="text-sm font-medium">Bookmark Source</Label>
+            <div className="flex gap-2">
+              {(["browser", "standalone"] as const).map((mode) => (
+                <Button
+                  key={mode}
+                  variant={adapterMode === mode ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setAdapterMode(mode)}
+                  className="capitalize"
+                >
+                  {mode === "browser" ? "Browser" : "Standalone"}
+                </Button>
+              ))}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Use browser bookmarks or manage an independent collection.
+              Requires a page reload to take effect.
+            </p>
           </div>
 
           <div className="flex flex-col gap-2">
