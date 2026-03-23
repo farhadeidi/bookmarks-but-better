@@ -1,8 +1,8 @@
-# Pure Bookmarks - Design Specification
+# Bookmarks - But Better - Design Specification
 
 ## Overview
 
-Pure Bookmarks is a Chrome extension that replaces the new tab page with a clean bookmarks dashboard. It reads the user's browser bookmarks and displays them in a masonry grid of folder cards, each with its own layout mode. It also supports a standalone mode backed by IndexedDB, with import/export via the standard Netscape Bookmark HTML format.
+Bookmarks - But Better is a Chrome extension that replaces the new tab page with a clean bookmarks dashboard. It reads the user's browser bookmarks and displays them in a masonry grid of folder cards, each with its own layout mode. It also supports a standalone mode backed by IndexedDB, with import/export via the standard Netscape Bookmark HTML format.
 
 ## Architecture
 
@@ -70,7 +70,7 @@ public/
 └── vite.svg
 
 dev/
-└── seed-bookmarks.json         # Sample bookmark data for dev/standalone mode
+└── seed-bookmarks.json         # Sample bookmark data; auto-loaded into IndexedDB on first dev launch if empty
 ```
 
 ## Browser Adapter Layer
@@ -144,10 +144,11 @@ Pluggable chain of providers with fallback:
 - `chrome-favicon.ts` — returns `chrome://favicon/size/16@2x/${url}`. Available only in Chrome extension context.
 - `google-favicon.ts` — returns `https://www.google.com/s2/favicons?domain=${domain}&sz=32`. Always available.
 
-Resolution:
-- Chrome adapter: try Chrome provider, on image load error fall back to Google
-- Standalone adapter: uses Google provider directly
-- Final fallback in the UI: generic globe icon or first letter of the domain
+Resolution happens at the **component level**, not in the adapter:
+- Chrome adapter: provides the Chrome favicon URL as primary
+- Standalone adapter: provides Google S2 URL as primary
+- The `bookmark-item` component renders an `<img>` with the primary URL and handles `onError` to try the next provider in the chain
+- Final fallback: generic globe icon or first letter of the domain as a placeholder
 
 Each provider is independently usable and testable. New providers (DuckDuckGo, self-hosted) can be added by implementing `FaviconProvider`.
 
@@ -170,12 +171,13 @@ Owns the bookmark tree data.
 - `tree: BookmarkNode[]` — full tree from the active adapter
 - `rootFolderId: string | null` — user's selected root folder
 - `rootFolder: BookmarkNode | null` — derived subtree from rootFolderId
-- `loadTree()` — fetches from adapter, subscribes to change events (onChanged, onCreated, onRemoved, onMoved)
-- `refresh()` — re-fetches after mutations
+- `loadTree()` — fetches from adapter. In Chrome mode, subscribes to browser bookmark events (onChanged, onCreated, onRemoved, onMoved) to detect external changes. In standalone mode, no event subscription is needed — the store is the sole mutator, so `refresh()` after each mutation is sufficient.
+- `refresh()` — re-fetches the full tree from the adapter
 - `createBookmark(parentId, title, url)` — calls adapter, then refreshes
 - `updateBookmark(id, changes)` — calls adapter, then refreshes
 - `deleteBookmark(id)` — calls adapter.remove(), then refreshes
 - `deleteFolder(id)` — calls adapter.removeTree(), then refreshes
+- `rootFolder` is a derived value: computed from `tree` and `rootFolderId` inside the store using Zustand's selector pattern, not manually kept in sync
 
 ### `preferences-store.ts`
 
@@ -187,6 +189,8 @@ User settings, persisted via the StorageAdapter.
 - `setCardLayout(folderId, layout)` — updates and persists
 - `setNestedFolders(value)` — updates and persists
 - Hydrates from storage on init, writes back on every change
+
+Note: theme is not managed by this store. Theming is delegated to the custom `ThemeProvider` (in `src/components/theme-provider.tsx`), which handles its own persistence via `localStorage` and exposes a `useTheme()` hook. The theme picker in the settings dialog calls `setTheme()` from that hook directly.
 
 ### `ui-store.ts`
 
@@ -210,7 +214,7 @@ The masonry page.
 - Reads `rootFolder` from bookmark store, `nestedFolders` from preferences store
 - **Flat mode:** collects all folders in the tree at any depth into a flat list, renders each as a `BookmarkCard` in the masonry grid
 - **Nested mode:** renders only the direct child folders of the root as `BookmarkCard` components
-- Uses `@masonry-grid/react` with responsive column breakpoints
+- Uses `@masonry-grid/react` (v1.1.1, ~1.4KB, CSS Grid-based, by dangreen) with responsive column breakpoints. Fallback: `react-responsive-masonry` if issues arise.
 
 ### `bookmark-card/`
 
@@ -268,11 +272,12 @@ Edit dialog (modal).
 
 - `manifest_version: 3`
 - `chrome_url_overrides: { newtab: "index.html" }` — replaces the new tab page
-- `permissions: ["bookmarks", "storage", "favicon"]`
+- `permissions: ["bookmarks", "storage"]` (Chrome's `chrome://favicon/` URLs are accessible to extensions with the `"favicon"` permission in MV3 — verify exact permission name during implementation, as it may require `"favicon"` or just work via URL pattern)
 - Standard metadata: name, description, version, icons (16, 48, 128)
 
 ### Build & Dev Workflow
 
+- Package manager: **bun**
 - `bun dev` — runs the app in the browser, standalone adapter with seed data, fast iteration
 - `bun run build` — produces a loadable Chrome extension in `dist/` with manifest and icons
 - Vite copies `public/manifest.json` and icons to `dist/` automatically
