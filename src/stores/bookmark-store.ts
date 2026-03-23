@@ -11,7 +11,7 @@ interface BookmarkState {
   rootFolder: BookmarkNode | null
 
   // Actions
-  init(adapter: BrowserAdapter): Promise<void>
+  init(adapter: BrowserAdapter): Promise<void | (() => void)>
   setRootFolderId(id: string | null): void
   refresh(): Promise<void>
   createBookmark(parentId: string, title: string, url: string): Promise<void>
