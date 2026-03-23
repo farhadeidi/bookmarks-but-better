@@ -250,18 +250,22 @@ export class StandaloneBookmarkAdapter implements BookmarkAdapter {
   }
 
   // Standalone mode: no external events. The store calls refresh() after mutations.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   onChanged(_callback: () => void): () => void {
     return () => {}
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   onCreated(_callback: () => void): () => void {
     return () => {}
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   onRemoved(_callback: () => void): () => void {
     return () => {}
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   onMoved(_callback: () => void): () => void {
     return () => {}
   }
