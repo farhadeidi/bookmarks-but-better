@@ -1,0 +1,89 @@
+[
+  {
+    "id": "0",
+    "title": "",
+    "children": [
+      {
+        "id": "1",
+        "title": "Bookmarks Bar",
+        "parentId": "0",
+        "children": [
+          {
+            "id": "10",
+            "title": "Quick Access",
+            "parentId": "1",
+            "children": [
+              { "id": "100", "title": "YouTube", "url": "https://youtube.com", "parentId": "10" },
+              { "id": "101", "title": "GitHub", "url": "https://github.com", "parentId": "10" },
+              { "id": "102", "title": "Twitter", "url": "https://x.com", "parentId": "10" },
+              { "id": "103", "title": "LinkedIn", "url": "https://linkedin.com", "parentId": "10" },
+              { "id": "104", "title": "Reddit", "url": "https://reddit.com", "parentId": "10" },
+              { "id": "105", "title": "Stack Overflow", "url": "https://stackoverflow.com", "parentId": "10" }
+            ]
+          },
+          {
+            "id": "11",
+            "title": "Development",
+            "parentId": "1",
+            "children": [
+              { "id": "110", "title": "MDN Web Docs", "url": "https://developer.mozilla.org", "parentId": "11" },
+              { "id": "111", "title": "TypeScript Docs", "url": "https://typescriptlang.org/docs", "parentId": "11" },
+              { "id": "112", "title": "React Documentation", "url": "https://react.dev", "parentId": "11" },
+              { "id": "113", "title": "Tailwind CSS", "url": "https://tailwindcss.com/docs", "parentId": "11" },
+              { "id": "114", "title": "Vite", "url": "https://vite.dev", "parentId": "11" },
+              {
+                "id": "115",
+                "title": "APIs",
+                "parentId": "11",
+                "children": [
+                  { "id": "1150", "title": "JSONPlaceholder", "url": "https://jsonplaceholder.typicode.com", "parentId": "115" },
+                  { "id": "1151", "title": "DummyJSON", "url": "https://dummyjson.com", "parentId": "115" }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "12",
+            "title": "AI",
+            "parentId": "1",
+            "children": [
+              { "id": "120", "title": "ChatGPT", "url": "https://chat.openai.com", "parentId": "12" },
+              { "id": "121", "title": "Claude", "url": "https://claude.ai", "parentId": "12" },
+              { "id": "122", "title": "Google Gemini", "url": "https://gemini.google.com", "parentId": "12" },
+              { "id": "123", "title": "Perplexity", "url": "https://perplexity.ai", "parentId": "12" }
+            ]
+          },
+          {
+            "id": "13",
+            "title": "Design",
+            "parentId": "1",
+            "children": [
+              { "id": "130", "title": "Figma", "url": "https://figma.com", "parentId": "13" },
+              { "id": "131", "title": "Dribbble", "url": "https://dribbble.com", "parentId": "13" },
+              { "id": "132", "title": "Mobbin", "url": "https://mobbin.com", "parentId": "13" }
+            ]
+          },
+          {
+            "id": "14",
+            "title": "Productivity",
+            "parentId": "1",
+            "children": [
+              { "id": "140", "title": "Gmail", "url": "https://mail.google.com", "parentId": "14" },
+              { "id": "141", "title": "Google Calendar", "url": "https://calendar.google.com", "parentId": "14" },
+              { "id": "142", "title": "Notion", "url": "https://notion.so", "parentId": "14" },
+              { "id": "143", "title": "Linear", "url": "https://linear.app", "parentId": "14" }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "2",
+        "title": "Other Bookmarks",
+        "parentId": "0",
+        "children": [
+          { "id": "200", "title": "Wikipedia", "url": "https://wikipedia.org", "parentId": "2" }
+        ]
+      }
+    ]
+  }
+]

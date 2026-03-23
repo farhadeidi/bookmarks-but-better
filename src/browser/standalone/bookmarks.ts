@@ -1,4 +1,5 @@
 import type { BookmarkAdapter, BookmarkNode } from "../types"
+import seedData from "../../../dev/seed-bookmarks.json"
 
 const DB_NAME = "bookmarks-but-better"
 const DB_VERSION = 1
@@ -130,16 +131,44 @@ export class StandaloneBookmarkAdapter implements BookmarkAdapter {
     const all = await getAllBookmarks(db)
 
     if (all.length === 0) {
-      const root: StoredBookmark = {
-        id: "0",
-        title: "",
-        dateAdded: Date.now(),
-      }
-      await putBookmark(db, root)
-      return buildTree([root])
+      await this.seedFromDevData(db)
+      const seeded = await getAllBookmarks(db)
+      return buildTree(seeded)
     }
 
     return buildTree(all)
+  }
+
+  private async seedFromDevData(db: IDBDatabase): Promise<void> {
+    function flattenNodes(
+      nodes: BookmarkNode[],
+      result: StoredBookmark[] = []
+    ): StoredBookmark[] {
+      for (const node of nodes) {
+        result.push({
+          id: node.id,
+          title: node.title,
+          url: node.url,
+          parentId: node.parentId,
+          dateAdded: node.dateAdded ?? Date.now(),
+        })
+        if (node.children) {
+          flattenNodes(node.children, result)
+        }
+      }
+      return result
+    }
+
+    const flat = flattenNodes(seedData as BookmarkNode[])
+    const tx = db.transaction(STORE_NAME, "readwrite")
+    const store = tx.objectStore(STORE_NAME)
+    for (const bookmark of flat) {
+      store.put(bookmark)
+    }
+    await new Promise<void>((resolve, reject) => {
+      tx.oncomplete = () => resolve()
+      tx.onerror = () => reject(tx.error)
+    })
   }
 
   async getSubTree(id: string): Promise<BookmarkNode[]> {
