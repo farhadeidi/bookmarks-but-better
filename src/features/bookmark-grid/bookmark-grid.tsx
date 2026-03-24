@@ -57,7 +57,7 @@ export function BookmarkGrid() {
 
   return (
     <div
-      className="columns-1 gap-4 sm:columns-2 md:columns-3 lg:columns-4 xl:columns-5"
+      className="columns-1 gap-4 sm:columns-2 md:columns-3 lg:columns-4"
       style={{ columnFill: "balance" }}
     >
       {folders.map((folder) => (
