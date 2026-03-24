@@ -5,6 +5,11 @@ import {
   HoverCardTrigger,
   HoverCardContent,
 } from "@/components/ui/hover-card"
+import {
+  Tooltip,
+  TooltipTrigger,
+  TooltipContent,
+} from "@/components/ui/tooltip"
 import { Button } from "@/components/ui/button"
 import { HugeiconsIcon } from "@hugeicons/react"
 import {
@@ -83,7 +88,7 @@ export function BookmarkItem({
             size={32}
           />
         </HoverCardTrigger>
-        <HoverCardContent className="w-64">
+        <HoverCardContent side="right" className="w-64">
           <HoverCardBody
             bookmark={bookmark}
             onEdit={handleEdit}
@@ -117,7 +122,7 @@ export function BookmarkItem({
         />
         <span className="truncate text-sm">{bookmark.title}</span>
       </HoverCardTrigger>
-      <HoverCardContent className="w-72">
+      <HoverCardContent side="right" className="w-72">
         <HoverCardBody
           bookmark={bookmark}
           onEdit={handleEdit}
@@ -149,15 +154,24 @@ function HoverCardBody({
         </div>
       )}
       <div className="flex items-center gap-1 pt-1">
-        <Button variant="ghost" size="icon-sm" onClick={onEdit}>
-          <HugeiconsIcon icon={PencilEdit01Icon} size={14} />
-        </Button>
-        <Button variant="ghost" size="icon-sm" onClick={onCopyUrl}>
-          <HugeiconsIcon icon={Copy01Icon} size={14} />
-        </Button>
-        <Button variant="ghost" size="icon-sm" onClick={onDelete}>
-          <HugeiconsIcon icon={Delete02Icon} size={14} />
-        </Button>
+        <Tooltip>
+          <TooltipTrigger render={<Button variant="ghost" size="icon-sm" onClick={onEdit} />}>
+            <HugeiconsIcon icon={PencilEdit01Icon} size={14} />
+          </TooltipTrigger>
+          <TooltipContent>Edit</TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger render={<Button variant="ghost" size="icon-sm" onClick={onCopyUrl} />}>
+            <HugeiconsIcon icon={Copy01Icon} size={14} />
+          </TooltipTrigger>
+          <TooltipContent>Copy URL</TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger render={<Button variant="ghost" size="icon-sm" onClick={onDelete} />}>
+            <HugeiconsIcon icon={Delete02Icon} size={14} />
+          </TooltipTrigger>
+          <TooltipContent>Delete</TooltipContent>
+        </Tooltip>
       </div>
     </div>
   )

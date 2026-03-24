@@ -1,6 +1,7 @@
 import * as React from "react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
+import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
 import { HugeiconsIcon } from "@hugeicons/react"
 import {
   GridViewIcon,
@@ -66,17 +67,15 @@ export function BookmarkCard({ folder, nested = false }: BookmarkCardProps) {
         >
           {folder.title}
         </h3>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          onClick={toggleLayout}
-          aria-label={`Switch to ${layout === "list" ? "grid" : "list"} view`}
-        >
-          <HugeiconsIcon
-            icon={layout === "list" ? GridViewIcon : Menu02Icon}
-            size={14}
-          />
-        </Button>
+        <Tooltip>
+          <TooltipTrigger render={<Button variant="ghost" size="icon-sm" onClick={toggleLayout} aria-label={`Switch to ${layout === "list" ? "grid" : "list"} view`} />}>
+            <HugeiconsIcon
+              icon={layout === "list" ? GridViewIcon : Menu02Icon}
+              size={14}
+            />
+          </TooltipTrigger>
+          <TooltipContent>{layout === "list" ? "Grid view" : "List view"}</TooltipContent>
+        </Tooltip>
       </div>
 
       {/* Bookmarks */}

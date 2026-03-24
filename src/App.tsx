@@ -8,6 +8,7 @@ import { SettingsDialog } from "@/features/settings"
 import { BookmarkEditorDialog } from "@/features/bookmark-editor"
 import { DeleteConfirmDialog } from "@/features/delete-confirm"
 import { Button } from "@/components/ui/button"
+import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
 import { HugeiconsIcon } from "@hugeicons/react"
 import { Settings02Icon } from "@hugeicons/core-free-icons"
 
@@ -29,14 +30,12 @@ export function App() {
     <div className="min-h-svh bg-background text-foreground">
       {/* Header */}
       <header className="sticky top-0 z-10 flex items-center justify-end p-4">
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={openSettings}
-          aria-label="Settings"
-        >
-          <HugeiconsIcon icon={Settings02Icon} size={18} />
-        </Button>
+        <Tooltip>
+          <TooltipTrigger render={<Button variant="ghost" size="icon" onClick={openSettings} aria-label="Settings" />}>
+            <HugeiconsIcon icon={Settings02Icon} size={18} />
+          </TooltipTrigger>
+          <TooltipContent>Settings</TooltipContent>
+        </Tooltip>
       </header>
 
       {/* Main content */}
