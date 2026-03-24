@@ -67,7 +67,9 @@ The simpler approach: use the existing `StorageAdapter` (which is per-device in 
 
 **Mode toggle:** Three-option segmented control — Light / Dark / System. Selecting one applies it live.
 
-**Recommended badge:** A small "Recommended" pill/badge on the Default theme swatch, and the Dark mode option is pre-selected as the default. The subtext can mention: "We recommend Default theme with Dark mode."
+**Recommended badge:** A small "Recommended" pill/badge on the Default theme swatch. The Dark mode option is pre-selected (overriding the system default of "system"). The subtext can mention: "We recommend Default theme with Dark mode."
+
+**Note:** Since this is first-run, there are no existing user preferences. The wizard intentionally defaults to Dark mode rather than inheriting the ThemeProvider's "system" default.
 
 ### Step 3: Done
 
@@ -75,11 +77,17 @@ The simpler approach: use the existing `StorageAdapter` (which is per-device in 
 - Subtext: "Your new tab is ready. You can always change these in settings."
 - "Start Browsing" button
 
-**On completion:** Write all selected preferences to the Zustand stores (which persist via the adapter), set `onboardingCompleted: true` via the storage adapter, and close the wizard.
+**On completion:** Persist each wizard output to its correct target:
+- Root folder → `bookmark-store.setRootFolderId()` (persists via adapter storage)
+- Color theme → `preferences-store.setColorTheme()` (persists via adapter storage)
+- Light/dark/system mode → `ThemeProvider.setTheme()` (persists via `localStorage`)
+- Onboarding flag → `storage.set("onboardingCompleted", true)` via the adapter
 
-### Shared Component Extraction: `FolderTreePicker`
+Then close the wizard.
 
-The current `RootFolderPicker` in `src/features/settings/root-folder-picker.tsx` uses a native `<select>` element with `collectFolderPaths` to build a flat list of folders with breadcrumb labels. This same component is reused in the wizard. No extraction needed — import it directly.
+### Shared Component: `RootFolderPicker`
+
+The existing `RootFolderPicker` in `src/features/settings/root-folder-picker.tsx` uses a native `<select>` element with `collectFolderPaths` to build a flat list of folders with breadcrumb labels. The wizard imports this component directly — no extraction needed.
 
 If the wizard needs a different visual treatment (e.g., styled select instead of native), create a wrapper or pass styling props. But the underlying data logic (`collectFolderPaths`) stays shared.
 
