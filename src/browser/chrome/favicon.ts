@@ -1,16 +1,13 @@
 import type { FaviconProvider } from "../types"
+import { GoogleFaviconV2Provider } from "../favicon/google-favicon-v2"
 import { ChromeFaviconProvider } from "../favicon/chrome-favicon"
-import { GoogleFaviconProvider } from "../favicon/google-favicon"
 
+const googleV2 = new GoogleFaviconV2Provider()
 const chromeFavicon = new ChromeFaviconProvider()
-const googleFavicon = new GoogleFaviconProvider()
 
 export class ChromeFaviconAdapter implements FaviconProvider {
   getUrl(pageUrl: string): string {
-    if (chromeFavicon.isAvailable()) {
-      return chromeFavicon.getUrl(pageUrl)
-    }
-    return googleFavicon.getUrl(pageUrl)
+    return googleV2.getUrl(pageUrl)
   }
 
   isAvailable(): boolean {
@@ -18,6 +15,9 @@ export class ChromeFaviconAdapter implements FaviconProvider {
   }
 
   getFallbackUrl(pageUrl: string): string {
-    return googleFavicon.getUrl(pageUrl)
+    if (chromeFavicon.isAvailable()) {
+      return chromeFavicon.getUrl(pageUrl)
+    }
+    return ""
   }
 }
