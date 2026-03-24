@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Bookmarks - But Better",
-  "description": "A clean bookmarks dashboard for your new tab page",
+  "description": "A clean, beautiful bookmarks dashboard for your new tab with themes, dark mode, and full bookmark management.",
   "version": "2.0.0",
   "chrome_url_overrides": {
     "newtab": "index.html"
