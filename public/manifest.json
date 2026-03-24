@@ -2,14 +2,15 @@
   "manifest_version": 3,
   "name": "Bookmarks - But Better",
   "description": "A clean bookmarks dashboard for your new tab page",
-  "version": "0.0.1",
+  "version": "2.0.0",
   "chrome_url_overrides": {
     "newtab": "index.html"
   },
   "permissions": [
     "bookmarks",
     "storage",
-    "favicon"
+    "favicon",
+    "tabs"
   ],
   "icons": {
     "16": "icons/icon-16.png",

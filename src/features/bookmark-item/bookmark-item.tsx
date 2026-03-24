@@ -16,9 +16,11 @@ import {
   PencilEdit01Icon,
   Copy01Icon,
   Delete02Icon,
+  ArrowUpRight01Icon,
 } from "@hugeicons/core-free-icons"
 import type { BookmarkNode } from "@/browser"
 import { useUIStore } from "@/stores/ui-store"
+import { useBookmarkStore } from "@/stores/bookmark-store"
 
 interface BookmarkItemProps {
   bookmark: BookmarkNode
@@ -35,6 +37,7 @@ export function BookmarkItem({
 }: BookmarkItemProps) {
   const openEditor = useUIStore((s) => s.openEditor)
   const openDeleteConfirm = useUIStore((s) => s.openDeleteConfirm)
+  const adapter = useBookmarkStore((s) => s.adapter)
 
   const handleCopyUrl = React.useCallback(
     (e: React.MouseEvent) => {
@@ -69,6 +72,15 @@ export function BookmarkItem({
     [bookmark, openDeleteConfirm]
   )
 
+  const handleOpenInManager = React.useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault()
+      e.stopPropagation()
+      adapter?.bookmarks.openInManager(bookmark.id)
+    },
+    [bookmark.id, adapter]
+  )
+
   if (layout === "grid") {
     return (
       <HoverCard>
@@ -94,6 +106,7 @@ export function BookmarkItem({
             onEdit={handleEdit}
             onCopyUrl={handleCopyUrl}
             onDelete={handleDelete}
+            onOpenInManager={handleOpenInManager}
           />
         </HoverCardContent>
       </HoverCard>
@@ -128,6 +141,7 @@ export function BookmarkItem({
           onEdit={handleEdit}
           onCopyUrl={handleCopyUrl}
           onDelete={handleDelete}
+          onOpenInManager={handleOpenInManager}
         />
       </HoverCardContent>
     </HoverCard>
@@ -139,11 +153,13 @@ function HoverCardBody({
   onEdit,
   onCopyUrl,
   onDelete,
+  onOpenInManager,
 }: {
   bookmark: BookmarkNode
   onEdit: (e: React.MouseEvent) => void
   onCopyUrl: (e: React.MouseEvent) => void
   onDelete: (e: React.MouseEvent) => void
+  onOpenInManager: (e: React.MouseEvent) => void
 }) {
   return (
     <div className="flex flex-col gap-2">
@@ -171,6 +187,12 @@ function HoverCardBody({
             <HugeiconsIcon icon={Delete02Icon} size={14} />
           </TooltipTrigger>
           <TooltipContent>Delete</TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger render={<Button variant="ghost" size="icon-sm" onClick={onOpenInManager} />}>
+            <HugeiconsIcon icon={ArrowUpRight01Icon} size={14} />
+          </TooltipTrigger>
+          <TooltipContent>Show in bookmark manager</TooltipContent>
         </Tooltip>
       </div>
     </div>

@@ -25,6 +25,7 @@ export interface BookmarkAdapter {
   onCreated(callback: () => void): () => void
   onRemoved(callback: () => void): () => void
   onMoved(callback: () => void): () => void
+  openInManager(id: string): Promise<void>
 }
 
 export interface StorageAdapter {

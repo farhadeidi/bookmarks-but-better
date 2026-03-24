@@ -66,4 +66,8 @@ export class ChromeBookmarkAdapter implements BookmarkAdapter {
     chrome.bookmarks.onMoved.addListener(callback)
     return () => chrome.bookmarks.onMoved.removeListener(callback)
   }
+
+  async openInManager(id: string): Promise<void> {
+    await chrome.tabs.create({ url: `chrome://bookmarks/?id=${id}` })
+  }
 }

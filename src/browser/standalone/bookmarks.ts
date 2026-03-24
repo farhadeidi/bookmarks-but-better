@@ -269,4 +269,8 @@ export class StandaloneBookmarkAdapter implements BookmarkAdapter {
   onMoved(_callback: () => void): () => void {
     return () => {}
   }
+
+  async openInManager(): Promise<void> {
+    // No-op in standalone mode — no Chrome bookmarks manager available
+  }
 }
