@@ -158,7 +158,7 @@ export class StandaloneBookmarkAdapter implements BookmarkAdapter {
       return result
     }
 
-    const { default: seedData } = await import("../../../dev/seed-bookmarks.json")
+    const { default: seedData } = await import("@/dev/seed-bookmarks.json")
     const flat = flattenNodes(seedData as BookmarkNode[])
     const tx = db.transaction(STORE_NAME, "readwrite")
     const store = tx.objectStore(STORE_NAME)
