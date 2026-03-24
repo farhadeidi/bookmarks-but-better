@@ -1,6 +1,13 @@
 import * as React from "react"
 import { useBookmarkStore } from "@/stores/bookmark-store"
 import type { BookmarkNode } from "@/browser"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 
 interface RootFolderPickerProps {
   value: string | null
@@ -32,6 +39,8 @@ function collectFolderPaths(
   return result
 }
 
+const ROOT_VALUE = "__root__"
+
 export function RootFolderPicker({ value, onChange }: RootFolderPickerProps) {
   const tree = useBookmarkStore((s) => s.tree)
 
@@ -46,18 +55,24 @@ export function RootFolderPicker({ value, onChange }: RootFolderPickerProps) {
   return (
     <div className="flex flex-col gap-2">
       <label className="text-sm font-medium">Root Folder</label>
-      <select
-        className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
-        value={value ?? ""}
-        onChange={(e) => onChange(e.target.value || null)}
+      <Select
+        value={value ?? ROOT_VALUE}
+        onValueChange={(val) => onChange(val === ROOT_VALUE ? null : val)}
       >
-        <option value="">Browser Root (all bookmarks)</option>
-        {folders.map((f) => (
-          <option key={f.id} value={f.id}>
-            {f.label}
-          </option>
-        ))}
-      </select>
+        <SelectTrigger className="w-full">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value={ROOT_VALUE}>
+            Browser Root (all bookmarks)
+          </SelectItem>
+          {folders.map((f) => (
+            <SelectItem key={f.id} value={f.id}>
+              {f.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
       <p className="text-xs text-muted-foreground">
         Choose which folder to display as the root of your bookmarks.
       </p>
