@@ -47,10 +47,10 @@ export function Favicon({
     return (
       <span
         className={cn(
-          "inline-flex items-center justify-center rounded-md bg-muted text-xs font-medium text-muted-foreground",
+          "inline-flex shrink-0 items-center justify-center rounded-md bg-muted text-xs font-medium text-muted-foreground",
           className
         )}
-        style={{ width: size, height: size }}
+        style={{ width: size, height: size, minWidth: size, minHeight: size }}
         aria-label={title}
       >
         {letter}
@@ -62,9 +62,8 @@ export function Favicon({
     <img
       src={src}
       alt=""
-      width={size}
-      height={size}
-      className={cn("shrink-0 rounded-sm", className)}
+      className={cn("shrink-0 rounded-sm object-contain", className)}
+      style={{ width: size, height: size, minWidth: size, minHeight: size }}
       onError={handleError}
       loading="lazy"
     />
