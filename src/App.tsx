@@ -7,6 +7,7 @@ import { BookmarkGrid } from "@/features/bookmark-grid"
 import { SettingsDialog } from "@/features/settings"
 import { BookmarkEditorDialog } from "@/features/bookmark-editor"
 import { DeleteConfirmDialog } from "@/features/delete-confirm"
+import { OnboardingWizard } from "@/features/onboarding"
 import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
 import {
@@ -33,6 +34,8 @@ import { COLOR_THEMES, type ColorTheme } from "@/stores/preferences-store"
 export function App() {
   const initBookmarks = useBookmarkStore((s) => s.init)
   const initPreferences = usePreferencesStore((s) => s.init)
+  const [showOnboarding, setShowOnboarding] = React.useState(false)
+  const [onboardingChecked, setOnboardingChecked] = React.useState(false)
   const openSettings = useUIStore((s) => s.openSettings)
   const isLoading = useBookmarkStore((s) => s.isLoading)
   const colorTheme = usePreferencesStore((s) => s.colorTheme)
@@ -52,6 +55,11 @@ export function App() {
     async function bootstrap() {
       const adapter = await detectAdapter()
       await Promise.all([initBookmarks(adapter), initPreferences(adapter)])
+      const onboardingCompleted = await adapter.storage.get<boolean>("onboardingCompleted")
+      if (!onboardingCompleted) {
+        setShowOnboarding(true)
+      }
+      setOnboardingChecked(true)
     }
     bootstrap()
   }, [initBookmarks, initPreferences])
@@ -115,6 +123,9 @@ export function App() {
       <SettingsDialog />
       <BookmarkEditorDialog />
       <DeleteConfirmDialog />
+      {showOnboarding && onboardingChecked && (
+        <OnboardingWizard onComplete={() => setShowOnboarding(false)} />
+      )}
     </div>
   )
 }
