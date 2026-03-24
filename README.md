@@ -1,84 +1,57 @@
-# Pure Bookmarks
+<p align="center">
+  <img src="public/logo-dark.svg" width="100" alt="Bookmarks But Better logo" />
+</p>
 
-Pure Bookmarks is a browser extension that replaces the new tab page with a clean bookmarks dashboard.
+<h1 align="center">Bookmarks - But Better</h1>
 
-## What the app is
+<p align="center">
+  A clean, beautiful bookmarks dashboard that replaces your new tab page.
+</p>
 
-The app reads the user’s existing browser bookmarks and displays them in a simple, organized interface. It is meant to make bookmarks easier to browse, open, and manage from the new tab page.
+---
 
-## Main goals
+## What is this?
 
-- Show bookmarks from the browser in a clear layout
-- Render each bookmark folder as its own card with its own links
-- Show folder cards in a masonry layout similar to Pinterest
-- Let each folder card use its own layout mode
-- Let users browse bookmarks from a selected root folder
-- Allow users to edit real bookmark data from the app
-- Keep bookmark changes synced with the browser’s native bookmarks system
-- Support bookmark actions such as open, copy, and delete
-- Let users choose display preferences such as theme and layout
-- Keep browser functions separated from UI so the app can support other browsers later
+A Chrome extension that turns your new tab page into an organized, Pinterest-style bookmarks dashboard. No more digging through menus - your bookmarks are front and center, every time you open a new tab.
 
-## Features to implement
+## Features
 
-### Core bookmark experience
+- **Masonry layout** - Your bookmark folders displayed as cards in a clean, responsive grid
+- **Two view modes** - Switch between list and icon grid on each folder
+- **Edit everything** - Rename bookmarks, change URLs, edit folders - all inline
+- **10 color themes** - Default, Amber, Bubblegum, Caffeine, Claude, Claymorphism, Cyberpunk, Solar Dusk, T3 Chat, Vintage Paper
+- **Light & dark mode** - Follows your system preference, or press `D` to toggle
+- **Choose your root folder** - Display bookmarks from any folder you want
+- **Import & export** - Bring bookmarks in or take them out as standard HTML files
+- **High-quality favicons** - Sharp icons for every bookmark, even on HiDPI displays
+- **Always in sync** - Changes you make are saved directly to Chrome's bookmarks
 
-- Load the full bookmarks tree from the browser
-- Display bookmarks and folders in a usable new tab interface
-- Render each folder as its own card component
-- Show the links that belong to each folder inside its card
-- Arrange folder cards in a masonry layout similar to Pinterest
-- Support nested and flat folder views
-- Refresh the UI after bookmark changes
+## Install
 
-### Folder root selection
+1. Download or clone this repository
+2. Open `chrome://extensions` in your browser
+3. Enable **Developer mode** (top right)
+4. Click **Load unpacked** and select the `dist/` folder
+5. Open a new tab - that's it!
 
-- On first launch, ask the user to choose the folder the app should use as its root
-- Use the browser root by default if the user does not choose another folder
-- If the user selects another folder, treat that folder as the app root
-- Load and display bookmarks relative to the selected root folder
-- Save the selected root folder preference for future launches
+> **Note:** A Chrome Web Store listing is coming soon.
 
-### Card layouts
+## How to Use
 
-- Support a separate layout setting for each folder card
-- Allow each card to switch between:
-  - List
-  - Icons Grid
-- Save per-card layout preferences
+- **Browse** - Scroll through your bookmark folders displayed as cards
+- **Open** - Click any bookmark to open it
+- **Edit** - Right-click or use the hover menu to edit, copy, or delete bookmarks
+- **Customize** - Use the buttons in the bottom-right corner to change theme, color, and settings
+- **Pick a root folder** - Open settings and choose which folder to display as your starting point
 
-### Bookmark editing
+## Screenshots
 
-- Edit bookmark title
-- Edit bookmark URL
-- Edit folder title
-- Save changes back to the browser bookmarks API
+*Coming soon*
 
-### Bookmark actions
+## Feedback & Issues
 
-- Open bookmarks
-- Copy bookmark URL
-- Copy bookmark title
-- Delete bookmarks
-- Delete folders
-- Open a bookmark or folder in the browser’s bookmark manager when supported
+Found a bug or have a feature request? [Open an issue](../../issues) - all feedback is welcome.
 
-### Interface and customization
+## License
 
-- Theme support
-- Configurable root folder
-- Saved user layout preferences
-- Masonry-style folder card presentation
-
-### Cross-browser readiness
-
-- Separate browser-specific functions from UI components
-- Keep bookmark operations behind browser adapters
-- Prepare the app to support Chrome-family browsers and Firefox later
-
-## Development
-
-```bash
-bun dev
-bun run build
-```
+MIT
