@@ -138,7 +138,7 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
               />,
               <DoneStep key="done" />,
             ].map((step, i) => (
-              <div key={i} className="min-w-full flex-shrink-0">
+              <div key={i} className="w-full px-1 flex-shrink-0">
                 {step}
               </div>
             ))}
