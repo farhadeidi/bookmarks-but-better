@@ -52,6 +52,10 @@ export function RootFolderPicker({ value, onChange }: RootFolderPickerProps) {
     return all
   }, [tree])
 
+  const displayLabel = value
+    ? folders.find((f) => f.id === value)?.label ?? value
+    : "Browser Root (all bookmarks)"
+
   return (
     <div className="flex flex-col gap-2">
       <label className="text-sm font-medium">Root Folder</label>
@@ -60,7 +64,7 @@ export function RootFolderPicker({ value, onChange }: RootFolderPickerProps) {
         onValueChange={(val) => onChange(val === ROOT_VALUE ? null : val)}
       >
         <SelectTrigger className="w-full">
-          <SelectValue />
+          <span className="truncate">{displayLabel}</span>
         </SelectTrigger>
         <SelectContent>
           <SelectItem value={ROOT_VALUE}>
