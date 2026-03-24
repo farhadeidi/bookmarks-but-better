@@ -8,6 +8,10 @@
   A clean, beautiful bookmarks dashboard that replaces your new tab page.
 </p>
 
+<p align="center">
+  <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT License" />
+</p>
+
 ---
 
 ## What is this?
@@ -34,7 +38,7 @@ A Chrome extension that turns your new tab page into an organized, Pinterest-sty
 4. Click **Load unpacked** and select the `dist/` folder
 5. Open a new tab - that's it!
 
-> **Note:** A Chrome Web Store listing is coming soon.
+> **Chrome Web Store:** [Install from the Chrome Web Store](link-pending)
 
 ## How to Use
 
@@ -46,7 +50,32 @@ A Chrome extension that turns your new tab page into an organized, Pinterest-sty
 
 ## Screenshots
 
-*Coming soon*
+<p align="center">
+  <img src="docs/screenshots/dashboard-dark.png" width="700" alt="Dashboard in dark mode" />
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/dashboard-theme.png" width="700" alt="Dashboard with alternate theme" />
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/hover-card.png" width="700" alt="Bookmark hover card" />
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/onboarding.png" width="700" alt="First-run onboarding wizard" />
+</p>
+
+## Development
+
+```bash
+bun install        # Install dependencies
+bun dev            # Start dev server (standalone mode)
+bun run build      # Build for production → dist/
+bun run typecheck  # Type check
+bun lint           # Lint
+bun run format     # Format code
+```
 
 ## Feedback & Issues
 
