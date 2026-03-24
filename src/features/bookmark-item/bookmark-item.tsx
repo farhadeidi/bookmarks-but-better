@@ -88,7 +88,7 @@ export function BookmarkItem({
             size={32}
           />
         </HoverCardTrigger>
-        <HoverCardContent side="right" className="w-64">
+        <HoverCardContent side="bottom" className="w-64">
           <HoverCardBody
             bookmark={bookmark}
             onEdit={handleEdit}

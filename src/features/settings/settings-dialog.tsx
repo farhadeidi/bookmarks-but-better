@@ -11,7 +11,6 @@ import { Button } from "@/components/ui/button"
 import { useUIStore } from "@/stores/ui-store"
 import { usePreferencesStore } from "@/stores/preferences-store"
 import { useBookmarkStore } from "@/stores/bookmark-store"
-import { useTheme } from "@/components/theme-provider"
 import { RootFolderPicker } from "./root-folder-picker"
 import { serializeNetscapeBookmarks } from "@/browser/import-export/netscape-serializer"
 import { parseNetscapeBookmarks } from "@/browser/import-export/netscape-parser"
@@ -29,7 +28,6 @@ export function SettingsDialog() {
   const refresh = useBookmarkStore((s) => s.refresh)
   const adapterMode = usePreferencesStore((s) => s.adapterMode)
   const setAdapterMode = usePreferencesStore((s) => s.setAdapterMode)
-  const { theme, setTheme } = useTheme()
 
   const handleExport = () => {
     const html = serializeNetscapeBookmarks(tree)
@@ -134,23 +132,6 @@ export function SettingsDialog() {
               Use browser bookmarks or manage an independent collection.
               Requires a page reload to take effect.
             </p>
-          </div>
-
-          <div className="flex flex-col gap-2">
-            <Label className="text-sm font-medium">Theme</Label>
-            <div className="flex gap-2">
-              {(["light", "dark", "system"] as const).map((t) => (
-                <Button
-                  key={t}
-                  variant={theme === t ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setTheme(t)}
-                  className="capitalize"
-                >
-                  {t}
-                </Button>
-              ))}
-            </div>
           </div>
 
           <div className="flex flex-col gap-2">
