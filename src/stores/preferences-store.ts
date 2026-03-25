@@ -11,6 +11,8 @@ interface PreferencesState {
   nestedFolders: boolean
   adapterMode: "browser" | "standalone"
   colorTheme: ColorTheme
+  maxColumns: number
+  containerMode: "fluid" | "contained"
   adapter: BrowserAdapter | null
 
   // Actions
@@ -19,6 +21,8 @@ interface PreferencesState {
   setNestedFolders(value: boolean): void
   setAdapterMode(mode: "browser" | "standalone"): void
   setColorTheme(theme: ColorTheme): void
+  setMaxColumns(value: number): void
+  setContainerMode(mode: "fluid" | "contained"): void
 }
 
 export const usePreferencesStore = create<PreferencesState>((set, get) => ({
@@ -26,17 +30,21 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
   nestedFolders: false,
   adapterMode: "browser",
   colorTheme: "default",
+  maxColumns: 4,
+  containerMode: "fluid" as const,
   adapter: null,
 
   async init(adapter: BrowserAdapter) {
     set({ adapter })
 
-    const [cardLayouts, nestedFolders, adapterMode, colorTheme] =
+    const [cardLayouts, nestedFolders, adapterMode, colorTheme, maxColumns, containerMode] =
       await Promise.all([
         adapter.storage.get<Record<string, CardLayout>>("cardLayouts"),
         adapter.storage.get<boolean>("nestedFolders"),
         adapter.storage.get<"browser" | "standalone">("adapterMode"),
         adapter.storage.get<ColorTheme>("colorTheme"),
+        adapter.storage.get<number>("maxColumns"),
+        adapter.storage.get<"fluid" | "contained">("containerMode"),
       ])
 
     const resolvedColorTheme = colorTheme ?? "default"
@@ -46,6 +54,8 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
       nestedFolders: nestedFolders ?? false,
       adapterMode: adapterMode ?? "browser",
       colorTheme: resolvedColorTheme,
+      maxColumns: maxColumns ?? 4,
+      containerMode: containerMode ?? "fluid",
     })
 
     // Apply color theme to root element
@@ -73,6 +83,16 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
     set({ colorTheme: theme })
     get().adapter?.storage.set("colorTheme", theme)
     applyColorTheme(theme)
+  },
+
+  setMaxColumns(value: number) {
+    set({ maxColumns: value })
+    get().adapter?.storage.set("maxColumns", value)
+  },
+
+  setContainerMode(mode: "fluid" | "contained") {
+    set({ containerMode: mode })
+    get().adapter?.storage.set("containerMode", mode)
   },
 }))
 
