@@ -2,14 +2,26 @@ import * as React from "react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu"
 import { HugeiconsIcon } from "@hugeicons/react"
 import {
   GridViewIcon,
   Menu02Icon,
+  MoreHorizontalIcon,
+  PencilEdit01Icon,
+  Delete02Icon,
+  ArrowUpRight01Icon,
 } from "@hugeicons/core-free-icons"
 import { BookmarkItem } from "@/features/bookmark-item"
 import { usePreferencesStore } from "@/stores/preferences-store"
 import { useBookmarkStore } from "@/stores/bookmark-store"
+import { useUIStore } from "@/stores/ui-store"
 import type { BookmarkNode } from "@/browser"
 
 interface BookmarkCardProps {
@@ -22,6 +34,8 @@ export function BookmarkCard({ folder, nested = false }: BookmarkCardProps) {
   const setCardLayout = usePreferencesStore((s) => s.setCardLayout)
   const nestedFolders = usePreferencesStore((s) => s.nestedFolders)
   const adapter = useBookmarkStore((s) => s.adapter)
+  const openEditor = useUIStore((s) => s.openEditor)
+  const openDeleteConfirm = useUIStore((s) => s.openDeleteConfirm)
 
   const layout = cardLayouts[folder.id] ?? "list"
   const children = folder.children ?? []
@@ -67,15 +81,70 @@ export function BookmarkCard({ folder, nested = false }: BookmarkCardProps) {
         >
           {folder.title}
         </h3>
-        <Tooltip>
-          <TooltipTrigger render={<Button variant="ghost" size="icon-sm" onClick={toggleLayout} aria-label={`Switch to ${layout === "list" ? "grid" : "list"} view`} />}>
-            <HugeiconsIcon
-              icon={layout === "list" ? GridViewIcon : Menu02Icon}
-              size={14}
-            />
-          </TooltipTrigger>
-          <TooltipContent>{layout === "list" ? "Grid view" : "List view"}</TooltipContent>
-        </Tooltip>
+        <div className="flex items-center gap-0.5">
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label="Folder actions"
+                />
+              }
+            >
+              <HugeiconsIcon icon={MoreHorizontalIcon} size={14} />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem
+                onClick={() => openEditor(folder)}
+              >
+                <HugeiconsIcon icon={PencilEdit01Icon} size={14} />
+                Rename
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => adapter?.bookmarks.openInManager(folder.id)}
+              >
+                <HugeiconsIcon icon={ArrowUpRight01Icon} size={14} />
+                View in manager
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                variant="destructive"
+                onClick={() =>
+                  openDeleteConfirm({
+                    id: folder.id,
+                    title: folder.title,
+                    type: "folder",
+                    childCount: (folder.children ?? []).length,
+                  })
+                }
+              >
+                <HugeiconsIcon icon={Delete02Icon} size={14} />
+                Delete
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={toggleLayout}
+                  aria-label={`Switch to ${layout === "list" ? "grid" : "list"} view`}
+                />
+              }
+            >
+              <HugeiconsIcon
+                icon={layout === "list" ? GridViewIcon : Menu02Icon}
+                size={14}
+              />
+            </TooltipTrigger>
+            <TooltipContent>
+              {layout === "list" ? "Grid view" : "List view"}
+            </TooltipContent>
+          </Tooltip>
+        </div>
       </div>
 
       {/* Bookmarks */}
