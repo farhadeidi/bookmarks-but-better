@@ -3,6 +3,20 @@ import { useBookmarkStore } from "@/stores/bookmark-store"
 import { usePreferencesStore } from "@/stores/preferences-store"
 import { BookmarkCard } from "@/features/bookmark-card"
 import type { BookmarkNode } from "@/browser"
+import { cn } from "@/lib/utils"
+
+const COLUMN_BREAKPOINTS = [
+  "columns-1",
+  "sm:columns-2",
+  "md:columns-3",
+  "lg:columns-4",
+  "xl:columns-5",
+  "2xl:columns-6",
+]
+
+function getColumnClasses(maxColumns: number): string {
+  return COLUMN_BREAKPOINTS.slice(0, maxColumns).join(" ")
+}
 
 function collectAllFolders(node: BookmarkNode): BookmarkNode[] {
   const folders: BookmarkNode[] = []
@@ -22,6 +36,8 @@ export function BookmarkGrid() {
   const tree = useBookmarkStore((s) => s.tree)
   const isLoading = useBookmarkStore((s) => s.isLoading)
   const nestedFolders = usePreferencesStore((s) => s.nestedFolders)
+  const maxColumns = usePreferencesStore((s) => s.maxColumns)
+  const containerMode = usePreferencesStore((s) => s.containerMode)
 
   const displayRoot = rootFolder ?? (tree.length > 0 ? tree[0] : null)
 
@@ -57,14 +73,20 @@ export function BookmarkGrid() {
 
   return (
     <div
-      className="columns-1 gap-4 sm:columns-2 md:columns-3 lg:columns-4"
-      style={{ columnFill: "balance" }}
+      className={cn(
+        containerMode === "contained" && "mx-auto max-w-[1440px]"
+      )}
     >
-      {folders.map((folder) => (
-        <div key={folder.id} className="mb-4 break-inside-avoid">
-          <BookmarkCard folder={folder} />
-        </div>
-      ))}
+      <div
+        className={cn(getColumnClasses(maxColumns), "gap-4")}
+        style={{ columnFill: "balance" }}
+      >
+        {folders.map((folder) => (
+          <div key={folder.id} className="mb-4 break-inside-avoid">
+            <BookmarkCard folder={folder} />
+          </div>
+        ))}
+      </div>
     </div>
   )
 }
