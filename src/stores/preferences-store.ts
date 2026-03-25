@@ -2,9 +2,30 @@ import { create } from "zustand"
 import type { BrowserAdapter } from "@/browser"
 
 type CardLayout = "list" | "grid"
-export type ColorTheme = "default" | "amber-minimal" | "bubblegum" | "caffeine" | "claude" | "claymorphism" | "cyberpunk" | "solar-dusk" | "t3-chat" | "vintage-paper"
+export type ColorTheme =
+  | "default"
+  | "amber-minimal"
+  | "bubblegum"
+  | "caffeine"
+  | "claude"
+  | "claymorphism"
+  | "cyberpunk"
+  | "solar-dusk"
+  | "t3-chat"
+  | "vintage-paper"
 
-export const COLOR_THEMES: ColorTheme[] = ["default", "amber-minimal", "bubblegum", "caffeine", "claude", "claymorphism", "cyberpunk", "solar-dusk", "t3-chat", "vintage-paper"]
+export const COLOR_THEMES: ColorTheme[] = [
+  "default",
+  "amber-minimal",
+  "bubblegum",
+  "caffeine",
+  "claude",
+  "claymorphism",
+  "cyberpunk",
+  "solar-dusk",
+  "t3-chat",
+  "vintage-paper",
+]
 
 interface PreferencesState {
   cardLayouts: Record<string, CardLayout>
@@ -37,15 +58,21 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
   async init(adapter: BrowserAdapter) {
     set({ adapter })
 
-    const [cardLayouts, nestedFolders, adapterMode, colorTheme, maxColumns, containerMode] =
-      await Promise.all([
-        adapter.storage.get<Record<string, CardLayout>>("cardLayouts"),
-        adapter.storage.get<boolean>("nestedFolders"),
-        adapter.storage.get<"browser" | "standalone">("adapterMode"),
-        adapter.storage.get<ColorTheme>("colorTheme"),
-        adapter.storage.get<number>("maxColumns"),
-        adapter.storage.get<"fluid" | "contained">("containerMode"),
-      ])
+    const [
+      cardLayouts,
+      nestedFolders,
+      adapterMode,
+      colorTheme,
+      maxColumns,
+      containerMode,
+    ] = await Promise.all([
+      adapter.storage.get<Record<string, CardLayout>>("cardLayouts"),
+      adapter.storage.get<boolean>("nestedFolders"),
+      adapter.storage.get<"browser" | "standalone">("adapterMode"),
+      adapter.storage.get<ColorTheme>("colorTheme"),
+      adapter.storage.get<number>("maxColumns"),
+      adapter.storage.get<"fluid" | "contained">("containerMode"),
+    ])
 
     const resolvedColorTheme = colorTheme ?? "default"
 

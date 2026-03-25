@@ -73,9 +73,7 @@ export function BookmarkGrid() {
 
   return (
     <div
-      className={cn(
-        containerMode === "contained" && "mx-auto max-w-[1440px]"
-      )}
+      className={cn(containerMode === "contained" && "mx-auto max-w-[1440px]")}
     >
       <div
         className={cn(getColumnClasses(maxColumns), "gap-4")}

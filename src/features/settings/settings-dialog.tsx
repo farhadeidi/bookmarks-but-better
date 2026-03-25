@@ -97,7 +97,12 @@ export function SettingsDialog() {
   }
 
   return (
-    <Dialog open={open} onOpenChange={(o) => { if (!o) closeSettings() }}>
+    <Dialog
+      open={open}
+      onOpenChange={(o) => {
+        if (!o) closeSettings()
+      }}
+    >
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Settings</DialogTitle>
@@ -126,7 +131,7 @@ export function SettingsDialog() {
           {/* Layout section */}
           <div className="flex flex-col gap-4">
             <div className="border-t pt-4">
-              <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
                 Layout
               </span>
             </div>
@@ -149,8 +154,8 @@ export function SettingsDialog() {
                 </SelectContent>
               </Select>
               <p className="text-xs text-muted-foreground">
-                Maximum number of columns in the dashboard grid. Fewer columns are
-                used on smaller screens.
+                Maximum number of columns in the dashboard grid. Fewer columns
+                are used on smaller screens.
               </p>
             </div>
 
@@ -163,7 +168,9 @@ export function SettingsDialog() {
                 }
               >
                 <SelectTrigger>
-                  <span>{containerMode === "fluid" ? "Fluid" : "Contained"}</span>
+                  <span>
+                    {containerMode === "fluid" ? "Fluid" : "Contained"}
+                  </span>
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="fluid">Fluid</SelectItem>
@@ -180,7 +187,7 @@ export function SettingsDialog() {
           {/* Data section */}
           <div className="flex flex-col gap-4">
             <div className="border-t pt-4">
-              <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
                 Data
               </span>
             </div>

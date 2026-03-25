@@ -1,7 +1,11 @@
 import * as React from "react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
-import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
+import {
+  Tooltip,
+  TooltipTrigger,
+  TooltipContent,
+} from "@/components/ui/tooltip"
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -74,10 +78,7 @@ export function BookmarkCard({ folder, nested = false }: BookmarkCardProps) {
       {/* Header */}
       <div className="flex items-center justify-between">
         <h3
-          className={cn(
-            "font-medium truncate",
-            nested ? "text-xs" : "text-sm"
-          )}
+          className={cn("truncate font-medium", nested ? "text-xs" : "text-sm")}
         >
           {folder.title}
         </h3>
@@ -95,9 +96,7 @@ export function BookmarkCard({ folder, nested = false }: BookmarkCardProps) {
               <HugeiconsIcon icon={MoreHorizontalIcon} size={14} />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem
-                onClick={() => openEditor(folder)}
-              >
+              <DropdownMenuItem onClick={() => openEditor(folder)}>
                 <HugeiconsIcon icon={PencilEdit01Icon} size={14} />
                 Rename
               </DropdownMenuItem>
