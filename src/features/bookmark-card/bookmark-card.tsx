@@ -115,7 +115,7 @@ export function BookmarkCard({ folder, nested = false }: BookmarkCardProps) {
                     id: folder.id,
                     title: folder.title,
                     type: "folder",
-                    childCount: (folder.children ?? []).length,
+                    childCount: children.length,
                   })
                 }
               >
