@@ -8,6 +8,12 @@ import {
 import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+} from "@/components/ui/select"
 import { useUIStore } from "@/stores/ui-store"
 import { usePreferencesStore } from "@/stores/preferences-store"
 import { useBookmarkStore } from "@/stores/bookmark-store"
@@ -28,6 +34,10 @@ export function SettingsDialog() {
   const refresh = useBookmarkStore((s) => s.refresh)
   const adapterMode = usePreferencesStore((s) => s.adapterMode)
   const setAdapterMode = usePreferencesStore((s) => s.setAdapterMode)
+  const maxColumns = usePreferencesStore((s) => s.maxColumns)
+  const setMaxColumns = usePreferencesStore((s) => s.setMaxColumns)
+  const containerMode = usePreferencesStore((s) => s.containerMode)
+  const setContainerMode = usePreferencesStore((s) => s.setContainerMode)
 
   const handleExport = () => {
     const html = serializeNetscapeBookmarks(tree)
@@ -97,6 +107,7 @@ export function SettingsDialog() {
         </DialogHeader>
 
         <div className="flex flex-col gap-6">
+          {/* Bookmarks section */}
           <RootFolderPicker value={rootFolderId} onChange={setRootFolderId} />
 
           <div className="flex items-center justify-between">
@@ -112,41 +123,104 @@ export function SettingsDialog() {
             />
           </div>
 
-          {/* Adapter mode */}
-          <div className="flex flex-col gap-2">
-            <Label className="text-sm font-medium">Bookmark Source</Label>
-            <div className="flex gap-2">
-              {(["browser", "standalone"] as const).map((mode) => (
-                <Button
-                  key={mode}
-                  variant={adapterMode === mode ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setAdapterMode(mode)}
-                  className="capitalize"
-                >
-                  {mode === "browser" ? "Browser" : "Standalone"}
-                </Button>
-              ))}
+          {/* Layout section */}
+          <div className="flex flex-col gap-4">
+            <div className="border-t pt-4">
+              <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                Layout
+              </span>
             </div>
-            <p className="text-xs text-muted-foreground">
-              Use browser bookmarks or manage an independent collection.
-              Requires a page reload to take effect.
-            </p>
+
+            <div className="flex flex-col gap-2">
+              <Label className="text-sm font-medium">Max Columns</Label>
+              <Select
+                value={String(maxColumns)}
+                onValueChange={(val) => setMaxColumns(Number(val))}
+              >
+                <SelectTrigger>
+                  <span>{maxColumns} columns</span>
+                </SelectTrigger>
+                <SelectContent>
+                  {[2, 3, 4, 5, 6].map((n) => (
+                    <SelectItem key={n} value={String(n)}>
+                      {n} columns
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Maximum number of columns in the dashboard grid. Fewer columns are
+                used on smaller screens.
+              </p>
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <Label className="text-sm font-medium">Container</Label>
+              <Select
+                value={containerMode}
+                onValueChange={(val) =>
+                  setContainerMode(val as "fluid" | "contained")
+                }
+              >
+                <SelectTrigger>
+                  <span>{containerMode === "fluid" ? "Fluid" : "Contained"}</span>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="fluid">Fluid</SelectItem>
+                  <SelectItem value="contained">Contained</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Contained limits the dashboard to 1440px wide and centers it on
+                the screen.
+              </p>
+            </div>
           </div>
 
-          <div className="flex flex-col gap-2">
-            <Label className="text-sm font-medium">Bookmarks Data</Label>
-            <div className="flex gap-2">
-              <Button variant="outline" size="sm" onClick={handleImport}>
-                Import
-              </Button>
-              <Button variant="outline" size="sm" onClick={handleExport}>
-                Export
-              </Button>
+          {/* Data section */}
+          <div className="flex flex-col gap-4">
+            <div className="border-t pt-4">
+              <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                Data
+              </span>
             </div>
-            <p className="text-xs text-muted-foreground">
-              Import or export bookmarks as HTML (standard browser format).
-            </p>
+
+            {/* Adapter mode */}
+            <div className="flex flex-col gap-2">
+              <Label className="text-sm font-medium">Bookmark Source</Label>
+              <div className="flex gap-2">
+                {(["browser", "standalone"] as const).map((mode) => (
+                  <Button
+                    key={mode}
+                    variant={adapterMode === mode ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setAdapterMode(mode)}
+                    className="capitalize"
+                  >
+                    {mode === "browser" ? "Browser" : "Standalone"}
+                  </Button>
+                ))}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Use browser bookmarks or manage an independent collection.
+                Requires a page reload to take effect.
+              </p>
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <Label className="text-sm font-medium">Bookmarks Data</Label>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={handleImport}>
+                  Import
+                </Button>
+                <Button variant="outline" size="sm" onClick={handleExport}>
+                  Export
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Import or export bookmarks as HTML (standard browser format).
+              </p>
+            </div>
           </div>
         </div>
       </DialogContent>
