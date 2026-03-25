@@ -103,7 +103,7 @@ export function SettingsDialog() {
         if (!o) closeSettings()
       }}
     >
-      <DialogContent className="max-h-[85vh] overflow-y-auto">
+      <DialogContent>
         <DialogHeader>
           <DialogTitle>Settings</DialogTitle>
           <DialogDescription>
@@ -111,6 +111,7 @@ export function SettingsDialog() {
           </DialogDescription>
         </DialogHeader>
 
+        <div className="-mx-4 no-scrollbar max-h-[50vh] overflow-y-auto px-4">
         <div className="flex flex-col gap-6">
           {/* Bookmarks section */}
           <RootFolderPicker value={rootFolderId} onChange={setRootFolderId} />
@@ -142,7 +143,7 @@ export function SettingsDialog() {
                 value={String(maxColumns)}
                 onValueChange={(val) => setMaxColumns(Number(val))}
               >
-                <SelectTrigger>
+                <SelectTrigger className="w-full">
                   <span>{maxColumns} columns</span>
                 </SelectTrigger>
                 <SelectContent>
@@ -167,7 +168,7 @@ export function SettingsDialog() {
                   setContainerMode(val as "fluid" | "contained")
                 }
               >
-                <SelectTrigger>
+                <SelectTrigger className="w-full">
                   <span>
                     {containerMode === "fluid" ? "Fluid" : "Contained"}
                   </span>
@@ -229,6 +230,7 @@ export function SettingsDialog() {
               </p>
             </div>
           </div>
+        </div>
         </div>
       </DialogContent>
     </Dialog>

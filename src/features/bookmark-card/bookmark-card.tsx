@@ -2,11 +2,6 @@ import * as React from "react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import {
-  Tooltip,
-  TooltipTrigger,
-  TooltipContent,
-} from "@/components/ui/tooltip"
-import {
   DropdownMenu,
   DropdownMenuTrigger,
   DropdownMenuContent,
@@ -17,7 +12,7 @@ import { HugeiconsIcon } from "@hugeicons/react"
 import {
   GridViewIcon,
   Menu02Icon,
-  MoreHorizontalIcon,
+  MoreVerticalIcon,
   PencilEdit01Icon,
   Delete02Icon,
   ArrowUpRight01Icon,
@@ -82,7 +77,6 @@ export function BookmarkCard({ folder, nested = false }: BookmarkCardProps) {
         >
           {folder.title}
         </h3>
-        <div className="flex items-center gap-0.5">
           <DropdownMenu>
             <DropdownMenuTrigger
               render={
@@ -93,9 +87,14 @@ export function BookmarkCard({ folder, nested = false }: BookmarkCardProps) {
                 />
               }
             >
-              <HugeiconsIcon icon={MoreHorizontalIcon} size={14} />
+              <HugeiconsIcon icon={MoreVerticalIcon} size={14} />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={toggleLayout}>
+                <HugeiconsIcon icon={layout === "list" ? GridViewIcon : Menu02Icon} size={14} />
+                {layout === "list" ? "Grid view" : "List view"}
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
               <DropdownMenuItem onClick={() => openEditor(folder)}>
                 <HugeiconsIcon icon={PencilEdit01Icon} size={14} />
                 Rename
@@ -123,27 +122,6 @@ export function BookmarkCard({ folder, nested = false }: BookmarkCardProps) {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  onClick={toggleLayout}
-                  aria-label={`Switch to ${layout === "list" ? "grid" : "list"} view`}
-                />
-              }
-            >
-              <HugeiconsIcon
-                icon={layout === "list" ? GridViewIcon : Menu02Icon}
-                size={14}
-              />
-            </TooltipTrigger>
-            <TooltipContent>
-              {layout === "list" ? "Grid view" : "List view"}
-            </TooltipContent>
-          </Tooltip>
-        </div>
       </div>
 
       {/* Bookmarks */}
