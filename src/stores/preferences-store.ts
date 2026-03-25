@@ -52,7 +52,7 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
   adapterMode: "browser",
   colorTheme: "default",
   maxColumns: 4,
-  containerMode: "fluid" as const,
+  containerMode: "fluid",
   adapter: null,
 
   async init(adapter: BrowserAdapter) {
@@ -81,7 +81,7 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
       nestedFolders: nestedFolders ?? false,
       adapterMode: adapterMode ?? "browser",
       colorTheme: resolvedColorTheme,
-      maxColumns: maxColumns ?? 4,
+      maxColumns: Math.max(2, Math.min(6, maxColumns ?? 4)),
       containerMode: containerMode ?? "fluid",
     })
 
@@ -113,8 +113,9 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
   },
 
   setMaxColumns(value: number) {
-    set({ maxColumns: value })
-    get().adapter?.storage.set("maxColumns", value)
+    const clamped = Math.max(2, Math.min(6, value))
+    set({ maxColumns: clamped })
+    get().adapter?.storage.set("maxColumns", clamped)
   },
 
   setContainerMode(mode: "fluid" | "contained") {
