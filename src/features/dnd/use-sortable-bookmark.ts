@@ -23,12 +23,6 @@ export function useSortableBookmark({
   const [isDragging, setIsDragging] = useState(false)
   const [closestEdge, setClosestEdge] = useState<Edge | null>(null)
 
-  // Reset visual state when position changes (after a drop completes)
-  useEffect(() => {
-    setClosestEdge(null)
-    setIsDragging(false)
-  }, [id, index, folderId])
-
   useEffect(() => {
     const el = ref.current
     if (!el || disabled) return
