@@ -8,6 +8,7 @@ import { SettingsDialog } from "@/features/settings"
 import { BookmarkEditorDialog } from "@/features/bookmark-editor"
 import { DeleteConfirmDialog } from "@/features/delete-confirm"
 import { OnboardingWizard } from "@/features/onboarding"
+import { FolderOrderDialog } from "@/features/folder-order"
 import { DndMonitor } from "@/features/dnd"
 import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
@@ -127,6 +128,7 @@ export function App() {
       <SettingsDialog />
       <BookmarkEditorDialog />
       <DeleteConfirmDialog />
+      <FolderOrderDialog />
       {showOnboarding && onboardingChecked && (
         <OnboardingWizard onComplete={() => setShowOnboarding(false)} />
       )}

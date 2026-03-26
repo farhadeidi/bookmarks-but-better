@@ -121,6 +121,7 @@ export function BookmarkGrid() {
   const containerMode = usePreferencesStore((s) => s.containerMode)
   const cardLayouts = usePreferencesStore((s) => s.cardLayouts)
   const folderOrder = usePreferencesStore((s) => s.folderOrder)
+  const experimentalCardDrag = usePreferencesStore((s) => s.experimentalCardDrag)
 
   const columnCount = useColumnCount(maxColumns)
   const displayRoot = rootFolder ?? (tree.length > 0 ? tree[0] : null)
@@ -177,13 +178,17 @@ export function BookmarkGrid() {
       >
         {columns.map((columnFolders, colIndex) => (
           <div key={colIndex} className="flex flex-col gap-4">
-            {columnFolders.map((folder) => (
-              <SortableFolderCard
-                key={folder.id}
-                folder={folder}
-                sortableIndex={folderIndexMap.get(folder.id) ?? 0}
-              />
-            ))}
+            {columnFolders.map((folder) =>
+              experimentalCardDrag ? (
+                <SortableFolderCard
+                  key={folder.id}
+                  folder={folder}
+                  sortableIndex={folderIndexMap.get(folder.id) ?? 0}
+                />
+              ) : (
+                <BookmarkCard key={folder.id} folder={folder} />
+              )
+            )}
           </div>
         ))}
       </div>
