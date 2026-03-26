@@ -23,6 +23,72 @@ import { useBookmarkStore } from "@/stores/bookmark-store"
 import { useUIStore } from "@/stores/ui-store"
 import type { BookmarkNode } from "@/browser"
 
+interface FolderMenuProps {
+  folder: BookmarkNode
+  childCount: number
+  layout: "list" | "grid"
+  onToggleLayout: () => void
+}
+
+const FolderMenu = React.memo(function FolderMenu({
+  folder,
+  childCount,
+  layout,
+  onToggleLayout,
+}: FolderMenuProps) {
+  const adapter = useBookmarkStore((s) => s.adapter)
+  const openEditor = useUIStore((s) => s.openEditor)
+  const openDeleteConfirm = useUIStore((s) => s.openDeleteConfirm)
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        render={
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label="Folder actions"
+          />
+        }
+      >
+        <HugeiconsIcon icon={MoreVerticalIcon} size={14} />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuItem onClick={onToggleLayout}>
+          <HugeiconsIcon icon={layout === "list" ? GridViewIcon : Menu02Icon} size={14} />
+          {layout === "list" ? "Grid view" : "List view"}
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onClick={() => openEditor(folder)}>
+          <HugeiconsIcon icon={PencilEdit01Icon} size={14} />
+          Rename
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          onClick={() => adapter?.bookmarks.openInManager(folder.id)}
+        >
+          <HugeiconsIcon icon={ArrowUpRight01Icon} size={14} />
+          View in manager
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          variant="destructive"
+          onClick={() =>
+            openDeleteConfirm({
+              id: folder.id,
+              title: folder.title,
+              type: "folder",
+              childCount,
+            })
+          }
+        >
+          <HugeiconsIcon icon={Delete02Icon} size={14} />
+          Delete
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+})
+
 interface BookmarkCardProps {
   folder: BookmarkNode
   nested?: boolean
@@ -33,8 +99,6 @@ export function BookmarkCard({ folder, nested = false }: BookmarkCardProps) {
   const setCardLayout = usePreferencesStore((s) => s.setCardLayout)
   const nestedFolders = usePreferencesStore((s) => s.nestedFolders)
   const adapter = useBookmarkStore((s) => s.adapter)
-  const openEditor = useUIStore((s) => s.openEditor)
-  const openDeleteConfirm = useUIStore((s) => s.openDeleteConfirm)
 
   const layout = cardLayouts[folder.id] ?? "list"
   const children = folder.children ?? []
@@ -77,51 +141,12 @@ export function BookmarkCard({ folder, nested = false }: BookmarkCardProps) {
         >
           {folder.title}
         </h3>
-          <DropdownMenu>
-            <DropdownMenuTrigger
-              render={
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-label="Folder actions"
-                />
-              }
-            >
-              <HugeiconsIcon icon={MoreVerticalIcon} size={14} />
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={toggleLayout}>
-                <HugeiconsIcon icon={layout === "list" ? GridViewIcon : Menu02Icon} size={14} />
-                {layout === "list" ? "Grid view" : "List view"}
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => openEditor(folder)}>
-                <HugeiconsIcon icon={PencilEdit01Icon} size={14} />
-                Rename
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => adapter?.bookmarks.openInManager(folder.id)}
-              >
-                <HugeiconsIcon icon={ArrowUpRight01Icon} size={14} />
-                View in manager
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                variant="destructive"
-                onClick={() =>
-                  openDeleteConfirm({
-                    id: folder.id,
-                    title: folder.title,
-                    type: "folder",
-                    childCount: children.length,
-                  })
-                }
-              >
-                <HugeiconsIcon icon={Delete02Icon} size={14} />
-                Delete
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+        <FolderMenu
+          folder={folder}
+          childCount={children.length}
+          layout={layout}
+          onToggleLayout={toggleLayout}
+        />
       </div>
 
       {/* Bookmarks */}
