@@ -28,7 +28,8 @@ export function useSortableBookmark({
     if (!el || disabled) return
 
     const data = { type: DND_TYPE.BOOKMARK, id, folderId, index } satisfies BookmarkDragData
-    const allowedEdges: Edge[] = layout === "grid" ? ["left", "right"] : ["top", "bottom"]
+    // Grid: single edge only to prevent double indicators in tight grid gaps
+    const allowedEdges: Edge[] = layout === "grid" ? ["left"] : ["top", "bottom"]
 
     return combine(
       draggable({
