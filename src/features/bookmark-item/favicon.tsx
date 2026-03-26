@@ -62,6 +62,7 @@ export function Favicon({
     <img
       src={src}
       alt=""
+      draggable="false"
       className={cn("shrink-0 rounded-sm object-contain", className)}
       style={{ width: size, height: size, minWidth: size, minHeight: size }}
       onError={handleError}

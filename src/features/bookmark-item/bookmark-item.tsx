@@ -104,6 +104,7 @@ export function BookmarkItem({
             render={
               <a
                 href={bookmark.url}
+                draggable="false"
                 className="flex items-center justify-center rounded-lg p-2 transition-colors hover:bg-accent"
               />
             }
@@ -144,6 +145,7 @@ export function BookmarkItem({
               href={bookmark.url}
               target="_blank"
               rel="noopener noreferrer"
+              draggable="false"
               className="flex items-center gap-2.5 rounded-lg px-2 py-1.5 transition-colors hover:bg-accent"
             />
           }
