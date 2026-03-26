@@ -8,6 +8,7 @@ interface UseSortableBookmarkInput {
   id: string
   index: number
   folderId: string
+  layout?: "list" | "grid"
   disabled?: boolean
 }
 
@@ -15,6 +16,7 @@ export function useSortableBookmark({
   id,
   index,
   folderId,
+  layout = "list",
   disabled = false,
 }: UseSortableBookmarkInput) {
   const ref = useRef<HTMLElement | null>(null)
@@ -26,6 +28,7 @@ export function useSortableBookmark({
     if (!el || disabled) return
 
     const data = { type: DND_TYPE.BOOKMARK, id, folderId, index } satisfies BookmarkDragData
+    const allowedEdges: Edge[] = layout === "grid" ? ["left", "right"] : ["top", "bottom"]
 
     return combine(
       draggable({
@@ -43,7 +46,7 @@ export function useSortableBookmark({
           attachClosestEdge(data as unknown as Record<string, unknown>, {
             element,
             input,
-            allowedEdges: ["top", "bottom"],
+            allowedEdges,
           }),
         onDragEnter: ({ self }) => setClosestEdge(extractClosestEdge(self.data)),
         onDrag: ({ self }) => setClosestEdge(extractClosestEdge(self.data)),
@@ -51,7 +54,7 @@ export function useSortableBookmark({
         onDrop: () => setClosestEdge(null),
       })
     )
-  }, [id, index, folderId, disabled])
+  }, [id, index, folderId, layout, disabled])
 
   return { ref, isDragging, closestEdge }
 }

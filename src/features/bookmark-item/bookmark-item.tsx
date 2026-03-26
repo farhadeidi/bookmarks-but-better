@@ -45,6 +45,7 @@ export function BookmarkItem({
     id: bookmark.id,
     index: sortableIndex,
     folderId,
+    layout,
   })
 
   const openEditor = useUIStore((s) => s.openEditor)
