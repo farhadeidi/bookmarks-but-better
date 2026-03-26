@@ -30,6 +30,8 @@ import {
   Moon02Icon,
   ComputerSettingsIcon,
   PaintBucketIcon,
+  Recycle02Icon,
+  FolderAddIcon,
 } from "@hugeicons/core-free-icons"
 import { useTheme } from "@/components/theme-provider"
 import { COLOR_THEMES, type ColorTheme } from "@/stores/preferences-store"
@@ -41,6 +43,9 @@ export function App() {
   const [onboardingChecked, setOnboardingChecked] = React.useState(false)
   const openSettings = useUIStore((s) => s.openSettings)
   const isLoading = useBookmarkStore((s) => s.isLoading)
+  const rootFolder = useBookmarkStore((s) => s.rootFolder)
+  const tree = useBookmarkStore((s) => s.tree)
+  const createFolder = useBookmarkStore((s) => s.createFolder)
   const colorTheme = usePreferencesStore((s) => s.colorTheme)
   const setColorTheme = usePreferencesStore((s) => s.setColorTheme)
   const { theme, setTheme } = useTheme()
@@ -82,6 +87,27 @@ export function App() {
 
       {/* FAB buttons */}
       <div className="fixed bottom-6 right-6 z-10 flex items-center gap-2">
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => {
+                  const parentId = rootFolder?.id ?? tree[0]?.id
+                  if (parentId) {
+                    const name = prompt("Folder name:")
+                    if (name?.trim()) createFolder(parentId, name.trim())
+                  }
+                }}
+                aria-label="Create folder"
+              />
+            }
+          >
+            <HugeiconsIcon icon={FolderAddIcon} size={18} />
+          </TooltipTrigger>
+          <TooltipContent side="top">New folder</TooltipContent>
+        </Tooltip>
         {/* Dropdown theme picker */}
         <DropdownMenu>
           <DropdownMenuTrigger
@@ -120,6 +146,26 @@ export function App() {
           </TooltipTrigger>
           <TooltipContent side="top">Settings</TooltipContent>
         </Tooltip>
+        {import.meta.env.DEV && (
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() => {
+                    indexedDB.deleteDatabase("bookmarks-but-better")
+                    window.location.reload()
+                  }}
+                  aria-label="Reset data (dev)"
+                />
+              }
+            >
+              <HugeiconsIcon icon={Recycle02Icon} size={18} />
+            </TooltipTrigger>
+            <TooltipContent side="top">Reset data (dev)</TooltipContent>
+          </Tooltip>
+        )}
       </div>
 
       {/* DnD monitor (renders nothing, handles drop logic) */}

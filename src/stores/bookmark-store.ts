@@ -21,6 +21,7 @@ interface BookmarkState {
   ): Promise<void>
   deleteBookmark(id: string): Promise<void>
   deleteFolder(id: string): Promise<void>
+  createFolder(parentId: string, title: string): Promise<void>
   moveBookmark(id: string, destination: { parentId?: string; index: number }): Promise<void>
 }
 
@@ -125,6 +126,13 @@ export const useBookmarkStore = create<BookmarkState>((set, get) => ({
     const { adapter } = get()
     if (!adapter) return
     await adapter.bookmarks.removeTree(id)
+    await get().refresh()
+  },
+
+  async createFolder(parentId: string, title: string) {
+    const { adapter } = get()
+    if (!adapter) return
+    await adapter.bookmarks.create({ parentId, title })
     await get().refresh()
   },
 
