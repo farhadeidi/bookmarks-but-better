@@ -21,12 +21,16 @@ import {
 import type { BookmarkNode } from "@/browser"
 import { useUIStore } from "@/stores/ui-store"
 import { useBookmarkStore } from "@/stores/bookmark-store"
+import { useSortableBookmark, DropIndicator } from "@/features/dnd"
+import { cn } from "@/lib/utils"
 
 interface BookmarkItemProps {
   bookmark: BookmarkNode
   layout: "list" | "grid"
   faviconUrl: string
   faviconFallbackUrl?: string
+  sortableIndex: number
+  folderId: string
 }
 
 export function BookmarkItem({
@@ -34,7 +38,15 @@ export function BookmarkItem({
   layout,
   faviconUrl,
   faviconFallbackUrl,
+  sortableIndex,
+  folderId,
 }: BookmarkItemProps) {
+  const { ref: sortableRef, isDragging, closestEdge } = useSortableBookmark({
+    id: bookmark.id,
+    index: sortableIndex,
+    folderId,
+  })
+
   const openEditor = useUIStore((s) => s.openEditor)
   const openDeleteConfirm = useUIStore((s) => s.openDeleteConfirm)
   const adapter = useBookmarkStore((s) => s.adapter)
@@ -83,12 +95,56 @@ export function BookmarkItem({
 
   if (layout === "grid") {
     return (
+      <div
+        ref={sortableRef as React.RefObject<HTMLDivElement>}
+        className={cn("relative", isDragging && "opacity-40")}
+      >
+        <HoverCard>
+          <HoverCardTrigger
+            render={
+              <a
+                href={bookmark.url}
+                className="flex items-center justify-center rounded-lg p-2 transition-colors hover:bg-accent"
+              />
+            }
+          >
+            <Favicon
+              url={bookmark.url ?? ""}
+              primarySrc={faviconUrl}
+              fallbackSrc={faviconFallbackUrl}
+              title={bookmark.title}
+              size={40}
+            />
+          </HoverCardTrigger>
+          <HoverCardContent side="bottom" className="w-64">
+            <HoverCardBody
+              bookmark={bookmark}
+              onEdit={handleEdit}
+              onCopyUrl={handleCopyUrl}
+              onDelete={handleDelete}
+              onOpenInManager={handleOpenInManager}
+            />
+          </HoverCardContent>
+        </HoverCard>
+        <DropIndicator edge={closestEdge} />
+      </div>
+    )
+  }
+
+  // List layout
+  return (
+    <div
+      ref={sortableRef as React.RefObject<HTMLDivElement>}
+      className={cn("relative", isDragging && "opacity-40")}
+    >
       <HoverCard>
         <HoverCardTrigger
           render={
             <a
               href={bookmark.url}
-              className="flex items-center justify-center rounded-lg p-2 transition-colors hover:bg-accent"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2.5 rounded-lg px-2 py-1.5 transition-colors hover:bg-accent"
             />
           }
         >
@@ -97,10 +153,11 @@ export function BookmarkItem({
             primarySrc={faviconUrl}
             fallbackSrc={faviconFallbackUrl}
             title={bookmark.title}
-            size={40}
+            size={16}
           />
+          <span className="truncate text-sm">{bookmark.title}</span>
         </HoverCardTrigger>
-        <HoverCardContent side="bottom" className="w-64">
+        <HoverCardContent side="right" className="w-72">
           <HoverCardBody
             bookmark={bookmark}
             onEdit={handleEdit}
@@ -110,41 +167,8 @@ export function BookmarkItem({
           />
         </HoverCardContent>
       </HoverCard>
-    )
-  }
-
-  // List layout
-  return (
-    <HoverCard>
-      <HoverCardTrigger
-        render={
-          <a
-            href={bookmark.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-2.5 rounded-lg px-2 py-1.5 transition-colors hover:bg-accent"
-          />
-        }
-      >
-        <Favicon
-          url={bookmark.url ?? ""}
-          primarySrc={faviconUrl}
-          fallbackSrc={faviconFallbackUrl}
-          title={bookmark.title}
-          size={16}
-        />
-        <span className="truncate text-sm">{bookmark.title}</span>
-      </HoverCardTrigger>
-      <HoverCardContent side="right" className="w-72">
-        <HoverCardBody
-          bookmark={bookmark}
-          onEdit={handleEdit}
-          onCopyUrl={handleCopyUrl}
-          onDelete={handleDelete}
-          onOpenInManager={handleOpenInManager}
-        />
-      </HoverCardContent>
-    </HoverCard>
+      <DropIndicator edge={closestEdge} />
+    </div>
   )
 }
 

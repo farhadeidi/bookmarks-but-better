@@ -47,6 +47,13 @@ export class ChromeBookmarkAdapter implements BookmarkAdapter {
     await chrome.bookmarks.removeTree(id)
   }
 
+  async move(
+    id: string,
+    destination: { parentId?: string; index: number }
+  ): Promise<void> {
+    await chrome.bookmarks.move(id, destination)
+  }
+
   onChanged(callback: () => void): () => void {
     chrome.bookmarks.onChanged.addListener(callback)
     return () => chrome.bookmarks.onChanged.removeListener(callback)

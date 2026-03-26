@@ -34,6 +34,7 @@ interface PreferencesState {
   colorTheme: ColorTheme
   maxColumns: number
   containerMode: "fluid" | "contained"
+  folderOrder: string[]
   adapter: BrowserAdapter | null
 
   // Actions
@@ -44,6 +45,7 @@ interface PreferencesState {
   setColorTheme(theme: ColorTheme): void
   setMaxColumns(value: number): void
   setContainerMode(mode: "fluid" | "contained"): void
+  setFolderOrder(order: string[]): void
 }
 
 export const usePreferencesStore = create<PreferencesState>((set, get) => ({
@@ -53,6 +55,7 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
   colorTheme: "default",
   maxColumns: 4,
   containerMode: "fluid",
+  folderOrder: [],
   adapter: null,
 
   async init(adapter: BrowserAdapter) {
@@ -65,6 +68,7 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
       colorTheme,
       maxColumns,
       containerMode,
+      folderOrder,
     ] = await Promise.all([
       adapter.storage.get<Record<string, CardLayout>>("cardLayouts"),
       adapter.storage.get<boolean>("nestedFolders"),
@@ -72,6 +76,7 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
       adapter.storage.get<ColorTheme>("colorTheme"),
       adapter.storage.get<number>("maxColumns"),
       adapter.storage.get<"fluid" | "contained">("containerMode"),
+      adapter.storage.get<string[]>("folderOrder"),
     ])
 
     const resolvedColorTheme = colorTheme ?? "default"
@@ -83,6 +88,7 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
       colorTheme: resolvedColorTheme,
       maxColumns: Math.max(2, Math.min(6, maxColumns ?? 4)),
       containerMode: containerMode ?? "fluid",
+      folderOrder: folderOrder ?? [],
     })
 
     // Apply color theme to root element
@@ -121,6 +127,11 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
   setContainerMode(mode: "fluid" | "contained") {
     set({ containerMode: mode })
     get().adapter?.storage.set("containerMode", mode)
+  },
+
+  setFolderOrder(order: string[]) {
+    set({ folderOrder: order })
+    get().adapter?.storage.set("folderOrder", order)
   },
 }))
 

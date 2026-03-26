@@ -2,6 +2,7 @@ import * as React from "react"
 import { useBookmarkStore } from "@/stores/bookmark-store"
 import { usePreferencesStore } from "@/stores/preferences-store"
 import { BookmarkCard } from "@/features/bookmark-card"
+import { useSortableFolder, sortFoldersByOrder, DropIndicator } from "@/features/dnd"
 import type { BookmarkNode } from "@/browser"
 import { cn } from "@/lib/utils"
 import { useMediaQuery } from "@/hooks/use-media-query"
@@ -88,6 +89,29 @@ function distributeToColumns(
   return columns
 }
 
+function SortableFolderCard({
+  folder,
+  sortableIndex,
+}: {
+  folder: BookmarkNode
+  sortableIndex: number
+}) {
+  const { ref, handleRef, isDragging, closestEdge } = useSortableFolder({
+    id: folder.id,
+    index: sortableIndex,
+  })
+
+  return (
+    <div
+      ref={ref as React.RefObject<HTMLDivElement>}
+      className={cn("relative", isDragging && "opacity-40")}
+    >
+      <BookmarkCard folder={folder} dragHandleRef={handleRef} />
+      <DropIndicator edge={closestEdge} />
+    </div>
+  )
+}
+
 export function BookmarkGrid() {
   const rootFolder = useBookmarkStore((s) => s.rootFolder)
   const tree = useBookmarkStore((s) => s.tree)
@@ -96,6 +120,7 @@ export function BookmarkGrid() {
   const maxColumns = usePreferencesStore((s) => s.maxColumns)
   const containerMode = usePreferencesStore((s) => s.containerMode)
   const cardLayouts = usePreferencesStore((s) => s.cardLayouts)
+  const folderOrder = usePreferencesStore((s) => s.folderOrder)
 
   const columnCount = useColumnCount(maxColumns)
   const displayRoot = rootFolder ?? (tree.length > 0 ? tree[0] : null)
@@ -103,14 +128,23 @@ export function BookmarkGrid() {
   const folders = React.useMemo(() => {
     if (!displayRoot) return []
 
+    let rawFolders: BookmarkNode[]
     if (nestedFolders) {
-      return (displayRoot.children ?? []).filter(
+      rawFolders = (displayRoot.children ?? []).filter(
         (c) => c.url === undefined && c.children !== undefined
       )
+    } else {
+      rawFolders = collectAllFolders(displayRoot)
     }
 
-    return collectAllFolders(displayRoot)
-  }, [displayRoot, nestedFolders])
+    return sortFoldersByOrder(rawFolders, folderOrder)
+  }, [displayRoot, nestedFolders, folderOrder])
+
+  const folderIndexMap = React.useMemo(() => {
+    const map = new Map<string, number>()
+    folders.forEach((f, i) => map.set(f.id, i))
+    return map
+  }, [folders])
 
   const columns = React.useMemo(
     () => distributeToColumns(folders, columnCount, cardLayouts),
@@ -144,7 +178,11 @@ export function BookmarkGrid() {
         {columns.map((columnFolders, colIndex) => (
           <div key={colIndex} className="flex flex-col gap-4">
             {columnFolders.map((folder) => (
-              <BookmarkCard key={folder.id} folder={folder} />
+              <SortableFolderCard
+                key={folder.id}
+                folder={folder}
+                sortableIndex={folderIndexMap.get(folder.id) ?? 0}
+              />
             ))}
           </div>
         ))}

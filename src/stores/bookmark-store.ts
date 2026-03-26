@@ -21,6 +21,7 @@ interface BookmarkState {
   ): Promise<void>
   deleteBookmark(id: string): Promise<void>
   deleteFolder(id: string): Promise<void>
+  moveBookmark(id: string, destination: { parentId?: string; index: number }): Promise<void>
 }
 
 function findNode(
@@ -124,6 +125,13 @@ export const useBookmarkStore = create<BookmarkState>((set, get) => ({
     const { adapter } = get()
     if (!adapter) return
     await adapter.bookmarks.removeTree(id)
+    await get().refresh()
+  },
+
+  async moveBookmark(id: string, destination: { parentId?: string; index: number }) {
+    const { adapter } = get()
+    if (!adapter) return
+    await adapter.bookmarks.move(id, destination)
     await get().refresh()
   },
 }))

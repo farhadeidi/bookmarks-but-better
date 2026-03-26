@@ -8,6 +8,7 @@ import { SettingsDialog } from "@/features/settings"
 import { BookmarkEditorDialog } from "@/features/bookmark-editor"
 import { DeleteConfirmDialog } from "@/features/delete-confirm"
 import { OnboardingWizard } from "@/features/onboarding"
+import { DndMonitor } from "@/features/dnd"
 import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
 import {
@@ -118,6 +119,9 @@ export function App() {
           <TooltipContent side="top">Settings</TooltipContent>
         </Tooltip>
       </div>
+
+      {/* DnD monitor (renders nothing, handles drop logic) */}
+      <DndMonitor />
 
       {/* Dialogs */}
       <SettingsDialog />
