@@ -154,7 +154,7 @@ export function BookmarkCard({ folder, nested = false }: BookmarkCardProps) {
         <div
           className={cn(
             layout === "grid"
-              ? "grid grid-cols-[repeat(auto-fill,minmax(48px,1fr))] gap-1"
+              ? "grid grid-cols-[repeat(auto-fill,minmax(52px,1fr))] gap-1"
               : "flex flex-col"
           )}
         >

@@ -97,7 +97,7 @@ export function BookmarkItem({
             primarySrc={faviconUrl}
             fallbackSrc={faviconFallbackUrl}
             title={bookmark.title}
-            size={36}
+            size={40}
           />
         </HoverCardTrigger>
         <HoverCardContent side="bottom" className="w-64">
