@@ -10,6 +10,7 @@ import { DeleteConfirmDialog } from "@/features/delete-confirm"
 import { OnboardingWizard } from "@/features/onboarding"
 import { FolderOrderDialog } from "@/features/folder-order"
 import { DndMonitor } from "@/features/dnd"
+import { ScrollArea } from "@/components/ui/scroll-area"
 import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
 import {
@@ -67,7 +68,7 @@ export function App() {
   }, [initBookmarks, initPreferences])
 
   return (
-    <div className="min-h-svh bg-background text-foreground">
+    <ScrollArea className="h-svh bg-background text-foreground">
       {/* Main content */}
       <main className="px-4 pt-8 pb-24">
         {isLoading ? (
@@ -132,7 +133,7 @@ export function App() {
       {showOnboarding && onboardingChecked && (
         <OnboardingWizard onComplete={() => setShowOnboarding(false)} />
       )}
-    </div>
+    </ScrollArea>
   )
 }
 
