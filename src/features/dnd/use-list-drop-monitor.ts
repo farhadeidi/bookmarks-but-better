@@ -28,7 +28,7 @@ export function useListDropMonitor({
 
     return monitorForElements({
       canMonitor: ({ source }) =>
-        (source.data as ListItemDragData).type === "list-item",
+        source.data.type === "list-item",
       onDrop({ source, location }) {
         const target = location.current.dropTargets[0]
         if (!target) return

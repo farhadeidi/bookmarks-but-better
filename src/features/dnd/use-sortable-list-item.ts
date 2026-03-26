@@ -45,7 +45,7 @@ export function useSortableListItem({
         element: el,
         canDrop: ({ source }) => {
           return (
-            (source.data as ListItemDragData).type === DND_TYPE_LIST_ITEM &&
+            source.data.type === DND_TYPE_LIST_ITEM &&
             source.data.id !== id
           )
         },
