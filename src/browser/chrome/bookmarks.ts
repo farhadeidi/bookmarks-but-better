@@ -51,7 +51,19 @@ export class ChromeBookmarkAdapter implements BookmarkAdapter {
     id: string,
     destination: { parentId?: string; index: number }
   ): Promise<void> {
-    await chrome.bookmarks.move(id, destination)
+    const [node] = await chrome.bookmarks.get(id)
+    const targetParentId = destination.parentId ?? node.parentId
+
+    let index = destination.index
+    if (
+      node.parentId === targetParentId &&
+      node.index != null &&
+      node.index < index
+    ) {
+      index += 1
+    }
+
+    await chrome.bookmarks.move(id, { ...destination, index })
   }
 
   onChanged(callback: () => void): () => void {
