@@ -23,6 +23,7 @@ import type { BookmarkNode } from "@/browser"
 import { cn } from "@/lib/utils"
 import { HugeiconsIcon } from "@hugeicons/react"
 import { Drag04Icon, Folder01Icon } from "@hugeicons/core-free-icons"
+import { collectAllFolders, getDisplayRoot } from "@/lib/bookmark-utils"
 
 // --- Internal sortable row ---
 
@@ -37,7 +38,9 @@ function FolderRow({ folder, index }: FolderRowProps) {
     index,
   })
 
-  const bookmarkCount = (folder.children ?? []).filter((c) => c.url !== undefined).length
+  const bookmarkCount = (folder.children ?? []).filter(
+    (c) => c.url !== undefined
+  ).length
 
   return (
     <div
@@ -80,21 +83,6 @@ function FolderRow({ folder, index }: FolderRowProps) {
   )
 }
 
-// --- Helpers ---
-
-function collectAllFolders(node: BookmarkNode): BookmarkNode[] {
-  const folders: BookmarkNode[] = []
-  if (node.children) {
-    for (const child of node.children) {
-      if (child.url === undefined && child.children !== undefined) {
-        folders.push(child)
-        folders.push(...collectAllFolders(child))
-      }
-    }
-  }
-  return folders
-}
-
 // --- Main dialog ---
 
 export function FolderOrderDialog() {
@@ -104,8 +92,12 @@ export function FolderOrderDialog() {
   const folderOrder = usePreferencesStore((s) => s.folderOrder)
   const setFolderOrder = usePreferencesStore((s) => s.setFolderOrder)
   const nestedFolders = usePreferencesStore((s) => s.nestedFolders)
-  const experimentalCardDrag = usePreferencesStore((s) => s.experimentalCardDrag)
-  const setExperimentalCardDrag = usePreferencesStore((s) => s.setExperimentalCardDrag)
+  const experimentalCardDrag = usePreferencesStore(
+    (s) => s.experimentalCardDrag
+  )
+  const setExperimentalCardDrag = usePreferencesStore(
+    (s) => s.setExperimentalCardDrag
+  )
 
   const rootFolder = useBookmarkStore((s) => s.rootFolder)
   const tree = useBookmarkStore((s) => s.tree)
@@ -115,7 +107,7 @@ export function FolderOrderDialog() {
 
   // Derive the full folder list based on nested mode
   const allFolders = React.useMemo(() => {
-    const displayRoot = rootFolder ?? (tree.length > 0 ? tree[0] : null)
+    const displayRoot = getDisplayRoot(rootFolder, tree)
     if (!displayRoot) return []
     if (nestedFolders) {
       return (displayRoot.children ?? []).filter(
@@ -130,8 +122,8 @@ export function FolderOrderDialog() {
     if (open) {
       setLocalOrder(folderOrder)
     }
-  }, [open]) // intentionally only react to open changing
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open])
 
   // Ordered folders for display
   const sortedFolders = React.useMemo(

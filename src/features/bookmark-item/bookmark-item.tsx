@@ -33,7 +33,7 @@ interface BookmarkItemProps {
   folderId: string
 }
 
-export function BookmarkItem({
+export const BookmarkItem = React.memo(function BookmarkItem({
   bookmark,
   layout,
   faviconUrl,
@@ -41,7 +41,11 @@ export function BookmarkItem({
   sortableIndex,
   folderId,
 }: BookmarkItemProps) {
-  const { ref: sortableRef, isDragging, closestEdge } = useSortableBookmark({
+  const {
+    ref: sortableRef,
+    isDragging,
+    closestEdge,
+  } = useSortableBookmark({
     id: bookmark.id,
     index: sortableIndex,
     folderId,
@@ -133,7 +137,6 @@ export function BookmarkItem({
     )
   }
 
-  // List layout
   return (
     <div
       ref={sortableRef as React.RefObject<HTMLDivElement>}
@@ -173,9 +176,9 @@ export function BookmarkItem({
       <DropIndicator edge={closestEdge} />
     </div>
   )
-}
+})
 
-function HoverCardBody({
+const HoverCardBody = React.memo(function HoverCardBody({
   bookmark,
   onEdit,
   onCopyUrl,
@@ -190,7 +193,7 @@ function HoverCardBody({
 }) {
   return (
     <div className="flex flex-col gap-2">
-      <div className="font-medium text-sm">{bookmark.title}</div>
+      <div className="text-sm font-medium">{bookmark.title}</div>
       {bookmark.url && (
         <div className="truncate text-xs text-muted-foreground">
           {bookmark.url}
@@ -198,25 +201,43 @@ function HoverCardBody({
       )}
       <div className="flex items-center gap-1 pt-1">
         <Tooltip>
-          <TooltipTrigger render={<Button variant="ghost" size="icon-sm" onClick={onEdit} />}>
+          <TooltipTrigger
+            render={<Button variant="ghost" size="icon-sm" onClick={onEdit} />}
+          >
             <HugeiconsIcon icon={PencilEdit01Icon} size={14} />
           </TooltipTrigger>
           <TooltipContent>Edit</TooltipContent>
         </Tooltip>
         <Tooltip>
-          <TooltipTrigger render={<Button variant="ghost" size="icon-sm" onClick={onCopyUrl} />}>
+          <TooltipTrigger
+            render={
+              <Button variant="ghost" size="icon-sm" onClick={onCopyUrl} />
+            }
+          >
             <HugeiconsIcon icon={Copy01Icon} size={14} />
           </TooltipTrigger>
           <TooltipContent>Copy URL</TooltipContent>
         </Tooltip>
         <Tooltip>
-          <TooltipTrigger render={<Button variant="ghost" size="icon-sm" onClick={onDelete} />}>
+          <TooltipTrigger
+            render={
+              <Button variant="ghost" size="icon-sm" onClick={onDelete} />
+            }
+          >
             <HugeiconsIcon icon={Delete02Icon} size={14} />
           </TooltipTrigger>
           <TooltipContent>Delete</TooltipContent>
         </Tooltip>
         <Tooltip>
-          <TooltipTrigger render={<Button variant="ghost" size="icon-sm" onClick={onOpenInManager} />}>
+          <TooltipTrigger
+            render={
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={onOpenInManager}
+              />
+            }
+          >
             <HugeiconsIcon icon={ArrowUpRight01Icon} size={14} />
           </TooltipTrigger>
           <TooltipContent>Show in bookmark manager</TooltipContent>
@@ -224,4 +245,4 @@ function HoverCardBody({
       </div>
     </div>
   )
-}
+})

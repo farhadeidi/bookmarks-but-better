@@ -4,42 +4,14 @@ import { extractClosestEdge } from "@atlaskit/pragmatic-drag-and-drop-hitbox/clo
 import { getReorderDestinationIndex } from "@atlaskit/pragmatic-drag-and-drop-hitbox/util/get-reorder-destination-index"
 import { useBookmarkStore } from "@/stores/bookmark-store"
 import { usePreferencesStore } from "@/stores/preferences-store"
-import type { BookmarkNode } from "@/browser"
-import { DND_TYPE, type BookmarkDragData, type FolderCardDragData } from "./types"
-import { reorderArray } from "./move-operations"
+import {
+  DND_TYPE,
+  type BookmarkDragData,
+  type FolderCardDragData,
+} from "./types"
+import { reorderArray, sortFoldersByOrder } from "./move-operations"
+import { collectAllFolders, getDisplayRoot } from "@/lib/bookmark-utils"
 
-/** Recursively collect all descendant folders (same logic as BookmarkGrid). */
-function collectAllFolders(node: BookmarkNode): BookmarkNode[] {
-  const folders: BookmarkNode[] = []
-  if (node.children) {
-    for (const child of node.children) {
-      if (child.url === undefined && child.children !== undefined) {
-        folders.push(child)
-        folders.push(...collectAllFolders(child))
-      }
-    }
-  }
-  return folders
-}
-
-function sortByOrder(folders: BookmarkNode[], order: string[]): BookmarkNode[] {
-  if (order.length === 0) return folders
-  const orderMap = new Map(order.map((id, i) => [id, i]))
-  const ordered: BookmarkNode[] = []
-  const unordered: BookmarkNode[] = []
-  for (const f of folders) {
-    if (orderMap.has(f.id)) ordered.push(f)
-    else unordered.push(f)
-  }
-  ordered.sort((a, b) => orderMap.get(a.id)! - orderMap.get(b.id)!)
-  return [...ordered, ...unordered]
-}
-
-/**
- * Global monitor for all drag-and-drop operations.
- * Handles bookmark reordering/moving and folder card reordering.
- * Renders nothing — just sets up the monitor in a useEffect.
- */
 export function DndMonitor() {
   const moveBookmark = useBookmarkStore((s) => s.moveBookmark)
   const rootFolder = useBookmarkStore((s) => s.rootFolder)
@@ -54,7 +26,9 @@ export function DndMonitor() {
         const target = location.current.dropTargets[0]
         if (!target) return
 
-        const sourceData = source.data as unknown as BookmarkDragData | FolderCardDragData
+        const sourceData = source.data as unknown as
+          | BookmarkDragData
+          | FolderCardDragData
 
         if (sourceData.type === DND_TYPE.BOOKMARK) {
           handleBookmarkDrop(sourceData, target)
@@ -135,7 +109,7 @@ export function DndMonitor() {
       if (destinationIndex === sourceData.index) return
 
       // Get the current effective folder list
-      const displayRoot = rootFolder ?? (tree.length > 0 ? tree[0] : null)
+      const displayRoot = getDisplayRoot(rootFolder, tree)
       if (!displayRoot) return
 
       const rawFolders = nestedFolders
@@ -144,13 +118,24 @@ export function DndMonitor() {
           )
         : collectAllFolders(displayRoot)
 
-      const sorted = sortByOrder(rawFolders, folderOrder)
+      const sorted = sortFoldersByOrder(rawFolders, folderOrder)
       const currentIds = sorted.map((f) => f.id)
-      const newOrder = reorderArray(currentIds, sourceData.index, destinationIndex)
+      const newOrder = reorderArray(
+        currentIds,
+        sourceData.index,
+        destinationIndex
+      )
 
       setFolderOrder(newOrder)
     }
-  }, [moveBookmark, rootFolder, tree, nestedFolders, folderOrder, setFolderOrder])
+  }, [
+    moveBookmark,
+    rootFolder,
+    tree,
+    nestedFolders,
+    folderOrder,
+    setFolderOrder,
+  ])
 
   return null
 }

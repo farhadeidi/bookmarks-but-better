@@ -45,18 +45,17 @@ const FolderMenu = React.memo(function FolderMenu({
     <DropdownMenu>
       <DropdownMenuTrigger
         render={
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            aria-label="Folder actions"
-          />
+          <Button variant="ghost" size="icon-sm" aria-label="Folder actions" />
         }
       >
         <HugeiconsIcon icon={MoreVerticalIcon} size={14} />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
         <DropdownMenuItem onClick={onToggleLayout}>
-          <HugeiconsIcon icon={layout === "list" ? GridViewIcon : Menu02Icon} size={14} />
+          <HugeiconsIcon
+            icon={layout === "list" ? GridViewIcon : Menu02Icon}
+            size={14}
+          />
           {layout === "list" ? "Grid view" : "List view"}
         </DropdownMenuItem>
         <DropdownMenuSeparator />
@@ -101,14 +100,13 @@ export const BookmarkCard = React.memo(function BookmarkCard({
   nested = false,
   dragHandleRef,
 }: BookmarkCardProps) {
-  const cardLayouts = usePreferencesStore((s) => s.cardLayouts)
+  const layout = usePreferencesStore((s) => s.cardLayouts[folder.id] ?? "list")
   const setCardLayout = usePreferencesStore((s) => s.setCardLayout)
   const nestedFolders = usePreferencesStore((s) => s.nestedFolders)
   const adapter = useBookmarkStore((s) => s.adapter)
 
   const { ref: dropRef, isOver } = useFolderDropTarget({ folderId: folder.id })
 
-  const layout = cardLayouts[folder.id] ?? "list"
   const children = folder.children ?? []
 
   // Separate direct bookmarks from subfolders
@@ -141,7 +139,7 @@ export const BookmarkCard = React.memo(function BookmarkCard({
       className={cn(
         "flex flex-col gap-3 rounded-2xl bg-card p-4 ring-1 ring-border transition-shadow",
         nested && "ring-border/50",
-        isOver && "ring-2 ring-primary/50 shadow-md"
+        isOver && "shadow-md ring-2 ring-primary/50"
       )}
     >
       {/* Header */}
@@ -149,7 +147,7 @@ export const BookmarkCard = React.memo(function BookmarkCard({
         {dragHandleRef && (
           <button
             ref={dragHandleRef as React.RefObject<HTMLButtonElement>}
-            className="flex-shrink-0 cursor-grab touch-none text-muted-foreground/40 hover:text-muted-foreground transition-colors"
+            className="flex-shrink-0 cursor-grab touch-none text-muted-foreground/40 transition-colors hover:text-muted-foreground"
             aria-label="Drag to reorder folder"
           >
             <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
@@ -163,7 +161,10 @@ export const BookmarkCard = React.memo(function BookmarkCard({
           </button>
         )}
         <h3
-          className={cn("min-w-0 flex-1 truncate font-medium", nested ? "text-xs" : "text-sm")}
+          className={cn(
+            "min-w-0 flex-1 truncate font-medium",
+            nested ? "text-xs" : "text-sm"
+          )}
         >
           {folder.title}
         </h3>

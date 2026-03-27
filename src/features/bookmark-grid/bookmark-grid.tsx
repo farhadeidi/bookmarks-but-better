@@ -2,39 +2,48 @@ import * as React from "react"
 import { useBookmarkStore } from "@/stores/bookmark-store"
 import { usePreferencesStore } from "@/stores/preferences-store"
 import { BookmarkCard } from "@/features/bookmark-card"
-import { useSortableFolder, sortFoldersByOrder, DropIndicator } from "@/features/dnd"
+import {
+  useSortableFolder,
+  sortFoldersByOrder,
+  DropIndicator,
+} from "@/features/dnd"
 import type { BookmarkNode } from "@/browser"
 import { cn } from "@/lib/utils"
-import { useMediaQuery } from "@/hooks/use-media-query"
+import { collectAllFolders } from "@/lib/bookmark-utils"
 
-function collectAllFolders(node: BookmarkNode): BookmarkNode[] {
-  const folders: BookmarkNode[] = []
-  if (node.children) {
-    for (const child of node.children) {
-      if (child.url === undefined && child.children !== undefined) {
-        folders.push(child)
-        folders.push(...collectAllFolders(child))
-      }
-    }
-  }
-  return folders
+function getColumnCountForWidth(): number {
+  const w = window.innerWidth
+  if (w >= 1536) return 6
+  if (w >= 1280) return 5
+  if (w >= 1024) return 4
+  if (w >= 768) return 3
+  if (w >= 640) return 2
+  return 1
 }
 
 function useColumnCount(maxColumns: number): number {
-  const sm = useMediaQuery("(min-width: 640px)")
-  const md = useMediaQuery("(min-width: 768px)")
-  const lg = useMediaQuery("(min-width: 1024px)")
-  const xl = useMediaQuery("(min-width: 1280px)")
-  const xxl = useMediaQuery("(min-width: 1536px)")
+  const [columnCount, setColumnCount] = React.useState(() =>
+    Math.min(getColumnCountForWidth(), maxColumns)
+  )
 
-  let count = 1
-  if (sm) count = 2
-  if (md) count = 3
-  if (lg) count = 4
-  if (xl) count = 5
-  if (xxl) count = 6
+  React.useEffect(() => {
+    const breakpoints = [640, 768, 1024, 1280, 1536]
+    const queries = breakpoints.map((bp) =>
+      window.matchMedia(`(min-width: ${bp}px)`)
+    )
 
-  return Math.min(count, maxColumns)
+    function update() {
+      setColumnCount(Math.min(getColumnCountForWidth(), maxColumns))
+    }
+
+    update()
+    for (const q of queries) q.addEventListener("change", update)
+    return () => {
+      for (const q of queries) q.removeEventListener("change", update)
+    }
+  }, [maxColumns])
+
+  return columnCount
 }
 
 /** Estimate card height based on layout mode and bookmark count */
@@ -121,7 +130,9 @@ export function BookmarkGrid() {
   const containerMode = usePreferencesStore((s) => s.containerMode)
   const cardLayouts = usePreferencesStore((s) => s.cardLayouts)
   const folderOrder = usePreferencesStore((s) => s.folderOrder)
-  const experimentalCardDrag = usePreferencesStore((s) => s.experimentalCardDrag)
+  const experimentalCardDrag = usePreferencesStore(
+    (s) => s.experimentalCardDrag
+  )
 
   const columnCount = useColumnCount(maxColumns)
   const displayRoot = rootFolder ?? (tree.length > 0 ? tree[0] : null)
@@ -174,7 +185,9 @@ export function BookmarkGrid() {
     >
       <div
         className="grid items-start gap-4"
-        style={{ gridTemplateColumns: `repeat(${columnCount}, minmax(0, 1fr))` }}
+        style={{
+          gridTemplateColumns: `repeat(${columnCount}, minmax(0, 1fr))`,
+        }}
       >
         {columns.map((columnFolders, colIndex) => (
           <div key={colIndex} className="flex flex-col gap-4">

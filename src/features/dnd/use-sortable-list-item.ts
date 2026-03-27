@@ -1,7 +1,14 @@
 import { useEffect, useRef, useState } from "react"
-import { draggable, dropTargetForElements } from "@atlaskit/pragmatic-drag-and-drop/element/adapter"
+import {
+  draggable,
+  dropTargetForElements,
+} from "@atlaskit/pragmatic-drag-and-drop/element/adapter"
 import { combine } from "@atlaskit/pragmatic-drag-and-drop/combine"
-import { attachClosestEdge, extractClosestEdge, type Edge } from "@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge"
+import {
+  attachClosestEdge,
+  extractClosestEdge,
+  type Edge,
+} from "@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge"
 
 const DND_TYPE_LIST_ITEM = "list-item" as const
 
@@ -24,20 +31,30 @@ export function useSortableListItem({
 }: UseSortableListItemInput) {
   const ref = useRef<HTMLElement | null>(null)
   const handleRef = useRef<HTMLElement | null>(null)
+  const indexRef = useRef(index)
   const [isDragging, setIsDragging] = useState(false)
   const [closestEdge, setClosestEdge] = useState<Edge | null>(null)
+
+  useEffect(() => {
+    indexRef.current = index
+  })
 
   useEffect(() => {
     const el = ref.current
     if (!el || disabled) return
 
-    const data: ListItemDragData = { type: DND_TYPE_LIST_ITEM, id, index }
+    const getData = (): Record<string, unknown> =>
+      ({
+        type: DND_TYPE_LIST_ITEM,
+        id,
+        index: indexRef.current,
+      }) as unknown as Record<string, unknown>
 
     return combine(
       draggable({
         element: el,
         dragHandle: handleRef.current ?? undefined,
-        getInitialData: () => data as unknown as Record<string, unknown>,
+        getInitialData: getData,
         onDragStart: () => setIsDragging(true),
         onDrop: () => setIsDragging(false),
       }),
@@ -45,23 +62,23 @@ export function useSortableListItem({
         element: el,
         canDrop: ({ source }) => {
           return (
-            source.data.type === DND_TYPE_LIST_ITEM &&
-            source.data.id !== id
+            source.data.type === DND_TYPE_LIST_ITEM && source.data.id !== id
           )
         },
         getData: ({ input, element }) =>
-          attachClosestEdge(data as unknown as Record<string, unknown>, {
+          attachClosestEdge(getData(), {
             element,
             input,
             allowedEdges: ["top", "bottom"],
           }),
-        onDragEnter: ({ self }) => setClosestEdge(extractClosestEdge(self.data)),
+        onDragEnter: ({ self }) =>
+          setClosestEdge(extractClosestEdge(self.data)),
         onDrag: ({ self }) => setClosestEdge(extractClosestEdge(self.data)),
         onDragLeave: () => setClosestEdge(null),
         onDrop: () => setClosestEdge(null),
       })
     )
-  }, [id, index, disabled])
+  }, [id, disabled])
 
   return { ref, handleRef, isDragging, closestEdge }
 }
