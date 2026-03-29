@@ -207,6 +207,8 @@ export function App() {
                   size="icon"
                   onClick={() => {
                     indexedDB.deleteDatabase("bookmarks-but-better")
+                    indexedDB.deleteDatabase("bookmarks-but-better-prefs")
+                    chrome?.storage?.sync?.clear?.()
                     window.location.reload()
                   }}
                   aria-label="Reset data (dev)"

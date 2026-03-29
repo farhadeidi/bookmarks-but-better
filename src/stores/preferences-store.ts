@@ -84,17 +84,70 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
       adapter.storage.get<boolean>("experimentalCardDrag"),
     ])
 
-    const resolvedColorTheme = colorTheme ?? "default"
+    const isFreshState =
+      cardLayouts === null &&
+      nestedFolders === null &&
+      adapterMode === null &&
+      colorTheme === null &&
+      maxColumns === null &&
+      containerMode === null &&
+      folderOrder === null &&
+      experimentalCardDrag === null
+
+    let seedPrefDefaults: Record<string, unknown> | null = null
+    if (import.meta.env.DEV && isFreshState) {
+      const { default: seed } = await import("@/dev/seed-preferences.json")
+      seedPrefDefaults = seed as Record<string, unknown>
+    }
+
+    const resolvedColorTheme =
+      colorTheme ??
+      (seedPrefDefaults?.colorTheme as ColorTheme | undefined) ??
+      "default"
 
     set({
-      cardLayouts: cardLayouts ?? {},
-      nestedFolders: nestedFolders ?? false,
-      adapterMode: adapterMode ?? "browser",
+      cardLayouts:
+        cardLayouts ??
+        (seedPrefDefaults?.cardLayouts as
+          | Record<string, CardLayout>
+          | undefined) ??
+        {},
+      nestedFolders:
+        nestedFolders ??
+        (seedPrefDefaults?.nestedFolders as boolean | undefined) ??
+        false,
+      adapterMode:
+        adapterMode ??
+        (seedPrefDefaults?.adapterMode as
+          | "browser"
+          | "standalone"
+          | undefined) ??
+        "browser",
       colorTheme: resolvedColorTheme,
-      maxColumns: Math.max(2, Math.min(6, maxColumns ?? 4)),
-      containerMode: containerMode ?? "fluid",
-      folderOrder: folderOrder ?? [],
-      experimentalCardDrag: experimentalCardDrag ?? false,
+      maxColumns: Math.max(
+        2,
+        Math.min(
+          6,
+          maxColumns ??
+            (seedPrefDefaults?.maxColumns as number | undefined) ??
+            4
+        )
+      ),
+      containerMode:
+        containerMode ??
+        (seedPrefDefaults?.containerMode as
+          | "fluid"
+          | "contained"
+          | undefined) ??
+        "fluid",
+      folderOrder:
+        folderOrder ??
+        (seedPrefDefaults?.folderOrder as string[] | undefined) ??
+        [],
+      experimentalCardDrag:
+        experimentalCardDrag ??
+        (seedPrefDefaults?.experimentalCardDrag as boolean | undefined) ??
+        false,
     })
 
     // Apply color theme to root element
