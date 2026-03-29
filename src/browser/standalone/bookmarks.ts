@@ -25,6 +25,7 @@ interface StoredBookmark {
   url?: string
   parentId?: string
   dateAdded: number
+  index?: number
 }
 
 function generateId(): string {
@@ -42,6 +43,7 @@ async function getAllBookmarks(db: IDBDatabase): Promise<StoredBookmark[]> {
 }
 
 function buildTree(bookmarks: StoredBookmark[]): BookmarkNode[] {
+  const indexMap = new Map(bookmarks.map((b) => [b.id, b.index ?? 0]))
   const map = new Map<string, BookmarkNode>()
   const roots: BookmarkNode[] = []
 
@@ -63,6 +65,16 @@ function buildTree(bookmarks: StoredBookmark[]): BookmarkNode[] {
       roots.push(node)
     }
   }
+
+  // Sort children by index
+  for (const node of map.values()) {
+    if (node.children && node.children.length > 1) {
+      node.children.sort(
+        (a, b) => (indexMap.get(a.id) ?? 0) - (indexMap.get(b.id) ?? 0)
+      )
+    }
+  }
+  roots.sort((a, b) => (indexMap.get(a.id) ?? 0) - (indexMap.get(b.id) ?? 0))
 
   return roots
 }
@@ -104,10 +116,7 @@ async function getChildIds(db: IDBDatabase, id: string): Promise<string[]> {
   })
 }
 
-async function deleteTreeRecursive(
-  db: IDBDatabase,
-  id: string
-): Promise<void> {
+async function deleteTreeRecursive(db: IDBDatabase, id: string): Promise<void> {
   const childIds = await getChildIds(db, id)
   for (const childId of childIds) {
     await deleteTreeRecursive(db, childId)
@@ -117,6 +126,16 @@ async function deleteTreeRecursive(
 
 export class StandaloneBookmarkAdapter implements BookmarkAdapter {
   private db: IDBDatabase | null = null
+  private listeners = {
+    changed: new Set<() => void>(),
+    created: new Set<() => void>(),
+    removed: new Set<() => void>(),
+    moved: new Set<() => void>(),
+  }
+
+  private notify(event: "changed" | "created" | "removed" | "moved") {
+    for (const cb of this.listeners[event]) cb()
+  }
 
   private async getDB(): Promise<IDBDatabase> {
     if (!this.db) {
@@ -143,13 +162,15 @@ export class StandaloneBookmarkAdapter implements BookmarkAdapter {
       nodes: BookmarkNode[],
       result: StoredBookmark[] = []
     ): StoredBookmark[] {
-      for (const node of nodes) {
+      for (let i = 0; i < nodes.length; i++) {
+        const node = nodes[i]
         result.push({
           id: node.id,
           title: node.title,
           url: node.url,
           parentId: node.parentId,
           dateAdded: node.dateAdded ?? Date.now(),
+          index: i,
         })
         if (node.children) {
           flattenNodes(node.children, result)
@@ -195,14 +216,20 @@ export class StandaloneBookmarkAdapter implements BookmarkAdapter {
     url?: string
   }): Promise<BookmarkNode> {
     const db = await this.getDB()
+    const all = await getAllBookmarks(db)
+    const siblingCount = all.filter(
+      (b) => b.parentId === bookmark.parentId
+    ).length
     const stored: StoredBookmark = {
       id: generateId(),
       title: bookmark.title,
       url: bookmark.url,
       parentId: bookmark.parentId,
       dateAdded: Date.now(),
+      index: siblingCount,
     }
     await putBookmark(db, stored)
+    this.notify("created")
     return {
       id: stored.id,
       title: stored.title,
@@ -229,6 +256,7 @@ export class StandaloneBookmarkAdapter implements BookmarkAdapter {
       ...(changes.url !== undefined && { url: changes.url }),
     }
     await putBookmark(db, updated)
+    this.notify("changed")
     return {
       id: updated.id,
       title: updated.title,
@@ -242,32 +270,79 @@ export class StandaloneBookmarkAdapter implements BookmarkAdapter {
   async remove(id: string): Promise<void> {
     const db = await this.getDB()
     await deleteBookmark(db, id)
+    this.notify("removed")
   }
 
   async removeTree(id: string): Promise<void> {
     const db = await this.getDB()
     await deleteTreeRecursive(db, id)
+    this.notify("removed")
   }
 
-  // Standalone mode: no external events. The store calls refresh() after mutations.
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  onChanged(_callback: () => void): () => void {
-    return () => {}
+  async move(
+    id: string,
+    destination: { parentId?: string; index: number }
+  ): Promise<void> {
+    const db = await this.getDB()
+    const all = await getAllBookmarks(db)
+    const bookmark = all.find((b) => b.id === id)
+    if (!bookmark) throw new Error(`Bookmark not found: ${id}`)
+
+    const oldParentId = bookmark.parentId
+    const newParentId = destination.parentId ?? oldParentId
+    const newIndex = destination.index
+
+    // Remove from old parent and re-index siblings
+    const oldSiblings = all
+      .filter((b) => b.parentId === oldParentId && b.id !== id)
+      .sort((a, b) => (a.index ?? 0) - (b.index ?? 0))
+    for (let i = 0; i < oldSiblings.length; i++) {
+      if (oldSiblings[i].index !== i) {
+        oldSiblings[i].index = i
+        await putBookmark(db, oldSiblings[i])
+      }
+    }
+
+    // Get new parent's children (excluding moved item)
+    const newSiblings =
+      oldParentId === newParentId
+        ? oldSiblings
+        : all
+            .filter((b) => b.parentId === newParentId && b.id !== id)
+            .sort((a, b) => (a.index ?? 0) - (b.index ?? 0))
+
+    // Shift siblings at and after the insertion point
+    const clampedIndex = Math.min(newIndex, newSiblings.length)
+    for (let i = newSiblings.length - 1; i >= clampedIndex; i--) {
+      newSiblings[i].index = i + 1
+      await putBookmark(db, newSiblings[i])
+    }
+
+    // Update the moved bookmark
+    bookmark.parentId = newParentId
+    bookmark.index = clampedIndex
+    await putBookmark(db, bookmark)
+    this.notify("moved")
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  onCreated(_callback: () => void): () => void {
-    return () => {}
+  onChanged(callback: () => void): () => void {
+    this.listeners.changed.add(callback)
+    return () => this.listeners.changed.delete(callback)
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  onRemoved(_callback: () => void): () => void {
-    return () => {}
+  onCreated(callback: () => void): () => void {
+    this.listeners.created.add(callback)
+    return () => this.listeners.created.delete(callback)
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  onMoved(_callback: () => void): () => void {
-    return () => {}
+  onRemoved(callback: () => void): () => void {
+    this.listeners.removed.add(callback)
+    return () => this.listeners.removed.delete(callback)
+  }
+
+  onMoved(callback: () => void): () => void {
+    this.listeners.moved.add(callback)
+    return () => this.listeners.moved.delete(callback)
   }
 
   async openInManager(): Promise<void> {

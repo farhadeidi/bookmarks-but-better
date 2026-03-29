@@ -1,5 +1,6 @@
 import { create } from "zustand"
 import type { BookmarkNode, BrowserAdapter } from "@/browser"
+import { debounce } from "@/lib/bookmark-utils"
 
 interface BookmarkState {
   tree: BookmarkNode[]
@@ -21,12 +22,14 @@ interface BookmarkState {
   ): Promise<void>
   deleteBookmark(id: string): Promise<void>
   deleteFolder(id: string): Promise<void>
+  createFolder(parentId: string, title: string): Promise<void>
+  moveBookmark(
+    id: string,
+    destination: { parentId?: string; index: number }
+  ): Promise<void>
 }
 
-function findNode(
-  nodes: BookmarkNode[],
-  id: string
-): BookmarkNode | null {
+function findNode(nodes: BookmarkNode[], id: string): BookmarkNode | null {
   for (const node of nodes) {
     if (node.id === id) return node
     if (node.children) {
@@ -49,7 +52,6 @@ export const useBookmarkStore = create<BookmarkState>((set, get) => ({
 
     const tree = await adapter.bookmarks.getTree()
 
-    // Load saved root folder preference
     const savedRootId = await adapter.storage.get<string>("rootFolderId")
 
     const rootFolder = savedRootId ? findNode(tree, savedRootId) : null
@@ -61,15 +63,15 @@ export const useBookmarkStore = create<BookmarkState>((set, get) => ({
       isLoading: false,
     })
 
-    // Subscribe to Chrome bookmark events (no-ops for standalone)
+    const debouncedRefresh = debounce(() => get().refresh(), 100)
+
     const unsubscribers = [
-      adapter.bookmarks.onChanged(() => get().refresh()),
-      adapter.bookmarks.onCreated(() => get().refresh()),
-      adapter.bookmarks.onRemoved(() => get().refresh()),
-      adapter.bookmarks.onMoved(() => get().refresh()),
+      adapter.bookmarks.onChanged(debouncedRefresh),
+      adapter.bookmarks.onCreated(debouncedRefresh),
+      adapter.bookmarks.onRemoved(debouncedRefresh),
+      adapter.bookmarks.onMoved(debouncedRefresh),
     ]
 
-    // Store cleanup function (called if needed)
     return () => {
       for (const unsub of unsubscribers) {
         unsub()
@@ -89,9 +91,7 @@ export const useBookmarkStore = create<BookmarkState>((set, get) => ({
     if (!adapter) return
 
     const tree = await adapter.bookmarks.getTree()
-    const rootFolder = rootFolderId
-      ? findNode(tree, rootFolderId)
-      : null
+    const rootFolder = rootFolderId ? findNode(tree, rootFolderId) : null
 
     set({ tree, rootFolder })
   },
@@ -100,30 +100,38 @@ export const useBookmarkStore = create<BookmarkState>((set, get) => ({
     const { adapter } = get()
     if (!adapter) return
     await adapter.bookmarks.create({ parentId, title, url })
-    await get().refresh()
   },
 
-  async updateBookmark(
-    id: string,
-    changes: { title?: string; url?: string }
-  ) {
+  async updateBookmark(id: string, changes: { title?: string; url?: string }) {
     const { adapter } = get()
     if (!adapter) return
     await adapter.bookmarks.update(id, changes)
-    await get().refresh()
   },
 
   async deleteBookmark(id: string) {
     const { adapter } = get()
     if (!adapter) return
     await adapter.bookmarks.remove(id)
-    await get().refresh()
   },
 
   async deleteFolder(id: string) {
     const { adapter } = get()
     if (!adapter) return
     await adapter.bookmarks.removeTree(id)
-    await get().refresh()
+  },
+
+  async createFolder(parentId: string, title: string) {
+    const { adapter } = get()
+    if (!adapter) return
+    await adapter.bookmarks.create({ parentId, title })
+  },
+
+  async moveBookmark(
+    id: string,
+    destination: { parentId?: string; index: number }
+  ) {
+    const { adapter } = get()
+    if (!adapter) return
+    await adapter.bookmarks.move(id, destination)
   },
 }))

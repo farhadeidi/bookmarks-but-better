@@ -1,0 +1,15 @@
+{
+  "cardLayouts": {
+    "1": "grid",
+    "10": "grid",
+    "12": "grid",
+    "17": "grid"
+  },
+  "nestedFolders": false,
+  "adapterMode": "standalone",
+  "colorTheme": "default",
+  "maxColumns": 4,
+  "containerMode": "fluid",
+  "folderOrder": [],
+  "experimentalCardDrag": false
+}

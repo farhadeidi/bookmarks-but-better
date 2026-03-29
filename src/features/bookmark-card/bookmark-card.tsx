@@ -18,6 +18,7 @@ import {
   ArrowUpRight01Icon,
 } from "@hugeicons/core-free-icons"
 import { BookmarkItem } from "@/features/bookmark-item"
+import { useFolderDropTarget } from "@/features/dnd"
 import { usePreferencesStore } from "@/stores/preferences-store"
 import { useBookmarkStore } from "@/stores/bookmark-store"
 import { useUIStore } from "@/stores/ui-store"
@@ -44,18 +45,17 @@ const FolderMenu = React.memo(function FolderMenu({
     <DropdownMenu>
       <DropdownMenuTrigger
         render={
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            aria-label="Folder actions"
-          />
+          <Button variant="ghost" size="icon-sm" aria-label="Folder actions" />
         }
       >
         <HugeiconsIcon icon={MoreVerticalIcon} size={14} />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
         <DropdownMenuItem onClick={onToggleLayout}>
-          <HugeiconsIcon icon={layout === "list" ? GridViewIcon : Menu02Icon} size={14} />
+          <HugeiconsIcon
+            icon={layout === "list" ? GridViewIcon : Menu02Icon}
+            size={14}
+          />
           {layout === "list" ? "Grid view" : "List view"}
         </DropdownMenuItem>
         <DropdownMenuSeparator />
@@ -92,15 +92,21 @@ const FolderMenu = React.memo(function FolderMenu({
 interface BookmarkCardProps {
   folder: BookmarkNode
   nested?: boolean
+  dragHandleRef?: React.RefObject<HTMLElement | null>
 }
 
-export function BookmarkCard({ folder, nested = false }: BookmarkCardProps) {
-  const cardLayouts = usePreferencesStore((s) => s.cardLayouts)
+export const BookmarkCard = React.memo(function BookmarkCard({
+  folder,
+  nested = false,
+  dragHandleRef,
+}: BookmarkCardProps) {
+  const layout = usePreferencesStore((s) => s.cardLayouts[folder.id] ?? "list")
   const setCardLayout = usePreferencesStore((s) => s.setCardLayout)
   const nestedFolders = usePreferencesStore((s) => s.nestedFolders)
   const adapter = useBookmarkStore((s) => s.adapter)
 
-  const layout = cardLayouts[folder.id] ?? "list"
+  const { ref: dropRef, isOver } = useFolderDropTarget({ folderId: folder.id })
+
   const children = folder.children ?? []
 
   // Separate direct bookmarks from subfolders
@@ -129,15 +135,36 @@ export function BookmarkCard({ folder, nested = false }: BookmarkCardProps) {
 
   return (
     <div
+      ref={dropRef as React.RefObject<HTMLDivElement>}
       className={cn(
-        "flex flex-col gap-3 rounded-2xl bg-card p-4 ring-1 ring-border",
-        nested && "ring-border/50"
+        "flex flex-col gap-3 rounded-2xl bg-card p-4 ring-1 ring-border transition-shadow",
+        nested && "ring-border/50",
+        isOver && "shadow-md ring-2 ring-primary/50"
       )}
     >
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center gap-2">
+        {dragHandleRef && (
+          <button
+            ref={dragHandleRef as React.RefObject<HTMLButtonElement>}
+            className="flex-shrink-0 cursor-grab touch-none text-muted-foreground/40 transition-colors hover:text-muted-foreground"
+            aria-label="Drag to reorder folder"
+          >
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+              <circle cx="5" cy="3" r="1.5" />
+              <circle cx="11" cy="3" r="1.5" />
+              <circle cx="5" cy="8" r="1.5" />
+              <circle cx="11" cy="8" r="1.5" />
+              <circle cx="5" cy="13" r="1.5" />
+              <circle cx="11" cy="13" r="1.5" />
+            </svg>
+          </button>
+        )}
         <h3
-          className={cn("truncate font-medium", nested ? "text-xs" : "text-sm")}
+          className={cn(
+            "min-w-0 flex-1 truncate font-medium",
+            nested ? "text-xs" : "text-sm"
+          )}
         >
           {folder.title}
         </h3>
@@ -158,13 +185,15 @@ export function BookmarkCard({ folder, nested = false }: BookmarkCardProps) {
               : "flex flex-col"
           )}
         >
-          {bookmarks.map((bookmark) => (
+          {bookmarks.map((bookmark, index) => (
             <BookmarkItem
               key={bookmark.id}
               bookmark={bookmark}
               layout={layout}
               faviconUrl={getFaviconUrl(bookmark.url!)}
               faviconFallbackUrl={getFallbackFaviconUrl(bookmark.url!)}
+              sortableIndex={index}
+              folderId={folder.id}
             />
           ))}
         </div>
@@ -177,4 +206,4 @@ export function BookmarkCard({ folder, nested = false }: BookmarkCardProps) {
         ))}
     </div>
   )
-}
+})

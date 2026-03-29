@@ -34,6 +34,8 @@ interface PreferencesState {
   colorTheme: ColorTheme
   maxColumns: number
   containerMode: "fluid" | "contained"
+  folderOrder: string[]
+  experimentalCardDrag: boolean
   adapter: BrowserAdapter | null
 
   // Actions
@@ -44,6 +46,8 @@ interface PreferencesState {
   setColorTheme(theme: ColorTheme): void
   setMaxColumns(value: number): void
   setContainerMode(mode: "fluid" | "contained"): void
+  setFolderOrder(order: string[]): void
+  setExperimentalCardDrag(value: boolean): void
 }
 
 export const usePreferencesStore = create<PreferencesState>((set, get) => ({
@@ -53,6 +57,8 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
   colorTheme: "default",
   maxColumns: 4,
   containerMode: "fluid",
+  folderOrder: [],
+  experimentalCardDrag: false,
   adapter: null,
 
   async init(adapter: BrowserAdapter) {
@@ -65,6 +71,8 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
       colorTheme,
       maxColumns,
       containerMode,
+      folderOrder,
+      experimentalCardDrag,
     ] = await Promise.all([
       adapter.storage.get<Record<string, CardLayout>>("cardLayouts"),
       adapter.storage.get<boolean>("nestedFolders"),
@@ -72,17 +80,74 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
       adapter.storage.get<ColorTheme>("colorTheme"),
       adapter.storage.get<number>("maxColumns"),
       adapter.storage.get<"fluid" | "contained">("containerMode"),
+      adapter.storage.get<string[]>("folderOrder"),
+      adapter.storage.get<boolean>("experimentalCardDrag"),
     ])
 
-    const resolvedColorTheme = colorTheme ?? "default"
+    const isFreshState =
+      cardLayouts === null &&
+      nestedFolders === null &&
+      adapterMode === null &&
+      colorTheme === null &&
+      maxColumns === null &&
+      containerMode === null &&
+      folderOrder === null &&
+      experimentalCardDrag === null
+
+    let seedPrefDefaults: Record<string, unknown> | null = null
+    if (import.meta.env.DEV && isFreshState) {
+      const { default: seed } = await import("@/dev/seed-preferences.json")
+      seedPrefDefaults = seed as Record<string, unknown>
+    }
+
+    const resolvedColorTheme =
+      colorTheme ??
+      (seedPrefDefaults?.colorTheme as ColorTheme | undefined) ??
+      "default"
 
     set({
-      cardLayouts: cardLayouts ?? {},
-      nestedFolders: nestedFolders ?? false,
-      adapterMode: adapterMode ?? "browser",
+      cardLayouts:
+        cardLayouts ??
+        (seedPrefDefaults?.cardLayouts as
+          | Record<string, CardLayout>
+          | undefined) ??
+        {},
+      nestedFolders:
+        nestedFolders ??
+        (seedPrefDefaults?.nestedFolders as boolean | undefined) ??
+        false,
+      adapterMode:
+        adapterMode ??
+        (seedPrefDefaults?.adapterMode as
+          | "browser"
+          | "standalone"
+          | undefined) ??
+        "browser",
       colorTheme: resolvedColorTheme,
-      maxColumns: Math.max(2, Math.min(6, maxColumns ?? 4)),
-      containerMode: containerMode ?? "fluid",
+      maxColumns: Math.max(
+        2,
+        Math.min(
+          6,
+          maxColumns ??
+            (seedPrefDefaults?.maxColumns as number | undefined) ??
+            4
+        )
+      ),
+      containerMode:
+        containerMode ??
+        (seedPrefDefaults?.containerMode as
+          | "fluid"
+          | "contained"
+          | undefined) ??
+        "fluid",
+      folderOrder:
+        folderOrder ??
+        (seedPrefDefaults?.folderOrder as string[] | undefined) ??
+        [],
+      experimentalCardDrag:
+        experimentalCardDrag ??
+        (seedPrefDefaults?.experimentalCardDrag as boolean | undefined) ??
+        false,
     })
 
     // Apply color theme to root element
@@ -121,6 +186,16 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
   setContainerMode(mode: "fluid" | "contained") {
     set({ containerMode: mode })
     get().adapter?.storage.set("containerMode", mode)
+  },
+
+  setFolderOrder(order: string[]) {
+    set({ folderOrder: order })
+    get().adapter?.storage.set("folderOrder", order)
+  },
+
+  setExperimentalCardDrag(value: boolean) {
+    set({ experimentalCardDrag: value })
+    get().adapter?.storage.set("experimentalCardDrag", value)
   },
 }))
 

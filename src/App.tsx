@@ -4,12 +4,14 @@ import { useBookmarkStore } from "@/stores/bookmark-store"
 import { usePreferencesStore } from "@/stores/preferences-store"
 import { useUIStore } from "@/stores/ui-store"
 import { BookmarkGrid } from "@/features/bookmark-grid"
-import { SettingsDialog } from "@/features/settings"
-import { BookmarkEditorDialog } from "@/features/bookmark-editor"
-import { DeleteConfirmDialog } from "@/features/delete-confirm"
-import { OnboardingWizard } from "@/features/onboarding"
+import { DndMonitor } from "@/features/dnd"
+import { ScrollArea } from "@/components/ui/scroll-area"
 import { Button } from "@/components/ui/button"
-import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
+import {
+  Tooltip,
+  TooltipTrigger,
+  TooltipContent,
+} from "@/components/ui/tooltip"
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -27,9 +29,35 @@ import {
   Moon02Icon,
   ComputerSettingsIcon,
   PaintBucketIcon,
+  Recycle02Icon,
+  FolderAddIcon,
 } from "@hugeicons/core-free-icons"
 import { useTheme } from "@/components/theme-provider"
 import { COLOR_THEMES, type ColorTheme } from "@/stores/preferences-store"
+
+const SettingsDialog = React.lazy(() =>
+  import("@/features/settings").then((m) => ({ default: m.SettingsDialog }))
+)
+const BookmarkEditorDialog = React.lazy(() =>
+  import("@/features/bookmark-editor").then((m) => ({
+    default: m.BookmarkEditorDialog,
+  }))
+)
+const DeleteConfirmDialog = React.lazy(() =>
+  import("@/features/delete-confirm").then((m) => ({
+    default: m.DeleteConfirmDialog,
+  }))
+)
+const FolderOrderDialog = React.lazy(() =>
+  import("@/features/folder-order").then((m) => ({
+    default: m.FolderOrderDialog,
+  }))
+)
+const OnboardingWizard = React.lazy(() =>
+  import("@/features/onboarding").then((m) => ({
+    default: m.OnboardingWizard,
+  }))
+)
 
 export function App() {
   const initBookmarks = useBookmarkStore((s) => s.init)
@@ -38,24 +66,32 @@ export function App() {
   const [onboardingChecked, setOnboardingChecked] = React.useState(false)
   const openSettings = useUIStore((s) => s.openSettings)
   const isLoading = useBookmarkStore((s) => s.isLoading)
+  const rootFolder = useBookmarkStore((s) => s.rootFolder)
+  const tree = useBookmarkStore((s) => s.tree)
+  const createFolder = useBookmarkStore((s) => s.createFolder)
   const colorTheme = usePreferencesStore((s) => s.colorTheme)
   const setColorTheme = usePreferencesStore((s) => s.setColorTheme)
   const { theme, setTheme } = useTheme()
 
   const themeOrder = ["light", "dark", "system"] as const
-  const themeIcon = { light: Sun02Icon, dark: Moon02Icon, system: ComputerSettingsIcon }
+  const themeIcon = {
+    light: Sun02Icon,
+    dark: Moon02Icon,
+    system: ComputerSettingsIcon,
+  }
 
   const cycleTheme = () => {
     const idx = themeOrder.indexOf(theme)
     setTheme(themeOrder[(idx + 1) % themeOrder.length])
   }
 
-
   React.useEffect(() => {
     async function bootstrap() {
       const adapter = await detectAdapter()
       await Promise.all([initBookmarks(adapter), initPreferences(adapter)])
-      const onboardingCompleted = await adapter.storage.get<boolean>("onboardingCompleted")
+      const onboardingCompleted = await adapter.storage.get<boolean>(
+        "onboardingCompleted"
+      )
       if (!onboardingCompleted) {
         setShowOnboarding(true)
       }
@@ -65,7 +101,7 @@ export function App() {
   }, [initBookmarks, initPreferences])
 
   return (
-    <div className="min-h-svh bg-background text-foreground">
+    <ScrollArea className="h-svh bg-background text-foreground">
       {/* Main content */}
       <main className="px-4 pt-8 pb-24">
         {isLoading ? (
@@ -78,12 +114,37 @@ export function App() {
       </main>
 
       {/* FAB buttons */}
-      <div className="fixed bottom-6 right-6 z-10 flex items-center gap-2">
+      <div className="fixed right-6 bottom-6 z-10 flex items-center gap-2">
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => {
+                  const parentId = rootFolder?.id ?? tree[0]?.id
+                  if (parentId) {
+                    const name = prompt("Folder name:")
+                    if (name?.trim()) createFolder(parentId, name.trim())
+                  }
+                }}
+                aria-label="Create folder"
+              />
+            }
+          >
+            <HugeiconsIcon icon={FolderAddIcon} size={18} />
+          </TooltipTrigger>
+          <TooltipContent side="top">New folder</TooltipContent>
+        </Tooltip>
         {/* Dropdown theme picker */}
         <DropdownMenu>
           <DropdownMenuTrigger
             render={
-              <Button variant="outline" size="icon" aria-label="Pick color theme">
+              <Button
+                variant="outline"
+                size="icon"
+                aria-label="Pick color theme"
+              >
                 <HugeiconsIcon icon={PaintBucketIcon} size={18} />
               </Button>
             }
@@ -106,27 +167,75 @@ export function App() {
           </DropdownMenuContent>
         </DropdownMenu>
         <Tooltip>
-          <TooltipTrigger render={<Button variant="outline" size="icon" onClick={cycleTheme} aria-label="Toggle theme" />}>
+          <TooltipTrigger
+            render={
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={cycleTheme}
+                aria-label="Toggle theme"
+              />
+            }
+          >
             <HugeiconsIcon icon={themeIcon[theme]} size={18} />
           </TooltipTrigger>
-          <TooltipContent side="top" className="capitalize">{theme}</TooltipContent>
+          <TooltipContent side="top" className="capitalize">
+            {theme}
+          </TooltipContent>
         </Tooltip>
         <Tooltip>
-          <TooltipTrigger render={<Button variant="outline" size="icon" onClick={openSettings} aria-label="Settings" />}>
+          <TooltipTrigger
+            render={
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={openSettings}
+                aria-label="Settings"
+              />
+            }
+          >
             <HugeiconsIcon icon={Settings03Icon} size={18} />
           </TooltipTrigger>
           <TooltipContent side="top">Settings</TooltipContent>
         </Tooltip>
+        {import.meta.env.DEV && (
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() => {
+                    indexedDB.deleteDatabase("bookmarks-but-better")
+                    indexedDB.deleteDatabase("bookmarks-but-better-prefs")
+                    chrome?.storage?.sync?.clear?.()
+                    window.location.reload()
+                  }}
+                  aria-label="Reset data (dev)"
+                />
+              }
+            >
+              <HugeiconsIcon icon={Recycle02Icon} size={18} />
+            </TooltipTrigger>
+            <TooltipContent side="top">Reset data (dev)</TooltipContent>
+          </Tooltip>
+        )}
       </div>
 
+      {/* DnD monitor (renders nothing, handles drop logic) */}
+      <DndMonitor />
+
       {/* Dialogs */}
-      <SettingsDialog />
-      <BookmarkEditorDialog />
-      <DeleteConfirmDialog />
-      {showOnboarding && onboardingChecked && (
-        <OnboardingWizard onComplete={() => setShowOnboarding(false)} />
-      )}
-    </div>
+      <React.Suspense fallback={null}>
+        <SettingsDialog />
+        <BookmarkEditorDialog />
+        <DeleteConfirmDialog />
+        <FolderOrderDialog />
+        {showOnboarding && onboardingChecked && (
+          <OnboardingWizard onComplete={() => setShowOnboarding(false)} />
+        )}
+      </React.Suspense>
+    </ScrollArea>
   )
 }
 
