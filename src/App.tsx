@@ -144,17 +144,24 @@ export function App() {
         </Tooltip>
         {/* Dropdown theme picker */}
         <DropdownMenu>
-          <DropdownMenuTrigger
-            render={
-              <Button
-                variant="outline"
-                size="icon"
-                aria-label="Pick color theme"
-              >
-                <HugeiconsIcon icon={PaintBucketIcon} size={18} />
-              </Button>
-            }
-          />
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <DropdownMenuTrigger
+                  render={
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      aria-label="Pick color theme"
+                    >
+                      <HugeiconsIcon icon={PaintBucketIcon} size={18} />
+                    </Button>
+                  }
+                />
+              }
+            />
+            <TooltipContent side="top">Color theme</TooltipContent>
+          </Tooltip>
           <DropdownMenuContent side="top" align="end">
             <DropdownMenuGroup>
               <DropdownMenuLabel>Color Theme</DropdownMenuLabel>
@@ -205,13 +212,24 @@ export function App() {
           <TooltipContent side="top">Settings</TooltipContent>
         </Tooltip>
         <HoverCard>
-          <HoverCardTrigger
-            render={
-              <Button variant="outline" size="icon" aria-label="App info" />
-            }
-          >
-            <HugeiconsIcon icon={InformationCircleIcon} size={18} />
-          </HoverCardTrigger>
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <HoverCardTrigger
+                  render={
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      aria-label="App info"
+                    />
+                  }
+                >
+                  <HugeiconsIcon icon={InformationCircleIcon} size={18} />
+                </HoverCardTrigger>
+              }
+            />
+            <TooltipContent side="top">App info</TooltipContent>
+          </Tooltip>
           <HoverCardContent side="top" align="end">
             <div className="flex flex-col gap-2">
               <div className="flex flex-col gap-1.5">
@@ -222,14 +240,24 @@ export function App() {
                   Version {__APP_VERSION__}
                 </span>
               </div>
-              <a
-                href="https://chromewebstore.google.com/detail/nflojekghnganlcjncbepnnnkgakghif?utm_source=extension-info"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-xs text-muted-foreground underline-offset-2 hover:underline"
-              >
-                Chrome Web Store
-              </a>
+              <div className="flex flex-col gap-1">
+                <a
+                  href="https://chromewebstore.google.com/detail/nflojekghnganlcjncbepnnnkgakghif?utm_source=extension-info"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs text-muted-foreground underline-offset-2 hover:underline"
+                >
+                  Chrome Web Store
+                </a>
+                <a
+                  href="https://github.com/farhadeidi/bookmarks-but-better"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs text-muted-foreground underline-offset-2 hover:underline"
+                >
+                  GitHub
+                </a>
+              </div>
             </div>
           </HoverCardContent>
         </HoverCard>
