@@ -5,7 +5,6 @@ import {
   createOnDropHandler,
   dragAndDropFeature,
   propMemoizationFeature,
-  type ItemInstance,
 } from "@headless-tree/core"
 import { useBookmarkStore } from "@/stores/bookmark-store"
 import { useUIStore } from "@/stores/ui-store"
