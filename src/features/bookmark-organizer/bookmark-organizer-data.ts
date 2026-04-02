@@ -6,11 +6,30 @@ import {
 export { BOOKMARK_ORGANIZER_ROOT_ID } from "./bookmark-organizer-types"
 export type { OrganizerItemData } from "./bookmark-organizer-types"
 
+function isFolderNode(node: chrome.bookmarks.BookmarkTreeNode): boolean {
+  return node.url == null
+}
+
+async function resolveFolderChildCount(
+  node: chrome.bookmarks.BookmarkTreeNode
+): Promise<number> {
+  if (!isFolderNode(node)) {
+    return 0
+  }
+
+  if (node.children) {
+    return node.children.length
+  }
+
+  return chrome.bookmarks.getChildren(node.id).then((children) => children.length)
+}
+
 export function toOrganizerItem(
   node: chrome.bookmarks.BookmarkTreeNode,
-  index: number
+  index: number,
+  childCount?: number
 ): OrganizerItemData {
-  const kind = node.children ? "folder" : "bookmark"
+  const kind = isFolderNode(node) ? "folder" : "bookmark"
 
   return {
     id: node.id,
@@ -20,7 +39,8 @@ export function toOrganizerItem(
     kind,
     parentId: node.parentId ?? null,
     index,
-    childCount: kind === "folder" ? node.children?.length ?? 0 : 0,
+    childCount:
+      kind === "folder" ? childCount ?? node.children?.length ?? 0 : 0,
   }
 }
 
@@ -32,7 +52,12 @@ export async function loadOrganizerChildren(
   }
 
   const children = await chrome.bookmarks.getChildren(parentId)
-  return children.map((node, index) => toOrganizerItem(node, index))
+  return Promise.all(
+    children.map(async (node, index) => {
+      const childCount = await resolveFolderChildCount(node)
+      return toOrganizerItem(node, index, childCount)
+    })
+  )
 }
 
 export async function loadOrganizerItem(
@@ -47,5 +72,6 @@ export async function loadOrganizerItem(
     return null
   }
 
-  return toOrganizerItem(node, 0)
+  const childCount = await resolveFolderChildCount(node)
+  return toOrganizerItem(node, 0, childCount)
 }
