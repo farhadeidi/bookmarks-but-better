@@ -25,7 +25,6 @@ import type { BookmarkNode } from "@/browser"
 export function SettingsDialog() {
   const open = useUIStore((s) => s.settingsOpen)
   const closeSettings = useUIStore((s) => s.closeSettings)
-  const openFolderOrder = useUIStore((s) => s.openFolderOrder)
   const nestedFolders = usePreferencesStore((s) => s.nestedFolders)
   const setNestedFolders = usePreferencesStore((s) => s.setNestedFolders)
   const rootFolderId = useBookmarkStore((s) => s.rootFolderId)
@@ -152,25 +151,6 @@ export function SettingsDialog() {
                 checked={nestedFolders}
                 onCheckedChange={(checked) => setNestedFolders(checked)}
               />
-            </div>
-
-            <div className="flex items-center justify-between">
-              <div className="flex flex-col gap-1">
-                <Label className="text-sm font-medium">Folder Order</Label>
-                <p className="text-xs text-muted-foreground">
-                  Set the display order of your folder cards.
-                </p>
-              </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  closeSettings()
-                  openFolderOrder()
-                }}
-              >
-                Reorder
-              </Button>
             </div>
 
             {/* Layout section */}
