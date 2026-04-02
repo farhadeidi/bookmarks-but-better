@@ -56,7 +56,7 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
   adapterMode: "browser",
   colorTheme: "default",
   maxColumns: 4,
-  containerMode: "fluid",
+  containerMode: "contained",
   folderOrder: [],
   experimentalCardDrag: false,
   adapter: null,
@@ -139,7 +139,7 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
           | "fluid"
           | "contained"
           | undefined) ??
-        "fluid",
+        "contained",
       folderOrder:
         folderOrder ??
         (seedPrefDefaults?.folderOrder as string[] | undefined) ??
