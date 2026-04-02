@@ -1,4 +1,4 @@
-import { RootFolderPicker } from "@/features/settings/root-folder-picker"
+import { RootFolderSelect } from "@/features/root-folder-select"
 
 interface RootFolderStepProps {
   value: string | null
@@ -14,7 +14,7 @@ export function RootFolderStep({ value, onChange }: RootFolderStepProps) {
           Pick a folder to display on your new tab page. You can change this later in settings.
         </p>
       </div>
-      <RootFolderPicker value={value} onChange={onChange} />
+      <RootFolderSelect value={value} onChange={onChange} />
     </div>
   )
 }
