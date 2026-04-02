@@ -229,7 +229,6 @@ export function SettingsDialog() {
               </div>
             </div>
 
-            {/* Data section */}
             <div className="flex flex-col gap-4">
               <div className="border-t pt-4">
                 <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
@@ -246,29 +245,33 @@ export function SettingsDialog() {
                       key={mode}
                       variant={adapterMode === mode ? "default" : "outline"}
                       size="sm"
-                      className="flex-1 capitalize"
                       onClick={() => setAdapterMode(mode)}
+                      className="capitalize"
                     >
-                      {mode}
+                      {mode === "browser" ? "Browser" : "Standalone"}
                     </Button>
                   ))}
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Choose between browser bookmarks or a standalone data source.
+                  Use browser bookmarks or manage an independent collection.
+                  Requires a page reload to take effect.
                 </p>
               </div>
 
-              {/* Import/Export */}
-              {adapterMode === "browser" ? (
+              <div className="flex flex-col gap-2">
+                <Label className="text-sm font-medium">Bookmarks Data</Label>
                 <div className="flex gap-2">
-                  <Button variant="outline" className="flex-1" onClick={handleImport}>
+                  <Button variant="outline" size="sm" onClick={handleImport}>
                     Import
                   </Button>
-                  <Button variant="outline" className="flex-1" onClick={handleExport}>
+                  <Button variant="outline" size="sm" onClick={handleExport}>
                     Export
                   </Button>
                 </div>
-              ) : null}
+                <p className="text-xs text-muted-foreground">
+                  Import or export bookmarks as HTML (standard browser format).
+                </p>
+              </div>
             </div>
           </div>
         </div>
