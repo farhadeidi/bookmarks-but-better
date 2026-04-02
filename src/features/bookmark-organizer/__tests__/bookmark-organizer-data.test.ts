@@ -34,23 +34,34 @@ describe("bookmark organizer data helpers", () => {
   })
 
   it("maps folder and bookmark children with indexes and title fallbacks", async () => {
+    const getChildren = vi.fn().mockImplementation(async (id: string) => {
+      if (id === "parent-1") {
+        return [
+          {
+            id: "folder-1",
+            title: "",
+            parentId: "parent-1",
+          },
+          {
+            id: "bookmark-2",
+            title: "",
+            parentId: "parent-1",
+            url: "https://example.org",
+          },
+        ]
+      }
+
+      if (id === "folder-1") {
+        return [
+          { id: "child-1", title: "Child 1", parentId: "folder-1", url: "https://example.com" },
+          { id: "child-2", title: "Child 2", parentId: "folder-1", url: "https://example.net" },
+        ]
+      }
+
+      return []
+    })
     setChromeBookmarks({
-      getChildren: vi.fn().mockResolvedValue([
-        {
-          id: "folder-1",
-          title: "",
-          parentId: "parent-1",
-          children: [
-            { id: "bookmark-1", title: "Leaf", url: "https://example.com" },
-          ],
-        },
-        {
-          id: "bookmark-2",
-          title: "",
-          parentId: "parent-1",
-          url: "https://example.org",
-        },
-      ]),
+      getChildren,
       get: vi.fn(),
     })
 
@@ -61,7 +72,7 @@ describe("bookmark organizer data helpers", () => {
         kind: "folder",
         parentId: "parent-1",
         index: 0,
-        childCount: 1,
+        childCount: 2,
       },
       {
         id: "bookmark-2",
@@ -72,6 +83,9 @@ describe("bookmark organizer data helpers", () => {
         childCount: 0,
       },
     ])
+    expect(getChildren).toHaveBeenCalledTimes(2)
+    expect(getChildren).toHaveBeenNthCalledWith(1, "parent-1")
+    expect(getChildren).toHaveBeenNthCalledWith(2, "folder-1")
   })
 
   it("returns null for the organizer root sentinel and missing items", async () => {
@@ -89,17 +103,17 @@ describe("bookmark organizer data helpers", () => {
   })
 
   it("maps a folder node correctly", async () => {
+    const getChildren = vi.fn().mockResolvedValue([
+      { id: "child-1", title: "Child", parentId: "folder-1", url: "https://example.com" },
+      { id: "child-2", title: "", parentId: "folder-1", url: "https://example.org" },
+    ])
     setChromeBookmarks({
-      getChildren: vi.fn(),
+      getChildren,
       get: vi.fn().mockResolvedValue([
         {
           id: "folder-1",
           title: "",
           parentId: "parent-1",
-          children: [
-            { id: "child-1", title: "Child", url: "https://example.com" },
-            { id: "child-2", title: "", url: "https://example.org" },
-          ],
         },
       ]),
     })
@@ -112,5 +126,7 @@ describe("bookmark organizer data helpers", () => {
       index: 0,
       childCount: 2,
     })
+    expect(getChildren).toHaveBeenCalledTimes(1)
+    expect(getChildren).toHaveBeenCalledWith("folder-1")
   })
 })
