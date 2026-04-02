@@ -6,6 +6,7 @@ import {
   dragAndDropFeature,
   propMemoizationFeature,
 } from "@headless-tree/core"
+import type { BookmarkAdapter, BookmarkNode } from "@/browser"
 import { useBookmarkStore } from "@/stores/bookmark-store"
 import { useUIStore } from "@/stores/ui-store"
 import { loadOrganizerChildren, loadOrganizerItem } from "./bookmark-organizer-data"
@@ -36,7 +37,7 @@ function createMissingOrganizerItem(
   }
 }
 
-function toBookmarkNode(node: chrome.bookmarks.BookmarkTreeNode) {
+function toBookmarkNode(node: BookmarkNode) {
   if (node.url) {
     return {
       id: node.id,
@@ -66,8 +67,10 @@ function BookmarkOrganizerUnavailable() {
 
 function BookmarkOrganizerTreeImpl({
   effectiveRootId,
+  bookmarks,
 }: {
   effectiveRootId: string | null
+  bookmarks: Pick<BookmarkAdapter, "getSubTree">
 }) {
   const openEditor = useUIStore((s) => s.openEditor)
   const openDeleteConfirm = useUIStore((s) => s.openDeleteConfirm)
@@ -89,7 +92,7 @@ function BookmarkOrganizerTreeImpl({
         }
 
         return (
-          (await loadOrganizerItem(id)) ??
+          (await loadOrganizerItem(bookmarks, id)) ??
           createMissingOrganizerItem(id, effectiveRootId)
         )
       },
@@ -99,7 +102,7 @@ function BookmarkOrganizerTreeImpl({
             return []
           }
 
-          return loadOrganizerChildren(effectiveRootId).then((items) =>
+          return loadOrganizerChildren(bookmarks, effectiveRootId).then((items) =>
             items.map((item) => ({
               id: item.id,
               data: item,
@@ -107,7 +110,7 @@ function BookmarkOrganizerTreeImpl({
           )
         }
 
-        const children = await loadOrganizerChildren(id)
+        const children = await loadOrganizerChildren(bookmarks, id)
         return children.map((item) => ({
           id: item.id,
           data: item,
@@ -132,7 +135,7 @@ function BookmarkOrganizerTreeImpl({
       const items = await Promise.all(
         newChildren.map(async (childId) => {
           return (
-            (await loadOrganizerItem(childId)) ??
+            (await loadOrganizerItem(bookmarks, childId)) ??
             createMissingOrganizerItem(childId, parentId)
           )
         })
@@ -185,7 +188,7 @@ function BookmarkOrganizerTreeImpl({
                 return
               }
 
-              const [bookmark] = await chrome.bookmarks.get(treeItem.getId())
+              const [bookmark] = await bookmarks.getSubTree(treeItem.getId())
               if (!bookmark) {
                 return
               }
@@ -224,5 +227,10 @@ export function BookmarkOrganizerTree({
     return <BookmarkOrganizerUnavailable />
   }
 
-  return <BookmarkOrganizerTreeImpl effectiveRootId={effectiveRootId} />
+  return (
+    <BookmarkOrganizerTreeImpl
+      effectiveRootId={effectiveRootId}
+      bookmarks={adapter.bookmarks}
+    />
+  )
 }

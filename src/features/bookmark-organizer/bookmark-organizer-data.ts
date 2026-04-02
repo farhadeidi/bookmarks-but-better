@@ -1,3 +1,4 @@
+import type { BookmarkAdapter, BookmarkNode } from "@/browser"
 import {
   BOOKMARK_ORGANIZER_ROOT_ID,
   type OrganizerItemData,
@@ -6,28 +7,13 @@ import {
 export { BOOKMARK_ORGANIZER_ROOT_ID } from "./bookmark-organizer-types"
 export type { OrganizerItemData } from "./bookmark-organizer-types"
 
-function isFolderNode(node: chrome.bookmarks.BookmarkTreeNode): boolean {
+function isFolderNode(node: BookmarkNode): boolean {
   return node.url == null
 }
 
-async function resolveFolderChildCount(
-  node: chrome.bookmarks.BookmarkTreeNode
-): Promise<number> {
-  if (!isFolderNode(node)) {
-    return 0
-  }
-
-  if (node.children) {
-    return node.children.length
-  }
-
-  return chrome.bookmarks.getChildren(node.id).then((children) => children.length)
-}
-
 export function toOrganizerItem(
-  node: chrome.bookmarks.BookmarkTreeNode,
-  index: number,
-  childCount?: number
+  node: BookmarkNode,
+  index: number
 ): OrganizerItemData {
   const kind = isFolderNode(node) ? "folder" : "bookmark"
 
@@ -39,39 +25,34 @@ export function toOrganizerItem(
     kind,
     parentId: node.parentId ?? null,
     index,
-    childCount:
-      kind === "folder" ? childCount ?? node.children?.length ?? 0 : 0,
+    childCount: kind === "folder" ? node.children?.length ?? 0 : 0,
   }
 }
 
 export async function loadOrganizerChildren(
+  bookmarks: Pick<BookmarkAdapter, "getSubTree">,
   parentId?: string | null
 ): Promise<OrganizerItemData[]> {
   if (!parentId || parentId === BOOKMARK_ORGANIZER_ROOT_ID) {
     return []
   }
 
-  const children = await chrome.bookmarks.getChildren(parentId)
-  return Promise.all(
-    children.map(async (node, index) => {
-      const childCount = await resolveFolderChildCount(node)
-      return toOrganizerItem(node, index, childCount)
-    })
-  )
+  const [parent] = await bookmarks.getSubTree(parentId)
+  return (parent?.children ?? []).map((node, index) => toOrganizerItem(node, index))
 }
 
 export async function loadOrganizerItem(
+  bookmarks: Pick<BookmarkAdapter, "getSubTree">,
   id?: string | null
 ): Promise<OrganizerItemData | null> {
   if (!id || id === BOOKMARK_ORGANIZER_ROOT_ID) {
     return null
   }
 
-  const [node] = await chrome.bookmarks.get(id)
+  const [node] = await bookmarks.getSubTree(id)
   if (!node) {
     return null
   }
 
-  const childCount = await resolveFolderChildCount(node)
-  return toOrganizerItem(node, 0, childCount)
+  return toOrganizerItem(node, 0)
 }
