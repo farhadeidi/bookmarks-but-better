@@ -4,12 +4,11 @@ import { usePreferencesStore } from "@/stores/preferences-store"
 import { BookmarkCard } from "@/features/bookmark-card"
 import {
   useSortableFolder,
-  sortFoldersByOrder,
   DropIndicator,
 } from "@/features/dnd"
 import type { BookmarkNode } from "@/browser"
 import { cn } from "@/lib/utils"
-import { collectAllFolders } from "@/lib/bookmark-utils"
+import { getVisibleFolders } from "./folder-collection"
 
 function getColumnCountForWidth(): number {
   const w = window.innerWidth
@@ -140,17 +139,13 @@ export function BookmarkGrid() {
   const folders = React.useMemo(() => {
     if (!displayRoot) return []
 
-    let rawFolders: BookmarkNode[]
-    if (nestedFolders) {
-      rawFolders = (displayRoot.children ?? []).filter(
-        (c) => c.url === undefined && c.children !== undefined
-      )
-    } else {
-      rawFolders = collectAllFolders(displayRoot)
-    }
-
-    return sortFoldersByOrder(rawFolders, folderOrder)
-  }, [displayRoot, nestedFolders, folderOrder])
+    return getVisibleFolders({
+      displayRoot,
+      nestedFolders,
+      experimentalCardDrag,
+      folderOrder,
+    })
+  }, [displayRoot, nestedFolders, experimentalCardDrag, folderOrder])
 
   const folderIndexMap = React.useMemo(() => {
     const map = new Map<string, number>()
