@@ -9,7 +9,7 @@
   "adapterMode": "standalone",
   "colorTheme": "default",
   "maxColumns": 4,
-  "containerMode": "fluid",
+  "containerMode": "contained",
   "folderOrder": [],
   "experimentalCardDrag": false
 }

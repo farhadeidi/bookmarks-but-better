@@ -13,6 +13,11 @@ import {
   TooltipContent,
 } from "@/components/ui/tooltip"
 import {
+  HoverCard,
+  HoverCardTrigger,
+  HoverCardContent,
+} from "@/components/ui/hover-card"
+import {
   DropdownMenu,
   DropdownMenuTrigger,
   DropdownMenuContent,
@@ -31,6 +36,7 @@ import {
   PaintBucketIcon,
   Recycle02Icon,
   FolderAddIcon,
+  InformationCircleIcon,
 } from "@hugeicons/core-free-icons"
 import { useTheme } from "@/components/theme-provider"
 import { COLOR_THEMES, type ColorTheme } from "@/stores/preferences-store"
@@ -198,6 +204,35 @@ export function App() {
           </TooltipTrigger>
           <TooltipContent side="top">Settings</TooltipContent>
         </Tooltip>
+        <HoverCard>
+          <HoverCardTrigger
+            render={
+              <Button variant="outline" size="icon" aria-label="App info" />
+            }
+          >
+            <HugeiconsIcon icon={InformationCircleIcon} size={18} />
+          </HoverCardTrigger>
+          <HoverCardContent side="top" align="end">
+            <div className="flex flex-col gap-2">
+              <div className="flex flex-col gap-1.5">
+                <span className="text-sm font-medium">
+                  Bookmarks — But Better
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  Version {__APP_VERSION__}
+                </span>
+              </div>
+              <a
+                href="https://chromewebstore.google.com/detail/nflojekghnganlcjncbepnnnkgakghif?utm_source=extension-info"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs text-muted-foreground underline-offset-2 hover:underline"
+              >
+                Chrome Web Store
+              </a>
+            </div>
+          </HoverCardContent>
+        </HoverCard>
         {import.meta.env.DEV && (
           <Tooltip>
             <TooltipTrigger
