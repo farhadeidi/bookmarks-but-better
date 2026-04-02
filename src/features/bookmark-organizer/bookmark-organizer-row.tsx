@@ -35,7 +35,7 @@ export const BookmarkOrganizerRow = React.memo(function BookmarkOrganizerRow({
     <div
       {...itemProps}
       className={cn(
-        "group flex items-center gap-2 rounded-lg border border-transparent px-2 py-1.5 transition-colors hover:bg-muted/70",
+        "group flex items-center gap-1.5 rounded-md border border-transparent px-1.5 py-1 transition-colors hover:bg-muted/70",
         itemProps.className
       )}
       style={{
@@ -47,7 +47,7 @@ export const BookmarkOrganizerRow = React.memo(function BookmarkOrganizerRow({
         <button
           type="button"
           aria-label={isExpanded ? "Collapse folder" : "Expand folder"}
-          className="flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          className="flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
           onClick={(event) => {
             event.preventDefault()
             event.stopPropagation()
@@ -60,7 +60,7 @@ export const BookmarkOrganizerRow = React.memo(function BookmarkOrganizerRow({
         >
           <HugeiconsIcon
             icon={ArrowRight01Icon}
-            size={14}
+            size={12}
             style={{
               transform: isExpanded ? "rotate(90deg)" : "rotate(0deg)",
               transition: "transform 120ms ease",
@@ -68,32 +68,32 @@ export const BookmarkOrganizerRow = React.memo(function BookmarkOrganizerRow({
           />
         </button>
       ) : (
-        <span className="size-8" aria-hidden="true" />
+        <span className="size-7" aria-hidden="true" />
       )}
 
       <button
         type="button"
         aria-label="Drag item"
-        className="flex size-8 cursor-grab touch-none items-center justify-center rounded-md text-muted-foreground/60 transition-colors hover:bg-muted hover:text-foreground"
+        className="flex size-7 cursor-grab touch-none items-center justify-center rounded-md text-muted-foreground/60 transition-colors hover:bg-muted hover:text-foreground"
         {...item.getDragHandleProps()}
       >
-        <HugeiconsIcon icon={Drag04Icon} size={14} />
+        <HugeiconsIcon icon={Drag04Icon} size={12} />
       </button>
 
-      <div className="flex min-w-0 flex-1 items-center gap-2">
+      <div className="flex min-w-0 flex-1 items-center gap-1.5">
         <HugeiconsIcon
           icon={isFolder ? Folder01Icon : ArrowUpRight01Icon}
-          size={14}
+          size={12}
           className="shrink-0 text-muted-foreground"
         />
-        <span className="truncate text-sm font-medium">{title}</span>
+        <span className="truncate text-[13px] font-medium leading-5">{title}</span>
       </div>
 
       <div className="flex items-center gap-1">
         <Button
           type="button"
           variant="ghost"
-          size="icon-sm"
+          size="icon-xs"
           aria-label="Rename item"
           onClick={(event) => {
             event.preventDefault()
@@ -101,12 +101,12 @@ export const BookmarkOrganizerRow = React.memo(function BookmarkOrganizerRow({
             void onRename(item)
           }}
         >
-          <HugeiconsIcon icon={PencilEdit01Icon} size={14} />
+          <HugeiconsIcon icon={PencilEdit01Icon} size={12} />
         </Button>
         <Button
           type="button"
           variant="ghost"
-          size="icon-sm"
+          size="icon-xs"
           aria-label="Delete item"
           onClick={(event) => {
             event.preventDefault()
@@ -114,7 +114,7 @@ export const BookmarkOrganizerRow = React.memo(function BookmarkOrganizerRow({
             void onDelete(item)
           }}
         >
-          <HugeiconsIcon icon={Delete02Icon} size={14} />
+          <HugeiconsIcon icon={Delete02Icon} size={12} />
         </Button>
       </div>
     </div>
