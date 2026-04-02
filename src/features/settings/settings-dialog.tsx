@@ -17,7 +17,7 @@ import {
 import { useUIStore } from "@/stores/ui-store"
 import { usePreferencesStore } from "@/stores/preferences-store"
 import { useBookmarkStore } from "@/stores/bookmark-store"
-import { RootFolderPicker } from "./root-folder-picker"
+import { RootFolderSelect } from "@/features/root-folder-select"
 import { serializeNetscapeBookmarks } from "@/browser/import-export/netscape-serializer"
 import { parseNetscapeBookmarks } from "@/browser/import-export/netscape-parser"
 import type { BookmarkNode } from "@/browser"
@@ -134,7 +134,12 @@ export function SettingsDialog() {
         <div className="-mx-4 no-scrollbar max-h-[50vh] overflow-y-auto px-4">
           <div className="flex flex-col gap-6">
             {/* Bookmarks section */}
-            <RootFolderPicker value={rootFolderId} onChange={setRootFolderId} />
+            <RootFolderSelect
+              value={rootFolderId}
+              onChange={setRootFolderId}
+              label="Root Folder"
+              description="Choose which folder to display as the root of your bookmarks."
+            />
 
             <div className="flex items-center justify-between">
               <div className="flex flex-col gap-1">
@@ -241,33 +246,29 @@ export function SettingsDialog() {
                       key={mode}
                       variant={adapterMode === mode ? "default" : "outline"}
                       size="sm"
+                      className="flex-1 capitalize"
                       onClick={() => setAdapterMode(mode)}
-                      className="capitalize"
                     >
-                      {mode === "browser" ? "Browser" : "Standalone"}
+                      {mode}
                     </Button>
                   ))}
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Use browser bookmarks or manage an independent collection.
-                  Requires a page reload to take effect.
+                  Choose between browser bookmarks or a standalone data source.
                 </p>
               </div>
 
-              <div className="flex flex-col gap-2">
-                <Label className="text-sm font-medium">Bookmarks Data</Label>
+              {/* Import/Export */}
+              {adapterMode === "browser" ? (
                 <div className="flex gap-2">
-                  <Button variant="outline" size="sm" onClick={handleImport}>
+                  <Button variant="outline" className="flex-1" onClick={handleImport}>
                     Import
                   </Button>
-                  <Button variant="outline" size="sm" onClick={handleExport}>
+                  <Button variant="outline" className="flex-1" onClick={handleExport}>
                     Export
                   </Button>
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  Import or export bookmarks as HTML (standard browser format).
-                </p>
-              </div>
+              ) : null}
             </div>
           </div>
         </div>
