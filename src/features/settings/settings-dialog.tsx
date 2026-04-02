@@ -258,17 +258,20 @@ export function SettingsDialog() {
                 </p>
               </div>
 
-              {/* Import/Export */}
-              {adapterMode === "browser" ? (
+              <div className="flex flex-col gap-2">
+                <Label className="text-sm font-medium">Bookmarks Data</Label>
                 <div className="flex gap-2">
-                  <Button variant="outline" className="flex-1" onClick={handleImport}>
+                  <Button variant="outline" size="sm" onClick={handleImport}>
                     Import
                   </Button>
-                  <Button variant="outline" className="flex-1" onClick={handleExport}>
+                  <Button variant="outline" size="sm" onClick={handleExport}>
                     Export
                   </Button>
                 </div>
-              ) : null}
+                <p className="text-xs text-muted-foreground">
+                  Import or export bookmarks as HTML (standard browser format).
+                </p>
+              </div>
             </div>
           </div>
         </div>
