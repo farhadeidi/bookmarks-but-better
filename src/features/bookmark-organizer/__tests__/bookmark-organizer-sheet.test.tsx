@@ -11,7 +11,6 @@ describe("BookmarkOrganizerSheet", () => {
     useUIStore.setState({
       settingsOpen: false,
       bookmarkOrganizerOpen: true,
-      folderOrderOpen: false,
       editingBookmark: null,
       deletingItem: null,
       creatingItem: null,

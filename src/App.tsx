@@ -36,6 +36,7 @@ import {
   PaintBucketIcon,
   Recycle02Icon,
   FolderAddIcon,
+  Folder01Icon,
   InformationCircleIcon,
 } from "@hugeicons/core-free-icons"
 import { useTheme } from "@/components/theme-provider"
@@ -54,9 +55,9 @@ const DeleteConfirmDialog = React.lazy(() =>
     default: m.DeleteConfirmDialog,
   }))
 )
-const FolderOrderDialog = React.lazy(() =>
-  import("@/features/folder-order").then((m) => ({
-    default: m.FolderOrderDialog,
+const BookmarkOrganizerSheet = React.lazy(() =>
+  import("@/features/bookmark-organizer").then((m) => ({
+    default: m.BookmarkOrganizerSheet,
   }))
 )
 const OnboardingWizard = React.lazy(() =>
@@ -75,6 +76,7 @@ export function App() {
   const rootFolder = useBookmarkStore((s) => s.rootFolder)
   const tree = useBookmarkStore((s) => s.tree)
   const createFolder = useBookmarkStore((s) => s.createFolder)
+  const openBookmarkOrganizer = useUIStore((s) => s.openBookmarkOrganizer)
   const colorTheme = usePreferencesStore((s) => s.colorTheme)
   const setColorTheme = usePreferencesStore((s) => s.setColorTheme)
   const { theme, setTheme } = useTheme()
@@ -121,6 +123,21 @@ export function App() {
 
       {/* FAB buttons */}
       <div className="fixed right-6 bottom-6 z-10 flex items-center gap-2">
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={openBookmarkOrganizer}
+                aria-label="Bookmark Organizer"
+              />
+            }
+          >
+            <HugeiconsIcon icon={Folder01Icon} size={18} />
+          </TooltipTrigger>
+          <TooltipContent side="top">Bookmark Organizer</TooltipContent>
+        </Tooltip>
         <Tooltip>
           <TooltipTrigger
             render={
@@ -293,7 +310,7 @@ export function App() {
         <SettingsDialog />
         <BookmarkEditorDialog />
         <DeleteConfirmDialog />
-        <FolderOrderDialog />
+        <BookmarkOrganizerSheet />
         {showOnboarding && onboardingChecked && (
           <OnboardingWizard onComplete={() => setShowOnboarding(false)} />
         )}
