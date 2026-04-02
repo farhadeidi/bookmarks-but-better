@@ -5,14 +5,18 @@ export interface RootFolderOption {
   label: string
 }
 
+const UNTITLED_FOLDER_LABEL = "Untitled Folder"
+
 function collectFolderPaths(
   node: BookmarkNode,
   path: string[] = []
 ): RootFolderOption[] {
-  const currentPath = node.title ? [...path, node.title] : path
+  const isRootLevelNode = path.length === 0 && !node.title
+  const segment = node.title || UNTITLED_FOLDER_LABEL
+  const currentPath = node.title || !isRootLevelNode ? [...path, segment] : path
   const result: RootFolderOption[] = []
 
-  if (node.title) {
+  if (!isRootLevelNode) {
     result.push({
       id: node.id,
       label: currentPath.join(" > "),
