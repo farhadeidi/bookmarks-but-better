@@ -122,7 +122,7 @@ export function App() {
       </main>
 
       {/* FAB buttons */}
-      <div className="fixed right-6 bottom-6 z-10 flex items-center gap-2">
+      <div className="fixed right-6 bottom-6 z-10 flex items-center gap-2 rounded-2xl border border-border/60 bg-background/90 px-2 py-1.5 shadow-sm backdrop-blur-sm">
         <Tooltip>
           <TooltipTrigger
             render={
