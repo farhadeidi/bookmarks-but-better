@@ -14,6 +14,7 @@ import {
   Menu02Icon,
   MoreVerticalIcon,
   Folder01Icon,
+  Bookmark02Icon,
   PencilEdit01Icon,
   Delete02Icon,
   ArrowUpRight01Icon,
@@ -42,6 +43,7 @@ const FolderMenu = React.memo(function FolderMenu({
   const openEditor = useUIStore((s) => s.openEditor)
   const openDeleteConfirm = useUIStore((s) => s.openDeleteConfirm)
   const openBookmarkOrganizer = useUIStore((s) => s.openBookmarkOrganizer)
+  const openCreateItem = useUIStore((s) => s.openCreateItem)
 
   return (
     <DropdownMenu>
@@ -61,6 +63,12 @@ const FolderMenu = React.memo(function FolderMenu({
           {layout === "list" ? "Grid view" : "List view"}
         </DropdownMenuItem>
         <DropdownMenuSeparator />
+        <DropdownMenuItem
+          onClick={() => openCreateItem({ type: "bookmark", parentId: folder.id })}
+        >
+          <HugeiconsIcon icon={Bookmark02Icon} size={14} />
+          New Bookmark
+        </DropdownMenuItem>
         <DropdownMenuItem onClick={openBookmarkOrganizer}>
           <HugeiconsIcon icon={Folder01Icon} size={14} />
           Organize bookmarks
