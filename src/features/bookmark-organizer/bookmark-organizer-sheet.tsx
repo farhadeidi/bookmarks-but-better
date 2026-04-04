@@ -2,6 +2,7 @@ import * as React from "react"
 import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
+
 import {
   Sheet,
   SheetContent,
@@ -19,10 +20,7 @@ import { useUIStore } from "@/stores/ui-store"
 export function BookmarkOrganizerSheet() {
   const bookmarkOrganizerOpen = useUIStore((s) => s.bookmarkOrganizerOpen)
   const closeBookmarkOrganizer = useUIStore((s) => s.closeBookmarkOrganizer)
-  const openCreateItem = useUIStore((s) => s.openCreateItem)
   const rootFolderId = useBookmarkStore((s) => s.rootFolderId)
-  const rootFolder = useBookmarkStore((s) => s.rootFolder)
-  const tree = useBookmarkStore((s) => s.tree)
   const setRootFolderId = useBookmarkStore((s) => s.setRootFolderId)
 
   const creatingItem = useUIStore((s) => s.creatingItem)
@@ -39,8 +37,6 @@ export function BookmarkOrganizerSheet() {
       lastCreatingItemRef.current = null
     }
   }, [creatingItem])
-
-  const activeParentId = rootFolder?.id ?? tree[0]?.id ?? null
 
   return (
     <>
@@ -72,43 +68,6 @@ export function BookmarkOrganizerSheet() {
                 value={rootFolderId}
                 onChange={setRootFolderId}
               />
-
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  disabled={!activeParentId}
-                  onClick={() => {
-                    if (!activeParentId) {
-                      return
-                    }
-
-                    openCreateItem({
-                      type: "folder",
-                      parentId: activeParentId,
-                    })
-                  }}
-                >
-                  New Folder
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  disabled={!activeParentId}
-                  onClick={() => {
-                    if (!activeParentId) {
-                      return
-                    }
-
-                    openCreateItem({
-                      type: "bookmark",
-                      parentId: activeParentId,
-                    })
-                  }}
-                >
-                  New Bookmark
-                </Button>
-              </div>
 
               <div className="flex items-center gap-2">
                 <Button

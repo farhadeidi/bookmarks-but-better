@@ -62,7 +62,7 @@ describe("BookmarkOrganizerSheet", () => {
     render(<BookmarkOrganizerSheet />)
 
     expect(screen.getByText("Bookmark Organizer")).toBeTruthy()
-    expect(screen.getByRole("button", { name: "New Folder" })).toBeTruthy()
-    expect(screen.getByRole("button", { name: "New Bookmark" })).toBeTruthy()
+    expect(screen.getByRole("button", { name: "Expand All" })).toBeTruthy()
+    expect(screen.getByRole("button", { name: "Collapse All" })).toBeTruthy()
   })
 })
