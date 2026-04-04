@@ -35,7 +35,7 @@ export const BookmarkOrganizerRow = React.memo(function BookmarkOrganizerRow({
     <div
       {...itemProps}
       className={cn(
-        "group flex items-center gap-1.5 rounded-md border border-transparent px-1.5 py-1 transition-colors hover:bg-muted/70",
+        "group group/row flex items-center gap-1.5 rounded-md border border-transparent px-1.5 py-1 transition-colors hover:bg-muted/70",
         itemProps.className
       )}
       style={{
@@ -92,29 +92,33 @@ export const BookmarkOrganizerRow = React.memo(function BookmarkOrganizerRow({
       <div className="flex items-center gap-1">
         <Button
           type="button"
-          variant="ghost"
+          variant="secondary"
           size="icon-xs"
           aria-label="Rename item"
+          title="Rename"
+          className="bg-transparent group-hover/row:bg-secondary"
           onClick={(event) => {
             event.preventDefault()
             event.stopPropagation()
             void onRename(item)
           }}
         >
-          <HugeiconsIcon icon={PencilEdit01Icon} size={12} />
+          <HugeiconsIcon icon={PencilEdit01Icon} />
         </Button>
         <Button
           type="button"
-          variant="ghost"
+          variant="secondary"
           size="icon-xs"
           aria-label="Delete item"
+          title="Delete"
+          className="bg-transparent group-hover/row:bg-secondary"
           onClick={(event) => {
             event.preventDefault()
             event.stopPropagation()
             void onDelete(item)
           }}
         >
-          <HugeiconsIcon icon={Delete02Icon} size={12} />
+          <HugeiconsIcon icon={Delete02Icon} />
         </Button>
       </div>
     </div>
