@@ -34,7 +34,10 @@ export function BookmarkOrganizerSheet() {
           }
         }}
       >
-        <SheetContent side="right" className="sm:max-w-2xl">
+        <SheetContent
+          side="right"
+          className="data-[side=right]:w-full data-[side=right]:sm:w-[40rem] data-[side=right]:lg:w-[44rem] data-[side=right]:sm:max-w-none"
+        >
           <div className="flex h-full min-h-0 flex-col">
             <SheetHeader className="border-b border-border/70 px-6 pb-4">
               <SheetTitle>Bookmark Organizer</SheetTitle>
