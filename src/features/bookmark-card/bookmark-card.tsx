@@ -52,7 +52,7 @@ const FolderMenu = React.memo(function FolderMenu({
       >
         <HugeiconsIcon icon={MoreVerticalIcon} size={14} />
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
+      <DropdownMenuContent align="end" className="min-w-52">
         <DropdownMenuItem onClick={onToggleLayout}>
           <HugeiconsIcon
             icon={layout === "list" ? GridViewIcon : Menu02Icon}

@@ -35,7 +35,6 @@ import {
   ComputerSettingsIcon,
   PaintBucketIcon,
   Recycle02Icon,
-  FolderAddIcon,
   Folder01Icon,
   InformationCircleIcon,
 } from "@hugeicons/core-free-icons"
@@ -73,9 +72,6 @@ export function App() {
   const [onboardingChecked, setOnboardingChecked] = React.useState(false)
   const openSettings = useUIStore((s) => s.openSettings)
   const isLoading = useBookmarkStore((s) => s.isLoading)
-  const rootFolder = useBookmarkStore((s) => s.rootFolder)
-  const tree = useBookmarkStore((s) => s.tree)
-  const createFolder = useBookmarkStore((s) => s.createFolder)
   const openBookmarkOrganizer = useUIStore((s) => s.openBookmarkOrganizer)
   const colorTheme = usePreferencesStore((s) => s.colorTheme)
   const setColorTheme = usePreferencesStore((s) => s.setColorTheme)
@@ -137,27 +133,6 @@ export function App() {
             <HugeiconsIcon icon={Folder01Icon} size={18} />
           </TooltipTrigger>
           <TooltipContent side="top">Bookmark Organizer</TooltipContent>
-        </Tooltip>
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={() => {
-                  const parentId = rootFolder?.id ?? tree[0]?.id
-                  if (parentId) {
-                    const name = prompt("Folder name:")
-                    if (name?.trim()) createFolder(parentId, name.trim())
-                  }
-                }}
-                aria-label="Create folder"
-              />
-            }
-          >
-            <HugeiconsIcon icon={FolderAddIcon} size={18} />
-          </TooltipTrigger>
-          <TooltipContent side="top">New folder</TooltipContent>
         </Tooltip>
         {/* Dropdown theme picker */}
         <DropdownMenu>
