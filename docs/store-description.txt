@@ -2,18 +2,18 @@ Bookmarks - But Better replaces your new tab page with a clean, organized bookma
 
 Every time you open a new tab, instead of an empty page or a search bar, you see your bookmarks laid out in a beautiful masonry grid. No more digging through menus, no more forgetting what you saved. Your bookmarks are right there, exactly where you need them.
 
-🆕 What's new in v3.0.0:
-- Drag and drop is here! Reorder bookmarks within a folder or move them between folders
-- Rearrange folder tabs with drag-and-drop ordering
-- Create new folders directly from the dashboard
-- Significant performance improvements: faster startup, lazy-loaded dialogs, reduced memory usage
-- Bug fixes for bookmark navigation, drop indicators, and drag behavior
+🆕 What's new in v3.1.0:
+- Bookmark Organizer: a full tree editor to drag, reorder, rename, create, and delete bookmarks and folders in one place
+- Create subfolders and bookmarks directly inside any folder from the tree or the folder card menu
+- Expand All / Collapse All and a Folders Only toggle to focus on structure
+- Cleaner toolbar with a frosted background so footer actions always stay visible
 
 💡 Why you'll love it:
 Your browser already has your bookmarks. You already organized them into folders. But the default bookmark experience buries them behind menus and clicks. This extension takes what you already have and presents it beautifully. There's nothing to set up, no account to create, no data to import. Install it, open a new tab, and your bookmarks are already there.
 
 ✨ Features:
 - Drag and drop: reorder bookmarks within a folder or move them between folders by simply dragging and dropping
+- Bookmark Organizer: a dedicated tree editor to drag-and-drop reorder, rename, create, and delete bookmarks and folders across your entire library in one sheet
 - Folder management: create new folders, rename them, delete them, and rearrange folder tabs with drag-and-drop ordering
 - Masonry layout: your bookmark folders are displayed as cards in a responsive, Pinterest-style grid that adapts to your screen size
 - Two view modes per folder: switch between a detailed list view with titles and favicons, or a compact icon grid for folders you know by heart
@@ -31,6 +31,13 @@ This extension was built with a simple principle: your bookmarks are yours. Ther
 Your bookmarks deserve better than a dropdown menu. Give them a home.
 
 📋 Changelog:
+
+v3.1.0 — Bookmark Organizer
+- Full tree editor: drag-and-drop reorder, rename, create, and delete bookmarks and folders
+- Per-folder create actions: add a subfolder or bookmark directly inside any folder
+- Expand All / Collapse All and Folders Only toggle
+- New Bookmark option in folder card context menu
+- Frosted FAB toolbar background for better visibility
 
 v3.0.0 — Drag & Drop, Folder Management, and Performance
 - Drag-and-drop bookmark sorting within and across folders
