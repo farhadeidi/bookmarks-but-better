@@ -1,6 +1,7 @@
 import * as React from "react"
 import { HugeiconsIcon } from "@hugeicons/react"
 import {
+  Add01Icon,
   ArrowRight01Icon,
   Bookmark02Icon,
   Delete02Icon,
@@ -9,6 +10,13 @@ import {
   PencilEdit01Icon,
 } from "@hugeicons/core-free-icons"
 import { Button } from "@/components/ui/button"
+import { buttonVariants } from "@/components/ui/button-variants"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { cn } from "@/lib/utils"
 import type { ItemInstance } from "@headless-tree/core"
 import type { OrganizerItemData } from "./bookmark-organizer-types"
@@ -17,12 +25,14 @@ interface BookmarkOrganizerRowProps {
   item: ItemInstance<OrganizerItemData>
   onRename: (item: ItemInstance<OrganizerItemData>) => void | Promise<void>
   onDelete: (item: ItemInstance<OrganizerItemData>) => void | Promise<void>
+  onCreateItem: (type: "folder" | "bookmark") => void
 }
 
 export const BookmarkOrganizerRow = React.memo(function BookmarkOrganizerRow({
   item,
   onRename,
   onDelete,
+  onCreateItem,
 }: BookmarkOrganizerRowProps) {
   const itemData = item.getItemData()
   const isFolder = itemData?.kind === "folder" || item.isFolder()
@@ -90,6 +100,42 @@ export const BookmarkOrganizerRow = React.memo(function BookmarkOrganizerRow({
       </div>
 
       <div className="flex items-center gap-1">
+        {isFolder && (
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              aria-label="Add item"
+              title="Add item"
+              className={buttonVariants({ variant: "secondary", size: "icon-xs", className: "bg-transparent group-hover/row:bg-secondary" })}
+              onClick={(event) => {
+                event.preventDefault()
+                event.stopPropagation()
+              }}
+            >
+              <HugeiconsIcon icon={Add01Icon} />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent side="bottom" align="end">
+              <DropdownMenuItem
+                onClick={(event) => {
+                  event.stopPropagation()
+                  onCreateItem("folder")
+                }}
+              >
+                <HugeiconsIcon icon={Folder01Icon} size={14} className="text-primary" />
+                New Folder
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={(event) => {
+                  event.stopPropagation()
+                  onCreateItem("bookmark")
+                }}
+              >
+                <HugeiconsIcon icon={Bookmark02Icon} size={14} className="text-muted-foreground" />
+                New Bookmark
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
+
         <Button
           type="button"
           variant="secondary"
