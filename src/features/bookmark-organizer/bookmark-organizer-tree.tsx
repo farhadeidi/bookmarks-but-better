@@ -76,6 +76,8 @@ function BookmarkOrganizerTreeImpl({
   const openDeleteConfirm = useUIStore((s) => s.openDeleteConfirm)
   const moveBookmark = useBookmarkStore((s) => s.moveBookmark)
 
+  const hasAutoExpanded = React.useRef(false)
+
   const tree = useTree<OrganizerItemData>({
     rootItemId: BOOKMARK_ORGANIZER_ROOT_ID,
     initialState: {
@@ -155,10 +157,24 @@ function BookmarkOrganizerTreeImpl({
   })
 
   React.useEffect(() => {
-    void tree.getItemInstance(BOOKMARK_ORGANIZER_ROOT_ID).invalidateChildrenIds(
-      true
-    )
+    hasAutoExpanded.current = false
+    void tree.getItemInstance(BOOKMARK_ORGANIZER_ROOT_ID).invalidateChildrenIds(true)
   }, [effectiveRootId, tree])
+
+  const items = tree.getItems()
+
+  React.useEffect(() => {
+    if (hasAutoExpanded.current) return
+
+    const topLevelFolders = items.filter(
+      (item) => item.isFolder() && item.getItemMeta().level === 0
+    )
+
+    if (topLevelFolders.length > 0) {
+      hasAutoExpanded.current = true
+      topLevelFolders.forEach((item) => item.expand())
+    }
+  }, [items])
 
   return (
     <div

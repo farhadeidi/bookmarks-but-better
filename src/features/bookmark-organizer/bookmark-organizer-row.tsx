@@ -2,7 +2,7 @@ import * as React from "react"
 import { HugeiconsIcon } from "@hugeicons/react"
 import {
   ArrowRight01Icon,
-  ArrowUpRight01Icon,
+  Bookmark02Icon,
   Delete02Icon,
   DragDropHorizontalIcon,
   Folder01Icon,
@@ -43,6 +43,15 @@ export const BookmarkOrganizerRow = React.memo(function BookmarkOrganizerRow({
         paddingLeft: `${0.5 + level * 1.25}rem`,
       }}
     >
+      <button
+        type="button"
+        aria-label="Drag item"
+        className="flex size-7 cursor-grab touch-none items-center justify-center rounded-md text-muted-foreground/60 transition-colors hover:bg-muted hover:text-foreground"
+        {...item.getDragHandleProps()}
+      >
+        <HugeiconsIcon icon={DragDropHorizontalIcon} size={16} />
+      </button>
+
       {isFolder ? (
         <button
           type="button"
@@ -71,22 +80,13 @@ export const BookmarkOrganizerRow = React.memo(function BookmarkOrganizerRow({
         <span className="size-7" aria-hidden="true" />
       )}
 
-      <button
-        type="button"
-        aria-label="Drag item"
-        className="flex size-7 cursor-grab touch-none items-center justify-center rounded-md text-muted-foreground/60 transition-colors hover:bg-muted hover:text-foreground"
-        {...item.getDragHandleProps()}
-      >
-        <HugeiconsIcon icon={DragDropHorizontalIcon} size={12} />
-      </button>
-
       <div className="flex min-w-0 flex-1 items-center gap-1.5">
         <HugeiconsIcon
-          icon={isFolder ? Folder01Icon : ArrowUpRight01Icon}
+          icon={isFolder ? Folder01Icon : Bookmark02Icon}
           size={12}
-          className="shrink-0 text-muted-foreground"
+          className={cn("shrink-0", isFolder ? "text-primary" : "text-muted-foreground")}
         />
-        <span className="truncate text-[13px] font-medium leading-5">{title}</span>
+        <span className={cn("truncate text-[13px] font-medium leading-5", !isFolder && "text-muted-foreground group-hover:text-foreground transition-colors")}>{title}</span>
       </div>
 
       <div className="flex items-center gap-1">
