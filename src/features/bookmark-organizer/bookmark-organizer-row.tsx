@@ -23,6 +23,7 @@ import type { OrganizerItemData } from "./bookmark-organizer-types"
 
 interface BookmarkOrganizerRowProps {
   item: ItemInstance<OrganizerItemData>
+  isDragging: boolean
   onRename: (item: ItemInstance<OrganizerItemData>) => void | Promise<void>
   onDelete: (item: ItemInstance<OrganizerItemData>) => void | Promise<void>
   onCreateItem: (type: "folder" | "bookmark") => void
@@ -30,6 +31,7 @@ interface BookmarkOrganizerRowProps {
 
 export const BookmarkOrganizerRow = React.memo(function BookmarkOrganizerRow({
   item,
+  isDragging,
   onRename,
   onDelete,
   onCreateItem,
@@ -37,6 +39,7 @@ export const BookmarkOrganizerRow = React.memo(function BookmarkOrganizerRow({
   const itemData = item.getItemData()
   const isFolder = itemData?.kind === "folder" || item.isFolder()
   const isExpanded = isFolder && item.isExpanded()
+  const isFolderDropTarget = isFolder && item.isUnorderedDragTarget()
   const title = itemData?.title ?? item.getItemName()
   const level = item.getItemMeta().level
   const itemProps = item.getProps()
@@ -46,6 +49,8 @@ export const BookmarkOrganizerRow = React.memo(function BookmarkOrganizerRow({
       {...itemProps}
       className={cn(
         "group group/row flex items-center gap-1.5 rounded-md border border-transparent px-1.5 py-1 transition-colors hover:bg-muted/70",
+        isDragging && "opacity-40",
+        isFolderDropTarget && "border-primary/40 bg-primary/5",
         itemProps.className
       )}
       style={{
