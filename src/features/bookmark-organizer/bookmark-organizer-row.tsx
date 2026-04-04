@@ -4,7 +4,7 @@ import {
   ArrowRight01Icon,
   ArrowUpRight01Icon,
   Delete02Icon,
-  Drag04Icon,
+  DragDropHorizontalIcon,
   Folder01Icon,
   PencilEdit01Icon,
 } from "@hugeicons/core-free-icons"
@@ -77,7 +77,7 @@ export const BookmarkOrganizerRow = React.memo(function BookmarkOrganizerRow({
         className="flex size-7 cursor-grab touch-none items-center justify-center rounded-md text-muted-foreground/60 transition-colors hover:bg-muted hover:text-foreground"
         {...item.getDragHandleProps()}
       >
-        <HugeiconsIcon icon={Drag04Icon} size={12} />
+        <HugeiconsIcon icon={DragDropHorizontalIcon} size={12} />
       </button>
 
       <div className="flex min-w-0 flex-1 items-center gap-1.5">
