@@ -36,6 +36,7 @@ interface PreferencesState {
   containerMode: "fluid" | "contained"
   folderOrder: string[]
   experimentalCardDrag: boolean
+  isFoldersOnlyEnabledInTreeEditor: boolean
   adapter: BrowserAdapter | null
 
   // Actions
@@ -48,6 +49,7 @@ interface PreferencesState {
   setContainerMode(mode: "fluid" | "contained"): void
   setFolderOrder(order: string[]): void
   setExperimentalCardDrag(value: boolean): void
+  setIsFoldersOnlyEnabledInTreeEditor(value: boolean): void
 }
 
 export const usePreferencesStore = create<PreferencesState>((set, get) => ({
@@ -59,6 +61,7 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
   containerMode: "contained",
   folderOrder: [],
   experimentalCardDrag: false,
+  isFoldersOnlyEnabledInTreeEditor: true,
   adapter: null,
 
   async init(adapter: BrowserAdapter) {
@@ -73,6 +76,7 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
       containerMode,
       folderOrder,
       experimentalCardDrag,
+      isFoldersOnlyEnabledInTreeEditor,
     ] = await Promise.all([
       adapter.storage.get<Record<string, CardLayout>>("cardLayouts"),
       adapter.storage.get<boolean>("nestedFolders"),
@@ -82,6 +86,7 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
       adapter.storage.get<"fluid" | "contained">("containerMode"),
       adapter.storage.get<string[]>("folderOrder"),
       adapter.storage.get<boolean>("experimentalCardDrag"),
+      adapter.storage.get<boolean>("isFoldersOnlyEnabledInTreeEditor"),
     ])
 
     const isFreshState =
@@ -148,6 +153,10 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
         experimentalCardDrag ??
         (seedPrefDefaults?.experimentalCardDrag as boolean | undefined) ??
         false,
+      isFoldersOnlyEnabledInTreeEditor:
+        isFoldersOnlyEnabledInTreeEditor ??
+        (seedPrefDefaults?.isFoldersOnlyEnabledInTreeEditor as boolean | undefined) ??
+        true,
     })
 
     // Apply color theme to root element
@@ -196,6 +205,11 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
   setExperimentalCardDrag(value: boolean) {
     set({ experimentalCardDrag: value })
     get().adapter?.storage.set("experimentalCardDrag", value)
+  },
+
+  setIsFoldersOnlyEnabledInTreeEditor(value: boolean) {
+    set({ isFoldersOnlyEnabledInTreeEditor: value })
+    get().adapter?.storage.set("isFoldersOnlyEnabledInTreeEditor", value)
   },
 }))
 

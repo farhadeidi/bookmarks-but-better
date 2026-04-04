@@ -16,6 +16,7 @@ import { BookmarkOrganizerCreateDialog } from "./bookmark-organizer-create-dialo
 import { BookmarkOrganizerTree, type BookmarkOrganizerTreeHandle } from "./bookmark-organizer-tree"
 import { useBookmarkStore } from "@/stores/bookmark-store"
 import { useUIStore } from "@/stores/ui-store"
+import { usePreferencesStore } from "@/stores/preferences-store"
 
 export function BookmarkOrganizerSheet() {
   const bookmarkOrganizerOpen = useUIStore((s) => s.bookmarkOrganizerOpen)
@@ -25,8 +26,10 @@ export function BookmarkOrganizerSheet() {
 
   const creatingItem = useUIStore((s) => s.creatingItem)
 
+  const foldersOnly = usePreferencesStore((s) => s.isFoldersOnlyEnabledInTreeEditor)
+  const setFoldersOnly = usePreferencesStore((s) => s.setIsFoldersOnlyEnabledInTreeEditor)
+
   const treeRef = React.useRef<BookmarkOrganizerTreeHandle>(null)
-  const [showBookmarks, setShowBookmarks] = React.useState(true)
   const lastCreatingItemRef = React.useRef<{ parentId: string } | null>(null)
 
   React.useEffect(() => {
@@ -70,32 +73,34 @@ export function BookmarkOrganizerSheet() {
               />
 
               <div className="flex items-center gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="xs"
-                  onClick={() => treeRef.current?.expandAll()}
-                >
-                  Expand All
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="xs"
-                  onClick={() => treeRef.current?.collapseAll()}
-                >
-                  Collapse All
-                </Button>
-                <div className="ml-auto flex items-center gap-2">
-                  <Label htmlFor="show-bookmarks" className="text-xs text-muted-foreground">
-                    Bookmarks
-                  </Label>
+                <div className="flex items-center gap-2">
                   <Switch
-                    id="show-bookmarks"
+                    id="folders-only"
                     size="sm"
-                    checked={showBookmarks}
-                    onCheckedChange={setShowBookmarks}
+                    checked={foldersOnly}
+                    onCheckedChange={setFoldersOnly}
                   />
+                  <Label htmlFor="folders-only" className="text-xs text-muted-foreground">
+                    Folders Only
+                  </Label>
+                </div>
+                <div className="ml-auto flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="xs"
+                    onClick={() => treeRef.current?.expandAll()}
+                  >
+                    Expand All
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="xs"
+                    onClick={() => treeRef.current?.collapseAll()}
+                  >
+                    Collapse All
+                  </Button>
                 </div>
               </div>
             </div>
@@ -103,7 +108,7 @@ export function BookmarkOrganizerSheet() {
             <ScrollArea className="min-h-0 flex-1 px-6 py-4">
               <BookmarkOrganizerTree
                 rootFolderId={rootFolderId}
-                showBookmarks={showBookmarks}
+                showBookmarks={!foldersOnly}
                 treeRef={treeRef}
               />
             </ScrollArea>
