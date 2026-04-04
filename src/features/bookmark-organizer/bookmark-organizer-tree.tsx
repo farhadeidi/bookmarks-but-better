@@ -68,6 +68,7 @@ function BookmarkOrganizerUnavailable() {
 export type BookmarkOrganizerTreeHandle = {
   expandAll: () => void
   collapseAll: () => void
+  invalidate: (parentId: string) => void
 }
 
 const BookmarkOrganizerTreeImpl = React.forwardRef<
@@ -83,6 +84,7 @@ const BookmarkOrganizerTreeImpl = React.forwardRef<
 ) {
   const openEditor = useUIStore((s) => s.openEditor)
   const openDeleteConfirm = useUIStore((s) => s.openDeleteConfirm)
+  const openCreateItem = useUIStore((s) => s.openCreateItem)
   const moveBookmark = useBookmarkStore((s) => s.moveBookmark)
 
   const hasAutoExpanded = React.useRef(false)
@@ -180,6 +182,10 @@ const BookmarkOrganizerTreeImpl = React.forwardRef<
         }
       })
     },
+    invalidate: (parentId: string) => {
+      const id = parentId === effectiveRootId ? BOOKMARK_ORGANIZER_ROOT_ID : parentId
+      void tree.getItemInstance(id).invalidateChildrenIds(true)
+    },
   }))
 
   React.useEffect(() => {
@@ -218,6 +224,9 @@ const BookmarkOrganizerTreeImpl = React.forwardRef<
           <BookmarkOrganizerRow
             key={item.getId()}
             item={item}
+            onCreateItem={(type) => {
+              openCreateItem({ type, parentId: item.getId() })
+            }}
             onRename={async (treeItem) => {
               const itemData = treeItem.getItemData()
               if (!itemData) {

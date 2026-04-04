@@ -25,8 +25,20 @@ export function BookmarkOrganizerSheet() {
   const tree = useBookmarkStore((s) => s.tree)
   const setRootFolderId = useBookmarkStore((s) => s.setRootFolderId)
 
+  const creatingItem = useUIStore((s) => s.creatingItem)
+
   const treeRef = React.useRef<BookmarkOrganizerTreeHandle>(null)
   const [showBookmarks, setShowBookmarks] = React.useState(true)
+  const lastCreatingItemRef = React.useRef<{ parentId: string } | null>(null)
+
+  React.useEffect(() => {
+    if (creatingItem) {
+      lastCreatingItemRef.current = creatingItem
+    } else if (lastCreatingItemRef.current) {
+      treeRef.current?.invalidate(lastCreatingItemRef.current.parentId)
+      lastCreatingItemRef.current = null
+    }
+  }, [creatingItem])
 
   const activeParentId = rootFolder?.id ?? tree[0]?.id ?? null
 
