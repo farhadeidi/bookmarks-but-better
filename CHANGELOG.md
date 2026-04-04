@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.1.0] - 2026-04-05
+
+### Added
+
+- Bookmark Organizer: new full-featured tree editor accessible from the footer toolbar and folder card menu
+- Drag-and-drop reordering within the organizer tree with live drop-line indicator and item dimming
+- Per-folder create actions: add a subfolder or bookmark directly inside any folder from the tree
+- Expand All / Collapse All controls in the organizer toolbar
+- Folders Only toggle to hide bookmark items and focus on folder structure (persisted across sessions)
+- New Bookmark option added to folder card context menu
+- FAB toolbar now has a frosted background to remain legible when overlapping content
+
+### Changed
+
+- Folder order entry points replaced by the Bookmark Organizer sheet
+- Bookmark Organizer tree auto-expands top-level folders on open
+- New Folder button removed from footer toolbar (use Bookmark Organizer instead)
+- Folder card context menu widened to fit all action labels on one line
+
 ## [3.0.0] - 2026-03-29
 
 ### Added
@@ -64,6 +83,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Rewrote README for end users with screenshots and badges
 
+[3.1.0]: https://github.com/farhadeidi/bookmarks-but-better/compare/v3.0.0...v3.1.0
 [3.0.0]: https://github.com/farhadeidi/bookmarks-but-better/compare/v2.1.0...v3.0.0
 [2.1.0]: https://github.com/farhadeidi/bookmarks-but-better/compare/v2.0.0...v2.1.0
 [2.0.0]: https://github.com/farhadeidi/bookmarks-but-better/releases/tag/v2.0.0
