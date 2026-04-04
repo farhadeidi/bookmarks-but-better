@@ -65,13 +65,22 @@ function BookmarkOrganizerUnavailable() {
   )
 }
 
-function BookmarkOrganizerTreeImpl({
-  effectiveRootId,
-  bookmarks,
-}: {
-  effectiveRootId: string | null
-  bookmarks: Pick<BookmarkAdapter, "getSubTree">
-}) {
+export type BookmarkOrganizerTreeHandle = {
+  expandAll: () => void
+  collapseAll: () => void
+}
+
+const BookmarkOrganizerTreeImpl = React.forwardRef<
+  BookmarkOrganizerTreeHandle,
+  {
+    effectiveRootId: string | null
+    bookmarks: Pick<BookmarkAdapter, "getSubTree">
+    showBookmarks: boolean
+  }
+>(function BookmarkOrganizerTreeImpl(
+  { effectiveRootId, bookmarks, showBookmarks },
+  ref
+) {
   const openEditor = useUIStore((s) => s.openEditor)
   const openDeleteConfirm = useUIStore((s) => s.openDeleteConfirm)
   const moveBookmark = useBookmarkStore((s) => s.moveBookmark)
@@ -156,6 +165,23 @@ function BookmarkOrganizerTreeImpl({
     }),
   })
 
+  React.useImperativeHandle(ref, () => ({
+    expandAll: () => {
+      tree.getItems().forEach((item) => {
+        if (item.isFolder() && item.getId() !== BOOKMARK_ORGANIZER_ROOT_ID) {
+          item.expand()
+        }
+      })
+    },
+    collapseAll: () => {
+      tree.getItems().forEach((item) => {
+        if (item.isFolder() && item.getId() !== BOOKMARK_ORGANIZER_ROOT_ID) {
+          item.collapse()
+        }
+      })
+    },
+  }))
+
   React.useEffect(() => {
     hasAutoExpanded.current = false
     void tree.getItemInstance(BOOKMARK_ORGANIZER_ROOT_ID).invalidateChildrenIds(true)
@@ -183,7 +209,11 @@ function BookmarkOrganizerTreeImpl({
     >
       {tree
         .getItems()
-        .filter((item) => item.getId() !== BOOKMARK_ORGANIZER_ROOT_ID)
+        .filter((item) => {
+          if (item.getId() === BOOKMARK_ORGANIZER_ROOT_ID) return false
+          if (!showBookmarks && !item.isFolder()) return false
+          return true
+        })
         .map((item) => (
           <BookmarkOrganizerRow
             key={item.getId()}
@@ -228,12 +258,16 @@ function BookmarkOrganizerTreeImpl({
         ))}
     </div>
   )
-}
+})
 
 export function BookmarkOrganizerTree({
   rootFolderId,
+  showBookmarks,
+  treeRef,
 }: {
   rootFolderId: string | null
+  showBookmarks: boolean
+  treeRef: React.Ref<BookmarkOrganizerTreeHandle>
 }) {
   const adapter = useBookmarkStore((s) => s.adapter)
   const tree = useBookmarkStore((s) => s.tree)
@@ -245,8 +279,10 @@ export function BookmarkOrganizerTree({
 
   return (
     <BookmarkOrganizerTreeImpl
+      ref={treeRef}
       effectiveRootId={effectiveRootId}
       bookmarks={adapter.bookmarks}
+      showBookmarks={showBookmarks}
     />
   )
 }

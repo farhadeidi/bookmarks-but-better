@@ -94,7 +94,7 @@ describe("BookmarkOrganizerTree", () => {
   })
 
   it("renders root children from the bookmark adapter", async () => {
-    render(<BookmarkOrganizerTree rootFolderId="root-1" />)
+    render(<BookmarkOrganizerTree rootFolderId="root-1" showBookmarks treeRef={{ current: null }} />)
 
     await waitFor(() => {
       expect(screen.getByText("Folder One")).toBeTruthy()

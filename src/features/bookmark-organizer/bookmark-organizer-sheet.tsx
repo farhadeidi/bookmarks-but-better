@@ -1,4 +1,7 @@
+import * as React from "react"
 import { Button } from "@/components/ui/button"
+import { Switch } from "@/components/ui/switch"
+import { Label } from "@/components/ui/label"
 import {
   Sheet,
   SheetContent,
@@ -9,7 +12,7 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { RootFolderSelect } from "@/features/root-folder-select"
 import { BookmarkOrganizerCreateDialog } from "./bookmark-organizer-create-dialog"
-import { BookmarkOrganizerTree } from "./bookmark-organizer-tree"
+import { BookmarkOrganizerTree, type BookmarkOrganizerTreeHandle } from "./bookmark-organizer-tree"
 import { useBookmarkStore } from "@/stores/bookmark-store"
 import { useUIStore } from "@/stores/ui-store"
 
@@ -21,6 +24,9 @@ export function BookmarkOrganizerSheet() {
   const rootFolder = useBookmarkStore((s) => s.rootFolder)
   const tree = useBookmarkStore((s) => s.tree)
   const setRootFolderId = useBookmarkStore((s) => s.setRootFolderId)
+
+  const treeRef = React.useRef<BookmarkOrganizerTreeHandle>(null)
+  const [showBookmarks, setShowBookmarks] = React.useState(true)
 
   const activeParentId = rootFolder?.id ?? tree[0]?.id ?? null
 
@@ -91,10 +97,44 @@ export function BookmarkOrganizerSheet() {
                   New Bookmark
                 </Button>
               </div>
+
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="xs"
+                  onClick={() => treeRef.current?.expandAll()}
+                >
+                  Expand All
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="xs"
+                  onClick={() => treeRef.current?.collapseAll()}
+                >
+                  Collapse All
+                </Button>
+                <div className="ml-auto flex items-center gap-2">
+                  <Label htmlFor="show-bookmarks" className="text-xs text-muted-foreground">
+                    Bookmarks
+                  </Label>
+                  <Switch
+                    id="show-bookmarks"
+                    size="sm"
+                    checked={showBookmarks}
+                    onCheckedChange={setShowBookmarks}
+                  />
+                </div>
+              </div>
             </div>
 
             <ScrollArea className="min-h-0 flex-1 px-6 py-4">
-              <BookmarkOrganizerTree rootFolderId={rootFolderId} />
+              <BookmarkOrganizerTree
+                rootFolderId={rootFolderId}
+                showBookmarks={showBookmarks}
+                treeRef={treeRef}
+              />
             </ScrollArea>
           </div>
         </SheetContent>
