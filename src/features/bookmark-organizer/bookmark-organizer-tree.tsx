@@ -208,11 +208,19 @@ const BookmarkOrganizerTreeImpl = React.forwardRef<
     }
   }, [items])
 
+  const draggedItemIds = new Set(
+    tree.getState().dnd?.draggedItems?.map((i) => i.getId()) ?? []
+  )
+
   return (
     <div
       {...tree.getContainerProps("Bookmark Organizer")}
-      className="space-y-1"
+      className="relative space-y-1"
     >
+      <div
+        className="h-0.5 rounded-full bg-primary"
+        style={tree.getDragLineStyle()}
+      />
       {tree
         .getItems()
         .filter((item) => {
@@ -224,6 +232,7 @@ const BookmarkOrganizerTreeImpl = React.forwardRef<
           <BookmarkOrganizerRow
             key={item.getId()}
             item={item}
+            isDragging={draggedItemIds.has(item.getId())}
             onCreateItem={(type) => {
               openCreateItem({ type, parentId: item.getId() })
             }}
