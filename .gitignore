@@ -25,3 +25,8 @@ dist-ssr
 *.sw?
 .superpowers/
 .worktrees/
+
+# Screenshot automation tmp dirs
+docs/screenshots/tmp-video/
+docs/screenshots/tmp-themes/
+test-results/
