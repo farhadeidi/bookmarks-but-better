@@ -12,10 +12,11 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "preview": "vite preview",
-    "screenshots": "playwright test scripts/screenshots/capture.spec.ts --config scripts/screenshots/playwright.config.ts",
-    "video:features": "tsx scripts/screenshots/feature-walkthrough.ts",
-    "video:themes": "tsx scripts/screenshots/theme-showcase.ts",
-    "assets": "bun run screenshots && bun run video:features && bun run video:themes"
+    "screenshots": "playwright test marketing/scripts/capture.spec.ts --config marketing/scripts/playwright.config.ts",
+    "video:features": "tsx marketing/scripts/feature-walkthrough.ts",
+    "video:themes": "tsx marketing/scripts/theme-showcase.ts",
+    "promo": "tsx marketing/scripts/promo.ts",
+    "assets": "bun run screenshots && bun run video:features && bun run video:themes && bun run promo"
   },
   "dependencies": {
     "@atlaskit/pragmatic-drag-and-drop": "^1.7.9",
