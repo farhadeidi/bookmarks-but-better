@@ -19,29 +19,31 @@ async function run() {
   })
   const page = await context.newPage()
 
-  // 1. Dashboard loads with bookmarks and favicons visible
-  await page.goto('http://localhost:5173/?screenshot=true')
-  await page.waitForLoadState('networkidle')
-  await page.waitForTimeout(1500)
+  try {
+    // 1. Dashboard loads with bookmarks and favicons visible
+    await page.goto('http://localhost:5173/?screenshot=true')
+    await page.waitForLoadState('networkidle')
+    await page.waitForTimeout(1500)
 
-  // 2. Hover a bookmark card
-  await page.locator('[data-testid="bookmark-card"]').first().hover()
-  await page.waitForTimeout(1500)
+    // 2. Hover a bookmark card
+    await page.locator('[data-testid="bookmark-card"]').first().hover()
+    await page.waitForTimeout(1500)
 
-  // 3. Open organizer, show tree, close
-  await page.getByRole('button', { name: 'Bookmark Organizer' }).click()
-  await page.waitForSelector('[role="dialog"]', { timeout: 5_000 })
-  await page.waitForTimeout(2500)
-  await page.keyboard.press('Escape')
-  await page.waitForTimeout(800)
+    // 3. Open organizer, show tree, close
+    await page.getByRole('button', { name: 'Bookmark Organizer' }).click()
+    await page.waitForSelector('[role="dialog"]', { timeout: 5_000 })
+    await page.waitForTimeout(2500)
+    await page.keyboard.press('Escape')
+    await page.waitForTimeout(800)
 
-  // 4. Open settings
-  await page.getByRole('button', { name: 'Settings' }).click()
-  await page.waitForSelector('[role="dialog"]', { timeout: 5_000 })
-  await page.waitForTimeout(2000)
-
-  await context.close() // triggers .webm save
-  await browser.close()
+    // 4. Open settings
+    await page.getByRole('button', { name: 'Settings' }).click()
+    await page.waitForSelector('[role="dialog"]', { timeout: 5_000 })
+    await page.waitForTimeout(2000)
+  } finally {
+    await context.close().catch(() => {}) // triggers .webm save
+    await browser.close().catch(() => {})
+  }
 
   const files = fs.readdirSync(TMP)
   const webm = files.find(f => f.endsWith('.webm'))
@@ -49,21 +51,24 @@ async function run() {
 
   const webmPath = path.join(TMP, webm)
 
-  const ffmpeg = (await import('ffmpeg-static')).default as string
+  const ffmpeg = (await import('ffmpeg-static')).default
+  if (!ffmpeg) throw new Error('ffmpeg-static returned null — no bundled ffmpeg binary for this platform')
 
-  // Convert to MP4
-  execSync(
-    `"${ffmpeg}" -i "${webmPath}" -c:v libx264 -pix_fmt yuv420p "${OUT}/feature-walkthrough.mp4" -y`,
-    { stdio: 'inherit' }
-  )
+  try {
+    // Convert to MP4
+    execSync(
+      `"${ffmpeg}" -i "${webmPath}" -c:v libx264 -pix_fmt yuv420p "${OUT}/feature-walkthrough.mp4" -y`,
+      { stdio: 'inherit' }
+    )
 
-  // Convert to GIF (12fps, width 1280)
-  execSync(
-    `"${ffmpeg}" -i "${OUT}/feature-walkthrough.mp4" -vf "fps=12,scale=1280:-1:flags=lanczos" -loop 0 "${OUT}/feature-walkthrough.gif" -y`,
-    { stdio: 'inherit' }
-  )
-
-  fs.rmSync(TMP, { recursive: true, force: true })
+    // Convert to GIF (12fps, width 1280)
+    execSync(
+      `"${ffmpeg}" -i "${OUT}/feature-walkthrough.mp4" -vf "fps=12,scale=1280:-1:flags=lanczos" -loop 0 "${OUT}/feature-walkthrough.gif" -y`,
+      { stdio: 'inherit' }
+    )
+  } finally {
+    fs.rmSync(TMP, { recursive: true, force: true })
+  }
   console.log('✓ feature-walkthrough.mp4 and .gif written to docs/screenshots/')
 }
 
