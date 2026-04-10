@@ -12,7 +12,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "preview": "vite preview",
-    "screenshots": "playwright test scripts/screenshots/capture.spec.ts --config scripts/screenshots/playwright.config.ts"
+    "screenshots": "playwright test scripts/screenshots/capture.spec.ts --config scripts/screenshots/playwright.config.ts",
+    "video:features": "tsx scripts/screenshots/feature-walkthrough.ts"
   },
   "dependencies": {
     "@atlaskit/pragmatic-drag-and-drop": "^1.7.9",

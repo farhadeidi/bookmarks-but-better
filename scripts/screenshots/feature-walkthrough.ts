@@ -1,0 +1,70 @@
+import { chromium } from '@playwright/test'
+import { execSync } from 'child_process'
+import fs from 'fs'
+import path from 'path'
+import { fileURLToPath } from 'url'
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
+const OUT = path.resolve(__dirname, '../../docs/screenshots')
+const TMP = path.join(OUT, 'tmp-video')
+
+async function run() {
+  fs.mkdirSync(TMP, { recursive: true })
+
+  const browser = await chromium.launch()
+  const context = await browser.newContext({
+    viewport: { width: 1280, height: 800 },
+    recordVideo: { dir: TMP, size: { width: 1280, height: 800 } },
+  })
+  const page = await context.newPage()
+
+  // 1. Dashboard loads with bookmarks and favicons visible
+  await page.goto('http://localhost:5173/?screenshot=true')
+  await page.waitForLoadState('networkidle')
+  await page.waitForTimeout(1500)
+
+  // 2. Hover a bookmark card
+  await page.locator('[data-testid="bookmark-card"]').first().hover()
+  await page.waitForTimeout(1500)
+
+  // 3. Open organizer, show tree, close
+  await page.getByRole('button', { name: 'Bookmark Organizer' }).click()
+  await page.waitForSelector('[role="dialog"]', { timeout: 5_000 })
+  await page.waitForTimeout(2500)
+  await page.keyboard.press('Escape')
+  await page.waitForTimeout(800)
+
+  // 4. Open settings
+  await page.getByRole('button', { name: 'Settings' }).click()
+  await page.waitForSelector('[role="dialog"]', { timeout: 5_000 })
+  await page.waitForTimeout(2000)
+
+  await context.close() // triggers .webm save
+  await browser.close()
+
+  const files = fs.readdirSync(TMP)
+  const webm = files.find(f => f.endsWith('.webm'))
+  if (!webm) throw new Error('No .webm file found — video recording failed')
+
+  const webmPath = path.join(TMP, webm)
+
+  const ffmpeg = (await import('ffmpeg-static')).default as string
+
+  // Convert to MP4
+  execSync(
+    `"${ffmpeg}" -i "${webmPath}" -c:v libx264 -pix_fmt yuv420p "${OUT}/feature-walkthrough.mp4" -y`,
+    { stdio: 'inherit' }
+  )
+
+  // Convert to GIF (12fps, width 1280)
+  execSync(
+    `"${ffmpeg}" -i "${OUT}/feature-walkthrough.mp4" -vf "fps=12,scale=1280:-1:flags=lanczos" -loop 0 "${OUT}/feature-walkthrough.gif" -y`,
+    { stdio: 'inherit' }
+  )
+
+  fs.rmSync(TMP, { recursive: true, force: true })
+  console.log('✓ feature-walkthrough.mp4 and .gif written to docs/screenshots/')
+}
+
+run().catch(err => { console.error(err); process.exit(1) })
