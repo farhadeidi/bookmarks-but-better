@@ -4,7 +4,7 @@
 
 **Goal:** Automate all Chrome Web Store asset production — 5 ordered screenshots, 2 promo tiles, a feature walkthrough video/GIF, and a theme showcase video/GIF — runnable with `bun run assets`.
 
-**Architecture:** All pipelines are Playwright-based, running against the Vite dev server in standalone mode with its default seed data. A `useScreenshotMode` hook reads `?screenshot=` query params to suppress dev-only UI and control the onboarding wizard per capture. Videos are produced via Playwright's built-in `recordVideo`, then converted to MP4 + GIF using `ffmpeg-static` (provides a cross-platform ffmpeg binary as an npm package). Remotion was considered for the theme showcase but deferred: Tailwind CSS v4 (CSS-first) has unverified Remotion plugin support, and Playwright recording of the real app achieves equivalent visual quality.
+**Architecture:** All pipelines are Playwright-based, running against the Vite dev server in standalone mode with its default seed data. A `getScreenshotMode` hook reads `?screenshot=` query params to suppress dev-only UI and control the onboarding wizard per capture. Videos are produced via Playwright's built-in `recordVideo`, then converted to MP4 + GIF using `ffmpeg-static` (provides a cross-platform ffmpeg binary as an npm package). Remotion was considered for the theme showcase but deferred: Tailwind CSS v4 (CSS-first) has unverified Remotion plugin support, and Playwright recording of the real app achieves equivalent visual quality.
 
 **Tech Stack:** `@playwright/test` (screenshots + video recording), `ffmpeg-static` (ffmpeg binary via npm — no system install needed), `tsx` (run TypeScript scripts directly), `vitest` (unit tests for hook)
 
@@ -64,7 +64,7 @@ git commit -m "chore: add playwright, remotion/renderer, tsx as devDependencies"
 
 ---
 
-## Task 2: `useScreenshotMode` hook
+## Task 2: `getScreenshotMode` hook
 
 **Files:**
 - Create: `src/hooks/use-screenshot-mode.ts`
@@ -76,29 +76,29 @@ Create `src/hooks/use-screenshot-mode.test.ts`:
 
 ```ts
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { useScreenshotMode } from './use-screenshot-mode'
+import { getScreenshotMode } from './use-screenshot-mode'
 
 afterEach(() => vi.unstubAllGlobals())
 
-describe('useScreenshotMode', () => {
+describe('getScreenshotMode', () => {
   it('returns false when no query param is present', () => {
     vi.stubGlobal('location', { search: '' })
-    expect(useScreenshotMode()).toBe(false)
+    expect(getScreenshotMode()).toBe(false)
   })
 
   it('returns "default" for ?screenshot=true', () => {
     vi.stubGlobal('location', { search: '?screenshot=true' })
-    expect(useScreenshotMode()).toBe('default')
+    expect(getScreenshotMode()).toBe('default')
   })
 
   it('returns "onboarding" for ?screenshot=onboarding', () => {
     vi.stubGlobal('location', { search: '?screenshot=onboarding' })
-    expect(useScreenshotMode()).toBe('onboarding')
+    expect(getScreenshotMode()).toBe('onboarding')
   })
 
   it('returns false for an unknown param value', () => {
     vi.stubGlobal('location', { search: '?screenshot=foobar' })
-    expect(useScreenshotMode()).toBe(false)
+    expect(getScreenshotMode()).toBe(false)
   })
 })
 ```
@@ -109,7 +109,7 @@ describe('useScreenshotMode', () => {
 bun run test -- use-screenshot-mode
 ```
 
-Expected: 4 failures — `useScreenshotMode` not found.
+Expected: 4 failures — `getScreenshotMode` not found.
 
 - [ ] **Step 3: Implement the hook**
 
@@ -118,7 +118,7 @@ Create `src/hooks/use-screenshot-mode.ts`:
 ```ts
 export type ScreenshotMode = false | 'default' | 'onboarding'
 
-export function useScreenshotMode(): ScreenshotMode {
+export function getScreenshotMode(): ScreenshotMode {
   const param = new URLSearchParams(location.search).get('screenshot')
   if (param === 'onboarding') return 'onboarding'
   if (param === 'true') return 'default'
@@ -138,12 +138,12 @@ Expected: 4 passing.
 
 ```bash
 git add src/hooks/use-screenshot-mode.ts src/hooks/use-screenshot-mode.test.ts
-git commit -m "feat: add useScreenshotMode hook"
+git commit -m "feat: add getScreenshotMode hook"
 ```
 
 ---
 
-## Task 3: Wire `useScreenshotMode` into `App.tsx`
+## Task 3: Wire `getScreenshotMode` into `App.tsx`
 
 **Files:**
 - Modify: `src/App.tsx`
@@ -153,7 +153,7 @@ git commit -m "feat: add useScreenshotMode hook"
 After the last import line in `src/App.tsx` (line 42), add:
 
 ```ts
-import { useScreenshotMode } from "@/hooks/use-screenshot-mode"
+import { getScreenshotMode } from "@/hooks/use-screenshot-mode"
 ```
 
 - [ ] **Step 2: Call the hook inside `App()`**
@@ -161,7 +161,7 @@ import { useScreenshotMode } from "@/hooks/use-screenshot-mode"
 Inside `export function App()` at `src/App.tsx:68`, after the existing store hooks (around line 78), add:
 
 ```ts
-const screenshotMode = useScreenshotMode()
+const screenshotMode = getScreenshotMode()
 ```
 
 - [ ] **Step 3: Update the bootstrap `useEffect` to respect screenshot mode**
