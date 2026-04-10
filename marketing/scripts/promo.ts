@@ -189,7 +189,7 @@ async function run() {
     await browser.close().catch(() => {})
   }
 
-  console.log('✓ promo-small.png and promo-marquee.png written to docs/screenshots/')
+  console.log('✓ promo-small.png and promo-marquee.png written to marketing/output/')
 }
 
 run().catch(err => { console.error(err); process.exit(1) })

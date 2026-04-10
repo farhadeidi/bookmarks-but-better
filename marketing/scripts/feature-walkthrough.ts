@@ -71,7 +71,7 @@ async function run() {
   } finally {
     fs.rmSync(TMP, { recursive: true, force: true })
   }
-  console.log('✓ feature-walkthrough.mp4 and .gif written to docs/screenshots/')
+  console.log('✓ feature-walkthrough.mp4 and .gif written to marketing/output/videos/')
 }
 
 run().catch(err => { console.error(err); process.exit(1) })
