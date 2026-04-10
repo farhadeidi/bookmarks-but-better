@@ -40,6 +40,7 @@ import {
 } from "@hugeicons/core-free-icons"
 import { useTheme } from "@/components/theme-provider"
 import { COLOR_THEMES, type ColorTheme } from "@/stores/preferences-store"
+import { getScreenshotMode } from "@/hooks/use-screenshot-mode"
 
 const SettingsDialog = React.lazy(() =>
   import("@/features/settings").then((m) => ({ default: m.SettingsDialog }))
@@ -76,6 +77,7 @@ export function App() {
   const colorTheme = usePreferencesStore((s) => s.colorTheme)
   const setColorTheme = usePreferencesStore((s) => s.setColorTheme)
   const { theme, setTheme } = useTheme()
+  const screenshotMode = getScreenshotMode()
 
   const themeOrder = ["light", "dark", "system"] as const
   const themeIcon = {
@@ -93,16 +95,21 @@ export function App() {
     async function bootstrap() {
       const adapter = await detectAdapter()
       await Promise.all([initBookmarks(adapter), initPreferences(adapter)])
-      const onboardingCompleted = await adapter.storage.get<boolean>(
-        "onboardingCompleted"
-      )
-      if (!onboardingCompleted) {
+      if (screenshotMode === 'onboarding') {
         setShowOnboarding(true)
+      } else if (!screenshotMode) {
+        const onboardingCompleted = await adapter.storage.get<boolean>(
+          "onboardingCompleted"
+        )
+        if (!onboardingCompleted) {
+          setShowOnboarding(true)
+        }
       }
+      // screenshotMode === 'default': showOnboarding stays false (suppressed)
       setOnboardingChecked(true)
     }
     bootstrap()
-  }, [initBookmarks, initPreferences])
+  }, [initBookmarks, initPreferences, screenshotMode])
 
   return (
     <ScrollArea className="h-svh bg-background text-foreground">
@@ -253,7 +260,7 @@ export function App() {
             </div>
           </HoverCardContent>
         </HoverCard>
-        {import.meta.env.DEV && (
+        {import.meta.env.DEV && !screenshotMode && (
           <Tooltip>
             <TooltipTrigger
               render={
