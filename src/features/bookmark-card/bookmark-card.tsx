@@ -151,6 +151,7 @@ export const BookmarkCard = React.memo(function BookmarkCard({
   return (
     <div
       ref={dropRef as React.RefObject<HTMLDivElement>}
+      data-testid="bookmark-card"
       className={cn(
         "flex flex-col gap-3 rounded-2xl bg-card p-4 ring-1 ring-border transition-shadow",
         nested && "ring-border/50",
