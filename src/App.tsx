@@ -77,7 +77,7 @@ export function App() {
   const colorTheme = usePreferencesStore((s) => s.colorTheme)
   const setColorTheme = usePreferencesStore((s) => s.setColorTheme)
   const { theme, setTheme } = useTheme()
-  const screenshotMode = getScreenshotMode()
+  const screenshotMode = React.useMemo(() => getScreenshotMode(), [])
 
   const themeOrder = ["light", "dark", "system"] as const
   const themeIcon = {
