@@ -17,6 +17,7 @@ async function run() {
     viewport: { width: 1280, height: 800 },
     recordVideo: { dir: TMP, size: { width: 1280, height: 800 } },
   })
+  await context.addInitScript(() => localStorage.setItem('theme', 'dark'))
   const page = await context.newPage()
 
   try {

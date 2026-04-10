@@ -7,6 +7,9 @@ const __dirname = path.dirname(__filename)
 const OUT = path.resolve(__dirname, '../../docs/screenshots')
 
 test('capture store screenshots and promo tiles', async ({ page }) => {
+  // Force dark mode for all captures
+  await page.addInitScript(() => localStorage.setItem('theme', 'dark'))
+
   // ─── 01-dashboard.png (1280×800) ──────────────────────────────────
   await test.step('01-dashboard', async () => {
     await page.setViewportSize({ width: 1280, height: 800 })
