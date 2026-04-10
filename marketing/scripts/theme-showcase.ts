@@ -79,7 +79,7 @@ async function run() {
     fs.rmSync(TMP, { recursive: true, force: true })
   }
 
-  console.log('✓ theme-showcase.mp4 and .gif written to docs/screenshots/')
+  console.log('✓ theme-showcase.mp4 and .gif written to marketing/output/videos/')
 }
 
 run().catch(err => { console.error(err); process.exit(1) })

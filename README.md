@@ -19,7 +19,7 @@
 
 <p align="center">
   <a href="https://chromewebstore.google.com/detail/nflojekghnganlcjncbepnnnkgakghif?utm_source=github">
-    <img src="docs/screenshots/dashboard-dark.png" width="700" alt="Dashboard in dark mode" />
+    <img src="marketing/output/01-dashboard.png" width="700" alt="Dashboard in dark mode" />
   </a>
 </p>
 
@@ -50,19 +50,15 @@ Or load manually:
 ## Screenshots
 
 <p align="center">
-  <img src="docs/screenshots/dashboard-theme.png" width="700" alt="Dashboard with Cyberpunk theme" />
+  <img src="marketing/output/03-themes.png" width="700" alt="5 color themes side by side" />
 </p>
 
 <p align="center">
-  <img src="docs/screenshots/hover-card.png" width="700" alt="Bookmark hover card with actions" />
+  <img src="marketing/output/02-organizer.png" width="700" alt="Bookmark Organizer tree editor" />
 </p>
 
 <p align="center">
-  <img src="docs/screenshots/settings.png" width="700" alt="Settings dialog" />
-</p>
-
-<p align="center">
-  <img src="docs/screenshots/onboarding.png" width="700" alt="First-run onboarding wizard" />
+  <img src="marketing/output/04-settings.png" width="700" alt="Settings dialog" />
 </p>
 
 ## Development
