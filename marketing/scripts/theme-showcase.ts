@@ -6,8 +6,21 @@ import { fileURLToPath } from 'url'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
-const OUT = path.resolve(__dirname, '../../docs/screenshots')
-const TMP = path.join(OUT, 'tmp-video')
+const OUT = path.resolve(__dirname, '../output/videos')
+const TMP = path.join(OUT, 'tmp-themes')
+
+const THEMES = [
+  'default',
+  'amber-minimal',
+  'bubblegum',
+  'caffeine',
+  'claude',
+  'claymorphism',
+  'cyberpunk',
+  'solar-dusk',
+  't3-chat',
+  'vintage-paper',
+] as const
 
 async function run() {
   fs.mkdirSync(TMP, { recursive: true })
@@ -21,28 +34,23 @@ async function run() {
   const page = await context.newPage()
 
   try {
-    // 1. Dashboard loads with bookmarks and favicons visible
     await page.goto('http://localhost:5173/?screenshot=true')
     await page.waitForLoadState('networkidle')
-    await page.waitForTimeout(1500)
 
-    // 2. Hover a bookmark card
-    await page.locator('[data-testid="bookmark-card"]').first().hover()
-    await page.waitForTimeout(1500)
+    for (const theme of THEMES) {
+      await page.evaluate((t) => {
+        if (t === 'default') {
+          document.documentElement.removeAttribute('data-color-theme')
+        } else {
+          document.documentElement.setAttribute('data-color-theme', t)
+        }
+      }, theme)
+      await page.waitForTimeout(1500) // hold each theme for 1.5s
+    }
 
-    // 3. Open organizer, show tree, close
-    await page.getByRole('button', { name: 'Bookmark Organizer' }).click()
-    await page.waitForSelector('[role="dialog"]', { timeout: 5_000 })
-    await page.waitForTimeout(2500)
-    await page.keyboard.press('Escape')
-    await page.waitForTimeout(800)
-
-    // 4. Open settings
-    await page.getByRole('button', { name: 'Settings' }).click()
-    await page.waitForSelector('[role="dialog"]', { timeout: 5_000 })
-    await page.waitForTimeout(2000)
+    await page.waitForTimeout(500) // trailing pause
   } finally {
-    await context.close().catch(() => {}) // triggers .webm save
+    await context.close().catch(() => {})
     await browser.close().catch(() => {})
   }
 
@@ -58,19 +66,20 @@ async function run() {
   try {
     // Convert to MP4
     execSync(
-      `"${ffmpeg}" -i "${webmPath}" -c:v libx264 -pix_fmt yuv420p "${OUT}/feature-walkthrough.mp4" -y`,
+      `"${ffmpeg}" -i "${webmPath}" -c:v libx264 -pix_fmt yuv420p "${OUT}/theme-showcase.mp4" -y`,
       { stdio: 'inherit' }
     )
 
-    // Convert to GIF (12fps, width 1280)
+    // Convert to GIF (10fps — lower for smaller file, themes are slow-paced)
     execSync(
-      `"${ffmpeg}" -i "${OUT}/feature-walkthrough.mp4" -vf "fps=12,scale=1280:-1:flags=lanczos" -loop 0 "${OUT}/feature-walkthrough.gif" -y`,
+      `"${ffmpeg}" -i "${OUT}/theme-showcase.mp4" -vf "fps=10,scale=1280:-1:flags=lanczos" -loop 0 "${OUT}/theme-showcase.gif" -y`,
       { stdio: 'inherit' }
     )
   } finally {
     fs.rmSync(TMP, { recursive: true, force: true })
   }
-  console.log('✓ feature-walkthrough.mp4 and .gif written to docs/screenshots/')
+
+  console.log('✓ theme-showcase.mp4 and .gif written to docs/screenshots/')
 }
 
 run().catch(err => { console.error(err); process.exit(1) })

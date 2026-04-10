@@ -26,7 +26,6 @@ dist-ssr
 .superpowers/
 .worktrees/
 
-# Screenshot automation tmp dirs
-docs/screenshots/tmp-video/
-docs/screenshots/tmp-themes/
+# Marketing automation — videos and tmp dirs (large binary files)
+marketing/output/videos/
 test-results/
