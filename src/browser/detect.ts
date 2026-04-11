@@ -8,7 +8,7 @@ import { StandaloneFaviconAdapter } from "./standalone/favicon"
 
 const ADAPTER_PREF_KEY = "adapterMode"
 
-function isChromeExtension(): boolean {
+function isBrowserExtension(): boolean {
   try {
     return (
       typeof chrome !== "undefined" &&
@@ -18,6 +18,10 @@ function isChromeExtension(): boolean {
   } catch {
     return false
   }
+}
+
+function isFirefoxBuild(): boolean {
+  return import.meta.env.VITE_BUILD_TARGET === "firefox"
 }
 
 async function getUserAdapterPreference(): Promise<
@@ -59,6 +63,10 @@ function createChromeAdapter(): BrowserAdapter {
     bookmarks: new ChromeBookmarkAdapter(),
     storage: new ChromeStorageAdapter(),
     favicon: new ChromeFaviconAdapter(),
+    capabilities: {
+      openInManager: true,
+      storageSync: true,
+    },
   }
 }
 
@@ -67,21 +75,30 @@ function createStandaloneAdapter(): BrowserAdapter {
     bookmarks: new StandaloneBookmarkAdapter(),
     storage: new StandaloneStorageAdapter(),
     favicon: new StandaloneFaviconAdapter(),
+    capabilities: {
+      openInManager: false,
+      storageSync: false,
+    },
   }
 }
 
 export async function detectAdapter(): Promise<BrowserAdapter> {
   const preference = await getUserAdapterPreference()
 
+  if (isFirefoxBuild() && isBrowserExtension()) {
+    // Firefox adapter wired in Task 6
+    return createChromeAdapter() // temporary — replaced in Task 6
+  }
+
   if (preference === "standalone") {
     return createStandaloneAdapter()
   }
 
-  if (preference === "browser" && isChromeExtension()) {
+  if (preference === "browser" && isBrowserExtension()) {
     return createChromeAdapter()
   }
 
-  if (isChromeExtension()) {
+  if (isBrowserExtension()) {
     return createChromeAdapter()
   }
 
