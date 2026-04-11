@@ -89,6 +89,8 @@ export const BookmarkItem = React.memo(function BookmarkItem({
     [bookmark, openDeleteConfirm]
   )
 
+  const canOpenInManager = adapter?.capabilities.openInManager ?? false
+
   const handleOpenInManager = React.useCallback(
     (e: React.MouseEvent) => {
       e.preventDefault()
@@ -128,7 +130,7 @@ export const BookmarkItem = React.memo(function BookmarkItem({
               onEdit={handleEdit}
               onCopyUrl={handleCopyUrl}
               onDelete={handleDelete}
-              onOpenInManager={handleOpenInManager}
+              onOpenInManager={canOpenInManager ? handleOpenInManager : undefined}
             />
           </HoverCardContent>
         </HoverCard>
@@ -167,7 +169,7 @@ export const BookmarkItem = React.memo(function BookmarkItem({
             onEdit={handleEdit}
             onCopyUrl={handleCopyUrl}
             onDelete={handleDelete}
-            onOpenInManager={handleOpenInManager}
+            onOpenInManager={canOpenInManager ? handleOpenInManager : undefined}
           />
         </HoverCardContent>
       </HoverCard>
@@ -187,7 +189,7 @@ const HoverCardBody = React.memo(function HoverCardBody({
   onEdit: (e: React.MouseEvent) => void
   onCopyUrl: (e: React.MouseEvent) => void
   onDelete: (e: React.MouseEvent) => void
-  onOpenInManager: (e: React.MouseEvent) => void
+  onOpenInManager?: (e: React.MouseEvent) => void
 }) {
   return (
     <div className="flex flex-col gap-2">
@@ -226,20 +228,22 @@ const HoverCardBody = React.memo(function HoverCardBody({
           </TooltipTrigger>
           <TooltipContent>Delete</TooltipContent>
         </Tooltip>
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                onClick={onOpenInManager}
-              />
-            }
-          >
-            <HugeiconsIcon icon={ArrowUpRight01Icon} size={14} />
-          </TooltipTrigger>
-          <TooltipContent>Show in bookmark manager</TooltipContent>
-        </Tooltip>
+        {onOpenInManager && (
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={onOpenInManager}
+                />
+              }
+            >
+              <HugeiconsIcon icon={ArrowUpRight01Icon} size={14} />
+            </TooltipTrigger>
+            <TooltipContent>Show in bookmark manager</TooltipContent>
+          </Tooltip>
+        )}
       </div>
     </div>
   )
