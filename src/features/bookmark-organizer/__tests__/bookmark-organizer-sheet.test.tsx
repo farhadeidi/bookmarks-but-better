@@ -44,6 +44,10 @@ describe("BookmarkOrganizerSheet", () => {
           getUrl: vi.fn(() => ""),
           isAvailable: vi.fn(() => false),
         },
+        capabilities: {
+          openInManager: true,
+          storageSync: true,
+        },
       },
       rootFolder: null,
       init: vi.fn(),
