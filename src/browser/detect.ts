@@ -2,6 +2,9 @@ import type { BrowserAdapter } from "./types"
 import { ChromeBookmarkAdapter } from "./chrome/bookmarks"
 import { ChromeStorageAdapter } from "./chrome/storage"
 import { ChromeFaviconAdapter } from "./chrome/favicon"
+import { FirefoxBookmarkAdapter } from "./firefox/bookmarks"
+import { FirefoxStorageAdapter } from "./firefox/storage"
+import { FirefoxFaviconAdapter } from "./firefox/favicon"
 import { StandaloneBookmarkAdapter } from "./standalone/bookmarks"
 import { StandaloneStorageAdapter } from "./standalone/storage"
 import { StandaloneFaviconAdapter } from "./standalone/favicon"
@@ -70,6 +73,18 @@ function createChromeAdapter(): BrowserAdapter {
   }
 }
 
+function createFirefoxAdapter(): BrowserAdapter {
+  return {
+    bookmarks: new FirefoxBookmarkAdapter(),
+    storage: new FirefoxStorageAdapter(),
+    favicon: new FirefoxFaviconAdapter(),
+    capabilities: {
+      openInManager: false,
+      storageSync: true,
+    },
+  }
+}
+
 function createStandaloneAdapter(): BrowserAdapter {
   return {
     bookmarks: new StandaloneBookmarkAdapter(),
@@ -83,12 +98,11 @@ function createStandaloneAdapter(): BrowserAdapter {
 }
 
 export async function detectAdapter(): Promise<BrowserAdapter> {
-  const preference = await getUserAdapterPreference()
-
   if (isFirefoxBuild() && isBrowserExtension()) {
-    // Firefox adapter wired in Task 6
-    return createChromeAdapter() // temporary — replaced in Task 6
+    return createFirefoxAdapter()
   }
+
+  const preference = await getUserAdapterPreference()
 
   if (preference === "standalone") {
     return createStandaloneAdapter()
