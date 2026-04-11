@@ -45,6 +45,8 @@ const FolderMenu = React.memo(function FolderMenu({
   const openBookmarkOrganizer = useUIStore((s) => s.openBookmarkOrganizer)
   const openCreateItem = useUIStore((s) => s.openCreateItem)
 
+  const canOpenInManager = adapter?.capabilities.openInManager ?? false
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
@@ -78,12 +80,14 @@ const FolderMenu = React.memo(function FolderMenu({
           <HugeiconsIcon icon={PencilEdit01Icon} size={14} />
           Rename
         </DropdownMenuItem>
-        <DropdownMenuItem
-          onClick={() => adapter?.bookmarks.openInManager(folder.id)}
-        >
-          <HugeiconsIcon icon={ArrowUpRight01Icon} size={14} />
-          View in manager
-        </DropdownMenuItem>
+        {canOpenInManager && (
+          <DropdownMenuItem
+            onClick={() => adapter?.bookmarks.openInManager(folder.id)}
+          >
+            <HugeiconsIcon icon={ArrowUpRight01Icon} size={14} />
+            View in manager
+          </DropdownMenuItem>
+        )}
         <DropdownMenuSeparator />
         <DropdownMenuItem
           variant="destructive"
