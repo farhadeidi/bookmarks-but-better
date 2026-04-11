@@ -8,6 +8,7 @@
     "build:chrome": "VITE_BUILD_TARGET=chrome vite build --outDir dist-chrome && cp manifests/manifest.chrome.json dist-chrome/manifest.json",
     "build:firefox": "VITE_BUILD_TARGET=firefox vite build --outDir dist-firefox && cp manifests/manifest.firefox.json dist-firefox/manifest.json",
     "build": "bun run build:chrome && bun run build:firefox",
+    "zip:firefox": "cd dist-firefox && zip -r ../bookmarks-but-better-firefox.zip .",
     "lint": "eslint .",
     "format": "prettier --write \"**/*.{ts,tsx}\"",
     "typecheck": "tsc --noEmit",
