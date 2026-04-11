@@ -75,6 +75,10 @@ describe("BookmarkOrganizerTree", () => {
           getUrl: vi.fn(() => ""),
           isAvailable: vi.fn(() => false),
         },
+        capabilities: {
+          openInManager: true,
+          storageSync: true,
+        },
       },
       rootFolder: {
         id: "root-1",
