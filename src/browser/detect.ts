@@ -96,14 +96,14 @@ function createStandaloneAdapter(): BrowserAdapter {
 }
 
 export async function detectAdapter(): Promise<BrowserAdapter> {
-  if (isFirefoxBuild() && isBrowserExtension()) {
-    return createFirefoxAdapter()
-  }
-
   const preference = await getUserAdapterPreference()
 
   if (preference === "standalone") {
     return createStandaloneAdapter()
+  }
+
+  if (isFirefoxBuild() && isBrowserExtension()) {
+    return createFirefoxAdapter()
   }
 
   if (preference === "browser" && isBrowserExtension()) {
