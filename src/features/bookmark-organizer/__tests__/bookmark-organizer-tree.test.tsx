@@ -77,7 +77,6 @@ describe("BookmarkOrganizerTree", () => {
         },
         capabilities: {
           openInManager: true,
-          storageSync: true,
         },
       },
       rootFolder: {

@@ -68,7 +68,6 @@ function createChromeAdapter(): BrowserAdapter {
     favicon: new ChromeFaviconAdapter(),
     capabilities: {
       openInManager: true,
-      storageSync: true,
     },
   }
 }
@@ -80,7 +79,7 @@ function createFirefoxAdapter(): BrowserAdapter {
     favicon: new FirefoxFaviconAdapter(),
     capabilities: {
       openInManager: false,
-      storageSync: true,
+      syncNote: "Your preferences sync across devices via Firefox Sync. If you're not signed into Firefox Sync, settings are saved locally on this device only.",
     },
   }
 }
@@ -92,7 +91,6 @@ function createStandaloneAdapter(): BrowserAdapter {
     favicon: new StandaloneFaviconAdapter(),
     capabilities: {
       openInManager: false,
-      storageSync: false,
     },
   }
 }

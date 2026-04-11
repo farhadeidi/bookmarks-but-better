@@ -44,8 +44,8 @@ export interface FaviconProvider {
 export interface AdapterCapabilities {
   /** Whether "open in bookmark manager" is supported. False on Firefox and Standalone. */
   openInManager: boolean
-  /** Whether preferences use sync storage. True on Chrome and Firefox (Firefox requires Firefox Sync to be active). */
-  storageSync: boolean
+  /** Optional note to display in Settings about storage sync behaviour. Only set on Firefox. */
+  syncNote?: string
 }
 
 export interface BrowserAdapter {
