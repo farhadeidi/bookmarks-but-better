@@ -1,0 +1,77 @@
+Bookmarks - But Better replaces your new tab page with a clean, organized bookmarks dashboard that puts your favorite sites front and center.
+
+Every time you open a new tab, instead of an empty page or a search bar, you see your bookmarks laid out in a beautiful masonry grid. No more digging through menus, no more forgetting what you saved. Your bookmarks are right there, exactly where you need them.
+
+🆕 What's new in v3.1.0:
+- Bookmark Organizer: a full tree editor to drag, reorder, rename, create, and delete bookmarks and folders in one place
+- Create subfolders and bookmarks directly inside any folder from the tree or the folder card menu
+- Expand All / Collapse All and a Folders Only toggle to focus on structure
+- Cleaner toolbar with a frosted background so footer actions always stay visible
+
+💡 Why you'll love it:
+Your browser already has your bookmarks. You already organized them into folders. But the default bookmark experience buries them behind menus and clicks. This extension takes what you already have and presents it beautifully. There's nothing to set up, no account to create, no data to import. Install it, open a new tab, and your bookmarks are already there.
+
+✨ Features:
+- Drag and drop: reorder bookmarks within a folder or move them between folders by simply dragging and dropping
+- Bookmark Organizer: a dedicated tree editor to drag-and-drop reorder, rename, create, and delete bookmarks and folders across your entire library in one sheet
+- Folder management: create new folders, rename them, delete them, and rearrange folder tabs with drag-and-drop ordering
+- Masonry layout: your bookmark folders are displayed as cards in a responsive, Pinterest-style grid that adapts to your screen size
+- Two view modes per folder: switch between a detailed list view with titles and favicons, or a compact icon grid for folders you know by heart
+- Beautiful themes: choose from 10 handcrafted color themes including Default, Amber, Bubblegum, Caffeine, Claude, Claymorphism, Cyberpunk, Solar Dusk, T3 Chat, and Vintage Paper
+- Light and dark mode: follows your system preference automatically, or toggle manually with a single click. Press D on your keyboard to switch instantly
+- Edit everything inline: rename bookmarks, change URLs, create new bookmarks, and manage folders without ever leaving the page
+- Choose your root folder: pick any bookmark folder as your starting point. Only want to see your work bookmarks? Or just your personal ones? Set it in seconds
+- Import and export: bring bookmarks in or take them out using the standard HTML bookmark format that every browser understands
+- High-quality favicons: every bookmark gets a sharp, recognizable icon, even on high-resolution displays
+- Always in sync: every change you make is saved directly to your Chrome bookmarks. Edit a bookmark here and it updates everywhere
+
+🔒 Built for privacy:
+This extension was built with a simple principle: your bookmarks are yours. There is no data collection. No analytics. No tracking. No ads. No account required. All your data stays in your browser using Chrome's built-in bookmarks and storage APIs. The only external request the extension makes is fetching website icons from Google's public favicon service, which is the same service Chrome itself uses.
+
+Your bookmarks deserve better than a dropdown menu. Give them a home.
+
+📋 Changelog:
+
+v3.1.0 — Bookmark Organizer
+- Full tree editor: drag-and-drop reorder, rename, create, and delete bookmarks and folders
+- Per-folder create actions: add a subfolder or bookmark directly inside any folder
+- Expand All / Collapse All and Folders Only toggle
+- New Bookmark option in folder card context menu
+- Frosted FAB toolbar background for better visibility
+
+v3.0.0 — Drag & Drop, Folder Management, and Performance
+- Drag-and-drop bookmark sorting within and across folders
+- Folder order dialog for rearranging folder tabs
+- Create folder button
+- Performance: memoized components, lazy-loaded dialogs, eliminated double-refresh
+- Fixed bookmark links opening in new tab, drop indicator duplication, native drag interference
+
+v2.1.0 — Folder Actions and Layout Settings
+- Folder actions: rename, delete, and reorder folders
+- Layout settings for customizing bookmark grid columns
+
+v2.0.0 — Public Release
+- First-run onboarding wizard with theme selection
+- Curated seed bookmarks for new users
+- "Show in bookmark manager" action
+- Google Favicon V2 for higher quality icons
+- 10 handcrafted color themes
+- Import and export bookmarks
+
+🔑 Permission justifications:
+
+bookmarks: Core functionality. The extension reads and displays your Chrome bookmarks on the new tab page. It also allows you to create, edit, and delete bookmarks directly from the dashboard.
+
+storage: Used to save your preferences such as selected root folder, color theme, card layout mode, and onboarding completion status. All data is stored locally in your browser using Chrome's built-in storage API.
+
+favicon: Used to retrieve website icons for each bookmark via Chrome's built-in favicon API, so every bookmark displays a recognizable icon next to its title.
+
+tabs: Used to open Chrome's built-in bookmark manager when the user clicks "Show in bookmark manager" on a folder. This action opens a new tab pointing to chrome://bookmarks.
+
+clipboardWrite: Used to copy bookmark URLs to the clipboard when the user clicks the "Copy link" action on a bookmark card.
+
+Host permissions:
+
+https://t1.gstatic.com/*: Used to fetch high-quality favicons from Google's Favicon V2 service. This is the primary source for bookmark icons displayed in the dashboard.
+
+https://www.google.com/*: Used as a fallback favicon source via Google's S2 favicon service, in case the primary source does not return an icon for a given website.

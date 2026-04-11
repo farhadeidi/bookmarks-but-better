@@ -23,10 +23,10 @@ Your browser already has your bookmarks. You already organized them into folders
 - Choose your root folder: pick any bookmark folder as your starting point. Only want to see your work bookmarks? Or just your personal ones? Set it in seconds
 - Import and export: bring bookmarks in or take them out using the standard HTML bookmark format that every browser understands
 - High-quality favicons: every bookmark gets a sharp, recognizable icon, even on high-resolution displays
-- Always in sync: every change you make is saved directly to your Chrome bookmarks. Edit a bookmark here and it updates everywhere
+- Always in sync: every change you make is saved directly to your browser bookmarks. Edit a bookmark here and it updates everywhere
 
 🔒 Built for privacy:
-This extension was built with a simple principle: your bookmarks are yours. There is no data collection. No analytics. No tracking. No ads. No account required. All your data stays in your browser using Chrome's built-in bookmarks and storage APIs. The only external request the extension makes is fetching website icons from Google's public favicon service, which is the same service Chrome itself uses.
+This extension was built with a simple principle: your bookmarks are yours. There is no data collection. No analytics. No tracking. No ads. No account required. All your data stays in your browser using your browser's built-in bookmarks and storage APIs. The only external request the extension makes is fetching website icons from Google's public favicon service.
 
 Your bookmarks deserve better than a dropdown menu. Give them a home.
 
@@ -53,25 +53,16 @@ v2.1.0 — Folder Actions and Layout Settings
 v2.0.0 — Public Release
 - First-run onboarding wizard with theme selection
 - Curated seed bookmarks for new users
-- "Show in bookmark manager" action
 - Google Favicon V2 for higher quality icons
 - 10 handcrafted color themes
 - Import and export bookmarks
 
 🔑 Permission justifications:
 
-bookmarks: Core functionality. The extension reads and displays your Chrome bookmarks on the new tab page. It also allows you to create, edit, and delete bookmarks directly from the dashboard.
+bookmarks: Core functionality. The extension reads and displays your bookmarks on the new tab page. It also allows you to create, edit, and delete bookmarks directly from the dashboard.
 
-storage: Used to save your preferences such as selected root folder, color theme, card layout mode, and onboarding completion status. All data is stored locally in your browser using Chrome's built-in storage API.
-
-favicon: Used to retrieve website icons for each bookmark via Chrome's built-in favicon API, so every bookmark displays a recognizable icon next to its title.
-
-tabs: Used to open Chrome's built-in bookmark manager when the user clicks "Show in bookmark manager" on a folder. This action opens a new tab pointing to chrome://bookmarks.
-
-clipboardWrite: Used to copy bookmark URLs to the clipboard when the user clicks the "Copy link" action on a bookmark card.
+storage: Used to save your preferences such as selected root folder, color theme, card layout mode, and onboarding completion status. All data is stored locally in your browser using the browser's built-in storage API.
 
 Host permissions:
 
-https://t1.gstatic.com/*: Used to fetch high-quality favicons from Google's Favicon V2 service. This is the primary source for bookmark icons displayed in the dashboard.
-
-https://www.google.com/*: Used as a fallback favicon source via Google's S2 favicon service, in case the primary source does not return an icon for a given website.
+https://t1.gstatic.com/*: Used to fetch high-quality favicons from Google's Favicon V2 service. This is the sole source for bookmark icons displayed in the dashboard.
