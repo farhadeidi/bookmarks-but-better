@@ -4,5 +4,6 @@ export type {
   BookmarkAdapter,
   StorageAdapter,
   FaviconProvider,
+  AdapterCapabilities,
   BrowserAdapter,
 } from "./types"
