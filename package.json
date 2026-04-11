@@ -5,7 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build:chrome": "tsc -b && VITE_BUILD_TARGET=chrome vite build --outDir dist-chrome",
+    "build:firefox": "VITE_BUILD_TARGET=firefox vite build --outDir dist-firefox && cp public/manifest.firefox.json dist-firefox/manifest.json",
+    "build": "bun run build:chrome && bun run build:firefox",
     "lint": "eslint .",
     "format": "prettier --write \"**/*.{ts,tsx}\"",
     "typecheck": "tsc --noEmit",
