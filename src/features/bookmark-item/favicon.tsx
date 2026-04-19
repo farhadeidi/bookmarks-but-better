@@ -1,5 +1,6 @@
 import * as React from "react"
 import { cn } from "@/lib/utils"
+import { isGoogleDefaultGlobe } from "@/browser/favicon/detect-default-globe"
 
 interface FaviconProps {
   url: string
@@ -35,6 +36,16 @@ export function Favicon({
     }
   }, [failed, fallbackSrc])
 
+  const handleLoad = React.useCallback(
+    (e: React.SyntheticEvent<HTMLImageElement>) => {
+      const img = e.currentTarget
+      if (isGoogleDefaultGlobe(src, img.naturalWidth, img.naturalHeight)) {
+        handleError()
+      }
+    },
+    [src, handleError]
+  )
+
   if (failed && (!fallbackSrc || src === fallbackSrc)) {
     // Final fallback: first letter of domain
     let letter = "?"
@@ -66,6 +77,7 @@ export function Favicon({
       className={cn("shrink-0 rounded-sm object-contain", className)}
       style={{ width: size, height: size, minWidth: size, minHeight: size }}
       onError={handleError}
+      onLoad={handleLoad}
       loading="lazy"
     />
   )
