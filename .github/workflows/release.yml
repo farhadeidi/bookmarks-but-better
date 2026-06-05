@@ -8,6 +8,15 @@ on:
   release:
     types: [published]
   workflow_dispatch:
+    inputs:
+      chrome:
+        description: "Publish to Chrome Web Store"
+        type: boolean
+        default: true
+      firefox:
+        description: "Publish to Firefox AMO"
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -37,6 +46,7 @@ jobs:
 
       # --- Chrome Web Store ---------------------------------------------------
       - name: Publish to Chrome Web Store
+        if: ${{ github.event_name == 'release' || inputs.chrome }}
         uses: mnao305/chrome-extension-upload@v5.0.0
         with:
           file-path: chrome.zip
@@ -52,10 +62,11 @@ jobs:
       # the first listed submission may need a one-time manual source upload
       # from the AMO dashboard.
       - name: Publish to Firefox AMO
+        if: ${{ github.event_name == 'release' || inputs.firefox }}
         uses: kewisch/action-web-ext@v1
         with:
           cmd: sign
-          source: dist-firefox
+          source: firefox.zip
           channel: listed
           apiKey: ${{ secrets.AMO_JWT_ISSUER }}
           apiSecret: ${{ secrets.AMO_JWT_SECRET }}
