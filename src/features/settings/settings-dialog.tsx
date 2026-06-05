@@ -32,7 +32,6 @@ export function SettingsDialog() {
   const tree = useBookmarkStore((s) => s.tree)
   const adapter = useBookmarkStore((s) => s.adapter)
   const refresh = useBookmarkStore((s) => s.refresh)
-  const syncNote = adapter?.capabilities.syncNote
   const adapterMode = usePreferencesStore((s) => s.adapterMode)
   const setAdapterMode = usePreferencesStore((s) => s.setAdapterMode)
   const maxColumns = usePreferencesStore((s) => s.maxColumns)
@@ -133,11 +132,6 @@ export function SettingsDialog() {
 
         <div className="-mx-4 no-scrollbar max-h-[50vh] overflow-y-auto px-4">
           <div className="flex flex-col gap-6">
-            {syncNote && (
-              <div className="rounded-md bg-muted px-3 py-2.5 text-xs text-muted-foreground">
-                {syncNote}
-              </div>
-            )}
             {/* Bookmarks section */}
             <RootFolderSelect
               value={rootFolderId}
