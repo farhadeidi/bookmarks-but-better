@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.2.0] - 2026-06-05
+
+### Added
+
+- Firefox support: a dedicated Firefox build with an AMO-compliant manifest and Firefox for Android (Gecko) support
+- Option to set the dashboard as your Firefox Homepage, in addition to the new tab page
+- Dual-build pipeline with separate `build:chrome` and `build:firefox` output directories
+
+### Changed
+
+- Preferences are now stored locally per device instead of syncing across devices; existing settings are migrated automatically on first launch
+
+### Fixed
+
+- Root folder selection no longer breaks when switching between operating systems — the previously synced bookmark folder ID did not match across profiles/OSes
+- Replaced Google's default globe favicon with a clean letter fallback
+
 ## [3.1.0] - 2026-04-05
 
 ### Added
@@ -83,6 +100,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Rewrote README for end users with screenshots and badges
 
+[3.2.0]: https://github.com/farhadeidi/bookmarks-but-better/compare/v3.1.0...v3.2.0
 [3.1.0]: https://github.com/farhadeidi/bookmarks-but-better/compare/v3.0.0...v3.1.0
 [3.0.0]: https://github.com/farhadeidi/bookmarks-but-better/compare/v2.1.0...v3.0.0
 [2.1.0]: https://github.com/farhadeidi/bookmarks-but-better/compare/v2.0.0...v2.1.0
