@@ -34,7 +34,7 @@
 - **Light and dark mode** — Follows system preference or toggle manually
 - **Choose your root folder** — Display bookmarks from any folder
 - **Import and export** — Standard HTML bookmark files
-- **High-quality favicons** — Sharp icons on every display
+- **Smart favicons** — Sharp, high-quality site icons with a clean letter fallback when a site has none
 - **Always in sync** — Changes saved directly to your browser bookmarks
 - **100% private** — No analytics, no tracking, no data leaves your browser
 
