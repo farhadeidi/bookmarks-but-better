@@ -58,11 +58,20 @@ jobs:
 
       # --- Firefox AMO --------------------------------------------------------
       # Signs and submits the build to the listed channel via the AMO API.
+      #
+      # continue-on-error: for the *listed* channel the version is fully
+      # submitted once validation passes ("Waiting for approval..."), but
+      # web-ext then tries to download a signed .xpi that does not exist until
+      # a reviewer approves the listing — so it exits non-zero on a successful
+      # submission. We tolerate that here. ALWAYS confirm the new version on the
+      # AMO dashboard after a release: https://addons.mozilla.org/developers/
+      #
       # Note: AMO requires a source-code upload for review of bundled builds;
       # the first listed submission may need a one-time manual source upload
       # from the AMO dashboard.
       - name: Publish to Firefox AMO
         if: ${{ github.event_name == 'release' || inputs.firefox }}
+        continue-on-error: true
         uses: kewisch/action-web-ext@v1
         with:
           cmd: sign
