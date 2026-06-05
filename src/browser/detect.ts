@@ -10,6 +10,32 @@ import { StandaloneStorageAdapter } from "./standalone/storage"
 import { StandaloneFaviconAdapter } from "./standalone/favicon"
 
 const ADAPTER_PREF_KEY = "adapterMode"
+const SYNC_MIGRATION_FLAG = "__syncToLocalMigrated"
+
+/**
+ * One-time migration of preferences from chrome.storage.sync to
+ * chrome.storage.local. Preferences used to sync across devices, but the
+ * stored `rootFolderId` is a browser-assigned bookmark node id that is local
+ * to each profile/OS, so syncing it broke the root folder on other machines.
+ *
+ * Copies all existing sync keys (including rootFolderId) into local once, then
+ * sets a flag so it never runs again. Sync storage is intentionally left
+ * untouched so devices that haven't updated yet keep reading their settings.
+ */
+async function migrateSyncToLocal(): Promise<void> {
+  try {
+    const flag = await chrome.storage.local.get(SYNC_MIGRATION_FLAG)
+    if (flag[SYNC_MIGRATION_FLAG]) return
+
+    const synced = await chrome.storage.sync.get(null)
+    if (Object.keys(synced).length > 0) {
+      await chrome.storage.local.set(synced)
+    }
+    await chrome.storage.local.set({ [SYNC_MIGRATION_FLAG]: true })
+  } catch {
+    // Best-effort: if sync storage is unavailable there is nothing to migrate.
+  }
+}
 
 function isBrowserExtension(): boolean {
   try {
@@ -79,7 +105,6 @@ function createFirefoxAdapter(): BrowserAdapter {
     favicon: new FirefoxFaviconAdapter(),
     capabilities: {
       openInManager: false,
-      syncNote: "Your preferences sync across devices via Firefox Sync. If you're not signed into Firefox Sync, settings are saved locally on this device only.",
     },
   }
 }
@@ -103,14 +128,17 @@ export async function detectAdapter(): Promise<BrowserAdapter> {
   }
 
   if (isFirefoxBuild() && isBrowserExtension()) {
+    await migrateSyncToLocal()
     return createFirefoxAdapter()
   }
 
   if (preference === "browser" && isBrowserExtension()) {
+    await migrateSyncToLocal()
     return createChromeAdapter()
   }
 
   if (isBrowserExtension()) {
+    await migrateSyncToLocal()
     return createChromeAdapter()
   }
 
