@@ -1,0 +1,62 @@
+name: Release
+
+# Builds both extensions and submits them to the Chrome Web Store and
+# Firefox AMO whenever a GitHub Release is published. You can also run it
+# manually from the Actions tab (workflow_dispatch) — useful for re-running
+# a submission without cutting a new release.
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build Chrome and Firefox
+        run: bun run build
+
+      - name: Package zips
+        run: |
+          (cd dist-chrome && zip -r -q ../chrome.zip .)
+          (cd dist-firefox && zip -r -q ../firefox.zip .)
+
+      # --- Chrome Web Store ---------------------------------------------------
+      - name: Publish to Chrome Web Store
+        uses: mnao305/chrome-extension-upload@v5.0.0
+        with:
+          file-path: chrome.zip
+          extension-id: ${{ secrets.CHROME_EXTENSION_ID }}
+          client-id: ${{ secrets.CHROME_CLIENT_ID }}
+          client-secret: ${{ secrets.CHROME_CLIENT_SECRET }}
+          refresh-token: ${{ secrets.CHROME_REFRESH_TOKEN }}
+          publish: true
+
+      # --- Firefox AMO --------------------------------------------------------
+      # Signs and submits the build to the listed channel via the AMO API.
+      # Note: AMO requires a source-code upload for review of bundled builds;
+      # the first listed submission may need a one-time manual source upload
+      # from the AMO dashboard.
+      - name: Publish to Firefox AMO
+        uses: kewisch/action-web-ext@v1
+        with:
+          cmd: sign
+          source: dist-firefox
+          channel: listed
+          apiKey: ${{ secrets.AMO_JWT_ISSUER }}
+          apiSecret: ${{ secrets.AMO_JWT_SECRET }}
+          timeout: 900000
