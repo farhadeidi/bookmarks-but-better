@@ -238,13 +238,16 @@ impl StateFreeze {
     pub const fn detail(self) -> &'static str {
         match self {
             Self::UnknownField => {
-                "the child order file holds keys this version does not define, so it is used for \
-                 ordering but never rewritten; entries can still be added and removed, but they \
-                 cannot be reordered until the extra keys are gone"
+                "the child order file holds a key this version does not define — most likely \
+                 written by a newer build. The order it records is still used, and the file is \
+                 never rewritten, because rewriting it would discard that key. Entries can still \
+                 be created, renamed, moved and deleted; only changing their order is refused, \
+                 until the extra key is removed or this build is upgraded"
             }
             Self::DuplicateChild => {
-                "the child order file names one entry more than once, so it is used for ordering \
-                 but never rewritten; remove the duplicate to make ordering writable again"
+                "the child order file names one entry more than once, which has no single correct \
+                 reading. The first position is used and the file is never rewritten; remove the \
+                 duplicate to make ordering writable again"
             }
         }
     }

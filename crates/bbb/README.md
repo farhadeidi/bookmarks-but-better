@@ -98,18 +98,42 @@ patch, because a partial order has no single correct completion. Sending the
 order a folder is already in writes nothing, changes no revision, and produces
 no event.
 
-`index` on a create or a move is a position among the folder's children,
-counted from zero; the end when omitted. Anything that changes what a folder
-holds carries that folder's `stateRevision`, so a stale client gets a 409
-instead of dropping an entry into a list that has moved on.
+`index` on a create or a move counts the children exactly as `GET /tree` gives
+them, from zero; the end when omitted.
+
+`stateRevision` is required only where it means something. A request that says
+*where* — an `index`, or a `PUT .../order` — is checked against the revision it
+names, and refused with `stale_state_revision` if it does not send one, because
+a position only means something against a particular arrangement. A request
+that appends or removes by identity means the same thing whatever order the
+folder is in, so it may leave the revision out and the daemon resolves the
+current one itself under the write gate; a client written before ordering
+existed therefore keeps working unchanged. A revision that *is* sent is always
+checked strictly.
 
 A folder with no order file yet — one made before this feature, or in a file
 manager — is shown in the deterministic *migration order*: folders first, then
-by `bbb_created` and stable identity. It gains a real order file the first time
-a change needs one, pinning what was already on screen.
+by `bbb_created` and stable identity, and finally any directory with no
+`.bbb-folder.md`. It gains a real order file the first time a change needs one,
+pinning what was already on screen. That first write is a real change and does
+advance the revision; every later request for an order the folder already has
+writes nothing.
+
+**Migration note.** Before this feature siblings were sorted by folded title.
+They are now sorted as above, so an existing vault's default order changes once,
+the first time it is scanned by this build. Nothing on disk is rewritten to
+achieve it, and `bbb init` on an existing vault pins whatever order is being
+shown at that moment.
+
+A directory with no `.bbb-folder.md` has no stable identity, so no order file
+can name it and nothing can move it. Those sit in a block at the end whose
+position never changes — managed entries reorder above them — and an `index`
+that would fall after one is refused with `invalid_order` rather than quietly
+landing somewhere else.
 
 A file this build cannot fully account for (an unknown key, one identity listed
-twice, an unreadable document, a version from the future) is **never rewritten**.
+twice, an unreadable document, a version from the future, or a name held by a
+directory, a link or a case-variant sibling) is **never rewritten**.
 Where it can still be read it is still honoured for ordering; positional
 requests against it return `state_read_only`, and creating, renaming, moving and
 deleting all keep working. `bbb doctor` names every folder in that state.

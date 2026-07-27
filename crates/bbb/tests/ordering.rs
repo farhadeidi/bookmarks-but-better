@@ -132,18 +132,113 @@ async fn a_create_past_the_end_is_refused_and_writes_nothing() {
     );
 }
 
+/// A request that does not say *where* means the same thing whatever order the
+/// folder is in, so it may leave the revision out — which is what keeps a
+/// client written before ordering existed working unchanged.
 #[tokio::test]
-async fn a_create_without_the_parents_order_revision_is_refused() {
+async fn an_appending_create_may_omit_the_parents_order_revision() {
     let harness = Harness::new();
-    let root = harness.root_id().await;
+    let (root, ids) = populated(&harness).await;
 
-    harness
+    let response = harness
         .post(
             "/api/v1/bookmarks",
             &json!({ "parentId": root, "title": "New", "url": "https://new.example" }),
         )
+        .await;
+    assert_eq!(response.status, StatusCode::CREATED, "{}", response.text());
+
+    let new = response.json()["id"].as_str().expect("an id").to_owned();
+    let mut expected: Vec<String> = ids.to_vec();
+    expected.push(new);
+    assert_eq!(
+        harness.child_ids(&root).await,
+        expected,
+        "and it lands at the end, which is the only place it could have meant"
+    );
+}
+
+/// An index only means something against a particular order, so one has to be
+/// named. This is the half of the rule that is *not* relaxed.
+#[tokio::test]
+async fn a_placed_create_without_the_parents_order_revision_is_refused() {
+    let harness = Harness::new();
+    let (root, _) = populated(&harness).await;
+    let before = vault_files(harness.root());
+
+    harness
+        .post(
+            "/api/v1/bookmarks",
+            &json!({
+                "parentId": root, "title": "New", "url": "https://new.example", "index": 1,
+            }),
+        )
         .await
         .expect_problem(StatusCode::CONFLICT, "stale_state_revision");
+    assert_eq!(vault_files(harness.root()), before);
+}
+
+/// And a revision that *is* sent is checked strictly however the request is
+/// shaped: relaxing the requirement must not relax the check.
+#[tokio::test]
+async fn an_appending_create_with_a_wrong_order_revision_is_still_refused() {
+    let harness = Harness::new();
+    let (root, _) = populated(&harness).await;
+
+    harness
+        .post(
+            "/api/v1/bookmarks",
+            &json!({
+                "parentId": root, "title": "New", "url": "https://new.example",
+                "parentStateRevision": "0".repeat(64),
+            }),
+        )
+        .await
+        .expect_problem(StatusCode::CONFLICT, "stale_state_revision");
+}
+
+/// The same relaxation, on the routes the shipped web UI actually calls.
+#[tokio::test]
+async fn a_client_that_knows_nothing_about_ordering_can_still_create_move_and_delete() {
+    let harness = Harness::new();
+    let root = harness.root_id().await;
+
+    let folder = harness
+        .post(
+            "/api/v1/folders",
+            &json!({ "parentId": root, "title": "Development" }),
+        )
+        .await;
+    assert_eq!(folder.status, StatusCode::CREATED, "{}", folder.text());
+    let folder_id = folder.json()["id"].as_str().expect("an id").to_owned();
+
+    let bookmark = harness
+        .post(
+            "/api/v1/bookmarks",
+            &json!({ "parentId": root, "title": "Rust", "url": "https://rust-lang.org" }),
+        )
+        .await;
+    assert_eq!(bookmark.status, StatusCode::CREATED, "{}", bookmark.text());
+    let id = bookmark.json()["id"].as_str().expect("an id").to_owned();
+    let revision = bookmark.json()["revision"]
+        .as_str()
+        .expect("a revision")
+        .to_owned();
+
+    let moved = harness
+        .post(
+            &format!("/api/v1/bookmarks/{id}/move"),
+            &json!({ "revision": revision, "parentId": folder_id }),
+        )
+        .await;
+    assert_eq!(moved.status, StatusCode::OK, "{}", moved.text());
+    assert_eq!(harness.child_ids(&folder_id).await, [id.as_str()]);
+
+    let deleted = harness
+        .delete(&format!("/api/v1/bookmarks/{id}?revision={revision}"))
+        .await;
+    assert_eq!(deleted.status, StatusCode::NO_CONTENT, "{}", deleted.text());
+    assert!(harness.child_ids(&folder_id).await.is_empty());
 }
 
 #[tokio::test]
@@ -659,20 +754,36 @@ async fn a_delete_takes_the_entry_out_of_the_order_and_leaves_the_rest_alone() {
     );
 }
 
+/// A delete names an entry, not a position, so it may leave the revision out —
+/// and a wrong one is still a conflict.
 #[tokio::test]
-async fn a_delete_without_the_parents_order_revision_is_refused() {
+async fn a_delete_may_omit_the_parents_order_revision_but_not_get_it_wrong() {
     let harness = Harness::new();
-    let (_root, [one, ..]) = populated(&harness).await;
+    let (root, [one, two, dev, ops]) = populated(&harness).await;
     let revision = find_node(&harness.tree().await, &one).expect("the entry")["revision"]
         .as_str()
         .expect("a revision")
         .to_owned();
 
+    let wrong = "0".repeat(64);
     harness
-        .delete(&format!("/api/v1/bookmarks/{one}?revision={revision}"))
+        .delete(&format!(
+            "/api/v1/bookmarks/{one}?revision={revision}&parentStateRevision={wrong}"
+        ))
         .await
         .expect_problem(StatusCode::CONFLICT, "stale_state_revision");
     assert!(harness.root().join(format!("One--{one}.md")).exists());
+
+    let response = harness
+        .delete(&format!("/api/v1/bookmarks/{one}?revision={revision}"))
+        .await;
+    assert_eq!(
+        response.status,
+        StatusCode::NO_CONTENT,
+        "{}",
+        response.text()
+    );
+    assert_eq!(harness.child_ids(&root).await, refs(&[&two, &dev, &ops]));
 }
 
 #[tokio::test]
@@ -1101,6 +1212,134 @@ async fn a_cloud_client_that_delivers_half_a_change_is_absorbed() {
     assert_eq!(
         children[0], "77777777",
         "the kept reference put it back where it belonged: {children:?}"
+    );
+}
+
+/// `index` counts the list a client is looking at. Every child an order file
+/// can name comes first in that list, so an index into the addressable part
+/// means exactly the visual position it names — and a position inside the
+/// trailing block of unnameable directories is refused rather than quietly
+/// becoming a different one.
+#[tokio::test]
+async fn an_index_means_the_visual_position_and_a_position_it_cannot_record_is_refused() {
+    let harness = Harness::new();
+    let (root, [one, two, dev, ops]) = populated(&harness).await;
+    write_external(harness.root(), "Loose/note.txt", "mine");
+    harness.post("/api/v1/rescan", &json!({})).await;
+
+    let before = harness.child_ids(&root).await;
+    assert_eq!(before.len(), 5, "{before:?}");
+    assert_eq!(before[4], "!Loose", "the unnameable directory is last");
+
+    // Index 4 is the last position that can be recorded: immediately before it.
+    let created = harness
+        .create_bookmark_at(&root, "New", "https://new.example", Some(4))
+        .await;
+    let new = created["id"].as_str().expect("an id").to_owned();
+    let after = harness.child_ids(&root).await;
+    assert_eq!(
+        after,
+        refs(&[&one, &two, &dev, &ops, &new, &"!Loose".to_owned()]),
+        "landing exactly where the index said, with the directory undisturbed"
+    );
+
+    // Six children are now visible, five of them recordable. Index 5 is still
+    // the slot immediately before the directory; index 6 would be after it,
+    // which nothing can record.
+    assert_eq!(harness.child_ids(&root).await.len(), 6);
+    let files = vault_files(harness.root());
+    let state = harness.state_revision(&root).await.expect("a revision");
+    let problem = harness
+        .post(
+            "/api/v1/bookmarks",
+            &json!({
+                "parentId": root, "title": "Later", "url": "https://later.example",
+                "index": 6, "parentStateRevision": state,
+            }),
+        )
+        .await
+        .expect_problem(StatusCode::UNPROCESSABLE_ENTITY, "invalid_order");
+    let detail = problem["detail"].as_str().expect("a detail");
+    assert!(
+        detail.contains("no `.bbb-folder.md`"),
+        "the refusal has to say why: {detail}"
+    );
+    assert_eq!(
+        vault_files(harness.root()),
+        files,
+        "and it writes nothing at all"
+    );
+}
+
+#[tokio::test]
+async fn a_reorder_leaves_a_directory_it_cannot_name_exactly_where_it_was() {
+    let harness = Harness::new();
+    let (root, [one, two, dev, ops]) = populated(&harness).await;
+    write_external(harness.root(), "Loose/note.txt", "mine");
+    harness.post("/api/v1/rescan", &json!({})).await;
+
+    let response = harness
+        .set_order(
+            &root,
+            &[
+                (&ops, "folder"),
+                (&two, "bookmark"),
+                (&dev, "folder"),
+                (&one, "bookmark"),
+            ],
+        )
+        .await;
+    assert_eq!(response.status, StatusCode::OK, "{}", response.text());
+
+    assert_eq!(
+        harness.child_ids(&root).await,
+        refs(&[&ops, &two, &dev, &one, &"!Loose".to_owned()]),
+        "the managed entries reorder around it and it does not move"
+    );
+}
+
+/// A directory holding the order file's name is a refusal, not a retry loop: a
+/// client that reloads gets the same answer, so it has to be told the reason.
+#[cfg(unix)]
+#[tokio::test]
+async fn a_directory_holding_the_order_files_name_refuses_placement_with_a_reason() {
+    let harness = Harness::new();
+    let (root, [one, ..]) = populated(&harness).await;
+    fs::remove_file(state_path(&harness, "")).expect("remove");
+    fs::create_dir(state_path(&harness, "")).expect("create directory");
+    harness.post("/api/v1/rescan", &json!({})).await;
+
+    let tree = harness.tree().await;
+    let node = find_node(&tree, &root).expect("the root");
+    assert_eq!(node["orderReadOnly"], true, "{node}");
+    assert!(
+        node.get("stateRevision").is_none(),
+        "there is no revision to reload: {node}"
+    );
+
+    // Positional requests are refused by the reason that will not change.
+    harness
+        .post(
+            "/api/v1/bookmarks",
+            &json!({
+                "parentId": root, "title": "New", "url": "https://new.example", "index": 0,
+            }),
+        )
+        .await
+        .expect_problem(StatusCode::UNPROCESSABLE_ENTITY, "state_read_only");
+    harness
+        .set_order(&root, &[(&one, "bookmark")])
+        .await
+        .expect_problem(StatusCode::UNPROCESSABLE_ENTITY, "state_read_only");
+
+    // And an appending create still works.
+    let created = harness
+        .create_bookmark(&root, "New", "https://new.example")
+        .await;
+    assert!(created["id"].as_str().is_some());
+    assert!(
+        state_path(&harness, "").is_dir(),
+        "the directory in the way is never written over"
     );
 }
 

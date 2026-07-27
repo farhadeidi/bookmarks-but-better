@@ -617,8 +617,21 @@ fn walk(
     );
 
     let mut contents = Contents::default();
+    // A sibling that folds to the order file's name without being it. The two
+    // coexist here and are one file on macOS and Windows, so an order file
+    // written now would not survive the vault being copied there. Recorded and
+    // applied after the walk, so it wins over whatever was read.
+    let mut folded_collision: Option<String> = None;
+
     for (name, file_type) in read_children(handle, &relative_path, &mut contents)? {
         let child_relative = join_relative(&relative_path, &name);
+        if name != STATE_FILE_NAME && fold_key(&name) == fold_key(STATE_FILE_NAME) {
+            folded_collision = Some(name.clone());
+        }
+        if let Some(state) = occupied_state(&name, file_type, &child_relative) {
+            contents.state = Some(state);
+            continue;
+        }
         if file_type.is_symlink() {
             contents.diagnostics.push(
                 Diagnostic::new(
@@ -627,17 +640,6 @@ fn walk(
                 )
                 .at_path(&child_relative),
             );
-            if name == STATE_FILE_NAME {
-                // A link cannot be opened no-follow, so there is nothing to
-                // read and nothing that may be written through it. The folder
-                // keeps its migration order and stops being orderable until a
-                // person removes the link.
-                contents.state = Some(unreadable_state(
-                    &child_relative,
-                    "the child order file is a symbolic link, which is never followed or written \
-                     through",
-                ));
-            }
         } else if file_type.is_dir() {
             visit_directory(
                 handle,
@@ -678,7 +680,16 @@ fn walk(
         diagnostics.extend(metadata.diagnostics.iter().cloned());
     }
 
-    let state = contents.state;
+    let state = folded_collision.map_or(contents.state, |other| {
+        Some(unreadable_state(
+            &join_relative(&relative_path, STATE_FILE_NAME),
+            &format!(
+                "`{other}` differs from the child order file's name only by case, so the two \
+                 would be one file on macOS and Windows; no order is read or written here until \
+                 one of them is renamed"
+            ),
+        ))
+    });
     if let Some(state) = &state {
         diagnostics.extend(state.diagnostics.iter().cloned());
     }
@@ -692,14 +703,7 @@ fn walk(
         &mut diagnostics,
         &mut disorderly,
     );
-
-    let state_access = match &state {
-        None => StateAccess::Absent,
-        Some(state) if state.frozen || disorderly || state.revision.is_none() => {
-            StateAccess::ReadOnly
-        }
-        Some(_) => StateAccess::ReadWrite,
-    };
+    let state_access = state_access_of(state.as_ref(), disorderly);
 
     Ok(FolderNode {
         path: path.to_path_buf(),
@@ -826,12 +830,19 @@ fn order_children(
 /// The timestamp is compared as text, and only when it is valid RFC 3339. That
 /// is chronological for the `Z` form this vault writes, and merely stable for a
 /// hand-written offset; stable is what determinism needs.
-fn migration_key(child: &ChildNode) -> (u8, bool, String, String, String) {
+fn migration_key(child: &ChildNode) -> (u8, u8, bool, String, String, String) {
     let (rank, created) = match child {
         ChildNode::Folder(_) => (0, None),
         ChildNode::Bookmark(node) => (1, node.created().filter(|text| is_rfc3339(text))),
     };
     (
+        // A directory with no `.bbb-folder.md` has no identity, so no order
+        // file can ever name it and nothing can move it. Sorting those into a
+        // trailing block of their own is what makes their position *stable*:
+        // it is the same before any order file exists and after every rewrite,
+        // so managed entries reorder above them without shifting them, and an
+        // index into the list a client is looking at means what it says.
+        u8::from(child.id().is_none()),
         rank,
         created.is_none(),
         created.unwrap_or_default().to_owned(),
@@ -840,6 +851,43 @@ fn migration_key(child: &ChildNode) -> (u8, bool, String, String, String) {
             .map_or_else(String::new, |id| id.as_str().to_owned()),
         child.relative_path().to_owned(),
     )
+}
+
+/// Whether a folder's recorded order may be rewritten.
+fn state_access_of(state: Option<&StateFile>, disorderly: bool) -> StateAccess {
+    match state {
+        None => StateAccess::Absent,
+        Some(state) if state.frozen || disorderly || state.revision.is_none() => {
+            StateAccess::ReadOnly
+        }
+        Some(_) => StateAccess::ReadWrite,
+    }
+}
+
+/// Reports a child order file's name being held by something unreadable.
+///
+/// A link, a directory, a socket: none of them is a document, and none of them
+/// may be written through or over. The folder keeps its migration order and
+/// stops being orderable until a person moves the occupant out of the way —
+/// which is a clear refusal, rather than a write that would either fail
+/// obscurely or clobber something.
+fn occupied_state(
+    name: &str,
+    file_type: cap_std::fs::FileType,
+    relative_path: &str,
+) -> Option<StateFile> {
+    if name != STATE_FILE_NAME || file_type.is_file() {
+        return None;
+    }
+    let detail = if file_type.is_symlink() {
+        "the child order file is a symbolic link, which is never followed or written through"
+    } else if file_type.is_dir() {
+        "a directory occupies the child order file's name, so no order can be read or written here"
+    } else {
+        "the child order file's name is held by something that is not a regular file, so no order \
+         can be read or written here"
+    };
+    Some(unreadable_state(relative_path, detail))
 }
 
 /// A state file that exists and cannot be read, for whatever reason.

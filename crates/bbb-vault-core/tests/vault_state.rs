@@ -476,3 +476,98 @@ fn scanning_the_same_recorded_order_twice_gives_the_same_answer() {
         second.folder().state_revision()
     );
 }
+
+// -- children nothing can record ------------------------------------------
+
+/// A directory with no `.bbb-folder.md` cannot be named by any order file, so
+/// it sits in a stable block at the end — before any order file exists and
+/// after every rewrite. That is what lets an index into the list a client sees
+/// mean what it says.
+#[test]
+fn children_with_no_identity_form_a_stable_trailing_block() {
+    let dir = vault();
+    dir.mkdir("Loose");
+    dir.write("Loose/note.txt", "mine");
+
+    let without_state = scan(dir.path()).expect("scan");
+    assert_eq!(
+        child_ids(&without_state),
+        ["dddddddd", "eeeeeeee", "aaaaaaaa", "bbbbbbbb", "-"],
+        "last in the migration order"
+    );
+
+    dir.write(
+        STATE_FILE_NAME,
+        state(&[
+            ("bbbbbbbb", ChildKind::Bookmark),
+            ("eeeeeeee", ChildKind::Folder),
+            ("aaaaaaaa", ChildKind::Bookmark),
+            ("dddddddd", ChildKind::Folder),
+        ]),
+    );
+    let with_state = scan(dir.path()).expect("scan");
+    assert_eq!(
+        child_ids(&with_state),
+        ["bbbbbbbb", "eeeeeeee", "aaaaaaaa", "dddddddd", "-"],
+        "and still last once every other child has been rearranged around it"
+    );
+}
+
+#[test]
+fn a_child_with_no_identity_sits_after_one_the_order_has_not_named_yet() {
+    let dir = vault();
+    dir.mkdir("Loose");
+    dir.write(STATE_FILE_NAME, state(&[("bbbbbbbb", ChildKind::Bookmark)]));
+
+    let scanned = scan(dir.path()).expect("scan");
+    assert_eq!(
+        child_ids(&scanned),
+        ["bbbbbbbb", "dddddddd", "eeeeeeee", "aaaaaaaa", "-"],
+        "recorded, then addressable-but-unrecorded, then unaddressable"
+    );
+}
+
+// -- the order file's name held by something else --------------------------
+
+#[test]
+fn a_directory_wearing_the_order_files_name_freezes_the_order() {
+    let dir = vault();
+    dir.mkdir(STATE_FILE_NAME);
+    dir.write(&format!("{STATE_FILE_NAME}/inside.txt"), "mine");
+
+    let scanned = scan(dir.path()).expect("scan");
+    assert_eq!(scanned.folder().state_access(), StateAccess::ReadOnly);
+    assert_eq!(scanned.folder().state_revision(), None);
+    let codes = diagnostic_codes(&scanned);
+    assert!(
+        codes.contains(&DiagnosticCode::StateUnreadable),
+        "{codes:?}"
+    );
+    assert_eq!(
+        child_ids(&scanned),
+        ["dddddddd", "eeeeeeee", "aaaaaaaa", "bbbbbbbb"],
+        "the folder keeps its migration order and the directory is not a child"
+    );
+}
+
+/// On macOS and Windows these two names are one file, so an order file written
+/// here would not survive the vault being copied there.
+#[test]
+fn a_sibling_that_differs_only_by_case_freezes_the_order() {
+    let dir = vault();
+    dir.write(STATE_FILE_NAME, state(&[("bbbbbbbb", ChildKind::Bookmark)]));
+    dir.write(".BBB-State.JSON", "{}");
+
+    let scanned = scan(dir.path()).expect("scan");
+    assert_eq!(scanned.folder().state_access(), StateAccess::ReadOnly);
+    let codes = diagnostic_codes(&scanned);
+    assert!(
+        codes.contains(&DiagnosticCode::StateUnreadable),
+        "{codes:?}"
+    );
+    assert_eq!(
+        child_ids(&scanned),
+        ["dddddddd", "eeeeeeee", "aaaaaaaa", "bbbbbbbb"],
+        "and nothing is read from either of them"
+    );
+}

@@ -35,13 +35,22 @@ Position in `children` *is* the order — folders and bookmarks interleave freel
 because a user who drags a bookmark above a sub-folder means exactly that.
 Membership stays the filesystem's business: the file can never add a child that
 is not there, and a child it does not mention still appears, appended after
-everything it does name. A folder with no order file is shown in the
-deterministic migration order — folders first, then by `bbb_created` and stable
-identity.
+everything it does name.
+
+A folder with no order file is shown in the deterministic *migration order*:
+folders first, then by `bbb_created` and stable identity, and last any directory
+with no `.bbb-folder.md`. Those last ones have no identity for an order file to
+name, so they form a trailing block whose position is the same before any order
+file exists and after every rewrite — which is what lets an index into the list
+mean the visual position it names. (Before this feature siblings were sorted by
+folded title; an existing vault's default order therefore changes once, without
+anything on disk being rewritten.)
 
 A document this build cannot fully account for is never rewritten: an unknown
-key, one identity listed twice, an unreadable file or a version from the future
-all leave the file exactly as found and take away only the ability to reorder.
+key, one identity listed twice, an unreadable file, a version from the future,
+or the name being held by a directory, a link or a sibling differing only by
+case. All of them leave what is there exactly as found and take away only the
+ability to reorder — creating, renaming, moving and deleting keep working.
 A duplicated JSON key is a hard parse error rather than a last-one-wins merge,
 because two values for one key have no correct interpretation.
 

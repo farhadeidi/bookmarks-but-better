@@ -34,8 +34,12 @@ pub struct Report {
     /// entries cannot be reordered until a person fixes or removes it.
     ///
     /// Reported separately from `warnings` because the fix is a specific one —
-    /// repair or delete one named file — and because it is the only thing that
-    /// silently takes a feature away rather than an entry.
+    /// repair or move aside one named file — and because it is the only thing
+    /// that takes a *capability* away rather than an entry.
+    ///
+    /// This is exactly the set of folders whose DTO carries `orderReadOnly`,
+    /// and exactly the set whose positional requests answer `state_read_only`.
+    /// All three read [`StateAccess::ReadOnly`], so none of them can drift.
     pub unorderable: Vec<Finding>,
 }
 
@@ -112,8 +116,10 @@ fn collect_unorderable(folder: &FolderNode, out: &mut Vec<Finding>) {
                 folder.relative_path().to_owned()
             },
             detail: "this folder's `.bbb-state.json` holds something this build must not \
-                     overwrite, so its entries cannot be reordered; the folder's own diagnostics \
-                     say what, and removing the file restores the migration order"
+                     overwrite, or its name is held by something that is not a readable file, so \
+                     its entries cannot be reordered. The folder's own `state_*` warning says \
+                     which; creating, renaming, moving and deleting all still work, and moving \
+                     the file aside restores the deterministic migration order"
                 .to_owned(),
         });
     }
@@ -182,6 +188,17 @@ fn daemon_is_running(root: &Path) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use bbb_vault_core::{FOLDER_FILE_NAME, STATE_FILE_NAME};
+
+    /// Every folder whose recorded order the scan considers frozen.
+    fn frozen_folders(folder: &FolderNode, out: &mut Vec<String>) {
+        if folder.state_access() == StateAccess::ReadOnly {
+            out.push(folder.relative_path().to_owned());
+        }
+        for child in folder.folders() {
+            frozen_folders(child, out);
+        }
+    }
 
     #[test]
     fn an_uninitialized_directory_is_not_healthy() {
@@ -237,6 +254,52 @@ mod tests {
                 .any(|finding| finding.code == "state_malformed"),
             "{:?}",
             report.warnings
+        );
+    }
+
+    /// The three ways a frozen order file is reported must name the same set of
+    /// folders, or a client is told one thing and the daemon does another.
+    #[test]
+    fn every_way_of_reporting_a_frozen_order_agrees() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        crate::init::initialize(dir.path()).expect("init");
+        std::fs::create_dir(dir.path().join("Broken")).expect("create dir");
+        std::fs::write(
+            dir.path().join("Broken").join(FOLDER_FILE_NAME),
+            "---\nbbb_id: 1111aaaa\n---\n",
+        )
+        .expect("metadata");
+        // Three separate reasons, one per folder, all of which freeze.
+        std::fs::write(
+            dir.path().join("Broken").join(STATE_FILE_NAME),
+            r#"{"version":99,"children":[]}"#,
+        )
+        .expect("order file");
+        std::fs::create_dir(dir.path().join("Occupied")).expect("create dir");
+        std::fs::write(
+            dir.path().join("Occupied").join(FOLDER_FILE_NAME),
+            "---\nbbb_id: 2222bbbb\n---\n",
+        )
+        .expect("metadata");
+        std::fs::create_dir(dir.path().join("Occupied").join(STATE_FILE_NAME))
+            .expect("directory in the way");
+
+        let scanned = bbb_vault_core::scan(dir.path()).expect("scan");
+        let mut frozen = Vec::new();
+        frozen_folders(scanned.folder(), &mut frozen);
+        assert_eq!(frozen, ["Broken", "Occupied"], "the scan's view");
+
+        let report = examine(dir.path()).expect("examine");
+        let named: Vec<String> = report
+            .unorderable
+            .iter()
+            .map(|finding| finding.path.clone())
+            .collect();
+        assert_eq!(named, frozen, "doctor names exactly the same folders");
+        assert!(
+            report.is_healthy(),
+            "and none of it is a reason to fail a script: {:?}",
+            report.errors
         );
     }
 }

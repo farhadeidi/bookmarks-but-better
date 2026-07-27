@@ -1,43 +1,58 @@
 //! One reversible change, and recovery from an interrupted one.
 //!
-//! A multi-file operation that deletes as it goes cannot be undone: once the
-//! third file is gone, a failure on the fourth leaves a vault the daemon can
-//! neither complete nor restore. So nothing is deleted in place. Entries are
-//! *renamed* into `<vault>/.bbb/staging/<id>/`, one atomic operation per entry
-//! on the same filesystem, and only once every entry has moved are they
-//! destroyed.
+//! A multi-step change that acts as it goes cannot be undone: once the third
+//! file is gone, a failure on the fourth leaves a vault the daemon can neither
+//! complete nor restore. So every step a change takes is *recorded before it is
+//! taken*, in a durable manifest, and the record says enough to reverse it.
 //!
-//! # Child order files are part of the same transaction
+//! # Four kinds of step
 //!
-//! A change to what a folder holds is also a change to the order it holds it
-//! in, and a cross-parent move is two of those at once. Bolting a best-effort
-//! `.bbb-state.json` write onto the side of this protocol would reintroduce
-//! exactly the failure mode it exists to prevent: a crash between the two
-//! leaving a vault nothing can finish or undo.
+//! A change is an ordered list of actions, and an interrupted one is undone by
+//! walking that list backwards:
 //!
-//! So a state write is recorded here too. Before the new bytes are written the
-//! previous ones are copied into the operation directory and named in the
-//! manifest, so a rollback — in this process or in a later one — puts the old
-//! order back, and a folder that had no state file at all has it removed again.
-//! [`Staged::write_state`] is the only way the daemon writes one.
+//! * **stage** — an entry is *renamed* into `<vault>/.bbb/staging/<id>/` rather
+//!   than deleted in place, one atomic operation per entry on the same
+//!   filesystem, and destroyed only once the change has committed.
+//! * **create** — an entry the change brought into existence. Undoing removes
+//!   it again.
+//! * **relocate** — an entry the change renamed from one folder into another.
+//!   Undoing renames it back.
+//! * **order** — a folder's `.bbb-state.json`. The previous bytes are copied
+//!   into the change's directory first, so undoing restores them; a folder that
+//!   had none has the new file removed again.
+//!
+//! Keeping all four in one list is the point. A create followed by an order
+//! write, or a relocation followed by two order writes, is one change as far as
+//! a caller is concerned, and a crash in the middle of it must leave the vault
+//! at one end or the other — never in a state only the next request could
+//! repair. Bolting any of these onto the side of the protocol would reintroduce
+//! exactly the failure mode it exists to prevent.
+//!
+//! # Nothing is undone that is not provably ours
+//!
+//! Every action that *installed* something records what the operating system
+//! called it and, for an order file, the digest of the bytes written. Recovery
+//! checks that before reversing anything: if what sits at that name is no
+//! longer what this change put there, somebody else has replaced it, and the
+//! replacement is left exactly where it is. The action is kept, the manifest is
+//! kept, and a person is told. Undoing on the strength of a *name* alone is how
+//! a crash turns into data loss.
 //!
 //! # The manifest is the protocol
 //!
-//! A rename that no record describes is a file nobody can find again. So before
-//! anything moves, the operation writes and syncs a manifest naming every
-//! entry, where it came from, and what it will be called while staged. The
-//! manifest is extended and re-synced *before each rename*, never after: a
-//! crash between the record and the rename leaves a record of something that
-//! did not happen, which recovery handles trivially, whereas a crash between
-//! the rename and the record would leave a file with no way home.
+//! A rename that no record describes is a file nobody can find again. So the
+//! manifest is extended and re-synced *before each step*, never after: a crash
+//! between the record and the step leaves a record of something that did not
+//! happen, which recovery handles trivially, whereas a crash between the step
+//! and the record would leave a file with no way home.
 //!
 //! The manifest carries a phase, and the transition between the two is the
-//! operation's point of no return:
+//! change's point of no return:
 //!
-//! * `staging` — entries are being moved out. The delete has not logically
-//!   happened, so an interrupted operation is **rolled back**.
-//! * `committed` — every entry has moved and the caller has been told the
-//!   delete succeeded. An interrupted operation is **completed**.
+//! * `staging` — the change has not logically happened, so an interruption is
+//!   **rolled back**.
+//! * `committed` — every step has landed and the caller has been told it
+//!   succeeded. An interruption is **completed**.
 //!
 //! # Recovery never purges
 //!
@@ -70,36 +85,42 @@ use serde::{Deserialize, Serialize};
 
 use bbb_vault_core::STATE_FILE_NAME;
 
-use crate::fsx::{self, component};
+use crate::fsx::{self, FileIdentity, component};
 
 /// The staging directory's name inside the daemon's state directory.
 pub(crate) const STAGING_DIRECTORY: &str = "staging";
-/// The manifest's name inside one operation's directory.
+/// The manifest's name inside one change's directory.
 const MANIFEST_NAME: &str = "manifest.json";
 /// Where retained entries are explained, in the staging root.
 const RECOVERY_NAME: &str = "recovery.txt";
-/// The manifest format this build writes.
-const MANIFEST_VERSION: u32 = 3;
 
-/// The manifest formats this build can still recover from.
+/// The manifest format this build writes.
+const MANIFEST_VERSION: u32 = 4;
+
+/// The manifest formats this build can act on.
 ///
-/// Version 2 is what the previous release wrote. It has no `states` list, which
-/// deserialises to an empty one, and everything else about it is unchanged — so
-/// a vault upgraded mid-delete is still finished or undone correctly rather
-/// than having its residue declared unreadable and left to a human.
+/// Version 2 is what the last release wrote: a flat list of staged entries and
+/// nothing else, which reads as a list of `stage` actions and recovers exactly
+/// as it always did.
+///
+/// Version 3 is deliberately absent. It existed only between two commits on an
+/// unreleased branch and recorded child order writes in a shape this build no
+/// longer understands. A manifest claiming it is therefore *retained* rather
+/// than acted on — which is the safe answer, because the alternative is a build
+/// deciding that a record it cannot read describes nothing.
 const RECOVERABLE_VERSIONS: &[u32] = &[2, MANIFEST_VERSION];
 
-/// How far an operation has got.
+/// How far a change has got.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 enum Phase {
-    /// Entries are being moved out; an interruption is rolled back.
+    /// Steps are still being taken; an interruption is rolled back.
     Staging,
-    /// Every entry has moved; an interruption is completed.
+    /// Every step has landed; an interruption is completed.
     Committed,
 }
 
-/// What kind of thing was staged, which decides how it moves back.
+/// What kind of thing an action names, which decides how it is moved.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 enum Kind {
@@ -109,7 +130,17 @@ enum Kind {
     Directory,
 }
 
-/// One entry recorded in a manifest.
+impl Kind {
+    const fn of(is_directory: bool) -> Self {
+        if is_directory {
+            Self::Directory
+        } else {
+            Self::File
+        }
+    }
+}
+
+/// One entry moved out of the vault and into this change's directory.
 ///
 /// `origin` is a component *vector*, not a path: there is no string for a
 /// separator to hide in, and recovery walks it one handle at a time.
@@ -125,97 +156,213 @@ struct Entry {
     kind: Kind,
 }
 
-/// One folder's child order file, as this operation found it.
+/// One entry this change brought into existence.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct Created {
+    /// The vault-relative directory it was created in.
+    origin: Vec<String>,
+    /// The name it was created under.
+    name: String,
+    /// Whether it is a file or a directory.
+    kind: Kind,
+    /// What the operating system called it once it existed.
+    ///
+    /// Absent means the creation was recorded and never happened, which is the
+    /// crash window the record exists to make harmless. Present is also what
+    /// proves later that the thing at that name is still the thing this change
+    /// made, rather than something a user put there afterwards.
+    #[serde(default)]
+    identity: Option<FileIdentity>,
+}
+
+/// One entry this change renamed from one folder into another.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct Relocated {
+    /// The vault-relative directory it came from.
+    from: Vec<String>,
+    /// The name it had there.
+    from_name: String,
+    /// The vault-relative directory it went to.
+    to: Vec<String>,
+    /// The name it has there.
+    to_name: String,
+    /// Whether it is a file or a directory.
+    kind: Kind,
+    /// What the operating system called it once it had moved.
+    #[serde(default)]
+    identity: Option<FileIdentity>,
+}
+
+/// One folder's child order file, as this change found it and left it.
 ///
-/// The `origin` is a component vector for the same reason [`Entry`]'s is: there
-/// is no string for a separator to hide in, and it is walked one handle at a
-/// time. The name inside the folder is always `.bbb-state.json`, so it is not
+/// The name inside the folder is always `.bbb-state.json`, so it is not
 /// recorded and cannot be redirected by a hand-edited manifest.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-struct StateRecord {
+struct Ordered {
     /// The vault-relative directory whose order file this is; empty is the root.
     origin: Vec<String>,
-    /// The name, inside the operation directory, holding the bytes that were
+    /// The name, inside the change's directory, holding the bytes that were
     /// there before. Absent when the folder had no order file at all, in which
-    /// case undoing means removing the one this operation created.
+    /// case undoing means removing the one this change created.
     #[serde(default)]
     backup: Option<String>,
-    /// Whether the new bytes actually reached the folder.
+    /// What this change installed, once it landed.
     ///
-    /// Written `false` first, exactly like an [`Entry`] is recorded before it
-    /// moves: a record of something that did not happen is trivial to undo,
-    /// whereas a write with no record could not be undone at all.
-    applied: bool,
+    /// Absent means the write was recorded and never happened. Present is what
+    /// recovery checks the file against before touching it: an order file that
+    /// is no longer the one this change wrote belongs to somebody else.
+    #[serde(default)]
+    installed: Option<Installed>,
 }
 
-impl StateRecord {
+/// The file one action installed, described well enough to recognise again.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct Installed {
+    /// The digest of the bytes that were written, as lowercase hexadecimal.
+    revision: String,
+    /// What the operating system called the file they were written to.
+    identity: FileIdentity,
+}
+
+impl Installed {
+    /// Whether `current` is still the file this action installed.
+    ///
+    /// Both facts have to agree wherever both are available. Content alone
+    /// cannot tell "the file I wrote" from "a different file somebody else
+    /// wrote with the same bytes"; identity alone cannot be had on every
+    /// platform. Where the platform offers no identity the digest stands on its
+    /// own, and that is documented as weaker rather than quietly presented as
+    /// the same thing.
+    fn still_installed(&self, current: &fsx::Validated) -> bool {
+        if current.revision().to_string() != self.revision {
+            return false;
+        }
+        if self.identity.is_known() {
+            return current.identity.is_same(self.identity);
+        }
+        true
+    }
+}
+
+/// One step a change took, or was about to take.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "action", rename_all = "snake_case")]
+enum Action {
+    /// An entry moved out of the vault, pending destruction.
+    Stage(Entry),
+    /// An entry this change created.
+    Create(Created),
+    /// An entry this change moved between folders.
+    Relocate(Relocated),
+    /// A folder's child order file this change rewrote.
+    Order(Ordered),
+}
+
+impl Action {
     /// Checks every field a filesystem operation would be driven from.
     fn validate(&self) -> Result<(), String> {
-        component::check_all(&self.origin).map_err(|(part, error)| {
-            format!("its order file's origin component `{part}` is unusable: {error}")
-        })?;
-        if let Some(backup) = &self.backup {
-            component::check(backup)
-                .map_err(|error| format!("its backup name `{backup}` is unusable: {error}"))?;
+        match self {
+            Self::Stage(entry) => {
+                check_components(&entry.origin, "origin")?;
+                check_name(&entry.name, "entry name")?;
+                check_name(&entry.staged, "staged name")
+            }
+            Self::Create(created) => {
+                check_components(&created.origin, "origin")?;
+                check_name(&created.name, "created name")
+            }
+            Self::Relocate(moved) => {
+                check_components(&moved.from, "source")?;
+                check_components(&moved.to, "destination")?;
+                check_name(&moved.from_name, "source name")?;
+                check_name(&moved.to_name, "destination name")
+            }
+            Self::Order(order) => {
+                check_components(&order.origin, "order file's origin")?;
+                match &order.backup {
+                    Some(backup) => check_name(backup, "backup name"),
+                    None => Ok(()),
+                }
+            }
         }
-        Ok(())
     }
 
-    /// The origin as a display string, for a message a person reads.
-    fn origin_display(&self) -> String {
-        if self.origin.is_empty() {
-            "the vault root".to_owned()
-        } else {
-            self.origin.join("/")
+    /// A line naming this step, for a report a person reads.
+    fn describe(&self) -> String {
+        match self {
+            Self::Stage(entry) => format!(
+                "{} belongs in {} as {}",
+                entry.staged,
+                display(&entry.origin),
+                entry.name
+            ),
+            Self::Create(created) => format!(
+                "{} in {} was created by this change and was not removed again",
+                created.name,
+                display(&created.origin)
+            ),
+            Self::Relocate(moved) => format!(
+                "{} belongs in {} and is in {} as {}",
+                moved.from_name,
+                display(&moved.from),
+                display(&moved.to),
+                moved.to_name
+            ),
+            Self::Order(order) => match &order.backup {
+                Some(backup) => format!(
+                    "{backup} is the child order {} had before this change",
+                    display(&order.origin)
+                ),
+                None => format!(
+                    "{} was given a child order file this change meant to remove again",
+                    display(&order.origin)
+                ),
+            },
         }
     }
 }
 
-impl Entry {
-    /// Checks every field that will be used to resolve a filesystem name.
-    fn validate(&self) -> Result<(), String> {
-        component::check_all(&self.origin).map_err(|(part, error)| {
-            format!("its origin component `{part}` is unusable: {error}")
-        })?;
-        component::check(&self.name)
-            .map_err(|error| format!("its entry name `{}` is unusable: {error}", self.name))?;
-        component::check(&self.staged)
-            .map_err(|error| format!("its staged name `{}` is unusable: {error}", self.staged))?;
-        Ok(())
-    }
+fn check_components(parts: &[String], label: &str) -> Result<(), String> {
+    component::check_all(parts)
+        .map_err(|(part, error)| format!("its {label} component `{part}` is unusable: {error}"))
+}
 
-    /// The origin as a display string, for a message a person reads.
-    fn origin_display(&self) -> String {
-        if self.origin.is_empty() {
-            "the vault root".to_owned()
-        } else {
-            self.origin.join("/")
-        }
+fn check_name(value: &str, label: &str) -> Result<(), String> {
+    component::check(value).map_err(|error| format!("its {label} `{value}` is unusable: {error}"))
+}
+
+fn display(origin: &[String]) -> String {
+    if origin.is_empty() {
+        "the vault root".to_owned()
+    } else {
+        origin.join("/")
     }
 }
 
-/// The durable record of one staged operation.
+/// The durable record of one change.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct Manifest {
-    /// The format version, so a future build refuses what it cannot read.
+    /// The format version, so a build refuses what it cannot read.
     version: u32,
-    /// What the operation was, for the recovery report.
+    /// What the change was, for the recovery report.
     operation: String,
     /// How far it got.
     phase: Phase,
-    /// Set once recovery has tried and failed to resolve this operation.
+    /// Set once recovery has tried and failed to resolve this change.
     ///
-    /// It is what lets `bbb doctor` tell a stuck operation from one a running
+    /// It is what lets `bbb doctor` tell a stuck change from one a running
     /// daemon is in the middle of, without either guessing or racing it.
     #[serde(default)]
     retained: bool,
-    /// Every entry it moved, or was about to move.
-    entries: Vec<Entry>,
-    /// Every child order file it rewrote, or was about to rewrite.
+    /// Version 2's flat list of staged entries.
     ///
-    /// Absent in a version 2 manifest, which predates ordering entirely.
+    /// Read, never written: [`Manifest::normalize`] folds it into `actions` so
+    /// that everything below sees one shape.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    entries: Vec<Entry>,
+    /// Every step, in the order it was taken.
     #[serde(default)]
-    states: Vec<StateRecord>,
+    actions: Vec<Action>,
 }
 
 impl Manifest {
@@ -238,17 +385,30 @@ impl Manifest {
             return Err("its recorded operation name is not usable".to_owned());
         }
         for entry in &self.entries {
-            entry.validate()?;
+            Action::Stage(entry.clone()).validate()?;
         }
-        for state in &self.states {
-            state.validate()?;
+        for action in &self.actions {
+            action.validate()?;
         }
         Ok(())
     }
 
-    /// Whether this operation has anything left that needs undoing or removing.
+    /// Presents an older manifest in the one shape everything below expects.
+    fn normalize(&mut self) {
+        if self.entries.is_empty() {
+            return;
+        }
+        // Version 2 had no other kind of step, so its entries are the whole
+        // list and go in front of one that is empty anyway.
+        let mut actions: Vec<Action> = self.entries.drain(..).map(Action::Stage).collect();
+        actions.append(&mut self.actions);
+        self.actions = actions;
+        self.version = MANIFEST_VERSION;
+    }
+
+    /// Whether this change has anything left that needs undoing or removing.
     fn is_empty(&self) -> bool {
-        self.entries.is_empty() && self.states.is_empty()
+        self.actions.is_empty()
     }
 }
 
@@ -266,17 +426,25 @@ pub(crate) enum FaultPoint {
     BeforeFirstRename,
     /// After at least one entry has moved, with more to go.
     BetweenRenames,
-    /// After every entry has moved, before the phase becomes `committed`.
+    /// After every step has landed, before the phase becomes `committed`.
     BeforePhaseFlip,
     /// Immediately after the phase becomes `committed`.
     AfterPhaseFlip,
-    /// Part-way through destroying the staged entries.
+    /// Part-way through destroying what the change superseded.
     MidDestroy,
     /// After an entry is recorded, immediately before it is claimed.
     ///
     /// A test interposes here to replace the entry, which is the race the
     /// verified claim exists to survive.
     BeforeClaim,
+    /// After a create is recorded, before the entry exists.
+    BeforeCreate,
+    /// Immediately after a created entry exists.
+    AfterCreate,
+    /// After a relocation is recorded, before the entry moves.
+    BeforeRelocate,
+    /// Immediately after a relocated entry has moved.
+    AfterRelocate,
     /// After a child order file is recorded, before its new bytes are written.
     BeforeStateWrite,
     /// Immediately after a child order file's new bytes have landed.
@@ -327,17 +495,16 @@ pub(crate) enum TakeError {
     Io(io::Error),
 }
 
-/// One in-flight change: entries moved out of the vault, and child order files
-/// rewritten, under a single durable record.
+/// One in-flight change, under a single durable record.
 #[derive(Debug)]
 pub(crate) struct Staged {
     /// The `.bbb/staging/<id>` handle everything is renamed into.
     directory: Dir,
-    /// The staging root, so the operation's directory can be removed.
+    /// The staging root, so the change's directory can be removed.
     root: Dir,
-    /// The vault root, used to resolve an entry's origin when restoring.
+    /// The vault root, used to resolve an origin when undoing.
     vault: Dir,
-    /// This operation's directory name inside the staging root.
+    /// This change's directory name inside the staging root.
     name: String,
     /// The durable record, kept in step with the disk.
     manifest: Manifest,
@@ -360,7 +527,7 @@ impl Staged {
             phase: Phase::Staging,
             retained: false,
             entries: Vec::new(),
-            states: Vec::new(),
+            actions: Vec::new(),
         };
         write_manifest(&directory, &manifest)?;
 
@@ -373,22 +540,34 @@ impl Staged {
         })
     }
 
+    /// Records `action` durably, before the step it describes is taken.
+    fn record(&mut self, action: Action) -> io::Result<()> {
+        self.manifest.actions.push(action);
+        write_manifest(&self.directory, &self.manifest)
+    }
+
+    /// Drops the last record, for a step that turned out not to happen.
+    fn forget(&mut self) {
+        self.manifest.actions.pop();
+        let _ = write_manifest(&self.directory, &self.manifest);
+    }
+
     /// Moves `name` out of `origin` and into staging.
     ///
-    /// `origin_relative` is the origin's vault-relative path, which is what
+    /// `origin_components` is the origin's vault-relative path, which is what
     /// recovery uses to find it again in a later process.
     ///
     /// # Errors
     ///
-    /// Returns any I/O error. The caller should [`Staged::rollback`]; entries
-    /// already staged remain restorable.
+    /// Returns any I/O error. The caller should [`Staged::rollback`]; steps
+    /// already taken remain reversible.
     pub(crate) fn take(
         &mut self,
         origin: &Dir,
         origin_components: &[String],
         name: &str,
         is_directory: bool,
-        expected: fsx::FileIdentity,
+        expected: FileIdentity,
     ) -> Result<(), TakeError> {
         component::check_all(origin_components)
             .map_err(|(part, error)| TakeError::Io(invalid(&part, &error.to_string())))?;
@@ -396,21 +575,17 @@ impl Staged {
 
         // Staged names are positional, so two entries with the same name from
         // different directories cannot collide with each other.
-        let staged = format!("{}-{}", self.manifest.entries.len(), sanitize(name));
-        self.manifest.entries.push(Entry {
+        let staged = format!("{}-{}", self.manifest.actions.len(), sanitize(name));
+        // Recorded before the move, so a crash can never orphan the entry.
+        self.record(Action::Stage(Entry {
             origin: origin_components.to_vec(),
             name: name.to_owned(),
             staged: staged.clone(),
-            kind: if is_directory {
-                Kind::Directory
-            } else {
-                Kind::File
-            },
-        });
-        // Recorded before the move, so a crash can never orphan the entry.
-        write_manifest(&self.directory, &self.manifest).map_err(TakeError::Io)?;
+            kind: Kind::of(is_directory),
+        }))
+        .map_err(TakeError::Io)?;
 
-        if self.manifest.entries.len() == 1 {
+        if self.manifest.actions.len() == 1 {
             trip(FaultPoint::BeforeFirstRename);
         } else {
             trip(FaultPoint::BetweenRenames);
@@ -437,8 +612,7 @@ impl Staged {
                 // unless the entry really is sitting in staging.
                 let orphaned = matches!(error, fsx::ClaimError::UndoFailed { .. });
                 if !orphaned {
-                    self.manifest.entries.pop();
-                    let _ = write_manifest(&self.directory, &self.manifest);
+                    self.forget();
                 }
                 Err(match error {
                     fsx::ClaimError::NotTheSameEntry => TakeError::NotTheSameEntry,
@@ -449,17 +623,140 @@ impl Staged {
         }
     }
 
+    /// Creates a file as part of this change, recording it first.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`io::ErrorKind::AlreadyExists`] when the name is taken — which
+    /// a caller allocating a name treats as "try the next one" — and any other
+    /// I/O error. Nothing is left recorded for a creation that did not happen.
+    pub(crate) fn create_file(
+        &mut self,
+        origin: &Dir,
+        origin_components: &[String],
+        name: &str,
+        bytes: &[u8],
+    ) -> io::Result<()> {
+        self.record_creation(origin_components, name, Kind::File)?;
+        trip(FaultPoint::BeforeCreate);
+        match fsx::create_new(origin, name, bytes) {
+            Ok(()) => self.confirm_creation(origin, name, Kind::File),
+            Err(error) => {
+                self.forget();
+                Err(error)
+            }
+        }
+    }
+
+    /// Creates a directory as part of this change, recording it first.
+    ///
+    /// # Errors
+    ///
+    /// As [`Staged::create_file`].
+    pub(crate) fn create_directory(
+        &mut self,
+        origin: &Dir,
+        origin_components: &[String],
+        name: &str,
+    ) -> io::Result<()> {
+        self.record_creation(origin_components, name, Kind::Directory)?;
+        trip(FaultPoint::BeforeCreate);
+        match fsx::create_dir(origin, name) {
+            Ok(()) => self.confirm_creation(origin, name, Kind::Directory),
+            Err(error) => {
+                self.forget();
+                Err(error)
+            }
+        }
+    }
+
+    fn record_creation(
+        &mut self,
+        origin_components: &[String],
+        name: &str,
+        kind: Kind,
+    ) -> io::Result<()> {
+        component::check_all(origin_components)
+            .map_err(|(part, error)| invalid(&part, &error.to_string()))?;
+        component::check(name).map_err(|error| invalid(name, &error.to_string()))?;
+        self.record(Action::Create(Created {
+            origin: origin_components.to_vec(),
+            name: name.to_owned(),
+            kind,
+            identity: None,
+        }))
+    }
+
+    /// Records what the new entry turned out to be, so an undo can recognise it.
+    fn confirm_creation(&mut self, origin: &Dir, name: &str, kind: Kind) -> io::Result<()> {
+        let identity = identity_of(origin, name, kind)?;
+        if let Some(Action::Create(created)) = self.manifest.actions.last_mut() {
+            created.identity = Some(identity);
+        }
+        write_manifest(&self.directory, &self.manifest)?;
+        trip(FaultPoint::AfterCreate);
+        Ok(())
+    }
+
+    /// Renames an entry between folders as part of this change.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`io::ErrorKind::AlreadyExists`] when the destination name is
+    /// taken, and any other I/O error. Nothing is left recorded for a move that
+    /// did not happen.
+    pub(crate) fn relocate(
+        &mut self,
+        from: Place<'_>,
+        to: Place<'_>,
+        is_directory: bool,
+    ) -> io::Result<()> {
+        component::check_all(from.components)
+            .map_err(|(part, error)| invalid(&part, &error.to_string()))?;
+        component::check_all(to.components)
+            .map_err(|(part, error)| invalid(&part, &error.to_string()))?;
+
+        let kind = Kind::of(is_directory);
+        self.record(Action::Relocate(Relocated {
+            from: from.components.to_vec(),
+            from_name: from.name.to_owned(),
+            to: to.components.to_vec(),
+            to_name: to.name.to_owned(),
+            kind,
+            identity: None,
+        }))?;
+        trip(FaultPoint::BeforeRelocate);
+
+        let moved = if is_directory {
+            fsx::move_dir(from.dir, from.name, to.dir, to.name)
+        } else {
+            fsx::move_file(from.dir, from.name, to.dir, to.name)
+        };
+        if let Err(error) = moved {
+            self.forget();
+            return Err(error);
+        }
+
+        let identity = identity_of(to.dir, to.name, kind)?;
+        if let Some(Action::Relocate(record)) = self.manifest.actions.last_mut() {
+            record.identity = Some(identity);
+        }
+        write_manifest(&self.directory, &self.manifest)?;
+        trip(FaultPoint::AfterRelocate);
+        Ok(())
+    }
+
     /// Writes one folder's child order file as part of this change.
     ///
     /// `folder` must be the folder's own directory handle, and `current` the
-    /// state file as it was read from it — which is what binds the write to the
+    /// order file as it was read from it — which is what binds the write to the
     /// exact file whose revision the caller checked. Pass `None` when the
     /// folder has no order file yet; one is then created, and undoing means
     /// removing it again.
     ///
-    /// The previous bytes are copied into this operation's directory and named
-    /// in the manifest *before* anything is written, so an interrupted run has
-    /// a record of both what changed and what it used to be.
+    /// The previous bytes are copied into this change's directory and named in
+    /// the manifest *before* anything is written, so an interrupted run has a
+    /// record of both what changed and what it used to be.
     ///
     /// # Errors
     ///
@@ -479,19 +776,18 @@ impl Staged {
         // cannot collide.
         let backup = match current {
             Some(current) => {
-                let name = format!("state-{}.json", self.manifest.states.len());
+                let name = format!("state-{}.json", self.manifest.actions.len());
                 fsx::create_new(&self.directory, &name, &current.bytes)?;
                 Some(name)
             }
             None => None,
         };
 
-        self.manifest.states.push(StateRecord {
+        self.record(Action::Order(Ordered {
             origin: folder_components.to_vec(),
-            backup,
-            applied: false,
-        });
-        write_manifest(&self.directory, &self.manifest)?;
+            backup: backup.clone(),
+            installed: None,
+        }))?;
         trip(FaultPoint::BeforeStateWrite);
 
         let written = match current {
@@ -510,34 +806,39 @@ impl Staged {
         if let Err(error) = written {
             // The record describes a write that did not happen; dropping it is
             // safe precisely because nothing landed.
-            if let Some(record) = self.manifest.states.pop()
-                && let Some(backup) = record.backup
-            {
+            self.forget();
+            if let Some(backup) = backup {
                 let _ = fsx::remove_file(&self.directory, &backup);
             }
-            let _ = write_manifest(&self.directory, &self.manifest);
             return Err(error);
         }
 
-        if let Some(record) = self.manifest.states.last_mut() {
-            record.applied = true;
+        // What was installed, so recovery can tell it from a file somebody else
+        // put there afterwards.
+        let installed =
+            fsx::read_with_identity(folder, STATE_FILE_NAME).map(|written| Installed {
+                revision: written.revision().to_string(),
+                identity: written.identity,
+            })?;
+        if let Some(Action::Order(record)) = self.manifest.actions.last_mut() {
+            record.installed = Some(installed);
         }
         write_manifest(&self.directory, &self.manifest)?;
         trip(FaultPoint::AfterStateWrite);
         Ok(())
     }
 
-    /// Commits the deletion: flips the phase, then destroys the entries.
+    /// Commits the change: flips the phase, then destroys what it superseded.
     ///
     /// The phase flip is the point of no return. After it, an interrupted run
     /// is completed rather than undone, because the caller has been told the
-    /// delete succeeded.
+    /// change succeeded.
     ///
     /// # Errors
     ///
     /// Returns an I/O error only from the phase flip, which happens before
     /// anything is destroyed. A later failure to destroy leaves entries for
-    /// recovery to finish, and is not reported as a failed delete, because the
+    /// recovery to finish, and is not reported as a failed change, because the
     /// vault no longer references them.
     pub(crate) fn commit(mut self) -> io::Result<()> {
         trip(FaultPoint::BeforePhaseFlip);
@@ -551,17 +852,13 @@ impl Staged {
         Ok(())
     }
 
-    /// Puts every child order file and every staged entry back.
-    ///
-    /// Undoing runs newest-first, so the order files go back before the entries
-    /// they describe and a directory staged before its former contents is put
-    /// back before them.
+    /// Reverses every step this change took, newest first.
     ///
     /// # Errors
     ///
     /// Returns the first failure, having attempted everything. Anything that
-    /// could not be undone stays in staging with its manifest intact, so
-    /// recovery and `bbb doctor` can still describe it.
+    /// could not be undone stays recorded, so recovery and `bbb doctor` can
+    /// still describe it.
     pub(crate) fn rollback(mut self) -> io::Result<()> {
         let outcome = undo_all(&self.directory, &self.vault, &mut self.manifest);
         let _ = write_manifest(&self.directory, &self.manifest);
@@ -574,14 +871,37 @@ impl Staged {
     }
 }
 
-/// An operation whose entries could not be recovered automatically.
+/// One end of a rename: a directory handle, its vault-relative path, and a name.
+///
+/// The three always travel together — the handle does the work, the components
+/// go into the manifest so a later process can find the same directory, and the
+/// name is what is being moved.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct Place<'a> {
+    /// The directory handle, opened no-follow.
+    pub(crate) dir: &'a Dir,
+    /// Its vault-relative path, as validated components.
+    pub(crate) components: &'a [String],
+    /// The entry's name inside it.
+    pub(crate) name: &'a str,
+}
+
+/// The identity of whatever sits at `name`, file or directory.
+fn identity_of(dir: &Dir, name: &str, kind: Kind) -> io::Result<FileIdentity> {
+    match kind {
+        Kind::Directory => fsx::directory_identity(&fsx::open_dir(dir, name)?),
+        Kind::File => Ok(fsx::read_with_identity(dir, name)?.identity),
+    }
+}
+
+/// A change whose steps could not be reversed automatically.
 #[derive(Debug, Clone)]
 pub(crate) struct Retained {
     /// The staging directory holding them, relative to the vault.
     pub(crate) directory: String,
-    /// What the interrupted operation was.
+    /// What the interrupted change was.
     pub(crate) operation: String,
-    /// A line per entry, naming where it belongs.
+    /// A line per step, naming what is where.
     pub(crate) entries: Vec<String>,
     /// Why it could not be handled.
     pub(crate) reason: String,
@@ -606,17 +926,17 @@ impl Retained {
     }
 }
 
-/// Every staged operation that needs a person, with the reason.
+/// Every change that needs a person, with the reason.
 ///
 /// Read-only, and the single definition of "this needs attention", so `doctor`
 /// cannot disagree with recovery about what counts. Two things qualify:
 ///
-/// * an operation recovery marked `retained`, meaning it tried and could not
+/// * a change recovery marked `retained`, meaning it tried and could not
 ///   resolve it, and
-/// * an operation whose manifest is missing, unparseable, or fails validation —
-///   a record the daemon will never act on, so it will never clear itself.
+/// * a change whose manifest is missing, unparseable, or fails validation — a
+///   record the daemon will never act on, so it will never clear itself.
 ///
-/// A valid manifest without the flag belongs to an operation a daemon is in the
+/// A valid manifest without the flag belongs to a change a daemon is in the
 /// middle of, and is deliberately not reported.
 pub(crate) fn needs_attention(state: &Dir) -> Vec<(String, String)> {
     let Ok(root) = fsx::open_dir(state, STAGING_DIRECTORY) else {
@@ -653,7 +973,7 @@ pub(crate) fn needs_attention(state: &Dir) -> Vec<(String, String)> {
                     manifest.operation
                 ),
             )),
-            // A live operation: a daemon is mid-delete and will clear this up.
+            // A live change: a daemon is mid-flight and will clear this up.
             Ok(_) => {}
             Err(reason) => report.push((
                 staged_path(&name),
@@ -707,7 +1027,7 @@ pub(crate) fn rescue(
         Ok(()) => {
             // Rewrite the entry so recovery puts it back under its real name
             // rather than the temporary one.
-            if let Some(entry) = staged.manifest.entries.last_mut() {
+            if let Some(Action::Stage(entry)) = staged.manifest.actions.last_mut() {
                 name.clone_into(&mut entry.name);
             }
             let _ = write_manifest(&staged.directory, &staged.manifest);
@@ -723,7 +1043,7 @@ pub(crate) fn rescue(
     }
 }
 
-/// Finishes or undoes every operation a previous run left behind.
+/// Finishes or undoes every change a previous run left behind.
 ///
 /// Called once at startup with the vault lock held. Nothing is removed without
 /// its own manifest saying so.
@@ -800,15 +1120,10 @@ fn recover_one(root: &Dir, vault: &Dir, name: &str) -> Option<Retained> {
             Some(Retained {
                 directory: staged_path(name),
                 operation: manifest.operation.clone(),
-                entries: manifest
-                    .entries
-                    .iter()
-                    .map(describe)
-                    .chain(manifest.states.iter().map(describe_state))
-                    .collect(),
+                entries: manifest.actions.iter().map(Action::describe).collect(),
                 reason: outcome.err().map_or_else(
                     || "they could not be restored".to_owned(),
-                    |error| error.kind().to_string(),
+                    |error| error.to_string(),
                 ),
             })
         }
@@ -838,81 +1153,49 @@ fn recover_one(root: &Dir, vault: &Dir, name: &str) -> Option<Retained> {
     }
 }
 
-/// Undoes everything the operation did, dropping from `manifest` what succeeds.
+/// Reverses every step, dropping from `manifest` the ones that succeed.
 ///
-/// The order files go first, because an entry's membership record must not
-/// outlive the entry itself: putting a bookmark back into a folder whose order
-/// file has already been reverted is fine, while the reverse would leave the
-/// order naming something that is not there yet.
+/// Newest first, so the list unwinds exactly the way it was built: an order
+/// file goes back before the entry it describes, and a directory staged before
+/// its former contents is put back before them.
 ///
-/// An entry whose staged file is absent was recorded but never moved — the
-/// manifest is written first on purpose — and counts as restored. A state
-/// record that was never applied is the same case.
+/// A step whose record says it never happened counts as reversed — the manifest
+/// is written first on purpose.
 fn undo_all(directory: &Dir, vault: &Dir, manifest: &mut Manifest) -> io::Result<()> {
     let mut failure = None;
-
-    let mut kept_states = Vec::new();
-    for state in manifest.states.iter().rev() {
-        if let Err(error) = undo_state(directory, vault, state) {
-            failure.get_or_insert(error);
-            kept_states.push(state.clone());
-        }
-    }
-    kept_states.reverse();
-    manifest.states = kept_states;
-
     let mut kept = Vec::new();
-    for entry in manifest.entries.iter().rev() {
-        if let Err(error) = restore_one(directory, vault, entry) {
+
+    for action in manifest.actions.iter().rev() {
+        if let Err(error) = undo_one(directory, vault, action) {
             failure.get_or_insert(error);
-            kept.push(entry.clone());
+            kept.push(action.clone());
         }
     }
-    kept.reverse();
-    manifest.entries = kept;
 
+    kept.reverse();
+    manifest.actions = kept;
     match failure {
         Some(error) => Err(error),
         None => Ok(()),
     }
 }
 
-/// Puts one folder's child order file back the way this operation found it.
-fn undo_state(directory: &Dir, vault: &Dir, state: &StateRecord) -> io::Result<()> {
+fn undo_one(directory: &Dir, vault: &Dir, action: &Action) -> io::Result<()> {
     // Validated at the point of use: this is reachable from recovery, whose
     // manifest came off disk, and from rollback, whose did not.
-    state
+    action
         .validate()
         .map_err(|reason| io::Error::new(io::ErrorKind::InvalidInput, reason))?;
 
-    if !state.applied {
-        // Recorded but never written; there is nothing to put back.
-        return Ok(());
-    }
-
-    let folder = fsx::open_components(vault, &state.origin)?;
-    match &state.backup {
-        Some(backup) => {
-            let bytes = fsx::read(directory, backup)?;
-            fsx::write_replacing(&folder, STATE_FILE_NAME, &bytes)
-        }
-        // The folder had no order file, so this operation created it and undoing
-        // means it should have none again. An order file that is already gone is
-        // the outcome that was wanted.
-        None => match fsx::remove_file(&folder, STATE_FILE_NAME) {
-            Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
-            other => other,
-        },
+    match action {
+        Action::Stage(entry) => undo_stage(directory, vault, entry),
+        Action::Create(created) => undo_create(vault, created),
+        Action::Relocate(moved) => undo_relocate(vault, moved),
+        Action::Order(order) => undo_order(directory, vault, order),
     }
 }
 
-fn restore_one(directory: &Dir, vault: &Dir, entry: &Entry) -> io::Result<()> {
-    // Validated again at the point of use: this function is reachable from
-    // recovery, whose manifest came off disk, and from rollback, whose did not.
-    entry
-        .validate()
-        .map_err(|reason| io::Error::new(io::ErrorKind::InvalidInput, reason))?;
-
+fn undo_stage(directory: &Dir, vault: &Dir, entry: &Entry) -> io::Result<()> {
     if !fsx::exists(directory, &entry.staged) {
         // Recorded but never moved; there is nothing to put back.
         return Ok(());
@@ -926,38 +1209,151 @@ fn restore_one(directory: &Dir, vault: &Dir, entry: &Entry) -> io::Result<()> {
     }
 }
 
-/// Removes every staged entry the manifest names, and every order-file backup.
-///
-/// A backup only ever holds bytes the daemon itself wrote a moment earlier, and
-/// once the change has committed it is the superseded copy — so unlike a staged
-/// entry it is never something a person needs back.
-fn destroy(directory: &Dir, manifest: &Manifest) {
-    for state in &manifest.states {
-        if let Some(backup) = &state.backup
-            && component::check(backup).is_ok()
-        {
-            let _ = fsx::remove_file(directory, backup);
-        }
+/// Removes an entry the change created — but only if it is still that entry.
+fn undo_create(vault: &Dir, created: &Created) -> io::Result<()> {
+    let Some(identity) = created.identity else {
+        // Recorded and never created.
+        return Ok(());
+    };
+    let origin = fsx::open_components(vault, &created.origin)?;
+    let current = match identity_of(&origin, &created.name, created.kind) {
+        Ok(current) => current,
+        // Already gone, which is the outcome that was wanted.
+        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(()),
+        Err(error) => return Err(error),
+    };
+    if !identity.is_known() || !current.is_same(identity) {
+        return Err(replaced(&format!(
+            "`{}` in {} is no longer the entry this change created, so it was left alone",
+            created.name,
+            display(&created.origin)
+        )));
     }
-    for (index, entry) in manifest.entries.iter().enumerate() {
+    match created.kind {
+        Kind::Directory => fsx::remove_dir_all(&origin, &created.name),
+        Kind::File => fsx::remove_file(&origin, &created.name),
+    }
+}
+
+/// Renames a moved entry back — but only if it is still that entry.
+fn undo_relocate(vault: &Dir, moved: &Relocated) -> io::Result<()> {
+    let Some(identity) = moved.identity else {
+        // Recorded and never moved.
+        return Ok(());
+    };
+    let destination = fsx::open_components(vault, &moved.to)?;
+    let current = match identity_of(&destination, &moved.to_name, moved.kind) {
+        Ok(current) => current,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => {
+            return Err(replaced(&format!(
+                "`{}` is no longer in {}, so it could not be put back in {}",
+                moved.to_name,
+                display(&moved.to),
+                display(&moved.from)
+            )));
+        }
+        Err(error) => return Err(error),
+    };
+    if !identity.is_known() || !current.is_same(identity) {
+        return Err(replaced(&format!(
+            "`{}` in {} is no longer the entry this change moved there, so it was left alone",
+            moved.to_name,
+            display(&moved.to)
+        )));
+    }
+
+    let origin = fsx::open_components(vault, &moved.from)?;
+    match moved.kind {
+        Kind::Directory => fsx::move_dir(&destination, &moved.to_name, &origin, &moved.from_name),
+        Kind::File => fsx::move_file(&destination, &moved.to_name, &origin, &moved.from_name),
+    }
+}
+
+/// Puts one folder's child order file back the way this change found it.
+///
+/// The whole of this function is one rule: **never touch an order file this
+/// change did not install**. A `.bbb-state.json` that has been rewritten since
+/// — by a sync client, by another editor, by a later daemon — is somebody's
+/// current order, and restoring a backup over it or deleting it outright would
+/// destroy work nobody asked to lose. So the file is identified before it is
+/// touched, and anything unrecognised is kept and reported instead.
+fn undo_order(directory: &Dir, vault: &Dir, order: &Ordered) -> io::Result<()> {
+    let Some(installed) = &order.installed else {
+        // Recorded and never written.
+        return Ok(());
+    };
+
+    let folder = fsx::open_components(vault, &order.origin)?;
+    match fsx::read_with_identity(&folder, STATE_FILE_NAME) {
+        Ok(current) if installed.still_installed(&current) => {}
+        Ok(_) => {
+            return Err(replaced(&format!(
+                "the child order file in {} has been rewritten since this change installed it, so \
+                 it was left exactly as it is; the order this change replaced is kept beside the \
+                 manifest",
+                display(&order.origin)
+            )));
+        }
+        // Somebody removed it. There is nothing of theirs to protect, and
+        // putting the previous order back is what was wanted.
+        Err(error) if error.kind() == io::ErrorKind::NotFound => {
+            let Some(backup) = &order.backup else {
+                return Ok(());
+            };
+            let bytes = fsx::read(directory, backup)?;
+            return fsx::write_replacing(&folder, STATE_FILE_NAME, &bytes);
+        }
+        Err(error) => return Err(error),
+    }
+
+    match &order.backup {
+        Some(backup) => {
+            let bytes = fsx::read(directory, backup)?;
+            fsx::write_replacing(&folder, STATE_FILE_NAME, &bytes)
+        }
+        // The folder had no order file, so this change created it and undoing
+        // means it should have none again.
+        None => fsx::remove_file(&folder, STATE_FILE_NAME),
+    }
+}
+
+/// The refusal that keeps somebody else's file exactly where it is.
+fn replaced(reason: &str) -> io::Error {
+    io::Error::new(io::ErrorKind::AlreadyExists, reason.to_owned())
+}
+
+/// Removes everything a committed change superseded.
+///
+/// Staged entries are the ones the change deleted; order backups hold bytes the
+/// daemon itself wrote a moment earlier and has now replaced. A created or
+/// relocated entry is the change's *result* and is left exactly where it is.
+fn destroy(directory: &Dir, manifest: &Manifest) {
+    for (index, action) in manifest.actions.iter().enumerate() {
         if index > 0 {
             trip(FaultPoint::MidDestroy);
         }
-        if entry.validate().is_err() {
+        if action.validate().is_err() {
             // Unreachable for a manifest that came through `read_manifest`;
             // refusing here as well means no future caller can bypass it.
             continue;
         }
-        let removed = match entry.kind {
-            Kind::Directory => fsx::remove_dir_all(directory, &entry.staged),
-            Kind::File => fsx::remove_file(directory, &entry.staged),
+        let removed = match action {
+            Action::Stage(entry) => match entry.kind {
+                Kind::Directory => fsx::remove_dir_all(directory, &entry.staged),
+                Kind::File => fsx::remove_file(directory, &entry.staged),
+            },
+            Action::Order(order) => match &order.backup {
+                Some(backup) => fsx::remove_file(directory, backup),
+                None => Ok(()),
+            },
+            Action::Create(_) | Action::Relocate(_) => Ok(()),
         };
         if let Err(error) = removed
             && error.kind() != io::ErrorKind::NotFound
         {
             tracing::warn!(
                 error = %error.kind(),
-                "a staged entry could not be destroyed; it is kept for the next recovery"
+                "a superseded entry could not be destroyed; it is kept for the next recovery"
             );
         }
     }
@@ -990,11 +1386,12 @@ fn write_manifest(directory: &Dir, manifest: &Manifest) -> io::Result<()> {
 fn read_manifest(directory: &Dir) -> Result<Manifest, String> {
     let bytes = fsx::read(directory, MANIFEST_NAME)
         .map_err(|error| format!("its manifest could not be read: {}", error.kind()))?;
-    let manifest: Manifest = serde_json::from_slice(&bytes)
+    let mut manifest: Manifest = serde_json::from_slice(&bytes)
         .map_err(|error| format!("its manifest is not readable: {error}"))?;
     // Every field is checked before a single filesystem name is built from it.
     // A manifest that fails here is never acted on: see `recover_one`.
     manifest.validate()?;
+    manifest.normalize();
     Ok(manifest)
 }
 
@@ -1030,28 +1427,6 @@ fn write_recovery_report(root: &Dir, retained: &[Retained]) {
     }
 }
 
-fn describe(entry: &Entry) -> String {
-    format!(
-        "{} belongs in {} as {}",
-        entry.staged,
-        entry.origin_display(),
-        entry.name
-    )
-}
-
-fn describe_state(state: &StateRecord) -> String {
-    match &state.backup {
-        Some(backup) => format!(
-            "{backup} is the child order {} had before this change",
-            state.origin_display()
-        ),
-        None => format!(
-            "{} was given a child order file this change meant to remove again",
-            state.origin_display()
-        ),
-    }
-}
-
 fn staged_entry_names(directory: &Dir) -> Vec<String> {
     let Ok(entries) = directory.entries() else {
         return Vec::new();
@@ -1069,9 +1444,9 @@ fn staged_path(name: &str) -> String {
     format!(".bbb/{STAGING_DIRECTORY}/{name}")
 }
 
-/// Claims a directory name for one operation.
+/// Claims a directory name for one change.
 ///
-/// `create_dir` is the claim, so two operations cannot take the same name even
+/// `create_dir` is the claim, so two changes cannot take the same name even
 /// when they share an identity, which happens when a delete is retried.
 fn unique_operation_name(root: &Dir, id: &str) -> io::Result<String> {
     let base = sanitize(id);
@@ -1513,7 +1888,7 @@ mod tests {
         );
 
         assert!(
-            staged.manifest.entries.is_empty(),
+            staged.manifest.actions.is_empty(),
             "an entry that was never taken must not stay in the record"
         );
         staged.rollback().expect("rollback");
@@ -1555,7 +1930,7 @@ mod tests {
             "{outcome:?}"
         );
         assert!(
-            !staged.manifest.entries.is_empty(),
+            !staged.manifest.actions.is_empty(),
             "an entry stuck in staging must stay in the record, or nothing can find it"
         );
         let operation = staged.name.clone();
@@ -2035,5 +2410,430 @@ mod tests {
             fsx::exists(&directory, "state-0.json"),
             "a record that cannot be trusted is not a licence to write anything"
         );
+    }
+
+    // -- an order file somebody else replaced ------------------------------
+
+    /// The rule F2 exists for: a crash leaves the daemon's order file installed,
+    /// somebody replaces it before the next start, and recovery must leave the
+    /// replacement exactly where it is rather than restoring a backup over it.
+    #[test]
+    fn recovery_never_overwrites_an_order_file_it_did_not_install() {
+        let fixture = fixture();
+        fixture.seed_dev_order(FIRST);
+
+        crash_at(FaultPoint::AfterStateWrite, || {
+            let mut staged =
+                Staged::open(&fixture.state, &fixture.vault, "set_order", "dev").expect("staging");
+            fixture.write_dev_order(&mut staged, SECOND);
+        });
+        assert_eq!(fixture.dev_order().as_deref(), Some(SECOND));
+
+        // Between the crash and the next start, another tool writes its own
+        // order. It is now the user's current arrangement.
+        let theirs = b"{\n  \"version\": 1,\n  \"children\": [],\n  \"theirs\": true\n}\n";
+        fsx::write_replacing(&fixture.dev(), STATE_FILE_NAME, theirs).expect("replace");
+
+        let retained = recover(&fixture.state, &fixture.vault);
+
+        assert_eq!(
+            fixture.dev_order().as_deref(),
+            Some(&theirs[..]),
+            "the replacement must survive untouched"
+        );
+        assert_eq!(retained.len(), 1, "{retained:?}");
+        assert!(
+            retained[0].reason.contains("rewritten since"),
+            "and a person is told why: {}",
+            retained[0].reason
+        );
+        assert!(
+            retained[0]
+                .entries
+                .iter()
+                .any(|line| line.contains("state-")),
+            "with the order it replaced still named: {:?}",
+            retained[0].entries
+        );
+    }
+
+    /// The same rule where the change *created* the file: undoing means
+    /// removing it, and removing somebody else's is exactly as bad.
+    #[test]
+    fn recovery_never_removes_an_order_file_it_did_not_install() {
+        let fixture = fixture();
+        assert!(fixture.dev_order().is_none());
+
+        crash_at(FaultPoint::AfterStateWrite, || {
+            let mut staged =
+                Staged::open(&fixture.state, &fixture.vault, "create", "dev").expect("staging");
+            fixture.write_dev_order(&mut staged, FIRST);
+        });
+
+        let theirs = b"{\n  \"version\": 1,\n  \"children\": [],\n  \"theirs\": true\n}\n";
+        fsx::write_replacing(&fixture.dev(), STATE_FILE_NAME, theirs).expect("replace");
+
+        let retained = recover(&fixture.state, &fixture.vault);
+
+        assert_eq!(
+            fixture.dev_order().as_deref(),
+            Some(&theirs[..]),
+            "an order file this change did not install is never removed"
+        );
+        assert_eq!(retained.len(), 1, "{retained:?}");
+    }
+
+    /// Byte-identical is not the same as *the same file*: a replacement that
+    /// happens to hold the same content is still somebody else's file, and the
+    /// identity recorded alongside the digest is what tells them apart.
+    #[cfg(any(unix, windows))]
+    #[test]
+    fn an_order_file_rewritten_to_identical_bytes_is_still_a_replacement() {
+        let fixture = fixture();
+        fixture.seed_dev_order(FIRST);
+
+        crash_at(FaultPoint::AfterStateWrite, || {
+            let mut staged =
+                Staged::open(&fixture.state, &fixture.vault, "set_order", "dev").expect("staging");
+            fixture.write_dev_order(&mut staged, SECOND);
+        });
+
+        // Same bytes, different file: removed and recreated, as a sync client
+        // that replaces rather than patches would do.
+        let dev = fixture.dev();
+        fsx::remove_file(&dev, STATE_FILE_NAME).expect("remove");
+        fsx::create_new(&dev, STATE_FILE_NAME, SECOND).expect("recreate");
+
+        let retained = recover(&fixture.state, &fixture.vault);
+
+        assert_eq!(
+            fixture.dev_order().as_deref(),
+            Some(SECOND),
+            "the file that is there now is not one this change may touch"
+        );
+        assert_eq!(retained.len(), 1, "{retained:?}");
+    }
+
+    /// An order file somebody deleted is a different case: there is nothing of
+    /// theirs to protect, and putting the previous order back is what was meant.
+    #[test]
+    fn an_order_file_that_vanished_is_restored_from_the_backup() {
+        let fixture = fixture();
+        fixture.seed_dev_order(FIRST);
+
+        crash_at(FaultPoint::AfterStateWrite, || {
+            let mut staged =
+                Staged::open(&fixture.state, &fixture.vault, "set_order", "dev").expect("staging");
+            fixture.write_dev_order(&mut staged, SECOND);
+        });
+        fsx::remove_file(&fixture.dev(), STATE_FILE_NAME).expect("remove");
+
+        let retained = recover(&fixture.state, &fixture.vault);
+        assert!(retained.is_empty(), "{retained:?}");
+        assert_eq!(fixture.dev_order().as_deref(), Some(FIRST));
+    }
+
+    // -- created and relocated entries -------------------------------------
+
+    /// Moves `React--a1.md` from `Dev` into `Other`, inside `staged`.
+    fn relocate_react(fixture: &Fixture, staged: &mut Staged) -> io::Result<()> {
+        let dev = fixture.dev();
+        let other = fixture.vault.open_dir_nofollow("Other").expect("open");
+        let dev_components = dev_components();
+        let other_components = vec!["Other".to_owned()];
+        staged.relocate(
+            Place {
+                dir: &dev,
+                components: &dev_components,
+                name: "React--a1.md",
+            },
+            Place {
+                dir: &other,
+                components: &other_components,
+                name: "React--a1.md",
+            },
+            false,
+        )
+    }
+
+    #[test]
+    fn a_rollback_removes_an_entry_the_change_created() {
+        let fixture = fixture();
+        let mut staged =
+            Staged::open(&fixture.state, &fixture.vault, "create", "new").expect("staging");
+        staged
+            .create_file(&fixture.dev(), &dev_components(), "New--n1.md", b"new")
+            .expect("create");
+        assert!(fixture.dev().symlink_metadata("New--n1.md").is_ok());
+
+        staged.rollback().expect("rollback");
+
+        assert!(
+            fixture.dev().symlink_metadata("New--n1.md").is_err(),
+            "an entry the caller was told did not happen must not be left behind"
+        );
+        assert!(fixture.staging_is_clear());
+    }
+
+    #[test]
+    fn a_rollback_removes_a_directory_the_change_created_and_everything_in_it() {
+        let fixture = fixture();
+        let mut staged =
+            Staged::open(&fixture.state, &fixture.vault, "create", "new").expect("staging");
+        staged
+            .create_directory(&fixture.dev(), &dev_components(), "New")
+            .expect("create");
+        let child = fsx::open_dir(&fixture.dev(), "New").expect("open");
+        fsx::create_new(&child, ".bbb-folder.md", b"meta").expect("metadata");
+        drop(child);
+
+        staged.rollback().expect("rollback");
+        assert!(fixture.dev().symlink_metadata("New").is_err());
+    }
+
+    #[test]
+    fn a_crash_before_a_create_leaves_nothing_behind() {
+        let fixture = fixture();
+        crash_at(FaultPoint::BeforeCreate, || {
+            let mut staged =
+                Staged::open(&fixture.state, &fixture.vault, "create", "new").expect("staging");
+            let _ = staged.create_file(&fixture.dev(), &dev_components(), "New--n1.md", b"new");
+        });
+        assert!(fixture.dev().symlink_metadata("New--n1.md").is_err());
+
+        let retained = recover(&fixture.state, &fixture.vault);
+        assert!(retained.is_empty(), "{retained:?}");
+        assert!(fixture.staging_is_clear());
+    }
+
+    #[test]
+    fn a_crash_after_a_create_is_rolled_back() {
+        let fixture = fixture();
+        crash_at(FaultPoint::AfterCreate, || {
+            let mut staged =
+                Staged::open(&fixture.state, &fixture.vault, "create", "new").expect("staging");
+            let _ = staged.create_file(&fixture.dev(), &dev_components(), "New--n1.md", b"new");
+        });
+        assert!(
+            fixture.dev().symlink_metadata("New--n1.md").is_ok(),
+            "the entry did land, and the change never committed"
+        );
+
+        let retained = recover(&fixture.state, &fixture.vault);
+        assert!(retained.is_empty(), "{retained:?}");
+        assert!(
+            fixture.dev().symlink_metadata("New--n1.md").is_err(),
+            "so recovery removes it"
+        );
+        assert!(fixture.staging_is_clear());
+    }
+
+    /// The create counterpart of F2: an entry replaced after the crash is not
+    /// the entry the change made, and must not be removed.
+    #[cfg(any(unix, windows))]
+    #[test]
+    fn recovery_never_removes_an_entry_it_did_not_create() {
+        let fixture = fixture();
+        crash_at(FaultPoint::AfterCreate, || {
+            let mut staged =
+                Staged::open(&fixture.state, &fixture.vault, "create", "new").expect("staging");
+            let _ = staged.create_file(&fixture.dev(), &dev_components(), "New--n1.md", b"new");
+        });
+
+        let dev = fixture.dev();
+        fsx::remove_file(&dev, "New--n1.md").expect("remove");
+        fsx::create_new(&dev, "New--n1.md", b"THEIRS").expect("replace");
+
+        let retained = recover(&fixture.state, &fixture.vault);
+
+        assert_eq!(
+            fsx::read(&fixture.dev(), "New--n1.md").expect("read"),
+            b"THEIRS",
+            "somebody else's file at the same name must survive"
+        );
+        assert_eq!(retained.len(), 1, "{retained:?}");
+        assert!(
+            retained[0].reason.contains("no longer the entry"),
+            "{}",
+            retained[0].reason
+        );
+    }
+
+    #[test]
+    fn a_crash_after_a_relocation_puts_the_entry_back() {
+        let fixture = fixture();
+        fixture.vault.create_dir("Other").expect("create Other");
+
+        crash_at(FaultPoint::AfterRelocate, || {
+            let mut staged =
+                Staged::open(&fixture.state, &fixture.vault, "move", "a1").expect("staging");
+            let _ = relocate_react(&fixture, &mut staged);
+        });
+        assert!(!fixture.bookmark_is_present(), "the entry did move");
+
+        let retained = recover(&fixture.state, &fixture.vault);
+        assert!(retained.is_empty(), "{retained:?}");
+        assert!(fixture.bookmark_is_present(), "and is put back");
+        assert_eq!(
+            fsx::read(&fixture.dev(), "React--a1.md").expect("read"),
+            b"bookmark"
+        );
+        assert!(fixture.staging_is_clear());
+    }
+
+    #[test]
+    fn a_crash_before_a_relocation_leaves_the_entry_where_it_was() {
+        let fixture = fixture();
+        fixture.vault.create_dir("Other").expect("create Other");
+
+        crash_at(FaultPoint::BeforeRelocate, || {
+            let mut staged =
+                Staged::open(&fixture.state, &fixture.vault, "move", "a1").expect("staging");
+            let _ = relocate_react(&fixture, &mut staged);
+        });
+        assert!(fixture.bookmark_is_present());
+
+        let retained = recover(&fixture.state, &fixture.vault);
+        assert!(retained.is_empty(), "{retained:?}");
+        assert!(fixture.bookmark_is_present());
+    }
+
+    /// A relocation and both order writes are one list, so a crash after the
+    /// first order write undoes the rename as well.
+    #[test]
+    fn a_crash_between_a_relocation_and_its_order_writes_undoes_all_of_it() {
+        let fixture = fixture();
+        fixture.vault.create_dir("Other").expect("create Other");
+        fixture.seed_dev_order(FIRST);
+        let other = fixture.vault.open_dir_nofollow("Other").expect("open");
+        fsx::create_new(&other, STATE_FILE_NAME, FIRST).expect("seed other");
+        drop(other);
+
+        crash_at(FaultPoint::AfterStateWrite, || {
+            let mut staged =
+                Staged::open(&fixture.state, &fixture.vault, "move", "a1").expect("staging");
+            relocate_react(&fixture, &mut staged).expect("relocate");
+            let other = fixture.vault.open_dir_nofollow("Other").expect("open");
+            let current = fsx::read_with_identity(&other, STATE_FILE_NAME).ok();
+            staged
+                .write_state(&other, &["Other".to_owned()], SECOND, current.as_ref())
+                .expect("destination order");
+        });
+
+        let retained = recover(&fixture.state, &fixture.vault);
+        assert!(retained.is_empty(), "{retained:?}");
+        assert!(
+            fixture.bookmark_is_present(),
+            "the entry goes back where it was"
+        );
+        let other = fixture.vault.open_dir_nofollow("Other").expect("open");
+        assert_eq!(
+            fsx::read(&other, STATE_FILE_NAME).expect("read").as_slice(),
+            FIRST,
+            "and so does the order that had already been written"
+        );
+        assert!(fixture.staging_is_clear());
+    }
+
+    #[test]
+    fn a_committed_change_keeps_what_it_created_and_moved() {
+        let fixture = fixture();
+        fixture.vault.create_dir("Other").expect("create Other");
+
+        let mut staged =
+            Staged::open(&fixture.state, &fixture.vault, "create", "new").expect("staging");
+        staged
+            .create_file(&fixture.dev(), &dev_components(), "New--n1.md", b"new")
+            .expect("create");
+        relocate_react(&fixture, &mut staged).expect("relocate");
+        staged.commit().expect("commit");
+        let other = fixture.vault.open_dir_nofollow("Other").expect("open");
+
+        assert_eq!(
+            fsx::read(&fixture.dev(), "New--n1.md").expect("read"),
+            b"new",
+            "a committed create is the change's result, not something to clean up"
+        );
+        assert!(!fixture.bookmark_is_present());
+        assert_eq!(
+            fsx::read(&other, "React--a1.md").expect("read"),
+            b"bookmark"
+        );
+        assert!(fixture.staging_is_clear());
+    }
+
+    #[test]
+    fn a_manifest_from_the_unreleased_version_3_is_never_acted_on() {
+        let fixture = fixture();
+        let root = fsx::open_or_create_dir(&fixture.state, STAGING_DIRECTORY).expect("root");
+        fsx::create_dir(&root, "op-0").expect("op dir");
+        let directory = fsx::open_dir(&root, "op-0").expect("open op");
+        fsx::create_new(
+            &directory,
+            MANIFEST_NAME,
+            br#"{"version":3,"operation":"delete_bookmark","phase":"staging","entries":[
+               {"origin":["Dev"],"name":"React--a1.md","staged":"0-x","kind":"file"}]}"#,
+        )
+        .expect("manifest");
+        fsx::create_new(&directory, "0-x", b"staged bytes").expect("staged entry");
+
+        let retained = recover(&fixture.state, &fixture.vault);
+
+        assert_eq!(retained.len(), 1, "{retained:?}");
+        assert!(
+            fsx::exists(&directory, "0-x"),
+            "a shape this build cannot read is kept, never guessed at"
+        );
+    }
+
+    #[test]
+    fn a_manifest_with_a_hostile_action_is_never_acted_on() {
+        for (label, body) in [
+            (
+                "escaping create origin",
+                r#"{"version":4,"operation":"create","phase":"staging","actions":[
+                   {"action":"create","origin":["..",".."],"name":"passwd","kind":"file",
+                    "identity":{"known":{"volume":1,"number":2}}}]}"#,
+            ),
+            (
+                "escaping relocate destination",
+                r#"{"version":4,"operation":"move","phase":"staging","actions":[
+                   {"action":"relocate","from":[],"from_name":"a.md","to":["../.."],
+                    "to_name":"passwd","kind":"file",
+                    "identity":{"known":{"volume":1,"number":2}}}]}"#,
+            ),
+            (
+                "escaping order origin",
+                r#"{"version":4,"operation":"set_order","phase":"staging","actions":[
+                   {"action":"order","origin":["..",".."],"backup":"state-0.json",
+                    "installed":{"revision":"00","identity":{"unavailable":null}}}]}"#,
+            ),
+            (
+                "state directory as an order origin",
+                r#"{"version":4,"operation":"set_order","phase":"staging","actions":[
+                   {"action":"order","origin":[".bbb"],"backup":"state-0.json",
+                    "installed":{"revision":"00","identity":{"unavailable":null}}}]}"#,
+            ),
+        ] {
+            let fixture = fixture();
+            let root =
+                fsx::open_or_create_dir(&fixture.state, STAGING_DIRECTORY).expect("staging root");
+            fsx::create_dir(&root, "op-0").expect("op dir");
+            let directory = fsx::open_dir(&root, "op-0").expect("open op");
+            fsx::create_new(&directory, MANIFEST_NAME, body.as_bytes()).expect("manifest");
+            fsx::create_new(&directory, "state-0.json", b"staged bytes").expect("backup");
+
+            let retained = recover(&fixture.state, &fixture.vault);
+
+            assert_eq!(retained.len(), 1, "{label}: {retained:?}");
+            assert!(
+                fixture.bookmark_is_present(),
+                "{label}: nothing in the vault may be touched"
+            );
+            assert!(
+                fixture.vault.symlink_metadata("passwd").is_err(),
+                "{label}: nothing may be created from a hostile record"
+            );
+        }
     }
 }

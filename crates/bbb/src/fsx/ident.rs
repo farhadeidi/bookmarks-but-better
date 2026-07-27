@@ -13,9 +13,15 @@
 use std::io;
 
 use cap_std::fs::{Dir, File};
+use serde::{Deserialize, Serialize};
 
 /// What the operating system calls one file, independent of its name.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+///
+/// Serialisable because a staging manifest records it: what a crash-recovery
+/// pass needs to know, before it undoes anything, is whether the thing at a
+/// name is still the thing the interrupted change put there.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub(crate) enum FileIdentity {
     /// The kernel identified the file.
     Known {
