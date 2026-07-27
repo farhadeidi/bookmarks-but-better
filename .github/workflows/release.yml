@@ -31,13 +31,15 @@ jobs:
       - name: Set up Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: latest
+          # Reads the pinned version from package.json's "packageManager"
+          # field, so there is one place to bump it.
+          bun-version-file: package.json
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Build Chrome and Firefox
-        run: bun run build
+      - name: Quality gates
+        run: bun run check
 
       - name: Package zips
         run: |

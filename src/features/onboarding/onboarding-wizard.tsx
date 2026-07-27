@@ -1,6 +1,9 @@
 import * as React from "react"
 import { useBookmarkStore } from "@/stores/bookmark-store"
-import { usePreferencesStore, type ColorTheme } from "@/stores/preferences-store"
+import {
+  usePreferencesStore,
+  type ColorTheme,
+} from "@/stores/preferences-store"
 import { useTheme } from "@/components/theme-provider"
 import { WelcomeStep } from "./steps/welcome-step"
 import { RootFolderStep } from "./steps/root-folder-step"
@@ -32,14 +35,11 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
   const { setTheme } = useTheme()
 
   // Apply theme changes live as the user selects them
-  const handleColorThemeChange = React.useCallback(
-    (theme: ColorTheme) => {
-      setColorTheme(theme)
-      // Apply live so the user sees the change behind the blur
-      usePreferencesStore.getState().setColorTheme(theme)
-    },
-    []
-  )
+  const handleColorThemeChange = React.useCallback((theme: ColorTheme) => {
+    setColorTheme(theme)
+    // Apply live so the user sees the change behind the blur
+    usePreferencesStore.getState().setColorTheme(theme)
+  }, [])
 
   const handleThemeModeChange = React.useCallback(
     (mode: ThemeMode) => {
@@ -91,9 +91,12 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
 
   const nextButtonText = (() => {
     switch (currentStep) {
-      case 0: return "Get Started"
-      case TOTAL_STEPS - 1: return "Start Browsing"
-      default: return "Next"
+      case 0:
+        return "Get Started"
+      case TOTAL_STEPS - 1:
+        return "Start Browsing"
+      default:
+        return "Next"
     }
   })()
 
@@ -107,14 +110,14 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
 
   return (
     // Overlay with blur
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xl animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-50 flex animate-in items-center justify-center bg-black/50 backdrop-blur-xl duration-200 fade-in">
       {/* Modal */}
-      <div className="relative w-full max-w-lg rounded-xl border border-border bg-card p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+      <div className="relative w-full max-w-lg animate-in rounded-xl border border-border bg-card p-6 shadow-2xl duration-200 zoom-in-95 fade-in">
         {/* Skip link */}
         {currentStep > 0 && currentStep < TOTAL_STEPS - 1 && (
           <button
             onClick={handleSkip}
-            className="absolute top-4 right-4 text-xs text-muted-foreground hover:text-foreground transition-colors"
+            className="absolute top-4 right-4 text-xs text-muted-foreground transition-colors hover:text-foreground"
           >
             Skip, use defaults
           </button>
@@ -128,7 +131,11 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
           >
             {[
               <WelcomeStep key="welcome" />,
-              <RootFolderStep key="root-folder" value={rootFolderId} onChange={setRootFolderId} />,
+              <RootFolderStep
+                key="root-folder"
+                value={rootFolderId}
+                onChange={setRootFolderId}
+              />,
               <AppearanceStep
                 key="appearance"
                 colorTheme={colorTheme}
@@ -138,7 +145,7 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
               />,
               <DoneStep key="done" />,
             ].map((step, i) => (
-              <div key={i} className="w-full px-1 flex-shrink-0">
+              <div key={i} className="w-full flex-shrink-0 px-1">
                 {step}
               </div>
             ))}
@@ -155,9 +162,7 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
             )}
           </div>
 
-          <Button onClick={handleNextClick}>
-            {nextButtonText}
-          </Button>
+          <Button onClick={handleNextClick}>{nextButtonText}</Button>
         </div>
 
         {/* Step dots */}

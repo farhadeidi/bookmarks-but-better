@@ -30,7 +30,11 @@ export function sortFoldersByOrder(
  * Reorder an item in an array from one index to another.
  * Returns a new array.
  */
-export function reorderArray<T>(list: T[], startIndex: number, finishIndex: number): T[] {
+export function reorderArray<T>(
+  list: T[],
+  startIndex: number,
+  finishIndex: number
+): T[] {
   if (startIndex === finishIndex) return list
   const result = [...list]
   const [removed] = result.splice(startIndex, 1)

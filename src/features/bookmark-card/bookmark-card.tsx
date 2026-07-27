@@ -66,7 +66,9 @@ const FolderMenu = React.memo(function FolderMenu({
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem
-          onClick={() => openCreateItem({ type: "bookmark", parentId: folder.id })}
+          onClick={() =>
+            openCreateItem({ type: "bookmark", parentId: folder.id })
+          }
         >
           <HugeiconsIcon icon={Bookmark02Icon} size={14} />
           New Bookmark

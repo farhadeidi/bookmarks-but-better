@@ -33,9 +33,7 @@ export function serializeNetscapeBookmarks(tree: BookmarkNode[]): string {
         const addDate = node.dateAdded
           ? ` ADD_DATE="${Math.floor(node.dateAdded / 1000)}"`
           : ""
-        lines.push(
-          `${pad}    <DT><H3${addDate}>${escapeHtml(node.title)}</H3>`
-        )
+        lines.push(`${pad}    <DT><H3${addDate}>${escapeHtml(node.title)}</H3>`)
         serializeNodes(node.children, indent + 1)
       }
     }

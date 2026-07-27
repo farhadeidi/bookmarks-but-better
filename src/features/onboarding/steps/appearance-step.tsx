@@ -49,7 +49,8 @@ export function AppearanceStep({
       <div className="flex flex-col gap-2 text-center">
         <h2 className="text-2xl font-bold tracking-tight">Make it yours</h2>
         <p className="text-muted-foreground">
-          Choose a theme and color mode. We recommend Default theme with Dark mode.
+          Choose a theme and color mode. We recommend Default theme with Dark
+          mode.
         </p>
       </div>
 

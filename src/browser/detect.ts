@@ -8,8 +8,8 @@ import { FirefoxFaviconAdapter } from "./firefox/favicon"
 import { StandaloneBookmarkAdapter } from "./standalone/bookmarks"
 import { StandaloneStorageAdapter } from "./standalone/storage"
 import { StandaloneFaviconAdapter } from "./standalone/favicon"
+import { getAdapterModePreference } from "./adapter-preference"
 
-const ADAPTER_PREF_KEY = "adapterMode"
 const SYNC_MIGRATION_FLAG = "__syncToLocalMigrated"
 
 /**
@@ -53,40 +53,6 @@ function isFirefoxBuild(): boolean {
   return import.meta.env.VITE_BUILD_TARGET === "firefox"
 }
 
-async function getUserAdapterPreference(): Promise<
-  "browser" | "standalone" | null
-> {
-  return new Promise((resolve) => {
-    const request = indexedDB.open("bookmarks-but-better-prefs", 1)
-    request.onupgradeneeded = () => {
-      const db = request.result
-      if (!db.objectStoreNames.contains("preferences")) {
-        db.createObjectStore("preferences")
-      }
-    }
-    request.onsuccess = () => {
-      const db = request.result
-      try {
-        const tx = db.transaction("preferences", "readonly")
-        const store = tx.objectStore("preferences")
-        const getReq = store.get(ADAPTER_PREF_KEY)
-        getReq.onsuccess = () => {
-          const value = getReq.result
-          if (value === "browser" || value === "standalone") {
-            resolve(value)
-          } else {
-            resolve(null)
-          }
-        }
-        getReq.onerror = () => resolve(null)
-      } catch {
-        resolve(null)
-      }
-    }
-    request.onerror = () => resolve(null)
-  })
-}
-
 function createChromeAdapter(): BrowserAdapter {
   return {
     bookmarks: new ChromeBookmarkAdapter(),
@@ -121,7 +87,7 @@ function createStandaloneAdapter(): BrowserAdapter {
 }
 
 export async function detectAdapter(): Promise<BrowserAdapter> {
-  const preference = await getUserAdapterPreference()
+  const preference = await getAdapterModePreference()
 
   if (preference === "standalone") {
     return createStandaloneAdapter()
