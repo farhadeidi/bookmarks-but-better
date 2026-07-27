@@ -11,15 +11,36 @@
 //! the vault sizes this milestone targets it is not a price worth optimising
 //! away yet.
 //!
+//! # Why there are two gates
+//!
+//! The **write gate** serialises mutations against each other. The **scan
+//! gate** is held across each scan *and* the publish that follows it, by every
+//! caller — mutations, the watcher, the periodic reconcile and `POST /rescan`.
+//!
+//! The second gate exists because a scan and a publish that are not atomic
+//! together can be interleaved: a slow watcher scan that began before a
+//! mutation can finish after it and publish a tree that predates the write,
+//! silently reverting the daemon's own view of the vault until something else
+//! happens to rescan. Holding one gate across both makes publishes totally
+//! ordered by the moment their scan ran, so the newest scan always wins. Lock
+//! order is always write gate then scan gate; nothing takes them the other way.
+//!
 //! # Why the generation is content-derived
 //!
 //! Every published scan is fingerprinted over exactly what the API exposes. The
-//! generation advances only when that fingerprint changes. This single rule
-//! gives three things at once: the daemon's own writes never produce a phantom
-//! change event, because the watcher's rescan finds the fingerprint it just
-//! published; a watcher event that turns out to be noise costs a scan and
-//! nothing more; and a change that arrives with no event at all is still caught
-//! by the next periodic reconcile.
+//! generation advances only when that fingerprint changes. This gives three
+//! things at once: the daemon's own writes never produce a phantom change
+//! event, because the watcher's rescan finds the fingerprint it just published;
+//! a watcher event that turns out to be noise costs a scan and nothing more;
+//! and a change that arrives with no event at all is still caught by the next
+//! periodic reconcile.
+//!
+//! # Why filesystem work goes through `fsx`
+//!
+//! Nothing here names a path twice. Directories are opened once as no-follow
+//! handles and every child is resolved against them, so a symbolic link
+//! substituted underneath a running mutation fails the operation instead of
+//! redirecting it. See the `fsx` module.
 //!
 //! # Errors
 //!
@@ -29,37 +50,55 @@
 //! two drift apart.
 
 use std::collections::hash_map::DefaultHasher;
-use std::fs;
 use std::hash::{Hash as _, Hasher as _};
 use std::io;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex, RwLock};
+use std::sync::{Arc, Mutex, MutexGuard, PoisonError, RwLock, RwLockReadGuard};
 
 use bbb_vault_core::{
     Access, BookmarkFile, BookmarkNode, BookmarkUpdate, FOLDER_FILE_NAME, FolderFile, FolderNode,
     FolderUpdate, Id, NameAllocator, Revision, UpdateError, VaultScan, assets_directory_name,
     render_bookmark, render_folder, scan,
 };
+use cap_fs_ext::DirExt as _;
+use cap_std::fs::Dir;
 use tokio::sync::broadcast;
 
-use crate::atomic;
 use crate::clock;
 use crate::dto::{self, BookmarkDto};
 use crate::entry::EntryRef;
+use crate::fsx;
 use crate::problem::{Problem, ProblemCode};
+use crate::staging::Staged;
+use crate::subtree;
 
 /// How many change notifications a slow SSE client may fall behind before it is
 /// told to resynchronise.
 const CHANGE_CHANNEL_CAPACITY: usize = 64;
 
+/// How many names are tried before a create or a move gives up.
+///
+/// Each attempt is a claim that lost to a concurrent writer. Sixty-four
+/// consecutive losses is not contention; it is a directory something else is
+/// fighting over.
+const NAME_ATTEMPTS: usize = 64;
+
 /// A vault the daemon has open.
 #[derive(Debug)]
 pub struct Vault {
-    root: PathBuf,
-    state: RwLock<VaultState>,
+    /// The path, kept for logging and for rescanning by name.
+    root_path: PathBuf,
+    /// The vault root, opened once, no-follow.
+    root: Dir,
+    /// `<vault>/.bbb`, where staging lives. Absent when the vault was opened
+    /// read-only, which is the offline `bbb rescan` path and never mutates.
+    state: Option<Dir>,
+    published: RwLock<VaultState>,
     /// Serialises mutations inside this process. The on-disk lock keeps other
     /// processes out; this keeps our own request handlers from interleaving.
     write_gate: Mutex<()>,
+    /// Held across scan *and* publish, so publishes are ordered by their scan.
+    scan_gate: Mutex<()>,
     changes: broadcast::Sender<u64>,
 }
 
@@ -80,25 +119,46 @@ pub struct Snapshot {
 }
 
 impl Vault {
-    /// Opens `root` and takes the first scan.
+    /// Opens `root` for reading only.
+    ///
+    /// Mutations through a vault opened this way are refused, because staging a
+    /// reversible delete needs the `.bbb` directory this deliberately does not
+    /// create. It is the offline `bbb rescan` path, which only reads.
     ///
     /// # Errors
     ///
-    /// Returns any I/O error from the initial scan, including the refusal to
-    /// treat a symbolic link as a vault root.
+    /// Returns any I/O error from opening or scanning the root, including the
+    /// refusal to treat a symbolic link as a vault root.
     pub fn open(root: &Path) -> io::Result<Self> {
-        let root = std::path::absolute(root)?;
-        let scan = scan(&root)?;
+        Self::build(root, None)
+    }
+
+    /// Opens `root` for reading and writing, with `state` as `<vault>/.bbb`.
+    ///
+    /// # Errors
+    ///
+    /// As [`Vault::open`].
+    pub(crate) fn open_with_state(root: &Path, state: Dir) -> io::Result<Self> {
+        Self::build(root, Some(state))
+    }
+
+    fn build(root_path: &Path, state: Option<Dir>) -> io::Result<Self> {
+        let root_path = std::path::absolute(root_path)?;
+        let root = fsx::open_root(&root_path)?;
+        let scan = scan(&root_path)?;
         let fingerprint = fingerprint(&scan);
         let (changes, _) = broadcast::channel(CHANGE_CHANNEL_CAPACITY);
         Ok(Self {
+            root_path,
             root,
-            state: RwLock::new(VaultState {
+            state,
+            published: RwLock::new(VaultState {
                 scan: Arc::new(scan),
                 generation: 1,
                 fingerprint,
             }),
             write_gate: Mutex::new(()),
+            scan_gate: Mutex::new(()),
             changes,
         })
     }
@@ -106,13 +166,13 @@ impl Vault {
     /// The absolute vault root.
     #[must_use]
     pub fn root(&self) -> &Path {
-        &self.root
+        &self.root_path
     }
 
     /// The current published view.
     #[must_use]
     pub fn snapshot(&self) -> Snapshot {
-        let state = self.read_state();
+        let state = self.read_published();
         Snapshot {
             scan: Arc::clone(&state.scan),
             generation: state.generation,
@@ -128,14 +188,14 @@ impl Vault {
     /// Rescans and publishes, returning the new snapshot and whether anything
     /// actually changed.
     ///
-    /// This is what the watcher, the periodic fallback and `POST /rescan` all
-    /// call. It is safe to call as often as one likes; a scan that finds no
-    /// difference publishes nothing and wakes no client.
+    /// The scan and the publish happen under one gate, so a scan that started
+    /// earlier can never be published after one that started later.
     ///
     /// # Errors
     ///
     /// Returns [`ProblemCode::VaultUnavailable`] when the vault cannot be read.
     pub fn reconcile(&self) -> Result<(Snapshot, bool), Problem> {
+        let _gate = self.scan_gate();
         let scan = self.scan_now()?;
         Ok(self.publish(scan))
     }
@@ -174,34 +234,27 @@ impl Vault {
         title: &str,
         url: Option<&str>,
     ) -> Result<BookmarkDto, Problem> {
-        let _gate = self.gate();
-        let scan = self.scan_now()?;
+        let _write = self.write_gate();
+        let scan = self.plan_scan()?;
         let parent_node = writable_folder(&scan, parent)?;
         let title = validated_title(title)?;
+        let parent_dir = self.dir_of(parent_node.relative_path())?;
 
         let id = fresh_id(&scan)?;
-        let mut names = allocator_for(parent_node.path())?;
+        let mut names = allocator_for(&parent_dir)?;
 
         if let Some(url) = url {
             let url = validated_url(url)?;
             let now = clock::now_rfc3339();
-            let document = render_bookmark(id, url, title, &now, &now)
-                .map_err(|error| update_problem(&error))?;
-            let name = names.allocate_bookmark(title, id);
-            atomic::create_new(&parent_node.path().join(&name), document.as_bytes())
-                .map_err(|error| io_problem("the bookmark could not be written", &error))?;
-        } else {
             let document =
-                render_folder(id, Some(title)).map_err(|error| update_problem(&error))?;
-            let name = names.allocate_folder(title);
-            let directory = parent_node.path().join(&name);
-            fs::create_dir(&directory)
-                .map_err(|error| io_problem("the folder could not be created", &error))?;
-            atomic::create_new(&directory.join(FOLDER_FILE_NAME), document.as_bytes())
-                .map_err(|error| io_problem("the folder metadata could not be written", &error))?;
+                render_bookmark(id, url, title, &now, &now).map_err(|e| update_problem(&e))?;
+            create_bookmark_file(&parent_dir, &mut names, title, id, document.as_bytes())?;
+        } else {
+            let document = render_folder(id, Some(title)).map_err(|e| update_problem(&e))?;
+            create_folder_directory(&parent_dir, &mut names, title, document.as_bytes())?;
         }
 
-        self.republish_and_render(&EntryRef::Identity(id))
+        self.settle(&EntryRef::Identity(id))
     }
 
     /// Updates an entry's title, and a bookmark's URL.
@@ -222,15 +275,17 @@ impl Vault {
         title: Option<&str>,
         url: Option<&str>,
     ) -> Result<BookmarkDto, Problem> {
-        let _gate = self.gate();
+        let _write = self.write_gate();
         let expected = parse_revision(revision)?;
-        let scan = self.scan_now()?;
+        let scan = self.plan_scan()?;
 
         match locate(&scan, reference)? {
             Located::Bookmark(node) => {
                 let title = title.map(validated_title).transpose()?;
                 let url = url.map(validated_url).transpose()?;
-                update_bookmark(node, expected, title, url)?;
+                require_writable(node.access(), "the bookmark")?;
+                let dir = self.parent_dir_of(node.relative_path())?;
+                update_bookmark(&dir, node.file_name(), expected, title, url)?;
             }
             Located::Folder(node) => {
                 if url.is_some() {
@@ -240,23 +295,31 @@ impl Vault {
                     ));
                 }
                 let title = title.map(validated_title).transpose()?;
-                update_folder(node, expected, title)?;
+                require_writable(node.access(), "the folder")?;
+                let dir = self.dir_of(node.relative_path())?;
+                update_folder(&dir, expected, title)?;
             }
         }
 
-        self.republish_and_render(reference)
+        self.settle(reference)
     }
 
     /// Deletes a bookmark, together with its colocated assets directory.
     ///
+    /// Nothing is removed in place. Both entries are renamed into
+    /// `<vault>/.bbb/staging` first, and only destroyed once both have moved,
+    /// so a failure part-way puts them back rather than leaving a bookmark
+    /// whose assets are gone or the reverse.
+    ///
     /// # Errors
     ///
     /// [`ProblemCode::NotFound`], [`ProblemCode::StaleRevision`],
-    /// [`ProblemCode::ReadOnly`], or [`ProblemCode::VaultUnavailable`].
+    /// [`ProblemCode::ReadOnly`], [`ProblemCode::PartialFailure`] when a
+    /// rollback itself failed, or [`ProblemCode::VaultUnavailable`].
     pub fn delete_bookmark(&self, reference: &EntryRef, revision: &str) -> Result<(), Problem> {
-        let _gate = self.gate();
+        let _write = self.write_gate();
         let expected = parse_revision(revision)?;
-        let scan = self.scan_now()?;
+        let scan = self.plan_scan()?;
 
         let node = match locate(&scan, reference)? {
             Located::Bookmark(node) => node,
@@ -268,20 +331,31 @@ impl Vault {
             }
         };
         require_writable(node.access(), "the bookmark")?;
-        check_revision(expected, current_revision(node.path())?)?;
+        let dir = self.parent_dir_of(node.relative_path())?;
+        check_revision(expected, revision_of(&dir, node.file_name())?)?;
 
-        fs::remove_file(node.path())
-            .map_err(|error| io_problem("the bookmark could not be deleted", &error))?;
-        // The assets directory belongs to the bookmark, so it goes with it. A
-        // failure here is reported by the next scan rather than rolling back a
-        // deletion that already succeeded.
-        let assets = node
-            .path()
-            .with_file_name(assets_directory_name(node.file_name()));
-        if assets.is_dir() {
-            let _ = fs::remove_dir_all(&assets);
+        let assets = assets_directory_name(node.file_name());
+        let has_assets = is_directory(&dir, &assets);
+
+        let mut staged = self.staging(node.id().as_str())?;
+        if let Err(error) = staged.take(&dir, node.file_name(), false) {
+            return Err(rollback(
+                staged,
+                "the bookmark could not be removed",
+                &error,
+            ));
+        }
+        if has_assets && let Err(error) = staged.take(&dir, &assets, true) {
+            return Err(rollback(
+                staged,
+                "the bookmark's assets could not be removed",
+                &error,
+            ));
         }
 
+        staged
+            .commit()
+            .map_err(|error| io_problem("the staged entries could not be destroyed", &error))?;
         self.reconcile()?;
         Ok(())
     }
@@ -290,21 +364,25 @@ impl Vault {
     ///
     /// Emptiness is judged by the real directory listing rather than by the
     /// managed tree, so a directory holding the user's own notes still demands
-    /// the explicit recursive request.
+    /// the explicit recursive request. A recursive delete additionally proves
+    /// the whole subtree is managed and unchanged before anything moves — see
+    /// the `subtree` module.
     ///
     /// # Errors
     ///
     /// [`ProblemCode::FolderNotEmpty`] when the folder has contents and
-    /// `recursive` is false, plus the errors of [`Vault::delete_bookmark`].
+    /// `recursive` is false, [`ProblemCode::SubtreeHasUnknownFiles`] and
+    /// [`ProblemCode::SubtreeChanged`] from the subtree proof, plus the errors
+    /// of [`Vault::delete_bookmark`].
     pub fn delete_folder(
         &self,
         reference: &EntryRef,
         revision: &str,
         recursive: bool,
     ) -> Result<(), Problem> {
-        let _gate = self.gate();
+        let _write = self.write_gate();
         let expected = parse_revision(revision)?;
-        let scan = self.scan_now()?;
+        let scan = self.plan_scan()?;
 
         let node = match locate(&scan, reference)? {
             Located::Folder(node) => node,
@@ -322,21 +400,37 @@ impl Vault {
             ));
         }
         require_writable(node.access(), "the folder")?;
-        check_revision(
-            expected,
-            current_revision(&node.path().join(FOLDER_FILE_NAME))?,
-        )?;
 
-        let occupants = occupant_count(node.path())?;
+        let handle = self.dir_of(node.relative_path())?;
+        check_revision(expected, revision_of(&handle, FOLDER_FILE_NAME)?)?;
+
+        let occupants = occupant_count(&handle)?;
         if occupants > 0 && !recursive {
             return Err(Problem::new(
                 ProblemCode::FolderNotEmpty,
                 format!("the folder contains {occupants} entries; retry with recursive=true"),
             ));
         }
+        if recursive {
+            // The single revision the client sent covers this folder's metadata
+            // and nothing below it, so permission to erase the subtree has to be
+            // established here rather than assumed.
+            subtree::verify_deletable(&handle, node).map_err(|r| subtree_problem(&r))?;
+        }
+        drop(handle);
 
-        fs::remove_dir_all(node.path())
-            .map_err(|error| io_problem("the folder could not be deleted", &error))?;
+        let parent = self.parent_dir_of(node.relative_path())?;
+        let staging_id = node
+            .id()
+            .map_or_else(|| "folder".to_owned(), |id| id.as_str().to_owned());
+        let mut staged = self.staging(&staging_id)?;
+        if let Err(error) = staged.take(&parent, node.directory_name(), true) {
+            return Err(rollback(staged, "the folder could not be removed", &error));
+        }
+
+        staged
+            .commit()
+            .map_err(|error| io_problem("the staged folder could not be destroyed", &error))?;
         self.reconcile()?;
         Ok(())
     }
@@ -344,7 +438,9 @@ impl Vault {
     /// Moves an entry into another folder, keeping its identity.
     ///
     /// The move is a rename inside the vault, so the front matter — and with it
-    /// the identity, the revision and every unknown byte — is untouched.
+    /// the identity, the revision and every unknown byte — is untouched. A
+    /// bookmark's assets move with it, and if they cannot, the bookmark is
+    /// moved back so the pair never separates.
     ///
     /// # Errors
     ///
@@ -356,16 +452,20 @@ impl Vault {
         revision: &str,
         parent: &EntryRef,
     ) -> Result<BookmarkDto, Problem> {
-        let _gate = self.gate();
+        let _write = self.write_gate();
         let expected = parse_revision(revision)?;
-        let scan = self.scan_now()?;
-        let destination = writable_folder(&scan, parent)?;
+        let scan = self.plan_scan()?;
+        let destination_node = writable_folder(&scan, parent)?;
+        let destination = self.dir_of(destination_node.relative_path())?;
 
         match locate(&scan, reference)? {
             Located::Bookmark(node) => {
                 require_writable(node.access(), "the bookmark")?;
-                check_revision(expected, current_revision(node.path())?)?;
-                move_bookmark(node, destination)?;
+                let source = self.parent_dir_of(node.relative_path())?;
+                check_revision(expected, revision_of(&source, node.file_name())?)?;
+                if parent_path(node.relative_path()) != destination_node.relative_path() {
+                    move_bookmark(&source, node, &destination)?;
+                }
             }
             Located::Folder(node) => {
                 if node.relative_path().is_empty() {
@@ -375,41 +475,81 @@ impl Vault {
                     ));
                 }
                 require_writable(node.access(), "the folder")?;
-                check_revision(
-                    expected,
-                    current_revision(&node.path().join(FOLDER_FILE_NAME))?,
-                )?;
-                move_folder(node, destination)?;
+                let handle = self.dir_of(node.relative_path())?;
+                check_revision(expected, revision_of(&handle, FOLDER_FILE_NAME)?)?;
+                drop(handle);
+                guard_move_into_self(node, destination_node)?;
+                if parent_path(node.relative_path()) != destination_node.relative_path() {
+                    let source = self.parent_dir_of(node.relative_path())?;
+                    move_folder(&source, node, &destination)?;
+                }
             }
         }
 
-        self.republish_and_render(reference)
+        self.settle(reference)
     }
 
     // -- internals --------------------------------------------------------
 
-    fn gate(&self) -> std::sync::MutexGuard<'_, ()> {
-        self.write_gate
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    /// Opens a staging area for one operation.
+    fn staging(&self, id: &str) -> Result<Staged, Problem> {
+        let state = self.state.as_ref().ok_or_else(|| {
+            Problem::new(
+                ProblemCode::VaultUnavailable,
+                "this vault was opened for reading only",
+            )
+        })?;
+        Staged::open(state, id)
+            .map_err(|error| io_problem("the staging area could not be opened", &error))
     }
 
-    fn read_state(&self) -> std::sync::RwLockReadGuard<'_, VaultState> {
-        self.state
+    /// A handle to the vault-relative directory `relative`.
+    fn dir_of(&self, relative: &str) -> Result<Dir, Problem> {
+        fsx::open_relative_dir(&self.root, relative)
+            .map_err(|error| io_problem("a vault directory could not be opened", &error))
+    }
+
+    /// A handle to the directory containing the entry at `relative`.
+    fn parent_dir_of(&self, relative: &str) -> Result<Dir, Problem> {
+        self.dir_of(parent_path(relative))
+    }
+
+    fn write_gate(&self) -> MutexGuard<'_, ()> {
+        self.write_gate
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+    }
+
+    fn scan_gate(&self) -> MutexGuard<'_, ()> {
+        self.scan_gate
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+    }
+
+    fn read_published(&self) -> RwLockReadGuard<'_, VaultState> {
+        self.published
             .read()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .unwrap_or_else(PoisonError::into_inner)
+    }
+
+    /// The authoritative scan a mutation plans against.
+    ///
+    /// Taken under the scan gate so it cannot observe the vault mid-publish.
+    fn plan_scan(&self) -> Result<VaultScan, Problem> {
+        let _gate = self.scan_gate();
+        self.scan_now()
     }
 
     fn scan_now(&self) -> Result<VaultScan, Problem> {
-        scan(&self.root).map_err(|error| io_problem("the vault could not be scanned", &error))
+        scan(&self.root_path).map_err(|error| io_problem("the vault could not be scanned", &error))
     }
 
     fn publish(&self, scan: VaultScan) -> (Snapshot, bool) {
         let fingerprint = fingerprint(&scan);
         let mut state = self
-            .state
+            .published
             .write()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
+            .unwrap_or_else(PoisonError::into_inner);
         let changed = state.fingerprint != fingerprint;
         if changed {
             state.generation += 1;
@@ -431,22 +571,82 @@ impl Vault {
     }
 
     /// Publishes the post-mutation tree and renders the affected entry from it.
-    fn republish_and_render(&self, reference: &EntryRef) -> Result<BookmarkDto, Problem> {
+    fn settle(&self, reference: &EntryRef) -> Result<BookmarkDto, Problem> {
         let (snapshot, _) = self.reconcile()?;
         let located = locate(&snapshot.scan, reference)?;
         Ok(located.to_dto(&snapshot.scan))
     }
 }
 
+/// Creates a bookmark file, retrying if a name is claimed underneath us.
+fn create_bookmark_file(
+    parent: &Dir,
+    names: &mut NameAllocator,
+    title: &str,
+    id: Id,
+    document: &[u8],
+) -> Result<(), Problem> {
+    for _ in 0..NAME_ATTEMPTS {
+        let name = names.allocate_bookmark(title, id);
+        match fsx::create_new(parent, &name, document) {
+            Ok(()) => return Ok(()),
+            // Something claimed the name between listing the directory and
+            // creating the file. `create_new` caught it, so take the next name
+            // the allocator offers rather than overwriting anything.
+            // Something claimed the name; the next allocator name is a
+            // different one, so fall through to it.
+            Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {}
+            Err(error) => return Err(io_problem("the bookmark could not be written", &error)),
+        }
+    }
+    Err(name_exhausted())
+}
+
+/// Creates a folder directory and its metadata, undoing the first on failure.
+fn create_folder_directory(
+    parent: &Dir,
+    names: &mut NameAllocator,
+    title: &str,
+    document: &[u8],
+) -> Result<(), Problem> {
+    for _ in 0..NAME_ATTEMPTS {
+        let name = names.allocate_folder(title);
+        match parent.create_dir(&name) {
+            Ok(()) => {
+                let child = parent
+                    .open_dir_nofollow(&name)
+                    .map_err(|error| io_problem("the new folder could not be opened", &error))?;
+                return match fsx::create_new(&child, FOLDER_FILE_NAME, document) {
+                    Ok(()) => Ok(()),
+                    Err(error) => {
+                        // A directory with no identity is worse than no
+                        // directory, so undo it and leave the vault as it was.
+                        drop(child);
+                        let undone = parent.remove_dir(&name).is_ok();
+                        Err(partial_or_io(
+                            "the folder metadata could not be written",
+                            &error,
+                            undone,
+                        ))
+                    }
+                };
+            }
+            Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {}
+            Err(error) => return Err(io_problem("the folder could not be created", &error)),
+        }
+    }
+    Err(name_exhausted())
+}
+
 /// Applies a title and URL change to one bookmark file.
 fn update_bookmark(
-    node: &BookmarkNode,
+    dir: &Dir,
+    name: &str,
     expected: Revision,
     title: Option<&str>,
     url: Option<&str>,
 ) -> Result<(), Problem> {
-    require_writable(node.access(), "the bookmark")?;
-    let source = read_file(node.path())?;
+    let source = read_entry(dir, name)?;
     check_revision(expected, Revision::of(&source))?;
 
     let file = BookmarkFile::parse(&source).map_err(|error| {
@@ -470,12 +670,12 @@ fn update_bookmark(
         update
     };
 
-    // Ask what the change alone would produce. If that is the file we
-    // already have, the request was a no-op and must not touch the disk —
-    // stamping `bbb_updated` first would have made it one.
+    // Ask what the change alone would produce. If that is the file we already
+    // have, the request was a no-op and must not touch the disk — stamping
+    // `bbb_updated` first would have made it one.
     let probe = file
         .apply(&source, &requested(None))
-        .map_err(|error| update_problem(&error))?;
+        .map_err(|e| update_problem(&e))?;
     if probe == source {
         return Ok(());
     }
@@ -483,20 +683,14 @@ fn update_bookmark(
     let now = clock::now_rfc3339();
     let bytes = file
         .apply(&source, &requested(Some(&now)))
-        .map_err(|error| update_problem(&error))?;
-    atomic::replace(node.path(), &bytes)
+        .map_err(|e| update_problem(&e))?;
+    fsx::replace(dir, name, &bytes)
         .map_err(|error| io_problem("the bookmark could not be written", &error))
 }
 
 /// Applies a title change to one `.bbb-folder.md`.
-fn update_folder(
-    node: &FolderNode,
-    expected: Revision,
-    title: Option<&str>,
-) -> Result<(), Problem> {
-    require_writable(node.access(), "the folder")?;
-    let path = node.path().join(FOLDER_FILE_NAME);
-    let source = read_file(&path)?;
+fn update_folder(dir: &Dir, expected: Revision, title: Option<&str>) -> Result<(), Problem> {
+    let source = read_entry(dir, FOLDER_FILE_NAME)?;
     check_revision(expected, Revision::of(&source))?;
 
     let file = FolderFile::parse(&source).map_err(|error| {
@@ -512,65 +706,99 @@ fn update_folder(
     }
     let bytes = file
         .apply(&source, &update)
-        .map_err(|error| update_problem(&error))?;
+        .map_err(|e| update_problem(&e))?;
     if bytes == source {
         return Ok(());
     }
-    atomic::replace(&path, &bytes)
+    fsx::replace(dir, FOLDER_FILE_NAME, &bytes)
         .map_err(|error| io_problem("the folder metadata could not be written", &error))
 }
 
-/// Renames a bookmark file into `destination`, keeping its name when free.
-fn move_bookmark(node: &BookmarkNode, destination: &FolderNode) -> Result<(), Problem> {
-    if node.path().parent() == Some(destination.path()) {
-        return Ok(());
-    }
-    let mut names = allocator_for(destination.path())?;
+/// Renames a bookmark into `destination`, taking its assets with it.
+fn move_bookmark(source: &Dir, node: &BookmarkNode, destination: &Dir) -> Result<(), Problem> {
+    let mut names = allocator_for(destination)?;
+    let assets = assets_directory_name(node.file_name());
+    let has_assets = is_directory(source, &assets);
+
     // Keep the existing filename when the destination has room for it, so a
     // move is invisible in Git beyond the rename itself.
-    let name = if names.reserve(node.file_name()) {
+    let mut candidate = if names.reserve(node.file_name()) {
         node.file_name().to_owned()
     } else {
         names.allocate_bookmark(node.title(), node.id())
     };
 
-    let target = destination.path().join(&name);
-    fs::rename(node.path(), &target)
-        .map_err(|error| io_problem("the bookmark could not be moved", &error))?;
-
-    let assets = node
-        .path()
-        .with_file_name(assets_directory_name(node.file_name()));
-    if assets.is_dir() {
-        let _ = fs::rename(
-            &assets,
-            destination.path().join(assets_directory_name(&name)),
-        );
+    for attempt in 0..NAME_ATTEMPTS {
+        match fsx::move_file(source, node.file_name(), destination, &candidate) {
+            Ok(()) => {
+                if !has_assets {
+                    return Ok(());
+                }
+                let target = assets_directory_name(&candidate);
+                return match fsx::move_dir(source, &assets, destination, &target) {
+                    Ok(()) => Ok(()),
+                    Err(error) => {
+                        // The bookmark has already moved. Put it back, so the
+                        // pair is never split across two folders.
+                        let undone =
+                            fsx::move_file(destination, &candidate, source, node.file_name())
+                                .is_ok();
+                        Err(partial_or_io(
+                            "the bookmark's assets could not be moved",
+                            &error,
+                            undone,
+                        ))
+                    }
+                };
+            }
+            // The name was taken between listing the destination and the
+            // rename. Nothing was overwritten; take the next name.
+            Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {
+                if attempt + 1 == NAME_ATTEMPTS {
+                    break;
+                }
+                candidate = names.allocate_bookmark(node.title(), node.id());
+            }
+            Err(error) => return Err(io_problem("the bookmark could not be moved", &error)),
+        }
     }
-    Ok(())
+    Err(name_exhausted())
 }
 
-/// Renames a directory into `destination`, refusing a move into itself.
-fn move_folder(node: &FolderNode, destination: &FolderNode) -> Result<(), Problem> {
-    if node.path() == destination.path() || destination.path().starts_with(node.path()) {
-        return Err(Problem::new(
-            ProblemCode::MoveIntoSelf,
-            "a folder cannot be moved into itself or into one of its own descendants",
-        ));
-    }
-    if node.path().parent() == Some(destination.path()) {
-        return Ok(());
-    }
-
-    let mut names = allocator_for(destination.path())?;
-    let name = if names.reserve(node.directory_name()) {
+/// Renames a directory into `destination`.
+fn move_folder(source: &Dir, node: &FolderNode, destination: &Dir) -> Result<(), Problem> {
+    let mut names = allocator_for(destination)?;
+    let mut candidate = if names.reserve(node.directory_name()) {
         node.directory_name().to_owned()
     } else {
         names.allocate_folder(node.title())
     };
 
-    fs::rename(node.path(), destination.path().join(&name))
-        .map_err(|error| io_problem("the folder could not be moved", &error))
+    for attempt in 0..NAME_ATTEMPTS {
+        match fsx::move_dir(source, node.directory_name(), destination, &candidate) {
+            Ok(()) => return Ok(()),
+            Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {
+                if attempt + 1 == NAME_ATTEMPTS {
+                    break;
+                }
+                candidate = names.allocate_folder(node.title());
+            }
+            Err(error) => return Err(io_problem("the folder could not be moved", &error)),
+        }
+    }
+    Err(name_exhausted())
+}
+
+fn guard_move_into_self(node: &FolderNode, destination: &FolderNode) -> Result<(), Problem> {
+    let own = node.relative_path();
+    let target = destination.relative_path();
+    if target == own || target.starts_with(&format!("{own}/")) {
+        return Err(Problem::new(
+            ProblemCode::MoveIntoSelf,
+            "a folder cannot be moved into itself or into one of its own descendants",
+        ));
+    }
+    Ok(())
 }
 
 /// Where an address resolved to.
@@ -635,12 +863,17 @@ fn folder_at<'a>(folder: &'a FolderNode, relative_path: &str) -> Option<&'a Fold
 
 /// The address of the folder containing `relative_path`, or `None` at the root.
 fn parent_of_path(scan: &VaultScan, relative_path: &str) -> Option<EntryRef> {
-    let parent_path = match relative_path.rsplit_once('/') {
-        Some((parent, _)) => parent,
-        None if relative_path.is_empty() => return None,
-        None => "",
-    };
-    folder_at(scan.folder(), parent_path).map(dto::folder_ref)
+    if relative_path.is_empty() {
+        return None;
+    }
+    folder_at(scan.folder(), parent_path(relative_path)).map(dto::folder_ref)
+}
+
+/// The vault-relative directory holding `relative_path`.
+fn parent_path(relative_path: &str) -> &str {
+    relative_path
+        .rsplit_once('/')
+        .map_or("", |(parent, _)| parent)
 }
 
 /// Resolves an address that must be a folder the daemon may write into.
@@ -682,12 +915,15 @@ fn fresh_id(scan: &VaultScan) -> Result<Id, Problem> {
     })
 }
 
-/// Seeds a name allocator with every name already present in `directory`.
+/// Seeds a name allocator with every name already present in `dir`.
 ///
 /// The listing is used rather than the scanned tree because a vault holds the
 /// user's own files too, and a new bookmark must not collide with one of them.
-fn allocator_for(directory: &Path) -> Result<NameAllocator, Problem> {
-    let entries = fs::read_dir(directory)
+/// It is only a starting point: every create still goes through `create_new`,
+/// which is what actually makes the claim safe against a concurrent writer.
+fn allocator_for(dir: &Dir) -> Result<NameAllocator, Problem> {
+    let entries = dir
+        .entries()
         .map_err(|error| io_problem("the folder could not be listed", &error))?;
     let mut names = Vec::new();
     for entry in entries {
@@ -697,9 +933,10 @@ fn allocator_for(directory: &Path) -> Result<NameAllocator, Problem> {
     Ok(NameAllocator::from_existing(names))
 }
 
-/// Counts everything in `directory` except the folder's own metadata file.
-fn occupant_count(directory: &Path) -> Result<usize, Problem> {
-    let entries = fs::read_dir(directory)
+/// Counts everything in `dir` except the folder's own metadata file.
+fn occupant_count(dir: &Dir) -> Result<usize, Problem> {
+    let entries = dir
+        .entries()
         .map_err(|error| io_problem("the folder could not be listed", &error))?;
     let mut count = 0;
     for entry in entries {
@@ -711,8 +948,14 @@ fn occupant_count(directory: &Path) -> Result<usize, Problem> {
     Ok(count)
 }
 
-fn read_file(path: &Path) -> Result<Vec<u8>, Problem> {
-    fs::read(path).map_err(|error| match error.kind() {
+/// Whether `name` in `dir` is a real directory, judged without following links.
+fn is_directory(dir: &Dir, name: &str) -> bool {
+    dir.symlink_metadata(name)
+        .is_ok_and(|metadata| metadata.is_dir())
+}
+
+fn read_entry(dir: &Dir, name: &str) -> Result<Vec<u8>, Problem> {
+    fsx::read(dir, name).map_err(|error| match error.kind() {
         io::ErrorKind::NotFound => Problem::new(
             ProblemCode::NotFound,
             "the entry is no longer on disk; rescan and retry",
@@ -721,8 +964,8 @@ fn read_file(path: &Path) -> Result<Vec<u8>, Problem> {
     })
 }
 
-fn current_revision(path: &Path) -> Result<Revision, Problem> {
-    read_file(path).map(|bytes| Revision::of(&bytes))
+fn revision_of(dir: &Dir, name: &str) -> Result<Revision, Problem> {
+    read_entry(dir, name).map(|bytes| Revision::of(&bytes))
 }
 
 fn parse_revision(text: &str) -> Result<Revision, Problem> {
@@ -791,6 +1034,54 @@ fn update_problem(error: &UpdateError) -> Problem {
         // could not be stored, which is the client's problem to fix.
         _ => Problem::new(ProblemCode::InvalidValue, error.to_string()),
     }
+}
+
+fn subtree_problem(refusal: &subtree::SubtreeRefusal) -> Problem {
+    let code = match refusal {
+        subtree::SubtreeRefusal::Unknown { .. } => ProblemCode::SubtreeHasUnknownFiles,
+        subtree::SubtreeRefusal::Changed { .. } => ProblemCode::SubtreeChanged,
+        subtree::SubtreeRefusal::Unreadable { .. } => ProblemCode::VaultUnavailable,
+    };
+    Problem::new(code, refusal.detail())
+}
+
+/// Rolls a staged operation back and reports the original failure.
+fn rollback(staged: Staged, context: &str, cause: &io::Error) -> Problem {
+    match staged.rollback() {
+        Ok(()) => io_problem(context, cause),
+        Err(restore) => Problem::new(
+            ProblemCode::PartialFailure,
+            format!(
+                "{context} ({}), and undoing the change failed as well ({}); the entries are held \
+                 in the vault's `.bbb/staging` directory and are cleared on the next start",
+                cause.kind(),
+                restore.kind()
+            ),
+        ),
+    }
+}
+
+/// A failure whose severity depends on whether the undo worked.
+fn partial_or_io(context: &str, cause: &io::Error, undone: bool) -> Problem {
+    if undone {
+        io_problem(context, cause)
+    } else {
+        Problem::new(
+            ProblemCode::PartialFailure,
+            format!(
+                "{context} ({}), and the change could not be undone; run `bbb doctor` to see the \
+                 current state of the vault",
+                cause.kind()
+            ),
+        )
+    }
+}
+
+fn name_exhausted() -> Problem {
+    Problem::new(
+        ProblemCode::VaultUnavailable,
+        "no free name was found in the destination folder after many attempts",
+    )
 }
 
 /// Builds a vault-unavailable problem without leaking a path into the message.

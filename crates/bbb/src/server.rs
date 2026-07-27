@@ -9,8 +9,10 @@ use axum::Router;
 use tokio::net::TcpListener;
 
 use crate::api::{self, ApiState};
+use crate::fsx;
 use crate::host;
 use crate::lock::{LockError, VaultLock};
+use crate::staging;
 use crate::ui;
 use crate::vault::Vault;
 use crate::watch::{self, WatchHandle, WatchOptions};
@@ -103,15 +105,29 @@ impl Daemon {
     /// [`StartError::Vault`] when it cannot be scanned, and
     /// [`StartError::UiDir`] when the UI directory has no `index.html`.
     pub fn open(options: &ServeOptions) -> Result<Self, StartError> {
-        let lock = VaultLock::acquire(&options.vault).map_err(|error| match error {
-            held @ LockError::Held { .. } => StartError::Locked(held),
-            LockError::Io { path, error } => StartError::Vault { path, error },
-        })?;
-
-        let vault = Vault::open(&options.vault).map_err(|error| StartError::Vault {
+        // The root is opened once, no-follow, and everything below is resolved
+        // against that handle. A symlinked vault root is refused here, exactly
+        // as the scanner refuses it.
+        let root = fsx::open_root(&options.vault).map_err(|error| StartError::Vault {
             path: options.vault.clone(),
             error,
         })?;
+
+        let (lock, state) =
+            VaultLock::acquire(&root, &options.vault).map_err(|error| match error {
+                held @ LockError::Held { .. } => StartError::Locked(held),
+                LockError::Io { path, error } => StartError::Vault { path, error },
+            })?;
+
+        // The lock is held, so anything left in staging belongs to a run that
+        // is no longer alive and is safe to clear.
+        staging::purge(&state);
+
+        let vault =
+            Vault::open_with_state(&options.vault, state).map_err(|error| StartError::Vault {
+                path: options.vault.clone(),
+                error,
+            })?;
         if vault.snapshot().scan.folder().id().is_none() {
             return Err(StartError::NotAVault {
                 path: options.vault.clone(),
@@ -128,6 +144,9 @@ impl Daemon {
             let service = ui::service(directory).ok_or_else(|| StartError::UiDir {
                 path: directory.clone(),
             })?;
+            // Merged after the API is nested, and the API carries its own
+            // 404, so an unknown `/api/v1/...` path never reaches the SPA
+            // index.
             router = router.merge(service);
         } else {
             // With no UI to serve, a non-API path is simply not a route here.

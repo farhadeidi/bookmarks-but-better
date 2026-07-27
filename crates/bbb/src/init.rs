@@ -9,13 +9,12 @@
 //! diagnostic until something explicitly gives them one, and the bookmarks
 //! inside them stay visible and editable throughout.
 
-use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 
 use bbb_vault_core::{FOLDER_FILE_NAME, Id, render_folder, scan};
 
-use crate::atomic;
+use crate::fsx;
 
 /// What [`initialize`] did.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -71,8 +70,16 @@ pub fn initialize(root: &Path) -> Result<InitOutcome, InitError> {
         return Ok(InitOutcome::AlreadyInitialized { id });
     }
 
+    // The root is opened once, no-follow, and the metadata file is resolved
+    // against that handle. A `.bbb-folder.md` that is a symbolic link is
+    // refused rather than written through, so initialising a directory can
+    // never write outside it.
+    let handle = fsx::open_root(root).map_err(|error| InitError::Unreadable {
+        path: root.to_path_buf(),
+        error,
+    })?;
     let metadata = root.join(FOLDER_FILE_NAME);
-    if fs::symlink_metadata(&metadata).is_ok() {
+    if handle.symlink_metadata(FOLDER_FILE_NAME).is_ok() {
         return Err(InitError::Occupied { path: metadata });
     }
 
@@ -87,9 +94,17 @@ pub fn initialize(root: &Path) -> Result<InitOutcome, InitError> {
     let document = render_folder(id, None).map_err(|error| InitError::Identity {
         detail: error.to_string(),
     })?;
-    atomic::create_new(&metadata, document.as_bytes()).map_err(|error| InitError::Unreadable {
-        path: metadata,
-        error,
+    fsx::create_new(&handle, FOLDER_FILE_NAME, document.as_bytes()).map_err(|error| {
+        // `AlreadyExists` here means something claimed the name between the
+        // check above and this create; refusing is the same answer either way.
+        if error.kind() == io::ErrorKind::AlreadyExists {
+            InitError::Occupied { path: metadata }
+        } else {
+            InitError::Unreadable {
+                path: metadata,
+                error,
+            }
+        }
     })?;
 
     Ok(InitOutcome::Created { id })
@@ -149,6 +164,7 @@ impl core::error::Error for InitError {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
 
     #[test]
     fn initializing_twice_writes_once() {

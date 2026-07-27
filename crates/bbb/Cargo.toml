@@ -25,10 +25,19 @@ path = "src/main.rs"
 bbb-vault-core = { path = "../bbb-vault-core", version = "0.1.0" }
 # HTTP routing, extractors and the SSE response type.
 axum = "0.8.9"
+# Capability-oriented filesystem handles, the same ones the format core walks
+# the vault with. Every mutation resolves through an `openat`-style handle with
+# O_NOFOLLOW (and the Windows reparse-point equivalent), so no path is ever
+# resolved twice and a link cannot be swapped in between a check and a write.
+cap-std = "4.0.2"
+cap-fs-ext = "4.0.2"
 # Command line parsing for the four subcommands.
 clap = { version = "4.6.4", features = ["derive", "env"] }
 # Filesystem watching with a platform-native backend.
 notify = "8.2.0"
+# The MIME table the static handler serves assets with; the same one
+# `tower-http` consulted, so served types did not change when it was dropped.
+mime_guess = "2.0.5"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.151"
 # RFC 3339 parsing (for `dateAdded`) and formatting (for new timestamps).
@@ -43,10 +52,14 @@ tokio = { version = "1.53.1", features = [
 ] }
 # `BroadcastStream`, which turns the change channel into an SSE body.
 tokio-stream = { version = "0.1.19", features = ["sync"] }
-# `ServeDir`, used for the static UI with an SPA index fallback.
-tower-http = { version = "0.7.0", features = ["fs"] }
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["json", "env-filter"] }
+
+# `renameat2(RENAME_NOREPLACE)`, the only way to rename a directory without the
+# kernel silently replacing whatever is already there. Linux-only; other
+# platforms fall back to a documented check-then-rename in `fsx::move_dir`.
+[target.'cfg(target_os = "linux")'.dependencies]
+rustix = { version = "1.1.4", features = ["fs"] }
 
 [dev-dependencies]
 # Integration tests are their own crates, so the pieces they touch directly are

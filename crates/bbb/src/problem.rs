@@ -39,6 +39,12 @@ pub enum ProblemCode {
     FolderNotEmpty,
     /// More than one entry claims the requested identity.
     AmbiguousId,
+    /// A recursive delete would destroy files the vault does not manage.
+    SubtreeHasUnknownFiles,
+    /// A recursive delete found the subtree changed since it was planned.
+    SubtreeChanged,
+    /// A multi-step change failed and could not be undone.
+    PartialFailure,
     /// The move would place a folder inside itself.
     MoveIntoSelf,
     /// The `Host` header is missing or is not a loopback name.
@@ -60,6 +66,9 @@ impl ProblemCode {
             Self::InvalidValue => "invalid_value",
             Self::FolderNotEmpty => "folder_not_empty",
             Self::AmbiguousId => "ambiguous_id",
+            Self::SubtreeHasUnknownFiles => "subtree_has_unknown_files",
+            Self::SubtreeChanged => "subtree_changed",
+            Self::PartialFailure => "partial_failure",
             Self::MoveIntoSelf => "move_into_self",
             Self::HostNotAllowed => "host_not_allowed",
             Self::VaultUnavailable => "vault_unavailable",
@@ -75,12 +84,16 @@ impl ProblemCode {
         match self {
             Self::NotFound | Self::RouteNotFound => StatusCode::NOT_FOUND,
             Self::InvalidRequest => StatusCode::BAD_REQUEST,
-            Self::StaleRevision | Self::FolderNotEmpty | Self::AmbiguousId => StatusCode::CONFLICT,
+            Self::StaleRevision
+            | Self::FolderNotEmpty
+            | Self::AmbiguousId
+            | Self::SubtreeHasUnknownFiles
+            | Self::SubtreeChanged => StatusCode::CONFLICT,
             Self::ReadOnly | Self::InvalidValue | Self::MoveIntoSelf => {
                 StatusCode::UNPROCESSABLE_ENTITY
             }
             Self::HostNotAllowed => StatusCode::FORBIDDEN,
-            Self::VaultUnavailable => StatusCode::INTERNAL_SERVER_ERROR,
+            Self::VaultUnavailable | Self::PartialFailure => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 
@@ -96,6 +109,9 @@ impl ProblemCode {
             Self::InvalidValue => "Invalid value",
             Self::FolderNotEmpty => "Folder is not empty",
             Self::AmbiguousId => "Ambiguous identity",
+            Self::SubtreeHasUnknownFiles => "Folder holds unmanaged files",
+            Self::SubtreeChanged => "Folder changed while being deleted",
+            Self::PartialFailure => "Change partly applied",
             Self::MoveIntoSelf => "Cannot move a folder into itself",
             Self::HostNotAllowed => "Host not allowed",
             Self::VaultUnavailable => "Vault unavailable",

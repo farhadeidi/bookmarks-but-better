@@ -40,7 +40,7 @@ stable `code`.
 | `DELETE` | `/bookmarks/{id}`        | `?revision=…`                                     |
 | `POST`   | `/bookmarks/{id}/move`   | `{revision, parentId}`                            |
 | `POST`   | `/folders`               | `{parentId, title}`                               |
-| `DELETE` | `/folders/{id}`          | `?revision=…[&recursive=true]`                    |
+| `DELETE` | `/folders/{id}`          | `?revision=…[&recursive=true]`; see below          |
 | `POST`   | `/rescan`                | `{generation, changed, warnings}`                 |
 | `GET`    | `/events`                | SSE; `changed` events carrying `{"generation":N}` |
 
@@ -71,10 +71,27 @@ stable `code`.
 | `stale_revision`    | 409    | the file changed on disk; reload and reapply    |
 | `folder_not_empty`  | 409    | retry with `recursive=true`                     |
 | `ambiguous_id`      | 409    | more than one entry claims the identity         |
+| `subtree_has_unknown_files` | 409 | the folder holds files bbb does not manage |
+| `subtree_changed`   | 409    | the subtree changed while the delete was planned |
 | `read_only`         | 422    | the entry has an error diagnostic, or no identity |
 | `invalid_value`     | 422    | the value cannot be stored in the format        |
 | `move_into_self`    | 422    | a folder cannot contain itself                  |
 | `vault_unavailable` | 500    | the vault could not be read or written          |
+| `partial_failure`   | 500    | a multi-step change failed and could not be undone |
+
+### Deleting a folder
+
+`recursive=true` deletes a subtree only when every file in it is one the vault
+manages — a `.bbb-folder.md`, a scanned bookmark, or a file inside a scanned
+bookmark's `.assets` directory — and every one of those bookmarks still holds
+the bytes the request was planned against.
+
+A stray `notes.txt`, an `.obsidian` directory, a symbolic link, or a bookmark an
+editor touched a moment ago each stop the delete with a 409. There is no
+override flag: the single revision a client can send covers the folder's own
+metadata and says nothing about the thousand files beneath it, so it is not
+permission to erase them. Remove the unmanaged parts in a file manager, where
+you can see what you are losing, and then retry.
 
 ## Guarantees
 
@@ -83,14 +100,29 @@ stable `code`.
 - **No silent overwrites.** Every mutation carries a `revision`; a mismatch is a
   409 and the file is left alone.
 - **No lost bytes.** Updates use the format core's surgical patching, then a
-  temporary file in the destination directory, `fsync`, rename, and a directory
-  `fsync` where the platform supports it. A no-op update writes nothing at all.
+  uniquely named temporary file created with `create_new` in the destination
+  directory, `fsync`, rename, and a directory `fsync` on Unix. On Windows the
+  rename lands on `MoveFileExW(MOVEFILE_REPLACE_EXISTING)`, which is atomic on
+  one volume; there is no portable directory `fsync`, which is why the
+  durability guarantee is "best available" rather than identical everywhere. A
+  no-op update writes nothing at all.
+- **Nothing is deleted in place.** Deletions rename entries into
+  `<vault>/.bbb/staging` first and destroy them only once every entry has
+  moved, so a failure part-way is rolled back and a crash leaves bytes in a
+  directory the scanner ignores — purged by the next daemon to take the lock.
+- **No clobbering.** Creates use `create_new`; moves claim the destination name
+  first (`renameat2(RENAME_NOREPLACE)` on Linux), so a rename can never destroy
+  a file that is already there.
 - **Stable identities.** Identity lives in front matter, so it survives moves,
   renames and restarts.
 - **Loopback only.** The bind address is loopback and the `Host` header is
   checked, which is what stops DNS rebinding from reaching the daemon.
-- **Nothing outside the vault.** No symlinks are followed, by the scanner or by
-  the watcher.
+- **Nothing outside the vault.** Every read, write and rename resolves through
+  an `openat`-style directory handle with `O_NOFOLLOW`, so no path is resolved
+  twice and a symbolic link swapped in mid-operation fails it rather than
+  redirecting it. `.bbb` is refused if it is not a real directory. The static
+  UI refuses symlinked files outright, including ones pointing inside
+  `--ui-dir`.
 - **Logs carry no bookmark content** — counts, identities, codes and paths only.
 
 ## Testing

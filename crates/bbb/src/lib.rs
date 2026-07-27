@@ -30,6 +30,9 @@
 //! server   lock + vault + router + watcher + shutdown
 //! api      the /api/v1 routes
 //! vault    the cached scan, the generation, and every mutation
+//! fsx      handle-relative, no-follow filesystem primitives
+//! staging  reversible deletion
+//! subtree  proving a folder is safe to delete before deleting it
 //! init     making a directory into a vault
 //! doctor   the read-only health report
 //! watch    debounced, content-checked reconciliation
@@ -53,10 +56,12 @@
 
 #![forbid(unsafe_code)]
 
-mod atomic;
 mod clock;
 mod extract;
+mod fsx;
 mod host;
+mod staging;
+mod subtree;
 mod ui;
 
 pub mod api;
