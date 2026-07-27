@@ -1,0 +1,71 @@
+[package]
+name = "bbb"
+description = "Local-first daemon, HTTP API and CLI for Bookmarks But Better: serves a Markdown vault and the web UI on loopback."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+readme = "README.md"
+keywords = ["bookmarks", "markdown", "daemon", "vault"]
+categories = ["command-line-utilities", "web-programming::http-server"]
+
+[lib]
+name = "bbb"
+path = "src/lib.rs"
+
+[[bin]]
+name = "bbb"
+path = "src/main.rs"
+
+# The format itself lives in `bbb-vault-core`; nothing here re-implements
+# parsing, scanning or byte-preserving updates.
+[dependencies]
+bbb-vault-core = { path = "../bbb-vault-core", version = "0.1.0" }
+# HTTP routing, extractors and the SSE response type.
+axum = "0.8.9"
+# Command line parsing for the four subcommands.
+clap = { version = "4.6.4", features = ["derive", "env"] }
+# Filesystem watching with a platform-native backend.
+notify = "8.2.0"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
+# RFC 3339 parsing (for `dateAdded`) and formatting (for new timestamps).
+time = { version = "0.3.54", features = ["formatting", "parsing"] }
+tokio = { version = "1.53.1", features = [
+  "rt-multi-thread",
+  "macros",
+  "signal",
+  "sync",
+  "time",
+  "net",
+] }
+# `BroadcastStream`, which turns the change channel into an SSE body.
+tokio-stream = { version = "0.1.19", features = ["sync"] }
+# `ServeDir`, used for the static UI with an SPA index fallback.
+tower-http = { version = "0.7.0", features = ["fs"] }
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.23", features = ["json", "env-filter"] }
+
+[dev-dependencies]
+# Integration tests are their own crates, so the pieces they touch directly are
+# listed again here; Cargo unifies them with the versions above.
+axum = "0.8.9"
+bbb-vault-core = { path = "../bbb-vault-core", version = "0.1.0" }
+serde_json = "1.0.151"
+# `ServiceExt::oneshot`, which drives the router without binding a socket.
+tower = { version = "0.5.3", features = ["util"] }
+tempfile = "3.27.0"
+# The SSE test speaks HTTP/1.1 to a really-bound socket rather than pulling in
+# an HTTP client crate for one request.
+tokio = { version = "1.53.1", features = [
+  "rt-multi-thread",
+  "macros",
+  "time",
+  "net",
+  "io-util",
+] }
+
+[lints]
+workspace = true

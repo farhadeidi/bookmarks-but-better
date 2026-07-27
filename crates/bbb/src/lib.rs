@@ -1,0 +1,82 @@
+//! The **Bookmarks But Better** daemon: an HTTP API and static web host over a
+//! Markdown vault, plus the CLI that drives it.
+//!
+//! This crate owns *behaviour*. The on-disk format — parsing, scanning,
+//! validation and byte-preserving updates — lives entirely in
+//! [`bbb_vault_core`] and is never reimplemented here.
+//!
+//! # What the daemon guarantees
+//!
+//! * **Only the configured vault is touched.** Every read, write and watch is
+//!   rooted at the one directory the user named. Nothing scans elsewhere, and a
+//!   directory that is not already a vault is refused rather than initialized
+//!   by surprise.
+//! * **One writer.** An advisory lock on `<vault>/.bbb/lock` means a second
+//!   daemon fails to start instead of racing the first.
+//! * **No silent overwrites.** Every mutation carries the revision the client
+//!   last saw; a mismatch is a `409`, never a write.
+//! * **No lost bytes.** Updates go through the format core's surgical patching,
+//!   and land through a temporary file in the destination directory that is
+//!   fsynced and renamed into place.
+//! * **Stable identities.** Identity lives in front matter, so it survives
+//!   moves, renames and restarts.
+//! * **Loopback only.** The daemon binds a loopback address and additionally
+//!   refuses any request whose `Host` is not a loopback name.
+//!
+//! # Layout
+//!
+//! ```text
+//! cli      the four subcommands
+//! server   lock + vault + router + watcher + shutdown
+//! api      the /api/v1 routes
+//! vault    the cached scan, the generation, and every mutation
+//! init     making a directory into a vault
+//! doctor   the read-only health report
+//! watch    debounced, content-checked reconciliation
+//! ```
+//!
+//! # Example
+//!
+//! ```no_run
+//! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+//! use bbb::{Daemon, ServeOptions};
+//!
+//! let options = ServeOptions::new("/home/user/bookmarks");
+//! let daemon = Daemon::open(&options)?;
+//! let listener = bbb::server::bind(&options).await?;
+//! daemon
+//!     .serve(listener, async { /* shutdown signal */ }, Default::default())
+//!     .await?;
+//! # Ok(())
+//! # }
+//! ```
+
+#![forbid(unsafe_code)]
+
+mod atomic;
+mod clock;
+mod extract;
+mod host;
+mod ui;
+
+pub mod api;
+pub mod cli;
+pub mod doctor;
+pub mod dto;
+pub mod entry;
+pub mod init;
+pub mod lock;
+pub mod problem;
+pub mod server;
+pub mod vault;
+pub mod watch;
+
+pub use crate::entry::EntryRef;
+pub use crate::init::{InitOutcome, initialize};
+pub use crate::lock::VaultLock;
+pub use crate::problem::{Problem, ProblemCode};
+pub use crate::server::{Daemon, ServeOptions, StartError};
+pub use crate::vault::Vault;
+
+/// The daemon's version, as reported by `GET /api/v1/health`.
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");
