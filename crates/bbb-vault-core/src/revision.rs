@@ -2,14 +2,14 @@
 
 use core::fmt;
 
-use crate::hash::sha256;
+use sha2::{Digest, Sha256};
 
 /// A stable content fingerprint of an on-disk vault file.
 ///
-/// The revision is a SHA-256 digest of the exact file bytes. It depends on
-/// nothing but those bytes, so it is identical on every platform, across
-/// restarts and across copies of the vault. It exists to detect stale writes,
-/// not to authenticate anything.
+/// The revision is a SHA-256 digest of the exact file bytes, computed by the
+/// `RustCrypto` `sha2` implementation. It depends on nothing but those bytes, so
+/// it is identical on every platform, across restarts and across copies of the
+/// vault. It exists to detect stale writes, not to authenticate anything.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Revision([u8; 32]);
 
@@ -17,7 +17,7 @@ impl Revision {
     /// Computes the revision of a byte slice.
     #[must_use]
     pub fn of(bytes: &[u8]) -> Self {
-        Self(sha256(bytes))
+        Self(Sha256::digest(bytes).into())
     }
 
     /// Returns the raw digest.
@@ -65,6 +65,26 @@ impl fmt::Display for Revision {
 #[cfg(test)]
 mod tests {
     use super::Revision;
+
+    /// Pins the wire format of a revision.
+    ///
+    /// These are the FIPS 180-4 published SHA-256 vectors. If this test ever
+    /// changes, every stored revision in every vault has been invalidated.
+    #[test]
+    fn revisions_are_published_sha256_digests() {
+        assert_eq!(
+            Revision::of(b"").to_string(),
+            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        );
+        assert_eq!(
+            Revision::of(b"abc").to_string(),
+            "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+        );
+        assert_eq!(
+            Revision::of(b"abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq").to_string(),
+            "248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1"
+        );
+    }
 
     #[test]
     fn revision_is_content_addressed() {

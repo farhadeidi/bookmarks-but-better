@@ -48,9 +48,13 @@ pub enum DiagnosticCode {
     MissingFrontmatter,
     /// Front matter is not a mapping of keys to values.
     NonMappingRoot,
+    /// Front matter is not valid YAML.
+    MalformedYaml,
+    /// Front matter holds more than one YAML document.
+    MultipleDocuments,
     /// An owned `bbb_*` key appears more than once.
     DuplicateOwnedKey,
-    /// A non-owned key appears more than once, which is invalid YAML.
+    /// A key appears more than once, which is invalid YAML and ambiguous.
     DuplicateKey,
     /// An owned key holds a value outside the supported single-line subset.
     UnsupportedValue,
@@ -91,6 +95,8 @@ impl DiagnosticCode {
             Self::UnterminatedFrontmatter => "unterminated_frontmatter",
             Self::MissingFrontmatter => "missing_frontmatter",
             Self::NonMappingRoot => "non_mapping_root",
+            Self::MalformedYaml => "malformed_yaml",
+            Self::MultipleDocuments => "multiple_documents",
             Self::DuplicateOwnedKey => "duplicate_owned_key",
             Self::DuplicateKey => "duplicate_key",
             Self::UnsupportedValue => "unsupported_value",
@@ -122,6 +128,9 @@ impl DiagnosticCode {
             | Self::UnterminatedFrontmatter
             | Self::MissingFrontmatter
             | Self::NonMappingRoot
+            | Self::MalformedYaml
+            | Self::MultipleDocuments
+            | Self::DuplicateKey
             | Self::DuplicateOwnedKey
             | Self::UnsupportedValue
             | Self::InvalidId
@@ -129,8 +138,7 @@ impl DiagnosticCode {
             | Self::DuplicateId
             | Self::FileTooLarge
             | Self::UnreadablePath => Severity::Error,
-            Self::DuplicateKey
-            | Self::MissingRequiredField
+            Self::MissingRequiredField
             | Self::InvalidTimestamp
             | Self::FilenameIdMismatch
             | Self::ReservedKeyUnknown
@@ -236,6 +244,8 @@ mod tests {
             DiagnosticCode::UnterminatedFrontmatter,
             DiagnosticCode::MissingFrontmatter,
             DiagnosticCode::NonMappingRoot,
+            DiagnosticCode::MalformedYaml,
+            DiagnosticCode::MultipleDocuments,
             DiagnosticCode::DuplicateOwnedKey,
             DiagnosticCode::DuplicateKey,
             DiagnosticCode::UnsupportedValue,

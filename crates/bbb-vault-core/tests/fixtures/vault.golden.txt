@@ -7,8 +7,8 @@ folder "." id=r00tr00t title="vault" access=read_write
     bookmark "Reading list/renamed-by-hand.md" id=h1h2h3h4 title="Renamed by hand" url="https://example.com/renamed" logo="-" access=read_write
     bookmark "Reading list/Rust Book--r1r2r3r4.md" id=r1r2r3r4 title="The Rust Book" url="https://doc.rust-lang.org/book/" logo="-" access=read_write
   bookmark "apple--a1a1a1a1.md" id=a1a1a1a1 title="apple" url="https://apple.example" logo="-" access=read_write
-  bookmark "Zebra--z1z2z3z4.md" id=z1z2z3z4 title="Zebra" url="https://zebra.example" logo="Zebra--z1z2z3z4.assets/logo.svg" access=read_write
   bookmark "Éclair--e1e1e1e1.md" id=e1e1e1e1 title="Éclair" url="https://eclair.example" logo="-" access=read_write
+  bookmark "Zebra--z1z2z3z4.md" id=z1z2z3z4 title="Zebra" url="https://zebra.example" logo="Zebra--z1z2z3z4.assets/logo.svg" access=read_only
 
 diagnostics:
   error   duplicate_id             archive/Copy of Zebra--z1z2z3z4.md
@@ -16,3 +16,4 @@ diagnostics:
   error   unterminated_frontmatter Reading list/broken/unterminated--u1u2u3u4.md
   warning missing_folder_metadata  Reading list/broken
   warning filename_id_mismatch     Reading list/renamed-by-hand.md
+  error   duplicate_id             Zebra--z1z2z3z4.md

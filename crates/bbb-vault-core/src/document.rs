@@ -17,6 +17,7 @@ use crate::timestamp::is_rfc3339;
 use crate::yaml::{
     self, Entry, FrontmatterError, LineEnding, ScalarStyle, Unsupported, Value as YamlValue,
 };
+use crate::yaml_check::{self, YamlProblem};
 
 /// The front matter key holding a stable identity.
 pub const KEY_ID: &str = "bbb_id";
@@ -100,6 +101,32 @@ pub enum ParseError {
         /// The 1-based line of the offending content.
         line: usize,
     },
+    /// The front matter is not valid YAML.
+    ///
+    /// The byte scanner only interprets the keys the vault owns, so front matter
+    /// can be readable to it and still be unreadable to every other tool. A
+    /// conformant parser gets the final say.
+    MalformedYaml {
+        /// The 1-based line the parser stopped at.
+        line: usize,
+        /// The parser's own explanation.
+        detail: String,
+    },
+    /// The front matter holds more than one YAML document.
+    MultipleDocuments {
+        /// The 1-based line the second document starts on.
+        line: usize,
+    },
+    /// A key appears more than once, so its value is ambiguous.
+    ///
+    /// This covers unknown keys as well as owned ones: YAML forbids duplicates,
+    /// and readers that tolerate them disagree about which one wins.
+    DuplicateKey {
+        /// The duplicated key.
+        key: String,
+        /// The 1-based line of the second occurrence.
+        line: usize,
+    },
     /// An owned key appears more than once, so its value is ambiguous.
     DuplicateOwnedKey {
         /// The duplicated key.
@@ -136,6 +163,9 @@ impl ParseError {
             Self::MissingFrontmatter | Self::NotManaged => DiagnosticCode::MissingFrontmatter,
             Self::UnterminatedFrontmatter => DiagnosticCode::UnterminatedFrontmatter,
             Self::NonMappingRoot { .. } => DiagnosticCode::NonMappingRoot,
+            Self::MalformedYaml { .. } => DiagnosticCode::MalformedYaml,
+            Self::MultipleDocuments { .. } => DiagnosticCode::MultipleDocuments,
+            Self::DuplicateKey { .. } => DiagnosticCode::DuplicateKey,
             Self::DuplicateOwnedKey { .. } => DiagnosticCode::DuplicateOwnedKey,
             Self::UnsupportedValue { .. } => DiagnosticCode::UnsupportedValue,
             Self::InvalidId { .. } => DiagnosticCode::InvalidId,
@@ -147,6 +177,9 @@ impl ParseError {
     pub const fn line(&self) -> Option<usize> {
         match self {
             Self::NonMappingRoot { line }
+            | Self::MalformedYaml { line, .. }
+            | Self::MultipleDocuments { line }
+            | Self::DuplicateKey { line, .. }
             | Self::DuplicateOwnedKey { line, .. }
             | Self::UnsupportedValue { line, .. }
             | Self::InvalidId { line, .. } => Some(*line),
@@ -181,6 +214,16 @@ impl fmt::Display for ParseError {
             Self::NonMappingRoot { .. } => {
                 f.write_str("the front matter must be a mapping of keys to values")
             }
+            Self::MalformedYaml { detail, .. } => {
+                write!(f, "the front matter is not valid YAML: {detail}")
+            }
+            Self::MultipleDocuments { .. } => f.write_str(
+                "the front matter holds more than one YAML document; only the first would be read",
+            ),
+            Self::DuplicateKey { key, .. } => write!(
+                f,
+                "`{key}` appears more than once; YAML readers disagree about which value wins"
+            ),
             Self::DuplicateOwnedKey { key, .. } => {
                 write!(
                     f,
@@ -476,6 +519,21 @@ fn scan_owned(
         }
     }
 
+    // The owned keys are readable. Now hand the whole region to a real YAML
+    // parser: unknown keys are user data the vault preserves, but preserving
+    // bytes that no other tool can parse is not a service to anyone. This runs
+    // after the owned-key pass so that a duplicated `bbb_*` key is reported by
+    // its own, more specific code.
+    let line_offset = yaml::line_of(text, frontmatter.content.start) - 1;
+    yaml_check::validate(&text[frontmatter.content.clone()], line_offset).map_err(|problem| {
+        match problem {
+            YamlProblem::Malformed { line, detail } => ParseError::MalformedYaml { line, detail },
+            YamlProblem::NonMapping { line } => ParseError::NonMappingRoot { line },
+            YamlProblem::DuplicateKey { key, line } => ParseError::DuplicateKey { key, line },
+            YamlProblem::MultipleDocuments { line } => ParseError::MultipleDocuments { line },
+        }
+    })?;
+
     diagnostics.extend(namespace_diagnostics(&frontmatter.entries, owned, path));
 
     let last_owned = frontmatter
@@ -496,39 +554,31 @@ fn scan_owned(
     })
 }
 
-/// Warns about reserved-but-unrecognised keys and about duplicated user keys.
+/// Warns about keys that reserve the vault's namespace without being part of it.
+///
+/// Duplicate keys are not handled here: [`yaml_check`] rejects them outright,
+/// because a document with two values for one key has no single meaning.
 fn namespace_diagnostics(
     entries: &[Entry],
     owned: &[&'static str],
     path: Option<&str>,
 ) -> Vec<Diagnostic> {
-    let mut diagnostics = Vec::new();
-    for (index, entry) in entries.iter().enumerate() {
-        let key = entry.key.as_str();
-        if owned.contains(&key) {
-            continue;
-        }
-        if key.starts_with(OWNED_PREFIX) {
-            diagnostics.push(diagnose(
+    entries
+        .iter()
+        .filter(|entry| !owned.contains(&entry.key.as_str()) && entry.key.starts_with(OWNED_PREFIX))
+        .map(|entry| {
+            diagnose(
                 DiagnosticCode::ReservedKeyUnknown,
                 format!(
-                    "`{key}` uses the reserved `{OWNED_PREFIX}` namespace but is not part of the \
-                     vault format; it is preserved but ignored"
+                    "`{}` uses the reserved `{OWNED_PREFIX}` namespace but is not part of the \
+                     vault format; it is preserved but ignored",
+                    entry.key
                 ),
                 path,
                 Some(entry.line),
-            ));
-        }
-        if entries[..index].iter().any(|other| other.key == entry.key) {
-            diagnostics.push(diagnose(
-                DiagnosticCode::DuplicateKey,
-                format!("`{key}` appears more than once, which other YAML readers reject"),
-                path,
-                Some(entry.line),
-            ));
-        }
-    }
-    diagnostics
+            )
+        })
+        .collect()
 }
 
 fn diagnose(

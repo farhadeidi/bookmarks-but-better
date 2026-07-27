@@ -101,11 +101,12 @@ fn siblings_are_ordered_folders_first_then_by_folded_title() {
     let folders: Vec<_> = root.folders().iter().map(FolderNode::title).collect();
     assert_eq!(folders, ["Archive", "Reading List"]);
 
-    // Case-folded code point order: `apple` sorts before `Zebra` because the
-    // fold ignores case, and `Éclair` sorts last because `é` is above `z` in
-    // code point order. The rule is documented, not locale collation.
+    // The sort key is the canonical caseless fold, so case is ignored and
+    // `Éclair` decomposes to `e` plus a combining acute — which puts it where a
+    // reader expects it, between `apple` and `Zebra`, rather than after every
+    // ASCII name as raw code point order would.
     let bookmarks: Vec<_> = root.bookmarks().iter().map(BookmarkNode::title).collect();
-    assert_eq!(bookmarks, ["apple", "Zebra", "Éclair"]);
+    assert_eq!(bookmarks, ["apple", "Éclair", "Zebra"]);
 }
 
 #[test]
@@ -161,27 +162,86 @@ fn malformed_files_become_diagnostics_rather_than_entries() {
     assert!(scan.find_bookmark(Id::parse("m1m2m3m4").unwrap()).is_none());
 }
 
+/// Nothing distinguishes a copy from its original, so neither may be written.
+///
+/// Demoting only the "later" one would make traversal order decide which file a
+/// write lands on, which is exactly the silent-overwrite the vault exists to
+/// prevent.
 #[test]
-fn a_duplicated_identity_makes_the_later_entry_read_only() {
+fn every_claimant_of_a_duplicated_identity_is_read_only() {
     let scan = scan_fixture();
-    let original = scan
-        .folder()
-        .bookmarks()
-        .iter()
-        .find(|bookmark| bookmark.relative_path() == "Zebra--z1z2z3z4.md")
-        .expect("the original");
-    assert_eq!(original.access(), Access::ReadWrite);
+    let id = Id::parse("z1z2z3z4").unwrap();
 
-    let copy = scan
-        .bookmarks()
-        .find(|bookmark| bookmark.relative_path() == "archive/Copy of Zebra--z1z2z3z4.md")
-        .expect("the copy");
-    assert_eq!(copy.access(), Access::ReadOnly);
-    assert!(
-        copy.diagnostics()
-            .iter()
-            .any(|diagnostic| diagnostic.code() == DiagnosticCode::DuplicateId)
+    let claimants = scan.bookmarks_claiming(id);
+    let paths: Vec<_> = claimants
+        .iter()
+        .map(|bookmark| bookmark.relative_path())
+        .collect();
+    assert_eq!(
+        paths,
+        ["archive/Copy of Zebra--z1z2z3z4.md", "Zebra--z1z2z3z4.md"]
     );
+
+    for bookmark in &claimants {
+        assert_eq!(
+            bookmark.access(),
+            Access::ReadOnly,
+            "{} stayed writable",
+            bookmark.relative_path()
+        );
+        let duplicate = bookmark
+            .diagnostics()
+            .iter()
+            .find(|diagnostic| diagnostic.code() == DiagnosticCode::DuplicateId)
+            .expect("a duplicate-identity diagnostic");
+        assert_eq!(duplicate.path(), Some(bookmark.relative_path()));
+        // The diagnostic names every *other* claimant, so a human can act on it.
+        for other in &paths {
+            if *other == bookmark.relative_path() {
+                continue;
+            }
+            assert!(
+                duplicate.detail().contains(other),
+                "{} must point at {other}: {}",
+                bookmark.relative_path(),
+                duplicate.detail()
+            );
+        }
+    }
+
+    // An ambiguous identity has no answer, so the lookup refuses to invent one.
+    assert!(
+        scan.find_bookmark(id).is_none(),
+        "an ambiguous lookup must not pick a winner"
+    );
+    // An unambiguous one still resolves.
+    let unique = Id::parse("o1o2o3o4").unwrap();
+    assert_eq!(
+        scan.find_bookmark(unique).map(BookmarkNode::relative_path),
+        Some("archive/Old--o1o2o3o4.md")
+    );
+    assert!(scan.find_bookmark(Id::parse("00000000").unwrap()).is_none());
+}
+
+#[test]
+fn duplicated_folder_identities_are_refused_the_same_way() {
+    let temp = TempDir::new("dupe-folders");
+    temp.write(".bbb-folder.md", folder_source("r00tr00t", None));
+    temp.write("One/.bbb-folder.md", folder_source("same0000", Some("One")));
+    temp.write("Two/.bbb-folder.md", folder_source("same0000", Some("Two")));
+
+    let scan = scan(temp.path()).expect("a scan");
+    let id = Id::parse("same0000").unwrap();
+    assert_eq!(scan.folders_claiming(id).len(), 2);
+    assert!(scan.find_folder(id).is_none());
+    for folder in scan.folders_claiming(id) {
+        assert_eq!(
+            folder.access(),
+            Access::ReadOnly,
+            "{}",
+            folder.relative_path()
+        );
+    }
 }
 
 #[test]
@@ -358,6 +418,11 @@ fn windows_device_names_are_reported() {
     );
 }
 
+/// A vault must never read, or be redirected by, anything outside itself.
+///
+/// The traversal holds a directory handle and resolves each child against it
+/// with the no-follow flag, so these cases fail at the `openat` rather than
+/// being caught by a check that a racing rename could invalidate.
 #[cfg(unix)]
 #[test]
 fn symbolic_links_are_never_followed() {
@@ -368,29 +433,136 @@ fn symbolic_links_are_never_followed() {
         "Secret--s1s2s3s4.md",
         bookmark_source("s1s2s3s4", "https://secret.example", "Secret"),
     );
+    outside.write(".bbb-folder.md", folder_source("0uts1de0", Some("Outside")));
 
     let temp = TempDir::new("symlink");
     temp.write(".bbb-folder.md", folder_source("r00tr00t", None));
-    symlink(outside.path(), temp.path().join("linked")).expect("creating a directory link");
+    // A directory link out of the vault.
+    symlink(outside.path(), temp.path().join("linked")).expect("a directory link");
+    // A file link out of the vault, wearing a valid bookmark name.
     symlink(
         outside.path().join("Secret--s1s2s3s4.md"),
         temp.path().join("Link--l1l2l3l4.md"),
     )
-    .expect("creating a file link");
+    .expect("a file link");
+    // A link standing in for a folder's identity file: following this would let
+    // anything outside the vault name a directory inside it.
+    temp.mkdir("hijacked");
+    symlink(
+        outside.path().join(".bbb-folder.md"),
+        temp.path().join("hijacked/.bbb-folder.md"),
+    )
+    .expect("a metadata link");
+    // A link that points nowhere at all.
+    symlink(
+        outside.path().join("gone.md"),
+        temp.path().join("Dangling--d1d2d3d4.md"),
+    )
+    .expect("a dangling link");
+    // A link back to the parent, which would loop forever if followed.
+    symlink(temp.path(), temp.path().join("loop")).expect("a cyclic link");
 
     let scan = scan(temp.path()).expect("a scan");
     assert_eq!(
         scan.bookmarks().count(),
         0,
-        "nothing outside the vault is read"
+        "nothing outside the vault may be read"
     );
+    assert!(
+        scan.find_bookmark(Id::parse("s1s2s3s4").unwrap()).is_none(),
+        "the linked bookmark must not appear"
+    );
+    // The hijacked directory got no identity from the link.
+    let hijacked = scan
+        .folder()
+        .folders()
+        .iter()
+        .find(|folder| folder.relative_path() == "hijacked")
+        .expect("the directory itself is still listed");
+    assert_eq!(
+        hijacked.id(),
+        None,
+        "a linked metadata file must not be read"
+    );
+    assert!(scan.find_folder(Id::parse("0uts1de0").unwrap()).is_none());
+
     let skipped: Vec<_> = scan
         .diagnostics()
         .into_iter()
         .filter(|diagnostic| diagnostic.code() == DiagnosticCode::SymlinkSkipped)
         .map(|diagnostic| diagnostic.path().unwrap_or_default().to_owned())
         .collect();
-    assert_eq!(skipped, ["Link--l1l2l3l4.md", "linked"]);
+    assert_eq!(
+        skipped,
+        [
+            "Dangling--d1d2d3d4.md",
+            "Link--l1l2l3l4.md",
+            "linked",
+            "loop",
+            "hijacked/.bbb-folder.md",
+        ],
+        "every link must be reported, not silently dropped"
+    );
+}
+
+/// A vault root that is itself a link is refused outright.
+#[cfg(unix)]
+#[test]
+fn a_symlinked_vault_root_is_refused() {
+    use std::os::unix::fs::symlink;
+
+    let real = TempDir::new("real-root");
+    real.write(".bbb-folder.md", folder_source("r00tr00t", None));
+    real.write(
+        "Note--n1n2n3n4.md",
+        bookmark_source("n1n2n3n4", "https://example.com", "Note"),
+    );
+
+    let holder = TempDir::new("root-holder");
+    let link = holder.path().join("vault");
+    symlink(real.path(), &link).expect("a root link");
+
+    // The real directory scans.
+    assert_eq!(scan(real.path()).expect("a scan").bookmarks().count(), 1);
+    // The link to it does not.
+    let error = scan(&link).expect_err("a symlinked root must be refused");
+    assert!(
+        error.to_string().contains("vault root"),
+        "the error must say what is wrong: {error}"
+    );
+}
+
+/// Reading is bounded by the open handle, not by a size observed beforehand.
+#[cfg(unix)]
+#[test]
+fn a_file_swapped_for_a_link_after_listing_is_not_followed() {
+    use std::fs;
+    use std::os::unix::fs::symlink;
+
+    let outside = TempDir::new("swap-target");
+    let secret = outside.path().join("secret.md");
+    fs::write(
+        &secret,
+        bookmark_source("s9s9s9s9", "https://secret.example", "Secret"),
+    )
+    .expect("the target");
+
+    let temp = TempDir::new("swap");
+    temp.write(".bbb-folder.md", folder_source("r00tr00t", None));
+    let victim = temp.write(
+        "Victim--v1v2v3v4.md",
+        bookmark_source("v1v2v3v4", "https://example.com", "Victim"),
+    );
+
+    // Stand in for losing the race: by the time the file is opened, the name
+    // resolves to a link. The traversal re-resolves through the directory
+    // handle with no-follow, so this is refused rather than read.
+    fs::remove_file(&victim).expect("removing the victim");
+    symlink(&secret, &victim).expect("swapping in a link");
+
+    let scan = scan(temp.path()).expect("a scan");
+    assert_eq!(scan.bookmarks().count(), 0);
+    assert!(scan.find_bookmark(Id::parse("s9s9s9s9").unwrap()).is_none());
 }
 
 #[test]

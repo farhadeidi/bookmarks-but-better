@@ -4,11 +4,30 @@
 //! ever hints, and a rescan must always be able to rebuild the same tree from
 //! the same bytes. Two runs over identical content therefore produce identical
 //! output, including the order of siblings and of diagnostics.
+//!
+//! # Not following symlinks, safely
+//!
+//! "Do not follow symlinks" cannot be implemented by checking a path and then
+//! opening it: between the check and the open, anything may replace the name
+//! with a link, and the open follows it. That window is the classic TOCTOU
+//! race, and on a directory a user syncs with third-party tools it is not
+//! theoretical.
+//!
+//! So the walk never names a path twice. It holds a directory *handle* and
+//! resolves each child relative to that handle with the no-follow flag set
+//! ([`cap_std`] and [`cap_fs_ext`], which use `openat`/`O_NOFOLLOW` on Unix and
+//! the reparse-point equivalent on Windows). The handle that is checked is the
+//! handle that is read; there is no name to swap in between. Sizes come from
+//! `fstat` on the same open handle, and the read is bounded by the handle
+//! itself rather than by a previously observed length.
 
 use std::collections::HashMap;
-use std::fs;
-use std::io;
-use std::path::{Path, PathBuf};
+use std::io::{self, Read as _};
+use std::path::{Component, Path, PathBuf};
+
+use cap_fs_ext::{DirExt as _, FollowSymlinks, OpenOptionsFollowExt as _};
+use cap_std::ambient_authority;
+use cap_std::fs::{Dir, OpenOptions};
 
 use crate::diagnostic::{Diagnostic, DiagnosticCode};
 use crate::document::{Access, BookmarkFile, FolderFile, ParseError};
@@ -267,10 +286,52 @@ impl VaultScan {
         out
     }
 
-    /// Finds a bookmark by identity, wherever it currently lives.
+    /// Finds the one bookmark with `id`, wherever it currently lives.
+    ///
+    /// Returns `None` when no bookmark claims the identity **and** when more
+    /// than one does. An ambiguous identity has no correct answer, and a lookup
+    /// that guessed would let a write land on whichever copy happened to sort
+    /// first. Use [`VaultScan::bookmarks_claiming`] to show the user the
+    /// conflict.
     #[must_use]
     pub fn find_bookmark(&self, id: Id) -> Option<&BookmarkNode> {
-        self.bookmarks().find(|bookmark| bookmark.id == id)
+        let mut claimants = self.bookmarks_claiming(id).into_iter();
+        let first = claimants.next()?;
+        claimants.next().is_none().then_some(first)
+    }
+
+    /// Every bookmark claiming `id`, in display order.
+    ///
+    /// More than one means the vault is ambiguous; all of them are read-only.
+    #[must_use]
+    pub fn bookmarks_claiming(&self, id: Id) -> Vec<&BookmarkNode> {
+        self.bookmarks()
+            .filter(|bookmark| bookmark.id == id)
+            .collect()
+    }
+
+    /// Finds the one folder with `id`, with the same refusal to guess.
+    #[must_use]
+    pub fn find_folder(&self, id: Id) -> Option<&FolderNode> {
+        let mut claimants = self.folders_claiming(id).into_iter();
+        let first = claimants.next()?;
+        claimants.next().is_none().then_some(first)
+    }
+
+    /// Every folder claiming `id`, in display order.
+    #[must_use]
+    pub fn folders_claiming(&self, id: Id) -> Vec<&FolderNode> {
+        let mut out = Vec::new();
+        collect_folders(&self.folder, &mut out);
+        out.retain(|folder| folder.id == Some(id));
+        out
+    }
+}
+
+fn collect_folders<'a>(folder: &'a FolderNode, out: &mut Vec<&'a FolderNode>) {
+    out.push(folder);
+    for child in &folder.folders {
+        collect_folders(child, out);
     }
 }
 
@@ -295,9 +356,12 @@ fn collect_diagnostics<'a>(folder: &'a FolderNode, out: &mut Vec<&'a Diagnostic>
 ///
 /// # Errors
 ///
-/// Returns an error only when the root itself cannot be read. Problems with
-/// individual files become diagnostics so that one broken note never hides the
-/// rest of the vault.
+/// Returns an error when the root itself cannot be read, and when the root is a
+/// symbolic link or a Windows reparse point: a vault must be a real directory
+/// that the user chose, not an indirection into one.
+///
+/// Problems with individual files inside the vault become diagnostics, so that
+/// one broken note never hides the rest.
 pub fn scan(root: &Path) -> io::Result<VaultScan> {
     scan_with(root, ScanOptions::default())
 }
@@ -308,12 +372,58 @@ pub fn scan(root: &Path) -> io::Result<VaultScan> {
 ///
 /// As [`scan`].
 pub fn scan_with(root: &Path, options: ScanOptions) -> io::Result<VaultScan> {
-    let mut folder = walk(root, String::new(), 0, options)?;
+    let handle = open_vault_root(root)?;
+    let mut folder = walk(&handle, root, String::new(), 0, options)?;
     resolve_duplicate_ids(&mut folder);
     Ok(VaultScan {
         root: root.to_path_buf(),
         folder,
     })
+}
+
+/// Opens the vault root, refusing a root that is itself a link.
+///
+/// Where the root has a parent, the directory is opened *through a handle on
+/// that parent* with the no-follow flag, so the rejection is race-free: there is
+/// no window in which the name could be swapped. A root with no parent (a
+/// filesystem root, or a bare relative name with no parent component) is opened
+/// directly and checked with `symlink_metadata`; that check is not race-free,
+/// but such a root is a deliberately configured, trusted path.
+fn open_vault_root(root: &Path) -> io::Result<Dir> {
+    let has_usable_parent = root
+        .parent()
+        .is_some_and(|parent| !parent.as_os_str().is_empty());
+    let file_name = root.file_name().filter(|_| has_usable_parent);
+    let is_normal_component = root
+        .components()
+        .next_back()
+        .is_some_and(|component| matches!(component, Component::Normal(_)));
+
+    if let (Some(name), true) = (file_name, is_normal_component) {
+        let parent = root.parent().unwrap_or_else(|| Path::new("."));
+        let parent = Dir::open_ambient_dir(parent, ambient_authority())?;
+        return parent.open_dir_nofollow(name).map_err(|error| {
+            io::Error::new(
+                error.kind(),
+                format!(
+                    "the vault root {} could not be opened as a real directory \
+                     (symbolic links and reparse points are refused): {error}",
+                    root.display()
+                ),
+            )
+        });
+    }
+
+    if std::fs::symlink_metadata(root)?.file_type().is_symlink() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            format!(
+                "the vault root {} is a symbolic link; point the vault at the real directory",
+                root.display()
+            ),
+        ));
+    }
+    Dir::open_ambient_dir(root, ambient_authority())
 }
 
 /// What a single directory contributes to the tree while it is being built.
@@ -337,18 +447,19 @@ struct FolderMetadata {
 }
 
 fn walk(
-    directory: &Path,
+    handle: &Dir,
+    path: &Path,
     relative_path: String,
     depth: usize,
     options: ScanOptions,
 ) -> io::Result<FolderNode> {
-    let directory_name = directory.file_name().map_or_else(
-        || directory.display().to_string(),
+    let directory_name = path.file_name().map_or_else(
+        || path.display().to_string(),
         |name| name.to_string_lossy().into_owned(),
     );
 
     let mut contents = Contents::default();
-    for (name, path, file_type) in read_children(directory, &relative_path, &mut contents)? {
+    for (name, file_type) in read_children(handle, &relative_path, &mut contents)? {
         let child_relative = join_relative(&relative_path, &name);
         if file_type.is_symlink() {
             contents.diagnostics.push(
@@ -359,9 +470,17 @@ fn walk(
                 .at_path(&child_relative),
             );
         } else if file_type.is_dir() {
-            visit_directory(&mut contents, &name, &path, &child_relative, depth, options);
+            visit_directory(
+                handle,
+                &mut contents,
+                &name,
+                path,
+                &child_relative,
+                depth,
+                options,
+            );
         } else if file_type.is_file() {
-            visit_file(&mut contents, name, path, child_relative, options);
+            visit_file(handle, &mut contents, name, path, child_relative, options);
         }
     }
 
@@ -402,7 +521,7 @@ fn walk(
     });
 
     Ok(FolderNode {
-        path: directory.to_path_buf(),
+        path: path.to_path_buf(),
         title: metadata
             .as_ref()
             .and_then(|metadata| metadata.title.clone())
@@ -421,14 +540,15 @@ fn walk(
 /// Lists a directory in a stable order.
 ///
 /// `read_dir` order is filesystem-defined, so it is normalised here, before
-/// anything that can emit a diagnostic runs.
+/// anything that can emit a diagnostic runs. File types come from the directory
+/// entry itself and describe the link, never its target.
 fn read_children(
-    directory: &Path,
+    handle: &Dir,
     relative_path: &str,
     contents: &mut Contents,
-) -> io::Result<Vec<(String, PathBuf, fs::FileType)>> {
+) -> io::Result<Vec<(String, cap_std::fs::FileType)>> {
     let mut children = Vec::new();
-    for entry in fs::read_dir(directory)? {
+    for entry in handle.entries()? {
         let entry = entry?;
         let raw_name = entry.file_name();
         let Some(name) = raw_name.to_str() else {
@@ -444,14 +564,14 @@ fn read_children(
             );
             continue;
         };
-        // `DirEntry::file_type` reports the link itself, never its target.
-        children.push((name.to_owned(), entry.path(), entry.file_type()?));
+        children.push((name.to_owned(), entry.file_type()?));
     }
     children.sort_by(|left, right| left.0.cmp(&right.0));
     Ok(children)
 }
 
 fn visit_directory(
+    handle: &Dir,
     contents: &mut Contents,
     name: &str,
     path: &Path,
@@ -480,7 +600,29 @@ fn visit_directory(
         return;
     }
 
-    match walk(path, child_relative.to_owned(), depth + 1, options) {
+    // Re-resolving `name` against the handle with no-follow: if the entry became
+    // a symlink since the listing, this fails rather than escaping the vault.
+    let child_handle = match handle.open_dir_nofollow(name) {
+        Ok(handle) => handle,
+        Err(error) => {
+            contents.diagnostics.push(
+                Diagnostic::new(
+                    DiagnosticCode::UnreadablePath,
+                    format!("the directory could not be opened without following links: {error}"),
+                )
+                .at_path(child_relative),
+            );
+            return;
+        }
+    };
+
+    match walk(
+        &child_handle,
+        &path.join(name),
+        child_relative.to_owned(),
+        depth + 1,
+        options,
+    ) {
         Ok(child) => contents.folders.push(child),
         Err(error) => contents.diagnostics.push(
             Diagnostic::new(
@@ -493,9 +635,10 @@ fn visit_directory(
 }
 
 fn visit_file(
+    handle: &Dir,
     contents: &mut Contents,
     name: String,
-    path: PathBuf,
+    path: &Path,
     child_relative: String,
     options: ScanOptions,
 ) {
@@ -504,7 +647,7 @@ fn visit_file(
         return;
     }
 
-    let bytes = match read_limited(&path, options.max_file_bytes) {
+    let bytes = match read_limited(handle, &name, options.max_file_bytes) {
         Ok(Some(bytes)) => bytes,
         Ok(None) => {
             contents.diagnostics.push(
@@ -523,7 +666,7 @@ fn visit_file(
             contents.diagnostics.push(
                 Diagnostic::new(
                     DiagnosticCode::UnreadablePath,
-                    format!("the file could not be read: {error}"),
+                    format!("the file could not be read without following links: {error}"),
                 )
                 .at_path(&child_relative),
             );
@@ -551,7 +694,7 @@ fn visit_file(
     contents.sibling_names.push(name.clone());
     match BookmarkFile::parse_at(&bytes, Some(&child_relative)) {
         Ok(file) => contents.bookmarks.push(build_bookmark(
-            path,
+            path.join(&name),
             child_relative,
             name,
             &file,
@@ -643,70 +786,100 @@ fn portability_diagnostics(names: &[String], relative_path: &str) -> Vec<Diagnos
     diagnostics
 }
 
-/// Marks every entry after the first that claims an already-used identity.
+/// Marks **every** entry that shares an identity with another as read-only.
 ///
-/// The first entry in traversal order keeps the identity so that repeated scans
-/// of an unchanged vault always pick the same winner.
+/// An earlier version kept the first claimant writable and demoted the rest.
+/// That is wrong: nothing distinguishes the copy from the original, so "first in
+/// traversal order" is an arbitrary winner, and a write aimed at the identity
+/// would silently land on whichever file happened to sort first. When the vault
+/// cannot say which entry an identity means, no entry may be written.
 fn resolve_duplicate_ids(root: &mut FolderNode) {
-    let mut owners: HashMap<Id, String> = HashMap::new();
-    claim_ids(root, &mut owners);
+    let mut claimants: HashMap<Id, Vec<String>> = HashMap::new();
+    collect_claims(root, &mut claimants);
+    claimants.retain(|_, paths| paths.len() > 1);
+    if claimants.is_empty() {
+        return;
+    }
+    for paths in claimants.values_mut() {
+        paths.sort_unstable();
+    }
+    mark_claims(root, &claimants);
 }
 
-fn claim_ids(folder: &mut FolderNode, owners: &mut HashMap<Id, String>) {
+fn collect_claims(folder: &FolderNode, claimants: &mut HashMap<Id, Vec<String>>) {
     if let Some(id) = folder.id {
-        let relative_path = folder.relative_path.clone();
-        match owners.get(&id) {
-            Some(owner) if *owner != relative_path => {
-                folder
-                    .diagnostics
-                    .push(duplicate_id(id, owner, &relative_path));
-                folder.access = Access::ReadOnly;
-            }
-            Some(_) => {}
-            None => {
-                owners.insert(id, relative_path);
-            }
-        }
+        claimants
+            .entry(id)
+            .or_default()
+            .push(display_path(&folder.relative_path).to_owned());
+    }
+    for bookmark in &folder.bookmarks {
+        claimants
+            .entry(bookmark.id)
+            .or_default()
+            .push(bookmark.relative_path.clone());
+    }
+    for child in &folder.folders {
+        collect_claims(child, claimants);
+    }
+}
+
+fn mark_claims(folder: &mut FolderNode, claimants: &HashMap<Id, Vec<String>>) {
+    if let Some(paths) = folder
+        .id
+        .and_then(|id| claimants.get(&id).map(|paths| (id, paths)))
+    {
+        let (id, paths) = paths;
+        let own = display_path(&folder.relative_path).to_owned();
+        folder.diagnostics.push(duplicate_id(id, paths, &own));
+        folder.access = Access::ReadOnly;
     }
     for bookmark in &mut folder.bookmarks {
-        let id = bookmark.id;
-        match owners.get(&id) {
-            Some(owner) if *owner != bookmark.relative_path => {
-                let diagnostic = duplicate_id(id, owner, &bookmark.relative_path);
-                bookmark.diagnostics.push(diagnostic);
-                bookmark.access = Access::ReadOnly;
-            }
-            Some(_) => {}
-            None => {
-                owners.insert(id, bookmark.relative_path.clone());
-            }
+        if let Some(paths) = claimants.get(&bookmark.id) {
+            let own = bookmark.relative_path.clone();
+            let diagnostic = duplicate_id(bookmark.id, paths, &own);
+            bookmark.diagnostics.push(diagnostic);
+            bookmark.access = Access::ReadOnly;
         }
     }
     for child in &mut folder.folders {
-        claim_ids(child, owners);
+        mark_claims(child, claimants);
     }
 }
 
-fn duplicate_id(id: Id, owner: &str, relative_path: &str) -> Diagnostic {
+fn duplicate_id(id: Id, claimants: &[String], own: &str) -> Diagnostic {
+    let others: Vec<&str> = claimants
+        .iter()
+        .map(String::as_str)
+        .filter(|path| *path != own)
+        .collect();
     Diagnostic::new(
         DiagnosticCode::DuplicateId,
         format!(
-            "the identity `{id}` is already used by `{}`",
-            display_path(owner)
+            "the identity `{id}` is also claimed by `{}`; every entry claiming it is read-only \
+             until exactly one keeps it",
+            others.join("`, `")
         ),
     )
-    .at_path(relative_path)
+    .at_path(own)
 }
 
 /// The deterministic sibling order from the vault specification: folders first
 /// (enforced by keeping the two lists apart), then case-folded title, then the
 /// vault-relative path as a tiebreaker.
 ///
-/// The title comparison is Unicode-aware simple lowercasing followed by code
-/// point order. It is not locale collation, so `Éclair` sorts after `Zebra`
-/// rather than next to `Eclair`; real collation needs a Unicode collation table
-/// and is not worth a dependency for a rule whose only hard requirement is that
-/// it never changes between runs.
+/// Titles are compared by their canonical caseless fold (see
+/// [`crate::fold_key`]), which ignores case, folds `ß` to `ss`, and decomposes
+/// accents — so `Éclair` sorts between `apple` and `Zebra` rather than after
+/// every ASCII name, and two spellings of the same title always land in the same
+/// place.
+///
+/// It is still not locale collation: the fold orders the decomposed code points,
+/// so it will not match a Swedish speaker's expectation that `ö` sorts after
+/// `z`, and it has no language-specific tailoring. Full collation needs a
+/// Unicode collation table and a locale, neither of which a format core has.
+/// What it does guarantee is that the order never changes between runs,
+/// platforms or spellings.
 fn order_key(title: &str, relative_path: &str) -> (String, String) {
     (fold_key(title), relative_path.to_owned())
 }
@@ -745,12 +918,23 @@ fn display_path(relative_path: &str) -> &str {
     }
 }
 
-/// Reads a file, returning `None` when it exceeds `limit`.
-fn read_limited(path: &Path, limit: u64) -> io::Result<Option<Vec<u8>>> {
-    // `symlink_metadata` rather than `metadata`: the entry has already been
-    // checked, but a race must not turn into a followed link.
-    if fs::symlink_metadata(path)?.len() > limit {
+/// Reads `name` from `handle` without following links, returning `None` when the
+/// file exceeds `limit`.
+///
+/// The size limit is enforced by reading at most `limit + 1` bytes from the open
+/// handle rather than by trusting a size observed beforehand: a file that grows
+/// between the two is then bounded anyway, and there is no second path
+/// resolution to race against.
+fn read_limited(handle: &Dir, name: &str, limit: u64) -> io::Result<Option<Vec<u8>>> {
+    let file = handle.open_with(
+        name,
+        OpenOptions::new().read(true).follow(FollowSymlinks::No),
+    )?;
+    let ceiling = limit.saturating_add(1);
+    let mut bytes = Vec::new();
+    file.take(ceiling).read_to_end(&mut bytes)?;
+    if u64::try_from(bytes.len()).unwrap_or(u64::MAX) > limit {
         return Ok(None);
     }
-    fs::read(path).map(Some)
+    Ok(Some(bytes))
 }

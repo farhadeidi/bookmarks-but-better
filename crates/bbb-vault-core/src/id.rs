@@ -13,6 +13,16 @@ pub const ID_ALPHABET: &str = "0123456789abcdefghijklmnopqrstuvwxyz";
 /// The exact number of characters in an [`Id`].
 pub const ID_LENGTH: usize = 8;
 
+/// The number of distinct identities: `36^8`, a little under 2^42.
+const ID_SPACE: u64 = 2_821_109_907_456;
+
+/// How many times [`Id::generate_unique`] retries before giving up.
+///
+/// A caller that hits this has either exhausted the identity space or supplied
+/// a predicate that rejects everything; both are bugs worth surfacing rather
+/// than looping forever.
+pub const MAX_GENERATION_ATTEMPTS: usize = 64;
+
 /// A stable identity for a bookmark or a folder.
 ///
 /// The identity lives in front matter, never in the path, so it survives
@@ -56,33 +66,59 @@ impl Id {
         core::str::from_utf8(&self.0).expect("an Id only ever holds ASCII bytes")
     }
 
-    /// Generates a fresh identity.
+    /// Generates a fresh identity from operating-system randomness.
     ///
-    /// Entropy comes from [`std::collections::hash_map::RandomState`], which the
-    /// standard library seeds from the operating system, mixed with the current
-    /// time and a process-local counter so that identities generated in the same
-    /// nanosecond still differ. This is a uniqueness source, not a security
-    /// primitive: the vault enforces actual uniqueness by reporting duplicate
-    /// identities as a diagnostic.
-    #[must_use]
-    pub fn generate() -> Self {
-        use std::collections::hash_map::RandomState;
-        use std::hash::{BuildHasher, Hasher};
-        use std::sync::atomic::{AtomicU64, Ordering};
-        use std::time::{SystemTime, UNIX_EPOCH};
+    /// Entropy comes from [`getrandom`], which reads the platform's own
+    /// cryptographically secure generator (`getrandom(2)` on Linux,
+    /// `getentropy` on the BSDs and macOS, `ProcessPrng` on Windows). Draws
+    /// outside the largest whole multiple of the identity space are rejected and
+    /// redrawn, so every identity is equally likely.
+    ///
+    /// This says nothing about *uniqueness*: with roughly 2^42 identities the
+    /// birthday bound puts a first collision around two million entries. Use
+    /// [`Id::generate_unique`] whenever the identities already in use are known,
+    /// and treat the [`crate::DiagnosticCode::DuplicateId`] diagnostic as the
+    /// backstop.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`IdGenerationError::Entropy`] when the operating system refuses
+    /// to supply randomness. Callers must not fall back to a weaker source: a
+    /// vault with predictable identities is worse than a vault with none.
+    pub fn generate() -> Result<Self, IdGenerationError> {
+        // Only accept from the largest whole multiple of `ID_SPACE`, so the
+        // modulo in `from_seed` stays uniform. The rejected tail is about one
+        // draw in five million.
+        let limit = (u64::MAX / ID_SPACE) * ID_SPACE;
+        let mut buffer = [0u8; 8];
+        loop {
+            getrandom::fill(&mut buffer).map_err(IdGenerationError::Entropy)?;
+            let drawn = u64::from_le_bytes(buffer);
+            if drawn < limit {
+                return Ok(Self::from_seed(drawn));
+            }
+        }
+    }
 
-        static COUNTER: AtomicU64 = AtomicU64::new(0);
-
-        let nanos = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .ok()
-            .and_then(|elapsed| u64::try_from(elapsed.as_nanos() & u128::from(u64::MAX)).ok())
-            .unwrap_or_default();
-
-        let mut hasher = RandomState::new().build_hasher();
-        hasher.write_u64(COUNTER.fetch_add(1, Ordering::Relaxed));
-        hasher.write_u64(nanos);
-        Self::from_seed(hasher.finish())
+    /// Generates a fresh identity that `is_taken` rejects, retrying on collision.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`IdGenerationError::Entropy`] when the operating system refuses
+    /// to supply randomness, and [`IdGenerationError::Exhausted`] when
+    /// [`MAX_GENERATION_ATTEMPTS`] fresh identities were all rejected.
+    pub fn generate_unique(
+        mut is_taken: impl FnMut(Self) -> bool,
+    ) -> Result<Self, IdGenerationError> {
+        for _ in 0..MAX_GENERATION_ATTEMPTS {
+            let candidate = Self::generate()?;
+            if !is_taken(candidate) {
+                return Ok(candidate);
+            }
+        }
+        Err(IdGenerationError::Exhausted {
+            attempts: MAX_GENERATION_ATTEMPTS,
+        })
     }
 
     /// Derives an identity from a 64-bit seed.
@@ -140,9 +176,45 @@ impl fmt::Display for IdError {
 
 impl Error for IdError {}
 
+/// Why a fresh identity could not be produced.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum IdGenerationError {
+    /// The operating system refused to supply randomness.
+    Entropy(getrandom::Error),
+    /// Every attempt collided with an identity already in use.
+    Exhausted {
+        /// How many identities were drawn and rejected.
+        attempts: usize,
+    },
+}
+
+impl fmt::Display for IdGenerationError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Entropy(error) => {
+                write!(f, "the operating system supplied no randomness: {error}")
+            }
+            Self::Exhausted { attempts } => write!(
+                f,
+                "no free identity was found after {attempts} attempts; the vault may be corrupt"
+            ),
+        }
+    }
+}
+
+impl Error for IdGenerationError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match self {
+            Self::Entropy(error) => Some(error),
+            Self::Exhausted { .. } => None,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{ID_LENGTH, Id, IdError};
+    use super::{ID_LENGTH, Id, IdError, IdGenerationError, MAX_GENERATION_ATTEMPTS};
     use std::collections::HashSet;
 
     #[test]
@@ -188,7 +260,7 @@ mod tests {
     fn generated_identities_are_well_formed_and_distinct() {
         let mut seen = HashSet::new();
         for _ in 0..10_000 {
-            let id = Id::generate();
+            let id = Id::generate().expect("the operating system has randomness");
             assert_eq!(id.as_str().len(), ID_LENGTH);
             assert_eq!(Id::parse(id.as_str()), Ok(id));
             seen.insert(id);
@@ -196,5 +268,26 @@ mod tests {
         // A handful of collisions would still be tolerable, but anything close
         // to the birthday bound would mean the entropy source regressed.
         assert!(seen.len() > 9_990, "only {} distinct ids", seen.len());
+    }
+
+    #[test]
+    fn generation_retries_past_identities_already_in_use() {
+        let mut taken = HashSet::new();
+        for _ in 0..200 {
+            let id =
+                Id::generate_unique(|candidate| taken.contains(&candidate)).expect("a free id");
+            assert!(taken.insert(id), "generate_unique returned a used identity");
+        }
+    }
+
+    #[test]
+    fn generation_gives_up_rather_than_looping_forever() {
+        let error = Id::generate_unique(|_| true).expect_err("every candidate was rejected");
+        assert_eq!(
+            error,
+            IdGenerationError::Exhausted {
+                attempts: MAX_GENERATION_ATTEMPTS
+            }
+        );
     }
 }

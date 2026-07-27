@@ -7,6 +7,8 @@
 
 use std::collections::HashSet;
 
+use unicode_normalization::UnicodeNormalization;
+
 use crate::id::Id;
 
 /// Maximum size, in bytes, of the human-readable part of a vault name.
@@ -39,9 +41,15 @@ const INVISIBLE: [char; 11] = [
 /// Reduces a display title to a portable, human-readable path component.
 ///
 /// Forbidden and invisible characters become `-`, runs of whitespace become a
-/// single space, leading and trailing separators and dots are removed, and the
-/// result is truncated to [`MAX_STEM_BYTES`] on a character boundary. A title
-/// that sanitizes to nothing yields `untitled`.
+/// single space, leading and trailing separators and dots are removed, the text
+/// is normalized to NFC, and the result is truncated to [`MAX_STEM_BYTES`] on a
+/// character boundary. A title that sanitizes to nothing yields `untitled`.
+///
+/// Normalizing to NFC matters because the same name can be spelled two ways:
+/// `é` is one code point precomposed and two decomposed, and a vault that mixes
+/// them produces two directory entries a human reads as identical. NFC is what
+/// Linux and Windows store and what macOS returns from APFS, so it is the form
+/// that survives a copy between them.
 ///
 /// The result is *not* case-folded and non-ASCII characters are preserved:
 /// vault names stay readable in the user's own language.
@@ -74,9 +82,8 @@ pub fn sanitize_title(title: &str) -> String {
         out.push(character);
     }
 
-    let trimmed = trim_edges(&out);
-    let truncated = truncate_bytes(trimmed, MAX_STEM_BYTES);
-    let trimmed = trim_edges(truncated);
+    let normalized: String = trim_edges(&out).nfc().collect();
+    let trimmed = trim_edges(truncate_bytes(&normalized, MAX_STEM_BYTES));
     if trimmed.is_empty() {
         FALLBACK_STEM.to_owned()
     } else {
@@ -139,12 +146,22 @@ pub fn parse_bookmark_file_name(name: &str) -> Option<(&str, Id)> {
 /// macOS and Windows treat `React` and `react` as the same name, so the vault
 /// treats them that way everywhere rather than only on those platforms.
 ///
-/// The fold is Unicode-aware simple lowercasing. It does not normalize
-/// composition, so `é` and `é` remain distinct; that difference is reported as
-/// an ordinary collision if it ever reaches the filesystem.
+/// This is the Unicode *canonical caseless match* key — `NFD(fold(NFD(name)))`
+/// — using full case folding from the Unicode character database. Two things
+/// follow that simple lowercasing gets wrong:
+///
+/// * `Straße` and `STRASSE` fold to the same key, because full folding expands
+///   `ß` to `ss`. `str::to_lowercase` leaves `ß` alone and would call them
+///   different names.
+/// * Precomposed and decomposed spellings of the same text fold together, so a
+///   vault written on macOS and a vault written on Linux agree.
+///
+/// The key is an opaque comparison and ordering value; it is never written to
+/// disk.
 #[must_use]
 pub fn fold_key(name: &str) -> String {
-    name.to_lowercase()
+    let decomposed: String = name.nfd().collect();
+    caseless::default_case_fold_str(&decomposed).nfd().collect()
 }
 
 /// Hands out path components that do not collide with each other.
@@ -404,8 +421,51 @@ mod tests {
     }
 
     #[test]
-    fn fold_key_is_unicode_aware() {
+    fn fold_key_applies_full_case_folding() {
+        // Full folding expands `ß` to `ss`; simple lowercasing does not, and
+        // would let these two coexist in one directory.
+        assert_eq!(fold_key("Straße"), fold_key("STRASSE"));
+        assert_eq!(fold_key("Straße"), fold_key("strasse"));
         assert_eq!(fold_key("STRASSE"), "strasse");
-        assert_eq!(fold_key("Ärger"), "ärger");
+        assert_ne!(fold_key("Straße"), fold_key("Strase"));
+
+        // Turkish dotted/dotless I folds the way Unicode's default (not the
+        // Turkish tailored) mapping says it should.
+        assert_eq!(fold_key("I"), fold_key("i"));
+        assert_ne!(fold_key("I"), fold_key("\u{131}"));
+    }
+
+    #[test]
+    fn fold_key_ignores_composition() {
+        let precomposed = "\u{e9}clair";
+        let decomposed = "e\u{301}clair";
+        assert_ne!(precomposed, decomposed, "the inputs really do differ");
+        assert_eq!(fold_key(precomposed), fold_key(decomposed));
+        assert_eq!(fold_key("\u{c9}CLAIR"), fold_key(decomposed));
+
+        // Hangul, which normalizes by algorithm rather than by table.
+        assert_eq!(fold_key("\u{ac01}"), fold_key("\u{1100}\u{1161}\u{11a8}"));
+    }
+
+    #[test]
+    fn sanitized_names_are_normalized_to_nfc() {
+        assert_eq!(sanitize_title("e\u{301}clair"), "\u{e9}clair");
+        assert_eq!(sanitize_title("\u{e9}clair"), "\u{e9}clair");
+        // Normalization happens before truncation, so a decomposed title cannot
+        // be cut between a base character and its combining mark.
+        let long = "e\u{301}".repeat(200);
+        let sanitized = sanitize_title(&long);
+        assert!(sanitized.len() <= MAX_STEM_BYTES);
+        assert!(sanitized.chars().all(|character| character == '\u{e9}'));
+    }
+
+    #[test]
+    fn allocator_separates_names_that_only_look_alike() {
+        let mut allocator = NameAllocator::new();
+        assert_eq!(allocator.allocate_folder("Stra\u{df}e"), "Stra\u{df}e");
+        // Would silently merge with the first on macOS and Windows.
+        assert_eq!(allocator.allocate_folder("STRASSE"), "STRASSE-2");
+        assert_eq!(allocator.allocate_folder("e\u{301}clair"), "\u{e9}clair");
+        assert_eq!(allocator.allocate_folder("\u{c9}CLAIR"), "\u{c9}CLAIR-2");
     }
 }

@@ -74,20 +74,22 @@
 
 mod diagnostic;
 mod document;
-mod hash;
 mod id;
 mod naming;
 mod revision;
 mod scan;
 mod timestamp;
 mod yaml;
+mod yaml_check;
 
 pub use crate::diagnostic::{Diagnostic, DiagnosticCode, Severity};
 pub use crate::document::{
     Access, BookmarkFile, BookmarkUpdate, FolderFile, FolderUpdate, KEY_CREATED, KEY_ID, KEY_LOGO,
     KEY_TITLE, KEY_UPDATED, KEY_URL, ParseError, UpdateError, render_bookmark, render_folder,
 };
-pub use crate::id::{ID_ALPHABET, ID_LENGTH, Id, IdError};
+pub use crate::id::{
+    ID_ALPHABET, ID_LENGTH, Id, IdError, IdGenerationError, MAX_GENERATION_ATTEMPTS,
+};
 pub use crate::naming::{
     MAX_STEM_BYTES, NameAllocator, assets_directory_name, bookmark_file_name, fold_key,
     folder_directory_name, is_reserved_stem, parse_bookmark_file_name, sanitize_title,

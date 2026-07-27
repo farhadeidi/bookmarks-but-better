@@ -450,6 +450,18 @@ fn malformed_documents_are_rejected_with_an_actionable_diagnostic() {
             DiagnosticCode::UnsupportedValue,
             Some(4),
         ),
+        // Unknown YAML the byte scanner never interprets, but that no other
+        // reader can parse either.
+        (
+            "documents/invalid/malformed-collection.md",
+            DiagnosticCode::MalformedYaml,
+            Some(8),
+        ),
+        (
+            "documents/invalid/degraded.md",
+            DiagnosticCode::DuplicateKey,
+            Some(7),
+        ),
         (
             "documents/invalid/bad-id.md",
             DiagnosticCode::InvalidId,
@@ -494,7 +506,7 @@ fn ordinary_markdown_is_not_a_bookmark() {
 
 #[test]
 fn a_degraded_document_stays_writable_and_explains_itself() {
-    let bytes = read_fixture("documents/invalid/degraded.md");
+    let bytes = read_fixture("documents/degraded-writable.md");
     let file = BookmarkFile::parse(&bytes).expect("degraded but parsable");
     assert_eq!(file.access(), Access::ReadWrite);
     assert_eq!(file.title(), None);
@@ -507,7 +519,6 @@ fn a_degraded_document_stays_writable_and_explains_itself() {
     assert_eq!(
         codes,
         [
-            DiagnosticCode::DuplicateKey,
             DiagnosticCode::MissingRequiredField,
             DiagnosticCode::InvalidTimestamp,
             DiagnosticCode::ReservedKeyUnknown,
@@ -529,6 +540,83 @@ fn a_degraded_document_stays_writable_and_explains_itself() {
     assert_eq!(repaired.created(), Some("2026-01-01T00:00:00Z"));
     assert_eq!(repaired.updated(), Some("2026-01-02T00:00:00Z"));
     assert!(String::from_utf8_lossy(&written).contains("bbb_extra: reserved but unknown"));
+}
+
+/// Unknown front matter is user data the vault preserves, but only when it is
+/// front matter at all. A block that no conformant YAML reader accepts, or that
+/// answers a key two different ways, cannot be written to safely.
+#[test]
+fn ambiguous_or_unparsable_unknown_yaml_makes_a_document_read_only() {
+    let cases: &[(&str, DiagnosticCode)] = &[
+        // A duplicated *unknown* key: readers disagree about which value wins.
+        (
+            "documents/invalid/degraded.md",
+            DiagnosticCode::DuplicateKey,
+        ),
+        // An unterminated flow sequence under a key the vault never touches.
+        (
+            "documents/invalid/malformed-collection.md",
+            DiagnosticCode::MalformedYaml,
+        ),
+    ];
+    for (fixture, code) in cases {
+        let bytes = read_fixture(fixture);
+        let error = BookmarkFile::parse(&bytes).expect_err(fixture);
+        assert_eq!(error.code(), *code, "{fixture}");
+        assert_eq!(
+            error.to_diagnostic(*fixture).severity(),
+            Severity::Error,
+            "{fixture}"
+        );
+        assert!(error.line().is_some(), "{fixture} must name a line");
+    }
+}
+
+/// The same strictness, stated directly against the byte scanner's blind spots.
+///
+/// Each of these uses a construct the byte scanner records as opaque bytes and
+/// never interprets. Only the conformant parser can tell the harmless ones from
+/// the ones no reader could agree on.
+#[test]
+fn unknown_keys_are_preserved_only_when_they_are_valid_yaml() {
+    let head = "---\nbbb_id: a1b2c3d4\nbbb_url: https://example.com\nbbb_title: Fine\n\
+                bbb_created: 2026-01-01T00:00:00Z\nbbb_updated: 2026-01-01T00:00:00Z\n";
+
+    // Valid but exotic unknown values stay untouched and the document is usable.
+    let usable = format!("{head}anchors: &a [1, 2]\nalias: *a\nblock: |\n  text\n---\n");
+    let file = BookmarkFile::parse(usable.as_bytes()).expect("valid YAML");
+    assert_eq!(file.access(), Access::ReadWrite);
+    // …and a write still leaves every one of those bytes alone.
+    let written = file
+        .apply(usable.as_bytes(), &BookmarkUpdate::new().title("Renamed"))
+        .expect("writable");
+    let text = String::from_utf8(written).expect("valid UTF-8");
+    assert!(
+        text.contains("anchors: &a [1, 2]\nalias: *a\nblock: |\n  text\n"),
+        "{text}"
+    );
+
+    let broken: &[(&str, DiagnosticCode)] = &[
+        // A dangling alias: syntactically fine to the byte scanner, rejected by
+        // any real reader.
+        ("alias: *nowhere\n", DiagnosticCode::MalformedYaml),
+        // A flow mapping that is never closed.
+        ("map: {a: 1\n", DiagnosticCode::MalformedYaml),
+        // An unterminated flow sequence.
+        ("tags: [a, b\n", DiagnosticCode::MalformedYaml),
+        // A duplicate nested under an unknown key is just as ambiguous as one
+        // at the top level.
+        ("outer:\n  k: 1\n  k: 2\n", DiagnosticCode::DuplicateKey),
+        // A duplicated unknown key at the top level.
+        ("tags: one\ntags: two\n", DiagnosticCode::DuplicateKey),
+    ];
+    for (tail, code) in broken {
+        let source = format!("{head}{tail}---\n");
+        match BookmarkFile::parse(source.as_bytes()) {
+            Err(error) => assert_eq!(error.code(), *code, "{tail:?}"),
+            Ok(_) => panic!("{tail:?} should have been refused"),
+        }
+    }
 }
 
 #[test]
