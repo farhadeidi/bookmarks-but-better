@@ -1,5 +1,9 @@
 import { create } from "zustand"
-import type { BookmarkNode, BrowserAdapter } from "@/browser"
+import type {
+  BookmarkDiagnostic,
+  BookmarkNode,
+  BrowserAdapter,
+} from "@/browser"
 import { debounce } from "@/lib/bookmark-utils"
 
 export type BookmarkStoreStatus = "loading" | "ready" | "unavailable"
@@ -9,30 +13,65 @@ export type BookmarkStoreStatus = "loading" | "ready" | "unavailable"
  * importing it directly, so this store stays adapter-agnostic — other
  * adapters' errors are plain `Error`s and fall through to the generic path.
  *
- * The specific `code`/`status` values checked here (409 for a revision
- * conflict, "read_only" for a read-only rejection) are this slice's
- * assumption about what the daemon will send; they haven't been confirmed
- * against a real daemon yet.
+ * `code` is the daemon's stable `application/problem+json` code (see
+ * `crates/bbb/src/problem.rs::ProblemCode` in the daemon repo) — switched on
+ * directly rather than on HTTP status, since several distinct codes share a
+ * status (e.g. `stale_revision`, `folder_not_empty`, `ambiguous_id`, and
+ * `subtree_changed` are all 409s with different meanings).
  */
 interface KnownApiErrorShape {
-  status?: number
   code?: string
   detail?: string
+}
+
+function withDetail(lead: string, detail?: string): string {
+  return detail ? `${lead} ${detail}` : lead
 }
 
 function toErrorMessage(error: unknown): string {
   if (!(error instanceof Error)) return "Something went wrong."
 
   const shape = error as Error & KnownApiErrorShape
-  if (shape.code === "read_only") {
-    return shape.detail
-      ? `This item is read-only: ${shape.detail}`
-      : "This item is read-only and can't be edited."
+  switch (shape.code) {
+    case "stale_revision":
+      return withDetail(
+        "This item changed elsewhere. Refresh and try again.",
+        shape.detail
+      )
+    case "subtree_changed":
+      return withDetail(
+        "This folder changed while being deleted. Rescan and try again.",
+        shape.detail
+      )
+    case "subtree_has_unknown_files":
+      return withDetail(
+        "This folder contains files the vault doesn't manage, so deleting it isn't safe.",
+        shape.detail
+      )
+    case "folder_not_empty":
+      return withDetail(
+        "This folder isn't empty. Delete it recursively to remove its contents too.",
+        shape.detail
+      )
+    case "ambiguous_id":
+      return withDetail(
+        "More than one item matches this reference.",
+        shape.detail
+      )
+    case "read_only":
+      return withDetail(
+        "This item is read-only and can't be edited.",
+        shape.detail
+      )
+    case "partial_failure":
+      return withDetail("The change was only partly applied.", shape.detail)
+    default:
+      return error.message
   }
-  if (shape.status === 409) {
-    return "This item changed elsewhere. Refresh and try again."
-  }
-  return error.message
+}
+
+function describeHealthWarnings(warnings: BookmarkDiagnostic[]): string {
+  return warnings.map((warning) => warning.detail).join(" ")
 }
 
 async function loadTree(adapter: BrowserAdapter): Promise<BookmarkNode[]> {
@@ -41,7 +80,7 @@ async function loadTree(adapter: BrowserAdapter): Promise<BookmarkNode[]> {
     if (!health.ready) {
       throw new Error(
         health.warnings?.length
-          ? health.warnings.join(" ")
+          ? describeHealthWarnings(health.warnings)
           : "The daemon is not ready."
       )
     }

@@ -52,7 +52,8 @@ export interface BookmarkAdapter {
 
 export interface AdapterHealth {
   ready: boolean
-  warnings?: string[]
+  /** Vault-wide diagnostics, same shape as a node's own `diagnostics`. */
+  warnings?: BookmarkDiagnostic[]
 }
 
 export interface StorageAdapter {

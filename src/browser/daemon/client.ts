@@ -1,4 +1,4 @@
-import type { BookmarkNode } from "../types"
+import type { BookmarkDiagnostic, BookmarkNode } from "../types"
 
 const API_BASE = "/api/v1"
 const DEFAULT_TIMEOUT_MS = 10_000
@@ -30,6 +30,13 @@ export class DaemonApiError extends Error {
   }
 }
 
+/**
+ * The daemon's `application/problem+json` shape. `code` is one of:
+ * `not_found`, `route_not_found`, `invalid_request`, `stale_revision`,
+ * `read_only`, `invalid_value`, `folder_not_empty`, `ambiguous_id`,
+ * `subtree_has_unknown_files`, `subtree_changed`, `partial_failure`,
+ * `move_into_self`, `host_not_allowed`, `vault_unavailable`.
+ */
 interface ProblemJson {
   type?: string
   title?: string
@@ -108,7 +115,7 @@ export interface DaemonHealth {
   status: string
   version?: string
   generation?: number
-  warnings?: string[]
+  warnings?: BookmarkDiagnostic[]
 }
 
 export function fetchHealth(): Promise<DaemonHealth> {

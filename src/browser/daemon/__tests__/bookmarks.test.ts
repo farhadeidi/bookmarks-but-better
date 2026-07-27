@@ -190,18 +190,37 @@ describe("DaemonBookmarkAdapter", () => {
     expect(client.moveNode).not.toHaveBeenCalled()
   })
 
-  it("move() targets /bookmarks/:id with no kind argument, sending only revision and parentId", async () => {
+  it("move() targets /bookmarks/:id with no kind argument, sending only revision and parentId, and refreshes the cache from the response", async () => {
     vi.mocked(client.fetchTree).mockResolvedValue({ tree: [root] })
     const adapter = new DaemonBookmarkAdapter()
     await adapter.getTree()
 
-    vi.mocked(client.moveNode).mockResolvedValue(undefined)
+    // The daemon's move handler returns the moved entry's BookmarkDto (a
+    // real 200 body, not an empty 204) — that's what the cache refreshes from.
+    vi.mocked(client.moveNode).mockResolvedValue({
+      ...root,
+      parentId: "folder-other",
+      revision: "rev-root-moved",
+    })
     // Move the *folder* "root" — proves move() doesn't route by kind either.
     await adapter.move("root", { parentId: "folder-other", index: 3 })
 
     expect(client.moveNode).toHaveBeenCalledWith("root", {
       revision: "rev-root",
       parentId: "folder-other",
+    })
+
+    // Proof the cache refreshed: a follow-up update must send the *new*
+    // revision from the move response, not the pre-move one.
+    vi.mocked(client.updateNode).mockResolvedValue({
+      ...root,
+      title: "Renamed after move",
+      revision: "rev-root-moved-2",
+    })
+    await adapter.update("root", { title: "Renamed after move" })
+    expect(client.updateNode).toHaveBeenCalledWith("root", {
+      revision: "rev-root-moved",
+      title: "Renamed after move",
     })
   })
 
@@ -237,16 +256,23 @@ describe("DaemonBookmarkAdapter", () => {
     )
   })
 
-  it("checkHealth() reports readiness and passes through warnings", async () => {
+  it("checkHealth() reports readiness and passes through warnings as diagnostic objects", async () => {
+    const warnings = [
+      {
+        code: "unreadable_path",
+        severity: "error",
+        detail: "3 files could not be parsed.",
+      },
+    ]
     vi.mocked(client.fetchHealth).mockResolvedValue({
       status: "degraded",
-      warnings: ["3 files could not be parsed."],
+      warnings,
     })
     const adapter = new DaemonBookmarkAdapter()
 
     await expect(adapter.checkHealth?.()).resolves.toEqual({
       ready: false,
-      warnings: ["3 files could not be parsed."],
+      warnings,
     })
   })
 

@@ -38,7 +38,7 @@ describe("BookmarkOrganizerRow read-only affordances", () => {
       readOnly: true,
       diagnostics: [
         {
-          code: "invalid_frontmatter",
+          code: "invalid_id",
           severity: "error",
           detail: "bbb_id is missing.",
         },

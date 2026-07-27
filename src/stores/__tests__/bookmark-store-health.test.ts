@@ -32,11 +32,23 @@ function baseAdapter(
 }
 
 describe("bookmark-store health-gated readiness", () => {
-  it("retry() treats an unready health check as unavailable, surfacing its warnings, without calling getTree()", async () => {
+  it("retry() treats an unready health check as unavailable, joining warnings' `detail` — never rendering [object Object]", async () => {
     const getTree = vi.fn().mockResolvedValue([])
     const checkHealth = vi.fn().mockResolvedValue({
       ready: false,
-      warnings: ["Vault is being rescanned."],
+      warnings: [
+        {
+          code: "missing_folder_metadata",
+          severity: "warning",
+          detail: "Vault is being rescanned.",
+          path: "notes",
+        },
+        {
+          code: "unreadable_path",
+          severity: "error",
+          detail: "notes/broken.md could not be read.",
+        },
+      ],
     })
     const adapter = baseAdapter({ getTree, checkHealth })
     useBookmarkStore.setState({ adapter, status: "loading", loadError: null })
@@ -47,8 +59,9 @@ describe("bookmark-store health-gated readiness", () => {
     expect(getTree).not.toHaveBeenCalled()
     expect(useBookmarkStore.getState().status).toBe("unavailable")
     expect(useBookmarkStore.getState().loadError).toBe(
-      "Vault is being rescanned."
+      "Vault is being rescanned. notes/broken.md could not be read."
     )
+    expect(useBookmarkStore.getState().loadError).not.toContain("[object")
   })
 
   it("retry() proceeds to getTree() once health reports ready", async () => {
