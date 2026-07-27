@@ -8,7 +8,7 @@ mutation, watching, and the HTTP contract.
 ## Commands
 
 ```sh
-bbb init   --vault <path>                 # write the root .bbb-folder.md
+bbb init   --vault <path>                 # write the root .bbb-folder.md and .bbb-state.json
 bbb doctor --vault <path>                 # read-only report; non-zero if unhealthy
 bbb rescan --vault <path>                 # offline rescan and summary
 bbb serve  --vault <path> \
@@ -35,12 +35,13 @@ stable `code`.
 | `GET`    | `/health`                | `{status, version, generation, warnings}`        |
 | `GET`    | `/tree`                  | `{tree: [root]}` — one root holding the subtree   |
 | `GET`    | `/bookmarks/{id}`        | one entry                                         |
-| `POST`   | `/bookmarks`             | `{parentId, title, url?}`; no `url` ⇒ folder      |
+| `POST`   | `/bookmarks`             | `{parentId, title, url?, index?, parentStateRevision?}`; no `url` ⇒ folder |
 | `PATCH`  | `/bookmarks/{id}`        | `{revision, title?, url?}`                        |
-| `DELETE` | `/bookmarks/{id}`        | `?revision=…`                                     |
-| `POST`   | `/bookmarks/{id}/move`   | `{revision, parentId}`                            |
-| `POST`   | `/folders`               | `{parentId, title}`                               |
-| `DELETE` | `/folders/{id}`          | `?revision=…[&recursive=true]`; see below          |
+| `DELETE` | `/bookmarks/{id}`        | `?revision=…[&parentStateRevision=…]`             |
+| `POST`   | `/bookmarks/{id}/move`   | `{revision, parentId, index?, sourceStateRevision?, destinationStateRevision?}` |
+| `POST`   | `/folders`               | `{parentId, title, index?, parentStateRevision?}` |
+| `DELETE` | `/folders/{id}`          | `?revision=…[&parentStateRevision=…][&recursive=true]`; see below |
+| `PUT`    | `/folders/{id}/order`    | `{stateRevision?, children:[{id, kind}]}`; see below |
 | `POST`   | `/rescan`                | `{generation, changed, warnings}`                 |
 | `GET`    | `/events`                | SSE; `changed` events carrying `{"generation":N}` |
 
@@ -55,6 +56,8 @@ stable `code`.
   "children": [],             // folders only
   "dateAdded": 1767225600000, // epoch milliseconds, parsed from bbb_created
   "revision": "9f2c…",        // send this back with the next mutation
+  "stateRevision": "4b7e…",   // folders only; send back with anything that changes what it holds
+  "orderReadOnly": true,      // folders only; present when the order cannot be rewritten
   "readOnly": true,           // present only when the entry must not be written
   "diagnostics": [ … ]        // present only when there is something to say
 }
@@ -76,16 +79,72 @@ stable `code`.
 | `read_only`         | 422    | the entry has an error diagnostic, or no identity |
 | `invalid_value`     | 422    | the value cannot be stored in the format        |
 | `move_into_self`    | 422    | a folder cannot contain itself                  |
+| `stale_state_revision` | 409 | the folder's child order changed; reload and retry |
+| `invalid_order`     | 422    | the order is not a permutation, or an index is past the end |
+| `state_read_only`   | 422    | the folder's `.bbb-state.json` must not be overwritten |
 | `vault_unavailable` | 500    | the vault could not be read or written          |
 | `partial_failure`   | 500    | a multi-step change failed and could not be undone |
 | `unsupported_operation` | 501 | the platform lacks a primitive the operation needs |
+
+### Ordering children
+
+Each managed folder owns a `.bbb-state.json` recording the order its children
+are in, bookmarks and sub-folders together. The filesystem stays authoritative
+for *membership*; the file only ever says what order things are in.
+
+`PUT /folders/{id}/order` takes the complete permutation — every direct child
+that has a stable identity, exactly once, with the right `kind` — rather than a
+patch, because a partial order has no single correct completion. Sending the
+order a folder is already in writes nothing, changes no revision, and produces
+no event.
+
+`index` on a create or a move counts the children exactly as `GET /tree` gives
+them, from zero; the end when omitted.
+
+`stateRevision` is required only where it means something. A request that says
+*where* — an `index`, or a `PUT .../order` — is checked against the revision it
+names, and refused with `stale_state_revision` if it does not send one, because
+a position only means something against a particular arrangement. A request
+that appends or removes by identity means the same thing whatever order the
+folder is in, so it may leave the revision out and the daemon resolves the
+current one itself under the write gate; a client written before ordering
+existed therefore keeps working unchanged. A revision that *is* sent is always
+checked strictly.
+
+A folder with no order file yet — one made before this feature, or in a file
+manager — is shown in the deterministic *migration order*: folders first, then
+by `bbb_created` and stable identity, and finally any directory with no
+`.bbb-folder.md`. It gains a real order file the first time a change needs one,
+pinning what was already on screen. That first write is a real change and does
+advance the revision; every later request for an order the folder already has
+writes nothing.
+
+**Migration note.** Before this feature siblings were sorted by folded title.
+They are now sorted as above, so an existing vault's default order changes once,
+the first time it is scanned by this build. Nothing on disk is rewritten to
+achieve it, and `bbb init` on an existing vault pins whatever order is being
+shown at that moment.
+
+A directory with no `.bbb-folder.md` has no stable identity, so no order file
+can name it and nothing can move it. Those sit in a block at the end whose
+position never changes — managed entries reorder above them — and an `index`
+that would fall after one is refused with `invalid_order` rather than quietly
+landing somewhere else.
+
+A file this build cannot fully account for (an unknown key, one identity listed
+twice, an unreadable document, a version from the future, or a name held by a
+directory, a link or a case-variant sibling) is **never rewritten**.
+Where it can still be read it is still honoured for ordering; positional
+requests against it return `state_read_only`, and creating, renaming, moving and
+deleting all keep working. `bbb doctor` names every folder in that state.
 
 ### Deleting a folder
 
 `recursive=true` deletes a subtree only when every file in it is one the vault
 manages — a `.bbb-folder.md`, a scanned bookmark, or a file inside a scanned
-bookmark's `.assets` directory — and every one of those bookmarks still holds
-the bytes the request was planned against.
+bookmark's `.assets` directory, a nested `.bbb-folder.md` or a nested
+`.bbb-state.json` — and every one of those files still holds the bytes the
+request was planned against.
 
 A stray `notes.txt`, an `.obsidian` directory, a symbolic link, or a bookmark an
 editor touched a moment ago each stop the delete with a 409. There is no

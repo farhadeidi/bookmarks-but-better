@@ -8,7 +8,7 @@
 //! Optional fields are omitted rather than sent as `null`, so a response never
 //! carries a key that means nothing.
 
-use bbb_vault_core::{Access, BookmarkNode, Diagnostic, FolderNode, VaultScan};
+use bbb_vault_core::{Access, BookmarkNode, ChildNode, Diagnostic, FolderNode, VaultScan};
 use serde::{Deserialize, Serialize};
 
 use crate::clock;
@@ -45,6 +45,21 @@ pub struct BookmarkDto {
     /// `.bbb-folder.md` has no revision to be stale against.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub revision: Option<String>,
+    /// The revision of the folder's child order file, to send back with the
+    /// next change to what this folder holds or the order it holds it in.
+    ///
+    /// Absent on bookmarks, and on a folder that has no order file yet — in
+    /// which case a request must send nothing rather than invent one, and the
+    /// daemon writes the first one as part of the change.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub state_revision: Option<String>,
+    /// `true` when this folder's order file must not be rewritten, so
+    /// positional requests against it are refused; omitted otherwise.
+    ///
+    /// Distinct from `readOnly`: the folder itself is perfectly writable, and
+    /// entries can still be created, renamed and deleted inside it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub order_read_only: Option<bool>,
     /// `true` when the entry must not be written; omitted when it may be.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub read_only: Option<bool>,
@@ -119,6 +134,27 @@ pub struct RescanResponse {
     pub warnings: Vec<DiagnosticDto>,
 }
 
+/// Where a new or moved entry goes, and the proof it may go there.
+///
+/// `parent_state_revision` is the caller's evidence that it was looking at the
+/// folder's current order when it chose `index`. It is required exactly when
+/// the folder has an order file: without it a stale UI could place an entry
+/// third in a list that has since gained two more.
+///
+/// Not itself deserialised — `#[serde(flatten)]` and `deny_unknown_fields` are
+/// mutually exclusive, and refusing a misspelled field matters more than
+/// spelling these two out three times.
+#[derive(Debug, Clone, Default)]
+pub struct Placement {
+    /// Where among the folder's children the entry goes, counted from zero.
+    ///
+    /// `None` means the end, which is what a client that does not care about
+    /// order sends.
+    pub index: Option<usize>,
+    /// The revision of the destination folder's order file.
+    pub parent_state_revision: Option<String>,
+}
+
 /// The body of `POST /api/v1/bookmarks`.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -131,6 +167,12 @@ pub struct CreateBookmarkRequest {
     /// bookmark APIs the web UI is written against.
     #[serde(default)]
     pub url: Option<String>,
+    /// Where among the parent's children to put it; the end when omitted.
+    #[serde(default)]
+    pub index: Option<usize>,
+    /// The revision of the parent's order file, required once it has one.
+    #[serde(default)]
+    pub parent_state_revision: Option<String>,
 }
 
 /// The body of `POST /api/v1/folders`.
@@ -141,6 +183,43 @@ pub struct CreateFolderRequest {
     pub parent_id: String,
     /// The display title.
     pub title: String,
+    /// Where among the parent's children to put it; the end when omitted.
+    #[serde(default)]
+    pub index: Option<usize>,
+    /// The revision of the parent's order file, required once it has one.
+    #[serde(default)]
+    pub parent_state_revision: Option<String>,
+}
+
+/// The body of `PUT /api/v1/folders/:id/order`.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct OrderRequest {
+    /// The revision of the folder's order file, or absent when it has none.
+    ///
+    /// Absent is a claim in its own right — "this folder had no order file when
+    /// I looked" — and is refused if one has appeared since.
+    #[serde(default)]
+    pub state_revision: Option<String>,
+    /// Every direct child of the folder, in the order they should be in.
+    ///
+    /// This is a complete permutation, not a patch: a request that omits a
+    /// child, invents one, or names one twice is refused rather than guessed
+    /// at, because a partial order has no single correct completion.
+    pub children: Vec<OrderChild>,
+}
+
+/// One entry in a requested child order.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct OrderChild {
+    /// The child's stable identity.
+    pub id: String,
+    /// Whether it is a `bookmark` or a `folder`.
+    ///
+    /// Sent, and checked, so that a client working from a stale tree cannot
+    /// silently reorder a directory it believed was a bookmark.
+    pub kind: String,
 }
 
 /// The body of `PATCH /api/v1/bookmarks/:id`.
@@ -159,6 +238,11 @@ pub struct UpdateRequest {
 }
 
 /// The body of `POST /api/v1/bookmarks/:id/move`.
+///
+/// A move changes two folders' membership, so it carries two order revisions.
+/// A move *within* one folder is purely positional and carries one: send it as
+/// either `sourceStateRevision` or `destinationStateRevision`, or as both with
+/// the same value, since they name the same file.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct MoveRequest {
@@ -166,6 +250,15 @@ pub struct MoveRequest {
     pub revision: String,
     /// The destination folder.
     pub parent_id: String,
+    /// Where among the destination's children to put it; the end when omitted.
+    #[serde(default)]
+    pub index: Option<usize>,
+    /// The revision of the order file of the folder the entry is leaving.
+    #[serde(default)]
+    pub source_state_revision: Option<String>,
+    /// The revision of the order file of the folder the entry is joining.
+    #[serde(default)]
+    pub destination_state_revision: Option<String>,
 }
 
 /// The query string of the two `DELETE` routes.
@@ -174,6 +267,10 @@ pub struct MoveRequest {
 pub struct DeleteQuery {
     /// The revision the caller last saw.
     pub revision: String,
+    /// The revision of the parent folder's order file, required once it has
+    /// one: removing an entry changes the recorded order too.
+    #[serde(default)]
+    pub parent_state_revision: Option<String>,
     /// Whether a folder that still has children may be deleted with them.
     ///
     /// Defaults to `false`: deleting a subtree is a separate, explicit request,
@@ -191,6 +288,8 @@ pub(crate) fn bookmark_dto(node: &BookmarkNode, parent: Option<EntryRef>) -> Boo
         children: None,
         date_added: node.created().and_then(clock::epoch_millis),
         revision: Some(node.revision().to_string()),
+        state_revision: None,
+        order_read_only: None,
         read_only: read_only_flag(node.access()),
         diagnostics: diagnostics_dto(node.diagnostics()),
     }
@@ -198,16 +297,17 @@ pub(crate) fn bookmark_dto(node: &BookmarkNode, parent: Option<EntryRef>) -> Boo
 
 pub(crate) fn folder_dto(node: &FolderNode, parent: Option<EntryRef>) -> BookmarkDto {
     let own = folder_ref(node);
-    let mut children: Vec<BookmarkDto> = node
-        .folders()
+    // One mixed list, in the order the scan resolved. Splitting it back into
+    // folders-then-bookmarks here would throw away the ordering the whole
+    // state file exists to record.
+    let children: Vec<BookmarkDto> = node
+        .children()
         .iter()
-        .map(|child| folder_dto(child, Some(own.clone())))
+        .map(|child| match child {
+            ChildNode::Folder(child) => folder_dto(child, Some(own.clone())),
+            ChildNode::Bookmark(child) => bookmark_dto(child, Some(own.clone())),
+        })
         .collect();
-    children.extend(
-        node.bookmarks()
-            .iter()
-            .map(|child| bookmark_dto(child, Some(own.clone()))),
-    );
 
     BookmarkDto {
         id: own,
@@ -217,6 +317,8 @@ pub(crate) fn folder_dto(node: &FolderNode, parent: Option<EntryRef>) -> Bookmar
         children: Some(children),
         date_added: None,
         revision: node.revision().map(|revision| revision.to_string()),
+        state_revision: node.state_revision().map(|revision| revision.to_string()),
+        order_read_only: (!node.state_access().is_writable()).then_some(true),
         // A directory with no `.bbb-folder.md` is unwritable even though the
         // format core rates the missing file only a warning. The core is right
         // about the *file* — nothing is corrupt — but the API cannot offer a

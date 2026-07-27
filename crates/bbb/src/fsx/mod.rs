@@ -404,6 +404,31 @@ fn commit(
     Ok(())
 }
 
+/// Durably writes `bytes` to `name`, whether or not it is already there.
+///
+/// This is deliberately *not* bound to a previously validated file, and it has
+/// exactly one caller: undoing a write this process made moments ago, where
+/// what is currently at the name is our own output and putting the original
+/// back is the whole point. Every write that lands on a file the user could
+/// have touched goes through [`replace_validated`] instead.
+///
+/// # Errors
+///
+/// Returns the underlying I/O error.
+pub(crate) fn write_replacing(dir: &Dir, name: &str, bytes: &[u8]) -> io::Result<()> {
+    guard(name)?;
+    let Ok(current) = read_with_identity(dir, name) else {
+        return create_new(dir, name, bytes);
+    };
+    replace_validated(dir, name, bytes, &current).map_err(|error| match error {
+        CommitError::Io(error) | CommitError::UndoFailed { cause: error, .. } => error,
+        CommitError::Stale => io::Error::new(
+            io::ErrorKind::AlreadyExists,
+            "the file changed while it was being put back",
+        ),
+    })
+}
+
 /// Removes a file or link through `dir`, never following it.
 ///
 /// # Errors

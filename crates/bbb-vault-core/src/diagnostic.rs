@@ -84,6 +84,19 @@ pub enum DiagnosticCode {
     UnreadablePath,
     /// A name does not survive being copied to another platform.
     NonPortableName,
+    /// The folder's `.bbb-state.json` could not be read at all.
+    StateUnreadable,
+    /// The folder's `.bbb-state.json` is not the JSON the schema defines.
+    StateMalformed,
+    /// The folder's `.bbb-state.json` declares an unknown schema version.
+    StateUnsupportedVersion,
+    /// The folder's `.bbb-state.json` holds something this build must not
+    /// rewrite: an unknown key, or one identity listed twice.
+    StateNotRewritable,
+    /// The state names a child as one kind and the directory holds the other.
+    StateWrongKind,
+    /// The state names a child the directory does not hold.
+    StateMissingChild,
 }
 
 impl DiagnosticCode {
@@ -113,6 +126,12 @@ impl DiagnosticCode {
             Self::MaxDepthExceeded => "max_depth_exceeded",
             Self::UnreadablePath => "unreadable_path",
             Self::NonPortableName => "non_portable_name",
+            Self::StateUnreadable => "state_unreadable",
+            Self::StateMalformed => "state_malformed",
+            Self::StateUnsupportedVersion => "state_unsupported_version",
+            Self::StateNotRewritable => "state_not_rewritable",
+            Self::StateWrongKind => "state_wrong_kind",
+            Self::StateMissingChild => "state_missing_child",
         }
     }
 
@@ -121,6 +140,14 @@ impl DiagnosticCode {
     /// Severity is a property of the code rather than of the call site, so that
     /// the same problem never renders as read-only in one place and writable in
     /// another.
+    ///
+    /// Every `state_*` code is a warning, and deliberately so. A child order
+    /// file the daemon cannot rewrite says nothing about the folder's identity
+    /// or about the bookmarks inside it: renaming, creating and deleting all
+    /// remain perfectly safe, and only *positional* changes have to be refused.
+    /// Making these errors would take the whole folder read-only over a file
+    /// that holds no user content at all. What actually blocks a reorder is
+    /// [`crate::StateAccess`], which the scan reports separately.
     #[must_use]
     pub const fn severity(self) -> Severity {
         match self {
@@ -145,7 +172,13 @@ impl DiagnosticCode {
             | Self::MissingFolderMetadata
             | Self::SymlinkSkipped
             | Self::MaxDepthExceeded
-            | Self::NonPortableName => Severity::Warning,
+            | Self::NonPortableName
+            | Self::StateUnreadable
+            | Self::StateMalformed
+            | Self::StateUnsupportedVersion
+            | Self::StateNotRewritable
+            | Self::StateWrongKind
+            | Self::StateMissingChild => Severity::Warning,
         }
     }
 }
@@ -262,6 +295,12 @@ mod tests {
             DiagnosticCode::MaxDepthExceeded,
             DiagnosticCode::UnreadablePath,
             DiagnosticCode::NonPortableName,
+            DiagnosticCode::StateUnreadable,
+            DiagnosticCode::StateMalformed,
+            DiagnosticCode::StateUnsupportedVersion,
+            DiagnosticCode::StateNotRewritable,
+            DiagnosticCode::StateWrongKind,
+            DiagnosticCode::StateMissingChild,
         ];
         let mut names: Vec<&str> = codes.iter().map(|code| code.as_str()).collect();
         names.sort_unstable();

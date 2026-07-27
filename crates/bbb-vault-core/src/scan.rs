@@ -5,6 +5,21 @@
 //! the same bytes. Two runs over identical content therefore produce identical
 //! output, including the order of siblings and of diagnostics.
 //!
+//! # Where the order comes from
+//!
+//! A folder's children are one mixed list ([`ChildNode`]), because a user who
+//! drags a bookmark above a sub-folder means exactly that and two per-kind
+//! lists cannot express it. Their order is:
+//!
+//! * the order recorded in the folder's `.bbb-state.json`, for every child that
+//!   file names and the directory actually holds; then
+//! * every remaining child, in the deterministic *migration order* — folders
+//!   first, then by `bbb_created` and stable identity.
+//!
+//! Membership stays the filesystem's business. The state file only ever says
+//! what order things are in; it can never add a child that is not there, and a
+//! child it does not mention still appears.
+//!
 //! # Not following symlinks, safely
 //!
 //! "Do not follow symlinks" cannot be implemented by checking a path and then
@@ -34,6 +49,8 @@ use crate::document::{Access, BookmarkFile, FolderFile, ParseError};
 use crate::id::Id;
 use crate::naming::{fold_key, is_reserved_stem, parse_bookmark_file_name};
 use crate::revision::Revision;
+use crate::state::{ChildKind, FolderState, STATE_FILE_NAME, StateError};
+use crate::timestamp::is_rfc3339;
 
 /// The metadata file that gives a directory its stable identity.
 ///
@@ -173,6 +190,107 @@ impl BookmarkNode {
     }
 }
 
+/// One child of a folder, in the folder's display order.
+///
+/// Order is a property of the *folder*, not of the two kinds separately: a user
+/// who drags a bookmark above a sub-folder means exactly that. So the scan
+/// produces one mixed list, and the per-kind views below are filters over it
+/// rather than the storage.
+#[derive(Debug, Clone)]
+pub enum ChildNode {
+    /// A sub-folder.
+    Folder(FolderNode),
+    /// A bookmark.
+    Bookmark(BookmarkNode),
+}
+
+impl ChildNode {
+    /// The stable identity, absent only for a directory with no metadata.
+    #[must_use]
+    pub const fn id(&self) -> Option<Id> {
+        match self {
+            Self::Folder(node) => node.id(),
+            Self::Bookmark(node) => Some(node.id()),
+        }
+    }
+
+    /// Which kind of entry this is.
+    #[must_use]
+    pub const fn kind(&self) -> ChildKind {
+        match self {
+            Self::Folder(_) => ChildKind::Folder,
+            Self::Bookmark(_) => ChildKind::Bookmark,
+        }
+    }
+
+    /// The display title.
+    #[must_use]
+    pub fn title(&self) -> &str {
+        match self {
+            Self::Folder(node) => node.title(),
+            Self::Bookmark(node) => node.title(),
+        }
+    }
+
+    /// The vault-relative, `/`-separated path.
+    #[must_use]
+    pub fn relative_path(&self) -> &str {
+        match self {
+            Self::Folder(node) => node.relative_path(),
+            Self::Bookmark(node) => node.relative_path(),
+        }
+    }
+
+    /// The sub-folder, when this child is one.
+    #[must_use]
+    pub const fn as_folder(&self) -> Option<&FolderNode> {
+        match self {
+            Self::Folder(node) => Some(node),
+            Self::Bookmark(_) => None,
+        }
+    }
+
+    /// The bookmark, when this child is one.
+    #[must_use]
+    pub const fn as_bookmark(&self) -> Option<&BookmarkNode> {
+        match self {
+            Self::Bookmark(node) => Some(node),
+            Self::Folder(_) => None,
+        }
+    }
+}
+
+/// Whether a folder's recorded child order may be rewritten.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum StateAccess {
+    /// The folder has no `.bbb-state.json` yet, so one is written the first
+    /// time an ordering change needs it.
+    Absent,
+    /// The state is canonical and may be rewritten.
+    ReadWrite,
+    /// The state holds something this build cannot reproduce, so it is honoured
+    /// for ordering as far as it can be read and never written back.
+    ReadOnly,
+}
+
+impl StateAccess {
+    /// A stable machine-readable name.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Absent => "absent",
+            Self::ReadWrite => "read_write",
+            Self::ReadOnly => "read_only",
+        }
+    }
+
+    /// Whether an ordering change may write this folder's state.
+    #[must_use]
+    pub const fn is_writable(self) -> bool {
+        matches!(self, Self::Absent | Self::ReadWrite)
+    }
+}
+
 /// One directory found on disk.
 #[derive(Debug, Clone)]
 pub struct FolderNode {
@@ -184,8 +302,9 @@ pub struct FolderNode {
     revision: Option<Revision>,
     access: Access,
     diagnostics: Vec<Diagnostic>,
-    folders: Vec<FolderNode>,
-    bookmarks: Vec<BookmarkNode>,
+    children: Vec<ChildNode>,
+    state_revision: Option<Revision>,
+    state_access: StateAccess,
 }
 
 impl FolderNode {
@@ -238,16 +357,40 @@ impl FolderNode {
         &self.diagnostics
     }
 
-    /// Child directories, in display order.
+    /// Every child, bookmarks and sub-folders together, in display order.
+    ///
+    /// This is the authoritative order: the recorded one where the folder has a
+    /// usable `.bbb-state.json`, and the deterministic migration order where it
+    /// does not. See [`scan`].
     #[must_use]
-    pub fn folders(&self) -> &[FolderNode] {
-        &self.folders
+    pub fn children(&self) -> &[ChildNode] {
+        &self.children
+    }
+
+    /// Child directories, in display order.
+    pub fn folders(&self) -> impl Iterator<Item = &FolderNode> {
+        self.children.iter().filter_map(ChildNode::as_folder)
     }
 
     /// Child bookmarks, in display order.
+    pub fn bookmarks(&self) -> impl Iterator<Item = &BookmarkNode> {
+        self.children.iter().filter_map(ChildNode::as_bookmark)
+    }
+
+    /// The content revision of `.bbb-state.json`, when it exists and is
+    /// readable.
+    ///
+    /// This is what an ordering request carries back, and what makes a
+    /// concurrent reorder a conflict rather than a silent overwrite.
     #[must_use]
-    pub fn bookmarks(&self) -> &[BookmarkNode] {
-        &self.bookmarks
+    pub const fn state_revision(&self) -> Option<Revision> {
+        self.state_revision
+    }
+
+    /// Whether the recorded child order may be rewritten.
+    #[must_use]
+    pub const fn state_access(&self) -> StateAccess {
+        self.state_access
     }
 }
 
@@ -330,24 +473,24 @@ impl VaultScan {
 
 fn collect_folders<'a>(folder: &'a FolderNode, out: &mut Vec<&'a FolderNode>) {
     out.push(folder);
-    for child in &folder.folders {
+    for child in folder.folders() {
         collect_folders(child, out);
     }
 }
 
 fn collect_bookmarks<'a>(folder: &'a FolderNode, out: &mut Vec<&'a BookmarkNode>) {
-    for child in &folder.folders {
+    for child in folder.folders() {
         collect_bookmarks(child, out);
     }
-    out.extend(folder.bookmarks.iter());
+    out.extend(folder.bookmarks());
 }
 
 fn collect_diagnostics<'a>(folder: &'a FolderNode, out: &mut Vec<&'a Diagnostic>) {
     out.extend(folder.diagnostics.iter());
-    for child in &folder.folders {
+    for child in folder.folders() {
         collect_diagnostics(child, out);
     }
-    for bookmark in &folder.bookmarks {
+    for bookmark in folder.bookmarks() {
         out.extend(bookmark.diagnostics.iter());
     }
 }
@@ -433,6 +576,8 @@ struct Contents {
     folders: Vec<FolderNode>,
     bookmarks: Vec<BookmarkNode>,
     metadata: Option<FolderMetadata>,
+    /// The folder's recorded child order, as it was found on disk.
+    state: Option<StateFile>,
     /// Every child name that competes for a slot in this directory, used for the
     /// portability checks.
     sibling_names: Vec<String>,
@@ -443,6 +588,19 @@ struct FolderMetadata {
     id: Id,
     title: Option<String>,
     revision: Revision,
+    diagnostics: Vec<Diagnostic>,
+}
+
+/// The `.bbb-state.json` a directory holds, however usable it turned out to be.
+#[derive(Debug)]
+struct StateFile {
+    /// The recorded order, absent when the file could not be read at all.
+    state: Option<FolderState>,
+    /// The revision of the bytes, absent when they could not be read.
+    revision: Option<Revision>,
+    /// Set when the file must never be rewritten.
+    frozen: bool,
+    /// What was wrong with it, if anything.
     diagnostics: Vec<Diagnostic>,
 }
 
@@ -459,8 +617,21 @@ fn walk(
     );
 
     let mut contents = Contents::default();
+    // A sibling that folds to the order file's name without being it. The two
+    // coexist here and are one file on macOS and Windows, so an order file
+    // written now would not survive the vault being copied there. Recorded and
+    // applied after the walk, so it wins over whatever was read.
+    let mut folded_collision: Option<String> = None;
+
     for (name, file_type) in read_children(handle, &relative_path, &mut contents)? {
         let child_relative = join_relative(&relative_path, &name);
+        if name != STATE_FILE_NAME && fold_key(&name) == fold_key(STATE_FILE_NAME) {
+            folded_collision = Some(name.clone());
+        }
+        if let Some(state) = occupied_state(&name, file_type, &child_relative) {
+            contents.state = Some(state);
+            continue;
+        }
         if file_type.is_symlink() {
             contents.diagnostics.push(
                 Diagnostic::new(
@@ -509,16 +680,30 @@ fn walk(
         diagnostics.extend(metadata.diagnostics.iter().cloned());
     }
 
-    let mut folders = contents.folders;
-    let mut bookmarks = contents.bookmarks;
-    folders.sort_by(|left, right| {
-        order_key(&left.title, &left.relative_path)
-            .cmp(&order_key(&right.title, &right.relative_path))
+    let state = folded_collision.map_or(contents.state, |other| {
+        Some(unreadable_state(
+            &join_relative(&relative_path, STATE_FILE_NAME),
+            &format!(
+                "`{other}` differs from the child order file's name only by case, so the two \
+                 would be one file on macOS and Windows; no order is read or written here until \
+                 one of them is renamed"
+            ),
+        ))
     });
-    bookmarks.sort_by(|left, right| {
-        order_key(&left.title, &left.relative_path)
-            .cmp(&order_key(&right.title, &right.relative_path))
-    });
+    if let Some(state) = &state {
+        diagnostics.extend(state.diagnostics.iter().cloned());
+    }
+
+    let mut disorderly = false;
+    let children = order_children(
+        contents.folders,
+        contents.bookmarks,
+        state.as_ref().and_then(|state| state.state.as_ref()),
+        &relative_path,
+        &mut diagnostics,
+        &mut disorderly,
+    );
+    let state_access = state_access_of(state.as_ref(), disorderly);
 
     Ok(FolderNode {
         path: path.to_path_buf(),
@@ -532,9 +717,232 @@ fn walk(
         revision: metadata.as_ref().map(|metadata| metadata.revision),
         access: access_of(&diagnostics),
         diagnostics,
-        folders,
-        bookmarks,
+        children,
+        state_revision: state.as_ref().and_then(|state| state.revision),
+        state_access,
     })
+}
+
+/// Puts one directory's children into the order the vault says they are in.
+///
+/// Three rules, in this order, and each of them is about not losing anything:
+///
+/// * Children the state names, in the order it names them. That is the whole
+///   point of the file.
+/// * Children on disk the state does not name, appended in migration order.
+///   The filesystem is authoritative for membership, so a file dropped into the
+///   folder by any other tool shows up — after everything already placed, so it
+///   cannot disturb an order the user chose.
+/// * Children the state names that are not on disk are skipped, with a warning.
+///   They are not pruned from the file: a bookmark that is missing right now is
+///   very often one a sync client has not delivered yet.
+///
+/// `disorderly` is set when the state disagrees with the disk about a child's
+/// kind, which is one of the conditions that makes the file unwritable.
+fn order_children(
+    folders: Vec<FolderNode>,
+    bookmarks: Vec<BookmarkNode>,
+    state: Option<&FolderState>,
+    relative_path: &str,
+    diagnostics: &mut Vec<Diagnostic>,
+    disorderly: &mut bool,
+) -> Vec<ChildNode> {
+    let mut available: Vec<Option<ChildNode>> = folders
+        .into_iter()
+        .map(ChildNode::Folder)
+        .chain(bookmarks.into_iter().map(ChildNode::Bookmark))
+        .map(Some)
+        .collect();
+    available
+        .sort_by_cached_key(|child| migration_key(child.as_ref().expect("every slot is filled")));
+
+    let Some(state) = state else {
+        return available.into_iter().flatten().collect();
+    };
+
+    // An identity two entries on disk both claim has no single answer, so the
+    // state cannot place either of them; both fall through to the appended
+    // group, where their order comes from the deterministic migration key. The
+    // duplicate itself is already reported as an error elsewhere.
+    let mut by_id: HashMap<Id, Option<usize>> = HashMap::new();
+    for (index, child) in available.iter().enumerate() {
+        if let Some(id) = child.as_ref().and_then(ChildNode::id) {
+            by_id
+                .entry(id)
+                .and_modify(|slot| *slot = None)
+                .or_insert(Some(index));
+        }
+    }
+
+    let mut ordered = Vec::with_capacity(available.len());
+    for listed in state.children() {
+        let Some(Some(index)) = by_id.get(&listed.id()).copied() else {
+            diagnostics.push(
+                Diagnostic::new(
+                    DiagnosticCode::StateMissingChild,
+                    format!(
+                        "the child order names `{}`, which this folder does not hold; it is kept \
+                         in the file in case it comes back",
+                        listed.id()
+                    ),
+                )
+                .at_path(display_path(relative_path)),
+            );
+            continue;
+        };
+        let Some(child) = available[index].take() else {
+            // Already placed: the duplicate case, which parsing reported.
+            continue;
+        };
+        if child.kind() != listed.kind() {
+            diagnostics.push(
+                Diagnostic::new(
+                    DiagnosticCode::StateWrongKind,
+                    format!(
+                        "the child order calls `{}` a {} and this folder holds a {}; the entry is \
+                         shown in migration order and the file is not rewritten",
+                        listed.id(),
+                        listed.kind(),
+                        child.kind()
+                    ),
+                )
+                .at_path(display_path(relative_path)),
+            );
+            *disorderly = true;
+            available[index] = Some(child);
+            continue;
+        }
+        ordered.push(child);
+    }
+
+    ordered.extend(available.into_iter().flatten());
+    ordered
+}
+
+/// The order a folder with no usable recorded order is shown in.
+///
+/// Folders come before bookmarks, matching the vault's long-standing sibling
+/// order. Within each group the key is the creation timestamp the entry itself
+/// carries — the only evidence of intent that survives a directory being copied
+/// around — and then the stable identity, so the result never depends on the
+/// filesystem's listing order, the platform, or the title.
+///
+/// The timestamp is compared as text, and only when it is valid RFC 3339. That
+/// is chronological for the `Z` form this vault writes, and merely stable for a
+/// hand-written offset; stable is what determinism needs.
+fn migration_key(child: &ChildNode) -> (u8, u8, bool, String, String, String) {
+    let (rank, created) = match child {
+        ChildNode::Folder(_) => (0, None),
+        ChildNode::Bookmark(node) => (1, node.created().filter(|text| is_rfc3339(text))),
+    };
+    (
+        // A directory with no `.bbb-folder.md` has no identity, so no order
+        // file can ever name it and nothing can move it. Sorting those into a
+        // trailing block of their own is what makes their position *stable*:
+        // it is the same before any order file exists and after every rewrite,
+        // so managed entries reorder above them without shifting them, and an
+        // index into the list a client is looking at means what it says.
+        u8::from(child.id().is_none()),
+        rank,
+        created.is_none(),
+        created.unwrap_or_default().to_owned(),
+        child
+            .id()
+            .map_or_else(String::new, |id| id.as_str().to_owned()),
+        child.relative_path().to_owned(),
+    )
+}
+
+/// Whether a folder's recorded order may be rewritten.
+fn state_access_of(state: Option<&StateFile>, disorderly: bool) -> StateAccess {
+    match state {
+        None => StateAccess::Absent,
+        Some(state) if state.frozen || disorderly || state.revision.is_none() => {
+            StateAccess::ReadOnly
+        }
+        Some(_) => StateAccess::ReadWrite,
+    }
+}
+
+/// Reports a child order file's name being held by something unreadable.
+///
+/// A link, a directory, a socket: none of them is a document, and none of them
+/// may be written through or over. The folder keeps its migration order and
+/// stops being orderable until a person moves the occupant out of the way —
+/// which is a clear refusal, rather than a write that would either fail
+/// obscurely or clobber something.
+fn occupied_state(
+    name: &str,
+    file_type: cap_std::fs::FileType,
+    relative_path: &str,
+) -> Option<StateFile> {
+    if name != STATE_FILE_NAME || file_type.is_file() {
+        return None;
+    }
+    let detail = if file_type.is_symlink() {
+        "the child order file is a symbolic link, which is never followed or written through"
+    } else if file_type.is_dir() {
+        "a directory occupies the child order file's name, so no order can be read or written here"
+    } else {
+        "the child order file's name is held by something that is not a regular file, so no order \
+         can be read or written here"
+    };
+    Some(unreadable_state(relative_path, detail))
+}
+
+/// A state file that exists and cannot be read, for whatever reason.
+fn unreadable_state(relative_path: &str, detail: &str) -> StateFile {
+    StateFile {
+        state: None,
+        revision: None,
+        frozen: true,
+        diagnostics: vec![
+            Diagnostic::new(DiagnosticCode::StateUnreadable, detail.to_owned())
+                .at_path(relative_path),
+        ],
+    }
+}
+
+/// Interprets the bytes of one `.bbb-state.json`.
+fn read_state(bytes: &[u8], relative_path: &str) -> StateFile {
+    let revision = Revision::of(bytes);
+    match FolderState::parse(bytes) {
+        Ok((state, freeze)) => StateFile {
+            state: Some(state),
+            revision: Some(revision),
+            frozen: freeze.is_some(),
+            diagnostics: freeze
+                .map(|freeze| {
+                    Diagnostic::new(DiagnosticCode::StateNotRewritable, freeze.detail())
+                        .at_path(relative_path)
+                })
+                .into_iter()
+                .collect(),
+        },
+        Err(error) => {
+            let code = match error {
+                StateError::Malformed(_) => DiagnosticCode::StateMalformed,
+                StateError::UnsupportedVersion(_) => DiagnosticCode::StateUnsupportedVersion,
+            };
+            StateFile {
+                state: None,
+                // The bytes were read, so the revision is real; it is what a
+                // client sends back once the file has been repaired.
+                revision: Some(revision),
+                frozen: true,
+                diagnostics: vec![
+                    Diagnostic::new(
+                        code,
+                        format!(
+                            "{error}; this folder keeps its migration order and cannot be \
+                             reordered until the file is fixed or removed"
+                        ),
+                    )
+                    .at_path(relative_path),
+                ],
+            }
+        }
+    }
 }
 
 /// Lists a directory in a stable order.
@@ -643,13 +1051,30 @@ fn visit_file(
     options: ScanOptions,
 ) {
     let is_folder_file = name == FOLDER_FILE_NAME;
-    if !is_folder_file && (name.starts_with('.') || !has_markdown_extension(&name)) {
+    let is_state_file = name == STATE_FILE_NAME;
+    if !is_folder_file
+        && !is_state_file
+        && (name.starts_with('.') || !has_markdown_extension(&name))
+    {
         return;
     }
 
     let bytes = match read_limited(handle, &name, options.max_file_bytes) {
         Ok(Some(bytes)) => bytes,
         Ok(None) => {
+            if is_state_file {
+                // A child order file that big is not one this build wrote, so
+                // it is left exactly as found rather than truncated or
+                // replaced.
+                contents.state = Some(unreadable_state(
+                    &child_relative,
+                    &format!(
+                        "the child order file is larger than the {} byte limit and was not read",
+                        options.max_file_bytes
+                    ),
+                ));
+                return;
+            }
             contents.diagnostics.push(
                 Diagnostic::new(
                     DiagnosticCode::FileTooLarge,
@@ -663,6 +1088,13 @@ fn visit_file(
             return;
         }
         Err(error) => {
+            if is_state_file {
+                contents.state = Some(unreadable_state(
+                    &child_relative,
+                    &format!("the child order file could not be read: {error}"),
+                ));
+                return;
+            }
             contents.diagnostics.push(
                 Diagnostic::new(
                     DiagnosticCode::UnreadablePath,
@@ -673,6 +1105,11 @@ fn visit_file(
             return;
         }
     };
+
+    if is_state_file {
+        contents.state = Some(read_state(&bytes, &child_relative));
+        return;
+    }
 
     if is_folder_file {
         match FolderFile::parse_at(&bytes, Some(&child_relative)) {
@@ -813,14 +1250,14 @@ fn collect_claims(folder: &FolderNode, claimants: &mut HashMap<Id, Vec<String>>)
             .or_default()
             .push(display_path(&folder.relative_path).to_owned());
     }
-    for bookmark in &folder.bookmarks {
-        claimants
-            .entry(bookmark.id)
-            .or_default()
-            .push(bookmark.relative_path.clone());
-    }
-    for child in &folder.folders {
-        collect_claims(child, claimants);
+    for child in &folder.children {
+        match child {
+            ChildNode::Bookmark(bookmark) => claimants
+                .entry(bookmark.id)
+                .or_default()
+                .push(bookmark.relative_path.clone()),
+            ChildNode::Folder(nested) => collect_claims(nested, claimants),
+        }
     }
 }
 
@@ -834,16 +1271,18 @@ fn mark_claims(folder: &mut FolderNode, claimants: &HashMap<Id, Vec<String>>) {
         folder.diagnostics.push(duplicate_id(id, paths, &own));
         folder.access = Access::ReadOnly;
     }
-    for bookmark in &mut folder.bookmarks {
-        if let Some(paths) = claimants.get(&bookmark.id) {
-            let own = bookmark.relative_path.clone();
-            let diagnostic = duplicate_id(bookmark.id, paths, &own);
-            bookmark.diagnostics.push(diagnostic);
-            bookmark.access = Access::ReadOnly;
+    for child in &mut folder.children {
+        match child {
+            ChildNode::Bookmark(bookmark) => {
+                if let Some(paths) = claimants.get(&bookmark.id) {
+                    let own = bookmark.relative_path.clone();
+                    let diagnostic = duplicate_id(bookmark.id, paths, &own);
+                    bookmark.diagnostics.push(diagnostic);
+                    bookmark.access = Access::ReadOnly;
+                }
+            }
+            ChildNode::Folder(nested) => mark_claims(nested, claimants),
         }
-    }
-    for child in &mut folder.folders {
-        mark_claims(child, claimants);
     }
 }
 
@@ -862,26 +1301,6 @@ fn duplicate_id(id: Id, claimants: &[String], own: &str) -> Diagnostic {
         ),
     )
     .at_path(own)
-}
-
-/// The deterministic sibling order from the vault specification: folders first
-/// (enforced by keeping the two lists apart), then case-folded title, then the
-/// vault-relative path as a tiebreaker.
-///
-/// Titles are compared by their canonical caseless fold (see
-/// [`crate::fold_key`]), which ignores case, folds `ß` to `ss`, and decomposes
-/// accents — so `Éclair` sorts between `apple` and `Zebra` rather than after
-/// every ASCII name, and two spellings of the same title always land in the same
-/// place.
-///
-/// It is still not locale collation: the fold orders the decomposed code points,
-/// so it will not match a Swedish speaker's expectation that `ö` sorts after
-/// `z`, and it has no language-specific tailoring. Full collation needs a
-/// Unicode collation table and a locale, neither of which a format core has.
-/// What it does guarantee is that the order never changes between runs,
-/// platforms or spellings.
-fn order_key(title: &str, relative_path: &str) -> (String, String) {
-    (fold_key(title), relative_path.to_owned())
 }
 
 fn access_of(diagnostics: &[Diagnostic]) -> Access {

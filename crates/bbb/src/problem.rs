@@ -49,6 +49,15 @@ pub enum ProblemCode {
     UnsupportedOperation,
     /// The move would place a folder inside itself.
     MoveIntoSelf,
+    /// The requested child order is not a permutation of the folder's children,
+    /// or an index is outside it.
+    InvalidOrder,
+    /// The folder's `.bbb-state.json` holds something the daemon must not
+    /// overwrite, so positional changes are refused.
+    StateReadOnly,
+    /// The supplied state revision no longer matches the folder's
+    /// `.bbb-state.json`.
+    StaleStateRevision,
     /// The `Host` header is missing or is not a loopback name.
     HostNotAllowed,
     /// The vault could not be read or written.
@@ -73,6 +82,9 @@ impl ProblemCode {
             Self::PartialFailure => "partial_failure",
             Self::UnsupportedOperation => "unsupported_operation",
             Self::MoveIntoSelf => "move_into_self",
+            Self::InvalidOrder => "invalid_order",
+            Self::StateReadOnly => "state_read_only",
+            Self::StaleStateRevision => "stale_state_revision",
             Self::HostNotAllowed => "host_not_allowed",
             Self::VaultUnavailable => "vault_unavailable",
         }
@@ -88,13 +100,16 @@ impl ProblemCode {
             Self::NotFound | Self::RouteNotFound => StatusCode::NOT_FOUND,
             Self::InvalidRequest => StatusCode::BAD_REQUEST,
             Self::StaleRevision
+            | Self::StaleStateRevision
             | Self::FolderNotEmpty
             | Self::AmbiguousId
             | Self::SubtreeHasUnknownFiles
             | Self::SubtreeChanged => StatusCode::CONFLICT,
-            Self::ReadOnly | Self::InvalidValue | Self::MoveIntoSelf => {
-                StatusCode::UNPROCESSABLE_ENTITY
-            }
+            Self::ReadOnly
+            | Self::InvalidValue
+            | Self::MoveIntoSelf
+            | Self::InvalidOrder
+            | Self::StateReadOnly => StatusCode::UNPROCESSABLE_ENTITY,
             Self::HostNotAllowed => StatusCode::FORBIDDEN,
             Self::VaultUnavailable | Self::PartialFailure => StatusCode::INTERNAL_SERVER_ERROR,
             Self::UnsupportedOperation => StatusCode::NOT_IMPLEMENTED,
@@ -118,6 +133,9 @@ impl ProblemCode {
             Self::PartialFailure => "Change partly applied",
             Self::UnsupportedOperation => "Not supported on this platform",
             Self::MoveIntoSelf => "Cannot move a folder into itself",
+            Self::InvalidOrder => "Invalid child order",
+            Self::StateReadOnly => "Child order is read-only",
+            Self::StaleStateRevision => "Stale state revision",
             Self::HostNotAllowed => "Host not allowed",
             Self::VaultUnavailable => "Vault unavailable",
         }

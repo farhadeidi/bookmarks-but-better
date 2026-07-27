@@ -11,11 +11,12 @@
 //!
 //! * every file in it is one the vault manages — a `.bbb-folder.md`, a scanned
 //!   bookmark, or a file inside a scanned bookmark's `.assets` directory — and
-//! * every one of those bookmarks **and every nested `.bbb-folder.md`** still
-//!   has the exact bytes the scan saw. The nested metadata files matter as much
-//!   as the bookmarks: they carry the identities of the folders about to be
-//!   destroyed, and one changing means a folder was re-identified underneath
-//!   the request.
+//! * every one of those bookmarks, **every nested `.bbb-folder.md` and every
+//!   nested `.bbb-state.json`** still has the exact bytes the scan saw. The
+//!   nested machine-managed files matter as much as the bookmarks: they carry
+//!   the identities of the folders about to be destroyed and the order of
+//!   everything inside them, and one changing means the subtree was rearranged
+//!   underneath the request.
 //!
 //! Anything else refuses. A stray `notes.txt`, an `.obsidian` directory, a
 //! symbolic link, a bookmark an editor touched a moment ago: each of those is a
@@ -27,7 +28,9 @@
 use std::collections::HashMap;
 use std::io;
 
-use bbb_vault_core::{FOLDER_FILE_NAME, FolderNode, Revision, assets_directory_name};
+use bbb_vault_core::{
+    FOLDER_FILE_NAME, FolderNode, Revision, STATE_FILE_NAME, assets_directory_name,
+};
 use cap_fs_ext::DirExt as _;
 use cap_std::fs::Dir;
 
@@ -103,6 +106,13 @@ struct Expected {
     /// either, and is absent here — which makes it unknown, and blocks the
     /// delete, which is the right answer for a folder the vault cannot name.
     folder_metadata: HashMap<String, Revision>,
+    /// Vault-relative path of each nested `.bbb-state.json`, to its revision.
+    ///
+    /// A folder with no order file is simply absent here, and one whose order
+    /// file could not be read has no revision either — which makes the file
+    /// unknown, and blocks the delete. That is the right answer: bytes the
+    /// daemon cannot account for are not bytes it may destroy.
+    folder_state: HashMap<String, Revision>,
     /// Vault-relative path of each `.assets` directory the scan implies.
     assets: Vec<String>,
 }
@@ -119,6 +129,7 @@ pub(crate) fn verify_deletable(handle: &Dir, folder: &FolderNode) -> Result<(), 
         bookmarks: HashMap::new(),
         directories: Vec::new(),
         folder_metadata: HashMap::new(),
+        folder_state: HashMap::new(),
         assets: Vec::new(),
     };
     collect(folder, &mut expected);
@@ -143,6 +154,11 @@ fn collect(folder: &FolderNode, expected: &mut Expected) {
         expected
             .folder_metadata
             .insert(join(folder.relative_path(), FOLDER_FILE_NAME), revision);
+    }
+    if let Some(revision) = folder.state_revision() {
+        expected
+            .folder_state
+            .insert(join(folder.relative_path(), STATE_FILE_NAME), revision);
     }
     for bookmark in folder.bookmarks() {
         expected
@@ -229,6 +245,7 @@ fn walk(
         .bookmarks
         .keys()
         .chain(expected.folder_metadata.keys())
+        .chain(expected.folder_state.keys())
     {
         if parent_of(path) == relative && !handle.exists(file_name_of(path)) {
             return Err(SubtreeRefusal::Changed {
@@ -253,6 +270,17 @@ fn verify_file(
         // managed file with a revision the scan recorded, and it carries the
         // identity of a directory this delete is about to destroy.
         let Some(revision) = expected.folder_metadata.get(child) else {
+            unknown.push(child.to_owned());
+            return Ok(());
+        };
+        return compare(handle, name, child, *revision);
+    }
+
+    if name == STATE_FILE_NAME {
+        // And so is its child order, which records where everything in the
+        // subtree sits. One changing means somebody rearranged a folder this
+        // request was about to erase.
+        let Some(revision) = expected.folder_state.get(child) else {
             unknown.push(child.to_owned());
             return Ok(());
         };
@@ -360,7 +388,7 @@ mod tests {
 
     impl VaultScanHolder {
         fn folder(&self) -> &FolderNode {
-            &self.0.folder().folders()[0]
+            self.0.folder().folders().next().expect("one child folder")
         }
     }
 
@@ -491,6 +519,61 @@ mod tests {
 
         let refusal = verify_deletable(&handle(directory.path()), scan.folder())
             .expect_err("a missing nested metadata file must refuse");
+        assert!(
+            matches!(refusal, SubtreeRefusal::Changed { .. }),
+            "{refusal:?}"
+        );
+    }
+
+    #[test]
+    fn a_nested_child_order_change_refuses_the_delete() {
+        let (directory, scan) = vault_with_nested_folder();
+        std::fs::write(
+            directory.path().join("Dev/Nested").join(STATE_FILE_NAME),
+            "{\n  \"version\": 1,\n  \"children\": []\n}\n",
+        )
+        .expect("seed order");
+        let scan = {
+            // Rescan so the order file is part of the plan, then change it.
+            let _ = scan;
+            VaultScanHolder(bbb_vault_core::scan(directory.path()).expect("scan"))
+        };
+        verify_deletable(&handle(directory.path()), scan.folder()).expect("deletable as scanned");
+
+        // The order of a folder this delete is about to destroy changes while
+        // the request is in flight. One revision covering `Dev` said nothing
+        // about it, so the delete stops rather than erasing an arrangement the
+        // daemon never saw.
+        std::fs::write(
+            directory.path().join("Dev/Nested").join(STATE_FILE_NAME),
+            "{\n  \"version\": 1,\n  \"children\": []\n}\n\n",
+        )
+        .expect("external edit");
+
+        let refusal = verify_deletable(&handle(directory.path()), scan.folder())
+            .expect_err("a changed nested order must refuse");
+        match &refusal {
+            SubtreeRefusal::Changed { path, .. } => {
+                assert_eq!(path, "Dev/Nested/.bbb-state.json");
+            }
+            other => panic!("{other:?}"),
+        }
+    }
+
+    #[test]
+    fn a_nested_child_order_that_vanished_refuses_the_delete() {
+        let (directory, _) = vault_with_nested_folder();
+        std::fs::write(
+            directory.path().join("Dev/Nested").join(STATE_FILE_NAME),
+            "{\n  \"version\": 1,\n  \"children\": []\n}\n",
+        )
+        .expect("seed order");
+        let scan = VaultScanHolder(bbb_vault_core::scan(directory.path()).expect("scan"));
+        std::fs::remove_file(directory.path().join("Dev/Nested").join(STATE_FILE_NAME))
+            .expect("remove");
+
+        let refusal = verify_deletable(&handle(directory.path()), scan.folder())
+            .expect_err("a missing nested order must refuse");
         assert!(
             matches!(refusal, SubtreeRefusal::Changed { .. }),
             "{refusal:?}"

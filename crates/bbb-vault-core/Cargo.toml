@@ -31,6 +31,12 @@ getrandom = "0.4.3"
 # the byte-range scanner deliberately does not interpret. It never writes: all
 # mutations still go through the byte-range path.
 saphyr-parser = "0.0.11"
+# The child-order state file is JSON, and a JSON reader is no more hand-rollable
+# than a YAML one: it has to reject duplicate object keys rather than silently
+# keep the last, which is exactly what a `Value`-shaped parse would do. The
+# derived `Serialize` also fixes the canonical rendering in one place.
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
 # SHA-256 for content revisions.
 sha2 = "0.11.0"
 # Unicode normalization (NFC for names written to disk, NFD for caseless

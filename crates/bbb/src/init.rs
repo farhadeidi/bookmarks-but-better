@@ -1,8 +1,10 @@
 //! Giving a directory the identity that makes it a vault.
 //!
-//! Initialisation writes exactly one file: `.bbb-folder.md` in the directory the
-//! user named. It never descends, so pointing `bbb init` at the wrong directory
-//! costs one file that is trivial to delete, not a rewrite of a subtree.
+//! Initialisation writes exactly two files, both in the directory the user
+//! named: `.bbb-folder.md`, which gives it an identity, and `.bbb-state.json`,
+//! which records the order its children are already being shown in. It never
+//! descends, so pointing `bbb init` at the wrong directory costs two files that
+//! are trivial to delete, not a rewrite of a subtree.
 //!
 //! Sub-directories therefore start out without an identity of their own. That is
 //! deliberate: they are shown read-only with a `missing_folder_metadata`
@@ -13,7 +15,11 @@ use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 
-use bbb_vault_core::{FOLDER_FILE_NAME, Id, render_folder, scan};
+use bbb_vault_core::{
+    FOLDER_FILE_NAME, FolderState, Id, STATE_FILE_NAME, StateChild, VaultScan, render_folder, scan,
+};
+
+use cap_std::fs::Dir;
 
 use crate::fsx;
 
@@ -92,18 +98,23 @@ pub fn initialize(root: &Path) -> Result<InitOutcome, InitError> {
         error,
     })?;
 
-    if let Some(id) = scan.folder().id() {
-        return Ok(InitOutcome::AlreadyInitialized { id });
-    }
-
-    // The root is opened once, no-follow, and the metadata file is resolved
-    // against that handle. A `.bbb-folder.md` that is a symbolic link is
-    // refused rather than written through, so initialising a directory can
-    // never write outside it.
+    // The root is opened once, no-follow, and every file is resolved against
+    // that handle. A `.bbb-folder.md` that is a symbolic link is refused rather
+    // than written through, so initialising a directory can never write outside
+    // it.
     let handle = fsx::open_root(root).map_err(|error| InitError::Unreadable {
         path: root.to_path_buf(),
         error,
     })?;
+
+    if let Some(id) = scan.folder().id() {
+        // Already a vault. It may still predate the child order file, or have
+        // lost it; writing the one it should have is a repair, and pins the
+        // order it is being shown in right now rather than changing it.
+        write_state(&handle, &scan)?;
+        return Ok(InitOutcome::AlreadyInitialized { id });
+    }
+
     let metadata = root.join(FOLDER_FILE_NAME);
     if handle.symlink_metadata(FOLDER_FILE_NAME).is_ok() {
         return Err(InitError::Occupied { path: metadata });
@@ -133,7 +144,50 @@ pub fn initialize(root: &Path) -> Result<InitOutcome, InitError> {
         }
     })?;
 
+    // The identity and the child order are one step as far as a caller is
+    // concerned, so a directory that gains one and not the other is not left
+    // behind: the metadata file goes back out again and the directory is
+    // exactly as it was found.
+    if let Err(error) = write_state(&handle, &scan) {
+        let _ = fsx::remove_file(&handle, FOLDER_FILE_NAME);
+        return Err(error);
+    }
+
     Ok(InitOutcome::Created { id })
+}
+
+/// Writes the root's child order file, if it does not already have one.
+///
+/// The order recorded is the one the scan just resolved, which for a directory
+/// with no state file is the migration order — so initialising pins what the
+/// user is already looking at instead of rearranging it.
+fn write_state(handle: &Dir, scan: &VaultScan) -> Result<(), InitError> {
+    if scan.folder().state_revision().is_some() {
+        return Ok(());
+    }
+    if handle.symlink_metadata(STATE_FILE_NAME).is_ok() {
+        // Something is already at the name and the scan could not use it — a
+        // link, or bytes this build does not understand. It is left alone.
+        return Ok(());
+    }
+
+    let children: Vec<StateChild> = scan
+        .folder()
+        .children()
+        .iter()
+        .filter_map(|child| child.id().map(|id| (id, child.kind())))
+        .map(|(id, kind)| StateChild::new(id, kind, crate::clock::now_rfc3339()))
+        .collect();
+
+    fsx::create_new(
+        handle,
+        STATE_FILE_NAME,
+        &FolderState::new(children).render(),
+    )
+    .map_err(|error| InitError::Unreadable {
+        path: PathBuf::from(STATE_FILE_NAME),
+        error,
+    })
 }
 
 /// Why a directory could not be made into a vault.
@@ -220,6 +274,84 @@ mod tests {
         assert_eq!(
             fs::read(&metadata).expect("metadata"),
             b"---\nbbb_id: not-an-id\n---\n"
+        );
+    }
+
+    #[test]
+    fn initialization_writes_the_root_child_order_too() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        initialize(dir.path()).expect("init");
+        assert_eq!(
+            fs::read_to_string(dir.path().join(STATE_FILE_NAME)).expect("order file"),
+            "{\n  \"version\": 1,\n  \"children\": []\n}\n"
+        );
+    }
+
+    #[test]
+    fn initialization_records_the_order_the_directory_is_already_shown_in() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        // Two bookmarks a user already had, in a directory that is not a vault
+        // yet. Init pins the migration order rather than rearranging anything.
+        for (id, created) in [
+            ("bbbbbbbb", "2026-02-01T00:00:00Z"),
+            ("aaaaaaaa", "2026-01-01T00:00:00Z"),
+        ] {
+            fs::write(
+                dir.path().join(format!("Note--{id}.md")),
+                format!(
+                    "---\nbbb_id: {id}\nbbb_url: https://x.example\nbbb_title: Note\n\
+                     bbb_created: {created}\nbbb_updated: {created}\n---\n"
+                ),
+            )
+            .expect("write");
+        }
+
+        initialize(dir.path()).expect("init");
+
+        let written = fs::read_to_string(dir.path().join(STATE_FILE_NAME)).expect("order file");
+        assert!(
+            written.find("aaaaaaaa").expect("listed") < written.find("bbbbbbbb").expect("listed"),
+            "the older bookmark is recorded first, as it was already displayed: {written}"
+        );
+    }
+
+    #[test]
+    fn a_second_init_writes_a_missing_order_file_without_touching_the_identity() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        initialize(dir.path()).expect("init");
+        let identity = fs::read(dir.path().join(FOLDER_FILE_NAME)).expect("metadata");
+        fs::remove_file(dir.path().join(STATE_FILE_NAME)).expect("remove order");
+
+        let second = initialize(dir.path()).expect("second init");
+
+        assert!(!second.created(), "the vault was already initialized");
+        assert!(
+            dir.path().join(STATE_FILE_NAME).is_file(),
+            "but a missing order file is repaired"
+        );
+        assert_eq!(
+            fs::read(dir.path().join(FOLDER_FILE_NAME)).expect("metadata"),
+            identity,
+            "and the identity is not rewritten"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn an_order_file_that_is_a_link_is_left_exactly_as_found() {
+        let outer = tempfile::tempdir().expect("temp dir");
+        let root = outer.path().join("vault");
+        fs::create_dir(&root).expect("create vault");
+        let target = outer.path().join("outside.json");
+        fs::write(&target, b"untouched").expect("write");
+        std::os::unix::fs::symlink(&target, root.join(STATE_FILE_NAME)).expect("symlink");
+
+        initialize(&root).expect("init");
+
+        assert_eq!(
+            fs::read(&target).expect("read"),
+            b"untouched",
+            "init must never write through a link"
         );
     }
 

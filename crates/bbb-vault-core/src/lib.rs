@@ -13,9 +13,24 @@
 //!   example `React--a1b2c3d4.md`. The `--<id>` suffix is immutable; the
 //!   human-readable part may change freely.
 //! * One bookmark folder is one directory. Every managed directory contains a
-//!   `.bbb-folder.md` file holding the directory's stable identity.
+//!   `.bbb-folder.md` file holding the directory's stable identity, and a
+//!   `.bbb-state.json` recording the order its children are in.
 //! * Identity lives in the YAML front matter, never in the path, so it survives
 //!   renames and moves.
+//!
+//! # Membership, identity and order
+//!
+//! The three are deliberately kept in three places, because each has a
+//! different owner:
+//!
+//! * *Membership* is the filesystem's. What a folder holds is whatever the
+//!   directory holds — a file dropped in by any other tool is a bookmark.
+//! * *Identity* is the front matter's, so it survives every rename and move.
+//! * *Order* is [`FolderState`]'s, because neither of the others can express
+//!   the one thing a user cares about: that this bookmark goes above that
+//!   sub-folder. See [`FolderState`] for what happens to a file this build
+//!   cannot fully account for; the short answer is that it is honoured as far
+//!   as it can be read, and never rewritten.
 //!
 //! Owned front matter keys are namespaced with a `bbb_` prefix:
 //!
@@ -78,6 +93,7 @@ mod id;
 mod naming;
 mod revision;
 mod scan;
+mod state;
 mod timestamp;
 mod yaml;
 mod yaml_check;
@@ -96,6 +112,10 @@ pub use crate::naming::{
 };
 pub use crate::revision::Revision;
 pub use crate::scan::{
-    BookmarkNode, FOLDER_FILE_NAME, FolderNode, ScanOptions, VaultScan, scan, scan_with,
+    BookmarkNode, ChildNode, FOLDER_FILE_NAME, FolderNode, ScanOptions, StateAccess, VaultScan,
+    scan, scan_with,
+};
+pub use crate::state::{
+    ChildKind, FolderState, STATE_FILE_NAME, STATE_VERSION, StateChild, StateError, StateFreeze,
 };
 pub use crate::timestamp::is_rfc3339;

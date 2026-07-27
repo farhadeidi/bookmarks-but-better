@@ -100,10 +100,14 @@ async fn a_url_less_create_makes_a_folder() {
     let harness = Harness::new();
     let root_id = harness.root_id().await;
 
+    let state = harness
+        .state_revision(&root_id)
+        .await
+        .expect("an initialized root has a child order file");
     let response = harness
         .post(
             "/api/v1/bookmarks",
-            &json!({ "parentId": root_id, "title": "Dev" }),
+            &json!({ "parentId": root_id, "title": "Dev", "parentStateRevision": state }),
         )
         .await;
     assert_eq!(response.status, StatusCode::CREATED, "{}", response.text());
@@ -221,10 +225,7 @@ async fn a_move_preserves_the_identity_and_the_bytes() {
     let bytes_before = std::fs::read(&source).expect("read");
 
     let response = harness
-        .post(
-            &format!("/api/v1/bookmarks/{id}/move"),
-            &json!({ "revision": revision, "parentId": folder_id }),
-        )
+        .move_entry(&id, &revision, &root_id, &folder_id, None)
         .await;
     assert_eq!(response.status, StatusCode::OK, "{}", response.text());
 
@@ -261,7 +262,7 @@ async fn a_deleted_bookmark_is_gone_from_disk_and_from_the_tree() {
     let revision = created["revision"].as_str().expect("a revision").to_owned();
 
     let response = harness
-        .delete(&format!("/api/v1/bookmarks/{id}?revision={revision}"))
+        .delete_entry("bookmarks", &id, &revision, &root_id, "")
         .await;
     assert_eq!(
         response.status,
@@ -296,9 +297,7 @@ async fn an_empty_folder_deletes_and_a_full_one_needs_the_explicit_request() {
         .await;
 
     let response = harness
-        .delete(&format!(
-            "/api/v1/folders/{empty_id}?revision={empty_revision}"
-        ))
+        .delete_entry("folders", &empty_id, &empty_revision, &root_id, "")
         .await;
     assert_eq!(
         response.status,
@@ -309,9 +308,7 @@ async fn an_empty_folder_deletes_and_a_full_one_needs_the_explicit_request() {
     assert!(!harness.root().join("Empty").exists());
 
     let refused = harness
-        .delete(&format!(
-            "/api/v1/folders/{full_id}?revision={full_revision}"
-        ))
+        .delete_entry("folders", &full_id, &full_revision, &root_id, "")
         .await;
     refused.expect_problem(StatusCode::CONFLICT, "folder_not_empty");
     assert!(
@@ -320,9 +317,13 @@ async fn an_empty_folder_deletes_and_a_full_one_needs_the_explicit_request() {
     );
 
     let accepted = harness
-        .delete(&format!(
-            "/api/v1/folders/{full_id}?revision={full_revision}&recursive=true"
-        ))
+        .delete_entry(
+            "folders",
+            &full_id,
+            &full_revision,
+            &root_id,
+            "&recursive=true",
+        )
         .await;
     assert_eq!(
         accepted.status,
@@ -404,7 +405,7 @@ async fn siblings_come_back_in_a_deterministic_order() {
 
     assert_eq!(
         titles,
-        vec!["archive", "Tools", "Apple", "zebra"],
-        "folders first, then case-folded title order"
+        vec!["zebra", "Apple", "Tools", "archive"],
+        "a create appends, so the tree comes back in the order things were made"
     );
 }

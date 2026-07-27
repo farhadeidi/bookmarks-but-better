@@ -152,28 +152,154 @@ impl Harness {
             .expect("health reports a generation")
     }
 
+    /// The current `stateRevision` of a folder, or `None` when it has no
+    /// child order file yet.
+    ///
+    /// Every request that changes what a folder holds has to carry this, so
+    /// the helpers below look it up rather than making each test do it.
+    pub(crate) async fn state_revision(&self, id: &str) -> Option<String> {
+        let tree = self.tree().await;
+        find_node(&tree, id)
+            .and_then(|node| node["stateRevision"].as_str())
+            .map(str::to_owned)
+    }
+
+    /// The ids of a folder's children, in the order the API serves them.
+    pub(crate) async fn child_ids(&self, id: &str) -> Vec<String> {
+        let tree = self.tree().await;
+        find_node(&tree, id)
+            .and_then(|node| node["children"].as_array())
+            .map(|children| {
+                children
+                    .iter()
+                    .map(|child| child["id"].as_str().unwrap_or_default().to_owned())
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
     /// Creates a bookmark and returns its DTO, asserting the status.
     pub(crate) async fn create_bookmark(&self, parent: &str, title: &str, url: &str) -> Value {
-        let response = self
-            .post(
-                "/api/v1/bookmarks",
-                &serde_json::json!({ "parentId": parent, "title": title, "url": url }),
-            )
-            .await;
+        self.create_bookmark_at(parent, title, url, None).await
+    }
+
+    /// As [`Harness::create_bookmark`], at a chosen position.
+    pub(crate) async fn create_bookmark_at(
+        &self,
+        parent: &str,
+        title: &str,
+        url: &str,
+        index: Option<usize>,
+    ) -> Value {
+        let mut body = serde_json::json!({ "parentId": parent, "title": title, "url": url });
+        self.stamp(&mut body, parent, index).await;
+        let response = self.post("/api/v1/bookmarks", &body).await;
         assert_eq!(response.status, StatusCode::CREATED, "{}", response.text());
         response.json()
     }
 
     /// Creates a folder and returns its DTO, asserting the status.
     pub(crate) async fn create_folder(&self, parent: &str, title: &str) -> Value {
-        let response = self
-            .post(
-                "/api/v1/folders",
-                &serde_json::json!({ "parentId": parent, "title": title }),
-            )
-            .await;
+        self.create_folder_at(parent, title, None).await
+    }
+
+    /// As [`Harness::create_folder`], at a chosen position.
+    pub(crate) async fn create_folder_at(
+        &self,
+        parent: &str,
+        title: &str,
+        index: Option<usize>,
+    ) -> Value {
+        let mut body = serde_json::json!({ "parentId": parent, "title": title });
+        self.stamp(&mut body, parent, index).await;
+        let response = self.post("/api/v1/folders", &body).await;
         assert_eq!(response.status, StatusCode::CREATED, "{}", response.text());
         response.json()
+    }
+
+    /// Adds the parent's current order revision, and an index if one is wanted.
+    async fn stamp(&self, body: &mut Value, parent: &str, index: Option<usize>) {
+        if let Some(revision) = self.state_revision(parent).await {
+            body["parentStateRevision"] = Value::String(revision);
+        }
+        if let Some(index) = index {
+            body["index"] = Value::from(index);
+        }
+    }
+
+    /// `DELETE` an entry, carrying the revisions the daemon requires.
+    pub(crate) async fn delete_entry(
+        &self,
+        route: &str,
+        id: &str,
+        revision: &str,
+        parent: &str,
+        extra: &str,
+    ) -> Response {
+        let state = self
+            .state_revision(parent)
+            .await
+            .map(|state| format!("&parentStateRevision={state}"))
+            .unwrap_or_default();
+        self.delete(&format!(
+            "/api/v1/{route}/{id}?revision={revision}{extra}{state}"
+        ))
+        .await
+    }
+
+    /// `POST` a move, carrying whichever order revisions the daemon requires.
+    pub(crate) async fn move_entry(
+        &self,
+        id: &str,
+        revision: &str,
+        source: &str,
+        destination: &str,
+        index: Option<usize>,
+    ) -> Response {
+        let mut body = serde_json::json!({ "revision": revision, "parentId": destination });
+        if let Some(state) = self.state_revision(source).await {
+            body["sourceStateRevision"] = Value::String(state);
+        }
+        if source != destination
+            && let Some(state) = self.state_revision(destination).await
+        {
+            body["destinationStateRevision"] = Value::String(state);
+        }
+        if let Some(index) = index {
+            body["index"] = Value::from(index);
+        }
+        self.post(&format!("/api/v1/bookmarks/{id}/move"), &body)
+            .await
+    }
+
+    /// `PUT` a folder's child order, carrying its current revision.
+    pub(crate) async fn set_order(&self, id: &str, children: &[(&str, &str)]) -> Response {
+        let revision = self.state_revision(id).await;
+        self.send_order(id, revision.as_deref(), children).await
+    }
+
+    /// As [`Harness::set_order`], with an explicit — possibly wrong — revision.
+    pub(crate) async fn send_order(
+        &self,
+        id: &str,
+        revision: Option<&str>,
+        children: &[(&str, &str)],
+    ) -> Response {
+        let mut body = serde_json::json!({
+            "children": children
+                .iter()
+                .map(|(id, kind)| serde_json::json!({ "id": id, "kind": kind }))
+                .collect::<Vec<_>>(),
+        });
+        if let Some(revision) = revision {
+            body["stateRevision"] = Value::String(revision.to_owned());
+        }
+        self.send(json_request(
+            "PUT",
+            &format!("/api/v1/folders/{id}/order"),
+            &body,
+        ))
+        .await
     }
 }
 
