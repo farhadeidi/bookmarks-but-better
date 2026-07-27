@@ -1,0 +1,116 @@
+[package]
+name = "bbb"
+description = "Local-first daemon, HTTP API and CLI for Bookmarks But Better: serves a Markdown vault and the web UI on loopback."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+readme = "README.md"
+keywords = ["bookmarks", "markdown", "daemon", "vault"]
+categories = ["command-line-utilities", "web-programming::http-server"]
+
+[lib]
+name = "bbb"
+path = "src/lib.rs"
+
+[[bin]]
+name = "bbb"
+path = "src/main.rs"
+
+# The format itself lives in `bbb-vault-core`; nothing here re-implements
+# parsing, scanning or byte-preserving updates.
+[dependencies]
+bbb-vault-core = { path = "../bbb-vault-core", version = "0.1.0" }
+# HTTP routing, extractors and the SSE response type.
+axum = "0.8.9"
+# Capability-oriented filesystem handles, the same ones the format core walks
+# the vault with. Every mutation resolves through an `openat`-style handle with
+# O_NOFOLLOW (and the Windows reparse-point equivalent), so no path is ever
+# resolved twice and a link cannot be swapped in between a check and a write.
+cap-std = "4.0.2"
+cap-fs-ext = "4.0.2"
+# Command line parsing for the four subcommands.
+clap = { version = "4.6.4", features = ["derive", "env"] }
+# Filesystem watching with a platform-native backend.
+notify = "8.2.0"
+# The MIME table the static handler serves assets with; the same one
+# `tower-http` consulted, so served types did not change when it was dropped.
+mime_guess = "2.0.5"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
+# RFC 3339 parsing (for `dateAdded`) and formatting (for new timestamps).
+time = { version = "0.3.54", features = ["formatting", "parsing"] }
+tokio = { version = "1.53.1", features = [
+  "rt-multi-thread",
+  "macros",
+  "signal",
+  "sync",
+  "time",
+  "net",
+] }
+# `BroadcastStream`, which turns the change channel into an SSE body.
+tokio-stream = { version = "0.1.19", features = ["sync"] }
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.23", features = ["json", "env-filter"] }
+
+# `renameat2`, which gives both the no-replace rename and the atomic
+# `RENAME_EXCHANGE` the commit protocol uses to bind a write to the exact file
+# it validated.
+[target.'cfg(target_os = "linux")'.dependencies]
+rustix = { version = "1.1.4", features = ["fs"] }
+
+# `renameatx_np`: macOS's handle-relative rename, which offers both
+# `RENAME_EXCL` (never replace) and `RENAME_SWAP` (atomic exchange). Scoped to
+# macOS rather than every Apple vendor, since only macOS is a target here.
+[target.'cfg(target_os = "macos")'.dependencies]
+libc = "0.2.189"
+
+# `MoveFileExW` for durable replacement (`WRITE_THROUGH`) and for the
+# no-replace rename (no `REPLACE_EXISTING` flag), `GetFinalPathNameByHandleW`
+# to derive a path from a handle already validated, and
+# `GetFileInformationByHandle` for file identity, which cap-std only exposes on
+# nightly.
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61.2", features = [
+  "Win32_Foundation",
+  "Win32_Storage_FileSystem",
+] }
+
+[dev-dependencies]
+# Integration tests are their own crates, so the pieces they touch directly are
+# listed again here; Cargo unifies them with the versions above.
+axum = "0.8.9"
+bbb-vault-core = { path = "../bbb-vault-core", version = "0.1.0" }
+serde_json = "1.0.151"
+# `ServiceExt::oneshot`, which drives the router without binding a socket.
+tower = { version = "0.5.3", features = ["util"] }
+tempfile = "3.27.0"
+# The SSE test speaks HTTP/1.1 to a really-bound socket rather than pulling in
+# an HTTP client crate for one request.
+tokio = { version = "1.53.1", features = [
+  "rt-multi-thread",
+  "macros",
+  "time",
+  "net",
+  "io-util",
+] }
+
+# The workspace forbids `unsafe`, which cannot be relaxed anywhere once set.
+# This crate needs three platform calls that have no safe binding — a durable
+# Windows replacement, a Windows file identity, and Apple's no-replace rename —
+# so it denies `unsafe` itself and allows it in exactly one module,
+# `fsx::platform`, where every call carries a SAFETY note. `bbb-vault-core`
+# still forbids it outright. The rest of this table is the workspace's.
+[lints.rust]
+unsafe_code = "deny"
+missing_docs = "warn"
+missing_debug_implementations = "warn"
+rust_2018_idioms = { level = "warn", priority = -1 }
+unreachable_pub = "warn"
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+module_name_repetitions = "allow"

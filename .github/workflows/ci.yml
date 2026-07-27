@@ -1,8 +1,9 @@
 name: CI
 
 # Runs the frontend quality gates (formatting, lint, types, tests, extension
-# builds) on every push and pull request so regressions are caught before
-# they reach main or a release.
+# builds) and the Rust gates (format, clippy, tests, build, docs) on every push
+# and pull request so regressions are caught before they reach main or a
+# release. The two jobs are independent and run in parallel.
 on:
   push:
     branches: [main]
@@ -34,3 +35,92 @@ jobs:
 
       - name: Quality gates
         run: bun run check
+
+  rust:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Rust
+        # rustup installs whatever rust-toolchain.toml pins, components and
+        # all, so the version lives in exactly one file rather than being
+        # repeated here where it could drift.
+        run: rustup show active-toolchain || rustup toolchain install
+
+      - name: Cache cargo artifacts
+        uses: Swatinem/rust-cache@v2
+
+      - name: Format
+        run: cargo fmt --all --check
+
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+
+      - name: Test
+        run: cargo test --workspace --all-features
+
+      - name: Build
+        run: cargo build --workspace --all-features
+
+      - name: Docs
+        env:
+          RUSTDOCFLAGS: -D warnings
+        run: cargo doc --workspace --no-deps --all-features
+
+      # The daemon has real `cfg(windows)` code — a durable `MoveFileExW`
+      # replacement, a no-replace rename and a file-identity query. Checking the
+      # target from Linux catches every compile error in it in seconds. It
+      # cannot link or run, which is what the `rust-windows` job below is for.
+      - name: Check the Windows target
+        run: |
+          rustup target add x86_64-pc-windows-msvc
+          cargo check --workspace --all-targets --target x86_64-pc-windows-msvc
+
+  rust-macos:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Rust
+        run: rustup show active-toolchain || rustup toolchain install
+
+      - name: Cache cargo artifacts
+        uses: Swatinem/rust-cache@v2
+
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+
+      # macOS is the only platform where `renameatx_np` runs, for both
+      # RENAME_EXCL (the no-replace directory move) and RENAME_SWAP (the atomic
+      # exchange the commit and claim protocols are built on).
+      - name: Test
+        run: cargo test --workspace --all-features
+
+      - name: Build
+        run: cargo build --workspace --all-features
+
+  rust-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Rust
+        run: rustup show active-toolchain || rustup toolchain install
+
+      - name: Cache cargo artifacts
+        uses: Swatinem/rust-cache@v2
+
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+
+      # This is the job that actually executes the Windows filesystem paths:
+      # the replacement, the no-replace rename, the file identity, and the
+      # staging and recovery protocol built on top of them.
+      - name: Test
+        run: cargo test --workspace --all-features
+
+      - name: Build
+        run: cargo build --workspace --all-features
