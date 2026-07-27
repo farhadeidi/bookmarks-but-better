@@ -321,8 +321,9 @@ impl Vault {
                 let title = title.map(validated_title).transpose()?;
                 let url = url.map(validated_url).transpose()?;
                 require_writable(node.access(), "the bookmark")?;
+                let origin = component_path(node.relative_path())?;
                 let dir = self.parent_dir_of(node.relative_path())?;
-                update_bookmark(&dir, node.file_name(), expected, title, url)?;
+                update_bookmark(self, &dir, &origin, node.file_name(), expected, title, url)?;
             }
             Located::Folder(node) => {
                 if url.is_some() {
@@ -333,8 +334,15 @@ impl Vault {
                 }
                 let title = title.map(validated_title).transpose()?;
                 require_writable(node.access(), "the folder")?;
+                let origin =
+                    fsx::component::split(node.relative_path()).map_err(|(part, error)| {
+                        Problem::new(
+                            ProblemCode::VaultUnavailable,
+                            format!("`{part}` is not a usable path component: {error}"),
+                        )
+                    })?;
                 let dir = self.dir_of(node.relative_path())?;
-                update_folder(&dir, expected, title)?;
+                update_folder(self, &dir, &origin, expected, title)?;
             }
         }
 
@@ -368,7 +376,7 @@ impl Vault {
             }
         };
         require_writable(node.access(), "the bookmark")?;
-        let parent_relative = parent_path(node.relative_path()).to_owned();
+        let parent_components = component_path(node.relative_path())?;
         let dir = self.parent_dir_of(node.relative_path())?;
 
         // The bytes and the file's identity come from one handle, so the
@@ -377,27 +385,28 @@ impl Vault {
         check_revision(expected, validated.revision())?;
 
         let assets = assets_directory_name(node.file_name());
-        let has_assets = is_directory(&dir, &assets);
+        let assets_identity = fsx::open_dir(&dir, &assets)
+            .ok()
+            .and_then(|handle| fsx::directory_identity(&handle).ok());
 
         let mut staged = self.staging("delete_bookmark", node.id().as_str())?;
 
-        // Immediately before the entry leaves the vault, confirm the name still
-        // means the file that was validated. An external replacement in between
-        // is a conflict, and that replacement is left alone.
-        confirm_unchanged(&dir, node.file_name(), &validated)?;
-        if let Err(error) = staged.take(&dir, &parent_relative, node.file_name(), false) {
-            return Err(rollback(
-                staged,
-                "the bookmark could not be removed",
-                &error,
-            ));
+        // The claim itself checks the identity at the moment it lands, so there
+        // is no gap between confirming and taking: an entry replaced in between
+        // is put straight back and reported.
+        if let Err(error) = staged.take(
+            &dir,
+            &parent_components,
+            node.file_name(),
+            false,
+            validated.identity,
+        ) {
+            return Err(take_problem(staged, "the bookmark", error));
         }
-        if has_assets && let Err(error) = staged.take(&dir, &parent_relative, &assets, true) {
-            return Err(rollback(
-                staged,
-                "the bookmark's assets could not be removed",
-                &error,
-            ));
+        if let Some(identity) = assets_identity
+            && let Err(error) = staged.take(&dir, &parent_components, &assets, true, identity)
+        {
+            return Err(take_problem(staged, "the bookmark's assets", error));
         }
 
         staged
@@ -473,16 +482,32 @@ impl Vault {
         }
         drop(handle);
 
-        let parent_relative = parent_path(node.relative_path()).to_owned();
+        let parent_components = component_path(node.relative_path())?;
         let parent = self.parent_dir_of(node.relative_path())?;
-        confirm_same_directory(&parent, node.directory_name(), verified)?;
 
         let staging_id = node
             .id()
             .map_or_else(|| "folder".to_owned(), |id| id.as_str().to_owned());
         let mut staged = self.staging("delete_folder", &staging_id)?;
-        if let Err(error) = staged.take(&parent, &parent_relative, node.directory_name(), true) {
-            return Err(rollback(staged, "the folder could not be removed", &error));
+
+        // Bound to the identity of the directory whose contents were verified.
+        // If the entry now leads somewhere else, that somewhere else is put
+        // back untouched and the delete is refused.
+        if let Err(error) = staged.take(
+            &parent,
+            &parent_components,
+            node.directory_name(),
+            true,
+            verified,
+        ) {
+            return Err(match error {
+                crate::staging::TakeError::NotTheSameEntry => Problem::new(
+                    ProblemCode::SubtreeChanged,
+                    "the folder was replaced on disk after its contents were checked; the \
+                     replacement has been left untouched. Rescan and retry",
+                ),
+                other => take_problem(staged, "the folder", other),
+            });
         }
 
         staged
@@ -547,6 +572,17 @@ impl Vault {
     }
 
     // -- internals --------------------------------------------------------
+
+    /// Rescues a stranded temporary that holds the user's evicted bytes.
+    ///
+    /// Returns a sentence for the caller's error message describing where the
+    /// bytes are now. Nothing is ever deleted on this path.
+    fn rescue(&self, dir: &Dir, origin: &[String], name: &str, temporary: &str) -> String {
+        let Some(state) = self.state.as_ref() else {
+            return format!("they remain in `{temporary}`, beside the entry");
+        };
+        crate::staging::rescue(state, &self.root, dir, origin, name, temporary)
+    }
 
     /// Opens a staging area for one operation.
     fn staging(&self, operation: &str, id: &str) -> Result<Staged, Problem> {
@@ -697,7 +733,9 @@ fn create_folder_directory(
 /// content lands, the write is refused as stale and that file is left exactly
 /// as it is. See [`crate::fsx::replace_validated`].
 fn update_bookmark(
+    vault: &Vault,
     dir: &Dir,
+    origin: &[String],
     name: &str,
     expected: Revision,
     title: Option<&str>,
@@ -742,12 +780,26 @@ fn update_bookmark(
     let bytes = file
         .apply(source, &requested(Some(&now)))
         .map_err(|e| update_problem(&e))?;
-    fsx::replace_validated(dir, name, &bytes, &validated)
-        .map_err(|error| commit_problem("the bookmark could not be written", error))
+    fsx::replace_validated(dir, name, &bytes, &validated).map_err(|error| {
+        commit_problem(
+            vault,
+            dir,
+            origin,
+            name,
+            "the bookmark could not be written",
+            error,
+        )
+    })
 }
 
 /// Applies a title change to one `.bbb-folder.md`, bound to its identity.
-fn update_folder(dir: &Dir, expected: Revision, title: Option<&str>) -> Result<(), Problem> {
+fn update_folder(
+    vault: &Vault,
+    dir: &Dir,
+    origin: &[String],
+    expected: Revision,
+    title: Option<&str>,
+) -> Result<(), Problem> {
     let validated = read_validated(dir, FOLDER_FILE_NAME)?;
     check_revision(expected, validated.revision())?;
     let source = &validated.bytes;
@@ -769,8 +821,16 @@ fn update_folder(dir: &Dir, expected: Revision, title: Option<&str>) -> Result<(
     if bytes == *source {
         return Ok(());
     }
-    fsx::replace_validated(dir, FOLDER_FILE_NAME, &bytes, &validated)
-        .map_err(|error| commit_problem("the folder metadata could not be written", error))
+    fsx::replace_validated(dir, FOLDER_FILE_NAME, &bytes, &validated).map_err(|error| {
+        commit_problem(
+            vault,
+            dir,
+            origin,
+            FOLDER_FILE_NAME,
+            "the folder metadata could not be written",
+            error,
+        )
+    })
 }
 
 /// Renames a bookmark into `destination`, taking its assets with it.
@@ -1038,7 +1098,18 @@ fn read_validated(dir: &Dir, name: &str) -> Result<fsx::Validated, Problem> {
 }
 
 /// Turns a bound-commit failure into the right refusal.
-fn commit_problem(context: &str, error: fsx::CommitError) -> Problem {
+///
+/// The undo-failure case is the delicate one: the temporary named there holds
+/// the *user's* evicted file, so it is rescued into staging rather than left as
+/// a dot-file nobody will ever notice, and never deleted.
+fn commit_problem(
+    vault: &Vault,
+    dir: &Dir,
+    origin: &[String],
+    name: &str,
+    context: &str,
+    error: fsx::CommitError,
+) -> Problem {
     match error {
         fsx::CommitError::Stale => Problem::new(
             ProblemCode::StaleRevision,
@@ -1046,6 +1117,17 @@ fn commit_problem(context: &str, error: fsx::CommitError) -> Problem {
              has been left untouched. Reload it and reapply the change",
         ),
         fsx::CommitError::Io(error) => io_problem(context, &error),
+        fsx::CommitError::UndoFailed { temporary, cause } => {
+            let rescued = vault.rescue(dir, origin, name, &temporary);
+            Problem::new(
+                ProblemCode::PartialFailure,
+                format!(
+                    "{context} ({}), and the previous contents could not be put back. They have \
+                     not been deleted: {rescued}",
+                    cause.kind()
+                ),
+            )
+        }
     }
 }
 
@@ -1059,50 +1141,45 @@ fn read_entry(dir: &Dir, name: &str) -> Result<Vec<u8>, Problem> {
     })
 }
 
-/// Refuses unless `name` still leads to the file that was validated.
-///
-/// Run immediately before an entry leaves the vault, so the gap between the
-/// check and the rename is one syscall rather than a whole request. An entry
-/// replaced in the meantime is a conflict, and the replacement stays.
-fn confirm_unchanged(dir: &Dir, name: &str, validated: &fsx::Validated) -> Result<(), Problem> {
-    let current = read_validated(dir, name)?;
-    let same_file = !validated.identity.is_known() || current.identity.is_same(validated.identity);
-    if current.revision() == validated.revision() && same_file {
-        return Ok(());
-    }
-    Err(Problem::new(
-        ProblemCode::StaleRevision,
-        "the entry was replaced on disk after this request was checked; the replacement has been \
-         left untouched. Reload it and retry",
-    ))
+/// The vault-relative parent of `relative`, as validated components.
+fn component_path(relative: &str) -> Result<Vec<String>, Problem> {
+    fsx::component::split(parent_path(relative)).map_err(|(part, error)| {
+        Problem::new(
+            ProblemCode::VaultUnavailable,
+            format!("`{part}` is not a usable path component: {error}"),
+        )
+    })
 }
 
-/// Refuses unless `name` in `parent` still leads to the verified directory.
-///
-/// A recursive delete inspects a whole subtree through one handle and then
-/// removes a *name*. Without this, repointing that name after the inspection
-/// would have the daemon destroy something it never looked at.
-fn confirm_same_directory(
-    parent: &Dir,
-    name: &str,
-    verified: fsx::FileIdentity,
-) -> Result<(), Problem> {
-    let current = parent
-        .open_dir_nofollow(name)
-        .map_err(|error| io_problem("the folder could not be reopened", &error))
-        .and_then(|handle| {
-            fsx::directory_identity(&handle)
-                .map_err(|error| io_problem("the folder could not be identified", &error))
-        })?;
-
-    if verified.is_known() && current.is_same(verified) {
-        return Ok(());
+/// Turns a failed staging claim into the right refusal, rolling back the rest.
+fn take_problem(staged: Staged, subject: &str, error: crate::staging::TakeError) -> Problem {
+    match error {
+        crate::staging::TakeError::NotTheSameEntry => {
+            let _ = staged.rollback();
+            Problem::new(
+                ProblemCode::StaleRevision,
+                format!(
+                    "{subject} was replaced on disk after this request was checked; the \
+                     replacement has been left untouched. Reload it and retry"
+                ),
+            )
+        }
+        // The entry is in staging and could not be given back. It is *not*
+        // discarded: the manifest describes where it belongs, and recovery will
+        // try again at the next start.
+        crate::staging::TakeError::Orphaned(cause) => Problem::new(
+            ProblemCode::PartialFailure,
+            format!(
+                "{subject} was moved out of the vault and could not be put back ({}); it is held \
+                 in the vault's `.bbb/staging` directory and is restored at the next start — see \
+                 `.bbb/staging/recovery.txt`",
+                cause.kind()
+            ),
+        ),
+        crate::staging::TakeError::Io(cause) => {
+            rollback(staged, &format!("{subject} could not be removed"), &cause)
+        }
     }
-    Err(Problem::new(
-        ProblemCode::SubtreeChanged,
-        "the folder was replaced on disk after its contents were checked; nothing has been \
-         deleted. Rescan and retry",
-    ))
 }
 
 fn revision_of(dir: &Dir, name: &str) -> Result<Revision, Problem> {

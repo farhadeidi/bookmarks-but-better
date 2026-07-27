@@ -451,8 +451,8 @@ async fn an_interrupted_delete_is_rolled_back_at_startup() {
     fs::rename(vault.path().join("Notes--11112222.md"), &staged).expect("stage");
     fs::write(
         residue.join("manifest.json"),
-        r#"{"version":1,"operation":"delete_bookmark","phase":"staging","entries":[
-            {"origin":"","name":"Notes--11112222.md","staged":"0-Notes--11112222.md","kind":"file"}]}"#,
+        r#"{"version":2,"operation":"delete_bookmark","phase":"staging","entries":[
+            {"origin":[],"name":"Notes--11112222.md","staged":"0-Notes--11112222.md","kind":"file"}]}"#,
     )
     .expect("manifest");
 
@@ -480,8 +480,8 @@ async fn an_interrupted_delete_past_its_commit_point_is_finished_at_startup() {
     fs::write(residue.join("0-Notes--11112222.md"), b"deleted content").expect("write");
     fs::write(
         residue.join("manifest.json"),
-        r#"{"version":1,"operation":"delete_bookmark","phase":"committed","entries":[
-            {"origin":"","name":"Notes--11112222.md","staged":"0-Notes--11112222.md","kind":"file"}]}"#,
+        r#"{"version":2,"operation":"delete_bookmark","phase":"committed","entries":[
+            {"origin":[],"name":"Notes--11112222.md","staged":"0-Notes--11112222.md","kind":"file"}]}"#,
     )
     .expect("manifest");
 
@@ -955,4 +955,146 @@ async fn a_reconcile_never_publishes_a_half_finished_delete() {
         .filter(|path| path.contains(".assets"))
         .collect();
     assert!(leftovers.is_empty(), "orphaned assets: {leftovers:?}");
+}
+
+// ---------------------------------------------------------------------------
+// Doctor distinguishes a stuck operation from a live one
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn doctor_passes_a_vault_whose_daemon_is_mid_operation() {
+    let vault = tempfile::tempdir().expect("temp dir");
+    bbb::initialize(vault.path()).expect("initialize");
+
+    // Exactly what a daemon has on disk while a delete is in flight: a valid
+    // manifest, not yet marked retained. Reporting this would make `doctor`
+    // fail at random during ordinary use.
+    let live = vault.path().join(".bbb").join("staging").join("op-live-0");
+    fs::create_dir_all(&live).expect("create");
+    fs::write(live.join("0-Notes--11112222.md"), b"in flight").expect("write");
+    fs::write(
+        live.join("manifest.json"),
+        r#"{"version":2,"operation":"delete_bookmark","phase":"staging","entries":[
+            {"origin":[],"name":"Notes--11112222.md","staged":"0-Notes--11112222.md","kind":"file"}]}"#,
+    )
+    .expect("manifest");
+
+    let report = bbb::doctor::examine(vault.path()).expect("examine");
+    assert!(
+        report.is_healthy(),
+        "a live operation is not a problem: {:?}",
+        report.errors
+    );
+}
+
+#[tokio::test]
+async fn doctor_reports_an_operation_recovery_gave_up_on() {
+    let vault = tempfile::tempdir().expect("temp dir");
+    bbb::initialize(vault.path()).expect("initialize");
+
+    let stuck = vault.path().join(".bbb").join("staging").join("op-stuck-0");
+    fs::create_dir_all(&stuck).expect("create");
+    fs::write(stuck.join("0-Notes--11112222.md"), b"stuck").expect("write");
+    fs::write(
+        stuck.join("manifest.json"),
+        r#"{"version":2,"operation":"delete_bookmark","phase":"staging","retained":true,"entries":[
+            {"origin":[],"name":"Notes--11112222.md","staged":"0-Notes--11112222.md","kind":"file"}]}"#,
+    )
+    .expect("manifest");
+
+    let report = bbb::doctor::examine(vault.path()).expect("examine");
+    assert!(!report.is_healthy(), "a stuck operation must be reported");
+    assert!(
+        report
+            .errors
+            .iter()
+            .any(|finding| finding.code == "staged_entries_retained"),
+        "{:?}",
+        report.errors
+    );
+}
+
+#[tokio::test]
+async fn doctor_reports_a_manifest_that_parses_but_is_not_valid() {
+    let vault = tempfile::tempdir().expect("temp dir");
+    bbb::initialize(vault.path()).expect("initialize");
+
+    // Well-formed JSON, so a naive reader finds no `retained` flag and passes
+    // it over — but the daemon will never act on it, so it never clears itself.
+    let evil = vault.path().join(".bbb").join("staging").join("op-evil-0");
+    fs::create_dir_all(&evil).expect("create");
+    fs::write(evil.join("0-payload"), b"PAYLOAD").expect("write");
+    fs::write(
+        evil.join("manifest.json"),
+        r#"{"version":2,"operation":"delete_bookmark","phase":"staging","entries":[
+            {"origin":["..",".."],"name":"passwd","staged":"0-payload","kind":"file"}]}"#,
+    )
+    .expect("manifest");
+
+    let report = bbb::doctor::examine(vault.path()).expect("examine");
+    assert!(!report.is_healthy(), "an unusable record must be reported");
+    let finding = report
+        .errors
+        .iter()
+        .find(|finding| finding.code == "staged_entries_retained")
+        .unwrap_or_else(|| panic!("{:?}", report.errors));
+    assert!(finding.detail.contains("origin component"), "{finding:?}");
+}
+
+#[tokio::test]
+async fn doctor_notices_a_running_daemon() {
+    let harness = Harness::new();
+    let report = bbb::doctor::examine(harness.root()).expect("examine");
+    assert!(
+        report.daemon_running,
+        "the vault is held by this test's daemon"
+    );
+    assert!(report.is_healthy(), "{:?}", report.errors);
+}
+
+// ---------------------------------------------------------------------------
+// A hostile manifest cannot make the daemon touch anything
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn a_manifest_pointing_outside_the_vault_is_never_acted_on() {
+    let outside = tempfile::tempdir().expect("temp dir");
+    let target = outside.path().join("passwd");
+    fs::write(&target, b"root:x:0:0").expect("write target");
+
+    let vault = tempfile::tempdir().expect("temp dir");
+    bbb::initialize(vault.path()).expect("initialize");
+    let residue = vault.path().join(".bbb").join("staging").join("op-evil-0");
+    fs::create_dir_all(&residue).expect("create");
+    fs::write(residue.join("0-payload"), b"PAYLOAD").expect("write payload");
+    fs::write(
+        residue.join("manifest.json"),
+        r#"{"version":2,"operation":"delete_bookmark","phase":"staging","entries":[
+            {"origin":["..","..",".."],"name":"passwd","staged":"0-payload","kind":"file"}]}"#,
+    )
+    .expect("manifest");
+
+    let harness = Harness::adopt(vault);
+
+    assert_eq!(
+        fs::read(&target).expect("read target"),
+        b"root:x:0:0",
+        "a crafted origin must not let anything be written outside the vault"
+    );
+    assert_eq!(
+        fs::read_to_string(harness.root().join(".bbb/staging/op-evil-0/0-payload"))
+            .expect("the payload is left exactly where it was"),
+        "PAYLOAD"
+    );
+
+    let warnings = harness.get("/api/v1/health").await.json()["warnings"]
+        .as_array()
+        .expect("warnings")
+        .clone();
+    assert!(
+        warnings
+            .iter()
+            .any(|warning| warning["code"] == "staged_entries_retained"),
+        "{warnings:?}"
+    );
 }

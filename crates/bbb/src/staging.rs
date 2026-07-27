@@ -33,6 +33,18 @@
 //! `bbb doctor`. An earlier version removed the staging directory at startup,
 //! which threw away precisely the files a crash had put there for safekeeping.
 //!
+//! # The manifest is hostile input
+//!
+//! It is a file in the user's vault. It can be hand-edited, corrupted, or
+//! written by malware, and after a crash it is the only thing telling recovery
+//! where to put a file back. So every field is validated before it is used:
+//! each origin component, each name and each staged name must be one plain,
+//! portable path component, and an origin is resolved handle-by-handle beneath
+//! the vault root rather than joined into a path. A manifest that fails any of
+//! that is **not acted on at all** — its directory is left exactly as found and
+//! reported, because a record that cannot be trusted is not a licence to move
+//! or delete anything.
+//!
 //! Recovery runs while the vault lock is held, so anything it finds is provably
 //! the residue of a run that is no longer alive.
 
@@ -42,7 +54,7 @@ use cap_fs_ext::DirExt as _;
 use cap_std::fs::Dir;
 use serde::{Deserialize, Serialize};
 
-use crate::fsx;
+use crate::fsx::{self, component};
 
 /// The staging directory's name inside the daemon's state directory.
 pub(crate) const STAGING_DIRECTORY: &str = "staging";
@@ -51,7 +63,7 @@ const MANIFEST_NAME: &str = "manifest.json";
 /// Where retained entries are explained, in the staging root.
 const RECOVERY_NAME: &str = "recovery.txt";
 /// The manifest format this build writes and understands.
-const MANIFEST_VERSION: u32 = 1;
+const MANIFEST_VERSION: u32 = 2;
 
 /// How far an operation has got.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -74,16 +86,42 @@ enum Kind {
 }
 
 /// One entry recorded in a manifest.
+///
+/// `origin` is a component *vector*, not a path: there is no string for a
+/// separator to hide in, and recovery walks it one handle at a time.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct Entry {
     /// The vault-relative directory it came from; empty means the root.
-    origin: String,
+    origin: Vec<String>,
     /// The name it had there.
     name: String,
     /// The name it has while staged.
     staged: String,
     /// Whether it is a file or a directory.
     kind: Kind,
+}
+
+impl Entry {
+    /// Checks every field that will be used to resolve a filesystem name.
+    fn validate(&self) -> Result<(), String> {
+        component::check_all(&self.origin).map_err(|(part, error)| {
+            format!("its origin component `{part}` is unusable: {error}")
+        })?;
+        component::check(&self.name)
+            .map_err(|error| format!("its entry name `{}` is unusable: {error}", self.name))?;
+        component::check(&self.staged)
+            .map_err(|error| format!("its staged name `{}` is unusable: {error}", self.staged))?;
+        Ok(())
+    }
+
+    /// The origin as a display string, for a message a person reads.
+    fn origin_display(&self) -> String {
+        if self.origin.is_empty() {
+            "the vault root".to_owned()
+        } else {
+            self.origin.join("/")
+        }
+    }
 }
 
 /// The durable record of one staged operation.
@@ -95,9 +133,45 @@ struct Manifest {
     operation: String,
     /// How far it got.
     phase: Phase,
+    /// Set once recovery has tried and failed to resolve this operation.
+    ///
+    /// It is what lets `bbb doctor` tell a stuck operation from one a running
+    /// daemon is in the middle of, without either guessing or racing it.
+    #[serde(default)]
+    retained: bool,
     /// Every entry it moved, or was about to move.
     entries: Vec<Entry>,
 }
+
+impl Manifest {
+    /// Checks every field a filesystem operation would be driven from.
+    fn validate(&self) -> Result<(), String> {
+        if self.version != MANIFEST_VERSION {
+            return Err(format!(
+                "its manifest is version {}, which this build does not understand",
+                self.version
+            ));
+        }
+        if self.operation.is_empty() || self.operation.len() > 64 {
+            return Err("its recorded operation name is not usable".to_owned());
+        }
+        if self
+            .operation
+            .chars()
+            .any(|character| character.is_control() || character == '/' || character == '\\')
+        {
+            return Err("its recorded operation name is not usable".to_owned());
+        }
+        for entry in &self.entries {
+            entry.validate()?;
+        }
+        Ok(())
+    }
+}
+
+/// A callback armed at a point, used to make a race happen deterministically.
+#[cfg(test)]
+type Interposition = (FaultPoint, Box<dyn Fn()>);
 
 /// A point at which a test may simulate the process dying.
 ///
@@ -115,21 +189,53 @@ pub(crate) enum FaultPoint {
     AfterPhaseFlip,
     /// Part-way through destroying the staged entries.
     MidDestroy,
+    /// After an entry is recorded, immediately before it is claimed.
+    ///
+    /// A test interposes here to replace the entry, which is the race the
+    /// verified claim exists to survive.
+    BeforeClaim,
 }
 
 #[cfg(test)]
 thread_local! {
     static FAULT: std::cell::Cell<Option<FaultPoint>> = const { std::cell::Cell::new(None) };
+    /// A callback run at a point, used to make a race happen deterministically.
+    static INTERPOSED: std::cell::RefCell<Option<Interposition>> =
+        const { std::cell::RefCell::new(None) };
 }
 
 #[cfg(test)]
 fn trip(point: FaultPoint) {
     let armed = FAULT.with(std::cell::Cell::get);
     assert!(armed != Some(point), "simulated crash at {point:?}");
+
+    // Run at most once, so a callback that itself reaches this point does not
+    // recurse. Taken out of the cell before being called for the same reason.
+    let action = INTERPOSED.with(|slot| {
+        let mut slot = slot.borrow_mut();
+        match slot.as_ref() {
+            Some((armed, _)) if *armed == point => slot.take().map(|(_, action)| action),
+            _ => None,
+        }
+    });
+    if let Some(action) = action {
+        action();
+    }
 }
 
 #[cfg(not(test))]
 const fn trip(_point: FaultPoint) {}
+
+/// Why an entry could not be taken into staging.
+#[derive(Debug)]
+pub(crate) enum TakeError {
+    /// The entry was replaced after the caller verified it, and is untouched.
+    NotTheSameEntry,
+    /// The claim landed and could not be undone; the entry is in staging.
+    Orphaned(io::Error),
+    /// An ordinary I/O failure.
+    Io(io::Error),
+}
 
 /// A set of entries moved out of the vault, pending destruction.
 #[derive(Debug)]
@@ -161,6 +267,7 @@ impl Staged {
             version: MANIFEST_VERSION,
             operation: operation.to_owned(),
             phase: Phase::Staging,
+            retained: false,
             entries: Vec::new(),
         };
         write_manifest(&directory, &manifest)?;
@@ -186,15 +293,20 @@ impl Staged {
     pub(crate) fn take(
         &mut self,
         origin: &Dir,
-        origin_relative: &str,
+        origin_components: &[String],
         name: &str,
         is_directory: bool,
-    ) -> io::Result<()> {
+        expected: fsx::FileIdentity,
+    ) -> Result<(), TakeError> {
+        component::check_all(origin_components)
+            .map_err(|(part, error)| TakeError::Io(invalid(&part, &error.to_string())))?;
+        component::check(name).map_err(|error| TakeError::Io(invalid(name, &error.to_string())))?;
+
         // Staged names are positional, so two entries with the same name from
         // different directories cannot collide with each other.
         let staged = format!("{}-{}", self.manifest.entries.len(), sanitize(name));
         self.manifest.entries.push(Entry {
-            origin: origin_relative.to_owned(),
+            origin: origin_components.to_vec(),
             name: name.to_owned(),
             staged: staged.clone(),
             kind: if is_directory {
@@ -204,27 +316,45 @@ impl Staged {
             },
         });
         // Recorded before the move, so a crash can never orphan the entry.
-        write_manifest(&self.directory, &self.manifest)?;
+        write_manifest(&self.directory, &self.manifest).map_err(TakeError::Io)?;
 
         if self.manifest.entries.len() == 1 {
             trip(FaultPoint::BeforeFirstRename);
         } else {
             trip(FaultPoint::BetweenRenames);
         }
+        trip(FaultPoint::BeforeClaim);
 
-        let moved = if is_directory {
-            fsx::move_dir(origin, name, &self.directory, &staged)
-        } else {
-            fsx::move_file(origin, name, &self.directory, &staged)
-        };
-        if let Err(error) = moved {
-            // The record describes a move that did not happen. Recovery copes
-            // with that, but the manifest should not keep claiming it.
-            self.manifest.entries.pop();
-            let _ = write_manifest(&self.directory, &self.manifest);
-            return Err(error);
+        // The claim is bound to the identity the caller verified. If the entry
+        // was replaced in between, the replacement is put straight back and the
+        // caller is told; nothing of theirs is carried into staging.
+        let claimed = fsx::claim_verified(
+            origin,
+            name,
+            &self.directory,
+            &staged,
+            is_directory,
+            expected,
+        );
+
+        match claimed {
+            Ok(()) => Ok(()),
+            Err(error) => {
+                // The record describes a move that did not happen. Recovery
+                // copes with that, but the manifest should not keep claiming it
+                // unless the entry really is sitting in staging.
+                let orphaned = matches!(error, fsx::ClaimError::UndoFailed { .. });
+                if !orphaned {
+                    self.manifest.entries.pop();
+                    let _ = write_manifest(&self.directory, &self.manifest);
+                }
+                Err(match error {
+                    fsx::ClaimError::NotTheSameEntry => TakeError::NotTheSameEntry,
+                    fsx::ClaimError::Io(error) => TakeError::Io(error),
+                    fsx::ClaimError::UndoFailed { cause, .. } => TakeError::Orphaned(cause),
+                })
+            }
         }
-        Ok(())
     }
 
     /// Commits the deletion: flips the phase, then destroys the entries.
@@ -305,6 +435,120 @@ impl Retained {
     }
 }
 
+/// Every staged operation that needs a person, with the reason.
+///
+/// Read-only, and the single definition of "this needs attention", so `doctor`
+/// cannot disagree with recovery about what counts. Two things qualify:
+///
+/// * an operation recovery marked `retained`, meaning it tried and could not
+///   resolve it, and
+/// * an operation whose manifest is missing, unparseable, or fails validation —
+///   a record the daemon will never act on, so it will never clear itself.
+///
+/// A valid manifest without the flag belongs to an operation a daemon is in the
+/// middle of, and is deliberately not reported.
+pub(crate) fn needs_attention(state: &Dir) -> Vec<(String, String)> {
+    let Ok(root) = fsx::open_dir(state, STAGING_DIRECTORY) else {
+        return Vec::new();
+    };
+    let Ok(entries) = root.entries() else {
+        return Vec::new();
+    };
+
+    let mut names: Vec<String> = entries
+        .flatten()
+        .filter(|entry| entry.file_type().is_ok_and(|kind| kind.is_dir()))
+        .filter_map(|entry| entry.file_name().to_str().map(str::to_owned))
+        .collect();
+    names.sort();
+
+    let mut report = Vec::new();
+    for name in names {
+        let Ok(directory) = fsx::open_dir(&root, &name) else {
+            report.push((
+                staged_path(&name),
+                "entries from an interrupted change are held here and the directory cannot be \
+                 opened"
+                    .to_owned(),
+            ));
+            continue;
+        };
+        match read_manifest(&directory) {
+            Ok(manifest) if manifest.retained => report.push((
+                staged_path(&name),
+                format!(
+                    "entries from an interrupted {} could not be restored automatically; see \
+                     .bbb/{STAGING_DIRECTORY}/{RECOVERY_NAME}",
+                    manifest.operation
+                ),
+            )),
+            // A live operation: a daemon is mid-delete and will clear this up.
+            Ok(_) => {}
+            Err(reason) => report.push((
+                staged_path(&name),
+                format!(
+                    "entries from an interrupted change are held here and {reason}, so the daemon \
+                     will not act on them; see .bbb/{STAGING_DIRECTORY}/{RECOVERY_NAME}"
+                ),
+            )),
+        }
+    }
+    report
+}
+
+/// Takes a stranded temporary into staging so it can be found again.
+///
+/// Called when a commit's undo failed and the temporary holds the user's
+/// evicted file. It is moved under a manifest that says where it belongs, so
+/// recovery restores it at the next start; if even the move fails the file is
+/// left exactly where it is, because losing it is the one outcome that must not
+/// happen.
+///
+/// Returns a sentence describing where the bytes now are, for the caller's
+/// error message.
+pub(crate) fn rescue(
+    state: &Dir,
+    vault: &Dir,
+    origin: &Dir,
+    origin_components: &[String],
+    name: &str,
+    temporary: &str,
+) -> String {
+    let mut staged = match Staged::open(state, vault, "rescued_contents", "rescue") {
+        Ok(staged) => staged,
+        Err(error) => {
+            return format!(
+                "they remain in `{temporary}`, beside the entry, because a staging area could                  not be opened ({})",
+                error.kind()
+            );
+        }
+    };
+
+    // The temporary is ours, created by this process moments ago, so there is
+    // no identity to verify against an earlier observation; what matters is
+    // that it is recorded before it moves.
+    let identity = fsx::read_with_identity(origin, temporary)
+        .map_or(fsx::FileIdentity::Unavailable, |validated| {
+            validated.identity
+        });
+
+    match staged.take(origin, origin_components, temporary, false, identity) {
+        Ok(()) => {
+            // Rewrite the entry so recovery puts it back under its real name
+            // rather than the temporary one.
+            if let Some(entry) = staged.manifest.entries.last_mut() {
+                name.clone_into(&mut entry.name);
+            }
+            let _ = write_manifest(&staged.directory, &staged.manifest);
+            let directory = staged_path(&staged.name);
+            format!("they are held in `{directory}` and are restored at the next start")
+        }
+        Err(_) => format!(
+            "they remain in `{temporary}`, beside the entry; move it back over `{name}` yourself"
+        ),
+    }
+}
+
 /// Finishes or undoes every operation a previous run left behind.
 ///
 /// Called once at startup with the vault lock held. Nothing is removed without
@@ -377,6 +621,8 @@ fn recover_one(root: &Dir, vault: &Dir, name: &str) -> Option<Retained> {
                 );
                 return None;
             }
+            manifest.retained = true;
+            let _ = write_manifest(&directory, &manifest);
             Some(Retained {
                 directory: staged_path(name),
                 operation: manifest.operation.clone(),
@@ -390,6 +636,10 @@ fn recover_one(root: &Dir, vault: &Dir, name: &str) -> Option<Retained> {
         Phase::Committed => {
             destroy(&directory, &manifest);
             let leftovers = staged_entry_names(&directory);
+            if !leftovers.is_empty() {
+                manifest.retained = true;
+                let _ = write_manifest(&directory, &manifest);
+            }
             if leftovers.is_empty() {
                 drop(directory);
                 let _ = root.remove_dir_all(name);
@@ -435,11 +685,19 @@ fn restore_all(directory: &Dir, vault: &Dir, manifest: &mut Manifest) -> io::Res
 }
 
 fn restore_one(directory: &Dir, vault: &Dir, entry: &Entry) -> io::Result<()> {
-    if directory.symlink_metadata(&entry.staged).is_err() {
+    // Validated again at the point of use: this function is reachable from
+    // recovery, whose manifest came off disk, and from rollback, whose did not.
+    entry
+        .validate()
+        .map_err(|reason| io::Error::new(io::ErrorKind::InvalidInput, reason))?;
+
+    if !fsx::exists(directory, &entry.staged) {
         // Recorded but never moved; there is nothing to put back.
         return Ok(());
     }
-    let origin = fsx::open_relative_dir(vault, &entry.origin)?;
+    // Walked one handle at a time beneath the vault root — never joined into a
+    // path and opened, which is what would let a crafted origin escape.
+    let origin = fsx::open_components(vault, &entry.origin)?;
     match entry.kind {
         Kind::Directory => fsx::move_dir(directory, &entry.staged, &origin, &entry.name),
         Kind::File => fsx::move_file(directory, &entry.staged, &origin, &entry.name),
@@ -452,8 +710,13 @@ fn destroy(directory: &Dir, manifest: &Manifest) {
         if index > 0 {
             trip(FaultPoint::MidDestroy);
         }
+        if entry.validate().is_err() {
+            // Unreachable for a manifest that came through `read_manifest`;
+            // refusing here as well means no future caller can bypass it.
+            continue;
+        }
         let removed = match entry.kind {
-            Kind::Directory => directory.remove_dir_all(&entry.staged),
+            Kind::Directory => fsx::remove_dir_all(directory, &entry.staged),
             Kind::File => fsx::remove_file(directory, &entry.staged),
         };
         if let Err(error) = removed
@@ -480,7 +743,7 @@ fn write_manifest(directory: &Dir, manifest: &Manifest) -> io::Result<()> {
         fsx::replace_validated(directory, MANIFEST_NAME, &bytes, &validated).map_err(|error| {
             match error {
                 fsx::CommitError::Io(error) => error,
-                fsx::CommitError::Stale => io::Error::new(
+                fsx::CommitError::Stale | fsx::CommitError::UndoFailed { .. } => io::Error::new(
                     io::ErrorKind::AlreadyExists,
                     "the staging manifest changed underneath the daemon",
                 ),
@@ -496,12 +759,9 @@ fn read_manifest(directory: &Dir) -> Result<Manifest, String> {
         .map_err(|error| format!("its manifest could not be read: {}", error.kind()))?;
     let manifest: Manifest = serde_json::from_slice(&bytes)
         .map_err(|error| format!("its manifest is not readable: {error}"))?;
-    if manifest.version != MANIFEST_VERSION {
-        return Err(format!(
-            "its manifest is version {}, which this build does not understand",
-            manifest.version
-        ));
-    }
+    // Every field is checked before a single filesystem name is built from it.
+    // A manifest that fails here is never acted on: see `recover_one`.
+    manifest.validate()?;
     Ok(manifest)
 }
 
@@ -538,12 +798,12 @@ fn write_recovery_report(root: &Dir, retained: &[Retained]) {
 }
 
 fn describe(entry: &Entry) -> String {
-    let origin = if entry.origin.is_empty() {
-        "the vault root".to_owned()
-    } else {
-        entry.origin.clone()
-    };
-    format!("{} belongs in {origin} as {}", entry.staged, entry.name)
+    format!(
+        "{} belongs in {} as {}",
+        entry.staged,
+        entry.origin_display(),
+        entry.name
+    )
 }
 
 fn staged_entry_names(directory: &Dir) -> Vec<String> {
@@ -584,6 +844,13 @@ fn unique_operation_name(root: &Dir, id: &str) -> io::Result<String> {
 }
 
 /// Makes a name safe to use as a single staged component.
+fn invalid(name: &str, reason: &str) -> io::Error {
+    io::Error::new(
+        io::ErrorKind::InvalidInput,
+        format!("`{name}` is not a usable name: {reason}"),
+    )
+}
+
 fn sanitize(name: &str) -> String {
     name.chars()
         .map(|character| {
@@ -600,6 +867,21 @@ fn sanitize(name: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn dev_components() -> Vec<String> {
+        vec!["Dev".to_owned()]
+    }
+
+    fn file_identity(dir: &Dir, name: &str) -> fsx::FileIdentity {
+        fsx::read_with_identity(dir, name)
+            .expect("read for identity")
+            .identity
+    }
+
+    fn dir_identity(dir: &Dir, name: &str) -> fsx::FileIdentity {
+        let handle = fsx::open_dir(dir, name).expect("open for identity");
+        fsx::directory_identity(&handle).expect("identity")
+    }
 
     struct Fixture {
         _temp: tempfile::TempDir,
@@ -650,11 +932,13 @@ mod tests {
             let mut staged =
                 Staged::open(&self.state, &self.vault, "delete_bookmark", "a1").expect("staging");
             let origin = self.dev();
+            let bookmark = file_identity(&origin, "React--a1.md");
+            let assets = dir_identity(&origin, "React--a1.assets");
             staged
-                .take(&origin, "Dev", "React--a1.md", false)
+                .take(&origin, &dev_components(), "React--a1.md", false, bookmark)
                 .expect("stage bookmark");
             staged
-                .take(&origin, "Dev", "React--a1.assets", true)
+                .take(&origin, &dev_components(), "React--a1.assets", true, assets)
                 .expect("stage assets");
             staged
         }
@@ -857,6 +1141,372 @@ mod tests {
         assert!(fixture.bookmark_is_present());
     }
 
+    /// Runs `body` with `interposed` executed at `point`.
+    ///
+    /// This is how a race is made to happen on purpose: the callback runs at the
+    /// exact instant between recording an entry and claiming it, which is the
+    /// window a verified claim has to survive.
+    fn interpose_at(point: FaultPoint, interposed: impl Fn() + 'static, body: impl FnOnce()) {
+        INTERPOSED.with(|slot| *slot.borrow_mut() = Some((point, Box::new(interposed))));
+        body();
+        INTERPOSED.with(|slot| *slot.borrow_mut() = None);
+    }
+
+    #[test]
+    fn a_file_replaced_just_before_the_claim_survives_and_is_refused() {
+        let fixture = fixture();
+        let origin = fixture.dev();
+        let expected = file_identity(&origin, "React--a1.md");
+
+        let mut staged =
+            Staged::open(&fixture.state, &fixture.vault, "delete_bookmark", "a1").expect("staging");
+
+        // Between the manifest record and the claim, somebody replaces the
+        // bookmark with a different file that happens to share its name.
+        let vault = fixture.vault.try_clone().expect("clone");
+        let outcome = {
+            let mut result = None;
+            interpose_at(
+                FaultPoint::BeforeClaim,
+                move || {
+                    let dev = fsx::open_dir(&vault, "Dev").expect("open Dev");
+                    fsx::remove_file(&dev, "React--a1.md").expect("remove");
+                    fsx::create_new(&dev, "React--a1.md", b"THEIRS").expect("replace");
+                },
+                || {
+                    result = Some(staged.take(
+                        &origin,
+                        &dev_components(),
+                        "React--a1.md",
+                        false,
+                        expected,
+                    ));
+                },
+            );
+            result.expect("the body ran")
+        };
+
+        assert!(
+            matches!(outcome, Err(TakeError::NotTheSameEntry)),
+            "{outcome:?}"
+        );
+        assert_eq!(
+            fsx::read(&fixture.dev(), "React--a1.md").expect("read"),
+            b"THEIRS",
+            "the replacement must be left exactly where it was"
+        );
+    }
+
+    #[test]
+    fn a_directory_replaced_just_before_the_claim_survives_and_is_refused() {
+        let fixture = fixture();
+        let origin = fixture.dev();
+        let expected = dir_identity(&origin, "React--a1.assets");
+
+        let mut staged =
+            Staged::open(&fixture.state, &fixture.vault, "delete_folder", "a1").expect("staging");
+
+        let vault = fixture.vault.try_clone().expect("clone");
+        let outcome = {
+            let mut result = None;
+            interpose_at(
+                FaultPoint::BeforeClaim,
+                move || {
+                    let dev = fsx::open_dir(&vault, "Dev").expect("open Dev");
+                    fsx::remove_dir_all(&dev, "React--a1.assets").expect("remove");
+                    fsx::create_dir(&dev, "React--a1.assets").expect("recreate");
+                    let replacement =
+                        fsx::open_dir(&dev, "React--a1.assets").expect("open replacement");
+                    fsx::create_new(&replacement, "theirs.png", b"THEIRS").expect("write");
+                },
+                || {
+                    result = Some(staged.take(
+                        &origin,
+                        &dev_components(),
+                        "React--a1.assets",
+                        true,
+                        expected,
+                    ));
+                },
+            );
+            result.expect("the body ran")
+        };
+
+        assert!(
+            matches!(outcome, Err(TakeError::NotTheSameEntry)),
+            "{outcome:?}"
+        );
+        let replacement = fsx::open_dir(&fixture.dev(), "React--a1.assets")
+            .expect("the replacement directory is still there");
+        assert_eq!(
+            fsx::read(&replacement, "theirs.png").expect("read"),
+            b"THEIRS",
+            "the replacement directory's contents must survive"
+        );
+    }
+
+    #[test]
+    fn a_refused_claim_leaves_no_trace_in_the_manifest() {
+        let fixture = fixture();
+        let origin = fixture.dev();
+        let expected = file_identity(&origin, "React--a1.md");
+        let mut staged =
+            Staged::open(&fixture.state, &fixture.vault, "delete_bookmark", "a1").expect("staging");
+
+        let vault = fixture.vault.try_clone().expect("clone");
+        interpose_at(
+            FaultPoint::BeforeClaim,
+            move || {
+                let dev = fsx::open_dir(&vault, "Dev").expect("open Dev");
+                fsx::remove_file(&dev, "React--a1.md").expect("remove");
+                fsx::create_new(&dev, "React--a1.md", b"THEIRS").expect("replace");
+            },
+            || {
+                let _ = staged.take(&origin, &dev_components(), "React--a1.md", false, expected);
+            },
+        );
+
+        assert!(
+            staged.manifest.entries.is_empty(),
+            "an entry that was never taken must not stay in the record"
+        );
+        staged.rollback().expect("rollback");
+        assert_eq!(
+            fsx::read(&fixture.dev(), "React--a1.md").expect("read"),
+            b"THEIRS"
+        );
+    }
+
+    #[test]
+    fn an_undo_that_fails_keeps_the_entry_and_recovery_puts_it_back() {
+        let fixture = fixture();
+        let origin = fixture.dev();
+        let expected = file_identity(&origin, "React--a1.md");
+        let mut staged =
+            Staged::open(&fixture.state, &fixture.vault, "delete_bookmark", "a1").expect("staging");
+
+        // The entry is replaced, so the claim must be given back — and giving
+        // it back fails. The bytes are now in staging and must stay there.
+        let vault = fixture.vault.try_clone().expect("clone");
+        let mut outcome = None;
+        interpose_at(
+            FaultPoint::BeforeClaim,
+            move || {
+                let dev = fsx::open_dir(&vault, "Dev").expect("open Dev");
+                fsx::remove_file(&dev, "React--a1.md").expect("remove");
+                fsx::create_new(&dev, "React--a1.md", b"THEIRS").expect("replace");
+                fsx::fail_next_undo();
+            },
+            || {
+                outcome =
+                    Some(staged.take(&origin, &dev_components(), "React--a1.md", false, expected));
+            },
+        );
+
+        let outcome = outcome.expect("the body ran");
+        assert!(
+            matches!(outcome, Err(TakeError::Orphaned(_))),
+            "{outcome:?}"
+        );
+        assert!(
+            !staged.manifest.entries.is_empty(),
+            "an entry stuck in staging must stay in the record, or nothing can find it"
+        );
+        let operation = staged.name.clone();
+        core::mem::forget(staged);
+
+        // It is still there — never deleted — and recovery deals with it.
+        let root = fsx::open_or_create_dir(&fixture.state, STAGING_DIRECTORY).expect("root");
+        let directory = fsx::open_dir(&root, &operation).expect("op dir");
+        assert!(
+            fsx::exists(&directory, "0-React--a1.md"),
+            "the claimed entry must not be discarded"
+        );
+
+        // The failed undo strands the placeholder on the origin name; because
+        // it is provably ours it is cleared, which leaves the name free for
+        // recovery to put the entry back into. The vault then looks exactly as
+        // the other writer left it.
+        let retained = recover(&fixture.state, &fixture.vault);
+        assert!(retained.is_empty(), "{retained:?}");
+        assert_eq!(
+            fsx::read(&fixture.dev(), "React--a1.md").expect("read"),
+            b"THEIRS",
+            "the entry taken by mistake is returned, byte for byte"
+        );
+        assert!(
+            !fsx::exists(&directory, "0-React--a1.md"),
+            "and nothing is left behind in staging once it has been returned"
+        );
+    }
+
+    #[test]
+    fn an_undo_that_fails_onto_an_occupied_name_keeps_the_entry() {
+        let fixture = fixture();
+        let origin = fixture.dev();
+        let expected = file_identity(&origin, "React--a1.md");
+        let mut staged =
+            Staged::open(&fixture.state, &fixture.vault, "delete_bookmark", "a1").expect("staging");
+
+        let vault = fixture.vault.try_clone().expect("clone");
+        let mut outcome = None;
+        interpose_at(
+            FaultPoint::BeforeClaim,
+            move || {
+                let dev = fsx::open_dir(&vault, "Dev").expect("open Dev");
+                fsx::remove_file(&dev, "React--a1.md").expect("remove");
+                fsx::create_new(&dev, "React--a1.md", b"THEIRS").expect("replace");
+                fsx::fail_next_undo();
+            },
+            || {
+                outcome =
+                    Some(staged.take(&origin, &dev_components(), "React--a1.md", false, expected));
+            },
+        );
+        assert!(matches!(outcome, Some(Err(TakeError::Orphaned(_)))));
+        let operation = staged.name.clone();
+        core::mem::forget(staged);
+
+        // Somebody takes the freed name before recovery runs. The entry must
+        // then be kept and reported, never forced over what is now there.
+        fsx::create_new(&fixture.dev(), "React--a1.md", b"A THIRD FILE").expect("occupy");
+
+        let retained = recover(&fixture.state, &fixture.vault);
+        assert_eq!(retained.len(), 1, "{retained:?}");
+        assert_eq!(
+            fsx::read(&fixture.dev(), "React--a1.md").expect("read"),
+            b"A THIRD FILE",
+            "recovery must not overwrite whatever now holds the name"
+        );
+
+        let root = fsx::open_or_create_dir(&fixture.state, STAGING_DIRECTORY).expect("root");
+        let directory = fsx::open_dir(&root, &operation).expect("op dir");
+        assert!(
+            fsx::exists(&directory, "0-React--a1.md"),
+            "the entry is kept for the user rather than discarded"
+        );
+    }
+
+    #[test]
+    fn a_hostile_manifest_is_never_acted_on() {
+        for (label, body) in [
+            (
+                "escaping origin",
+                r#"{"version":2,"operation":"delete_bookmark","phase":"staging","entries":[
+                   {"origin":["..",".."],"name":"passwd","staged":"0-x","kind":"file"}]}"#,
+            ),
+            (
+                "separator in origin",
+                r#"{"version":2,"operation":"delete_bookmark","phase":"staging","entries":[
+                   {"origin":["../../etc"],"name":"passwd","staged":"0-x","kind":"file"}]}"#,
+            ),
+            (
+                "state directory as origin",
+                r#"{"version":2,"operation":"delete_bookmark","phase":"staging","entries":[
+                   {"origin":[".bbb"],"name":"lock","staged":"0-x","kind":"file"}]}"#,
+            ),
+            (
+                "traversal in the name",
+                r#"{"version":2,"operation":"delete_bookmark","phase":"staging","entries":[
+                   {"origin":[],"name":"../escape.md","staged":"0-x","kind":"file"}]}"#,
+            ),
+            (
+                "traversal in the staged name",
+                r#"{"version":2,"operation":"delete_bookmark","phase":"committed","entries":[
+                   {"origin":[],"name":"x.md","staged":"../../../x.md","kind":"file"}]}"#,
+            ),
+            (
+                "absolute staged name",
+                r#"{"version":2,"operation":"delete_bookmark","phase":"committed","entries":[
+                   {"origin":[],"name":"x.md","staged":"/etc/passwd","kind":"file"}]}"#,
+            ),
+            (
+                "old version",
+                r#"{"version":1,"operation":"delete_bookmark","phase":"staging","entries":[]}"#,
+            ),
+            ("not json", "{ not json"),
+        ] {
+            let fixture = fixture();
+            let root =
+                fsx::open_or_create_dir(&fixture.state, STAGING_DIRECTORY).expect("staging root");
+            fsx::create_dir(&root, "op-0").expect("op dir");
+            let directory = fsx::open_dir(&root, "op-0").expect("open op");
+            fsx::create_new(&directory, MANIFEST_NAME, body.as_bytes()).expect("manifest");
+            fsx::create_new(&directory, "0-x", b"staged bytes").expect("staged entry");
+
+            let retained = recover(&fixture.state, &fixture.vault);
+
+            assert_eq!(retained.len(), 1, "{label}: {retained:?}");
+            assert!(
+                fsx::exists(&directory, "0-x"),
+                "{label}: the staged bytes must be left exactly as found"
+            );
+            assert!(
+                fixture.bookmark_is_present(),
+                "{label}: nothing in the vault may be touched"
+            );
+            assert!(
+                fixture.vault.symlink_metadata("passwd").is_err()
+                    && fixture.vault.symlink_metadata("escape.md").is_err(),
+                "{label}: nothing may be created from a hostile record"
+            );
+        }
+    }
+
+    #[test]
+    fn a_manifest_naming_a_windows_device_is_refused() {
+        let fixture = fixture();
+        let root = fsx::open_or_create_dir(&fixture.state, STAGING_DIRECTORY).expect("root");
+        fsx::create_dir(&root, "op-0").expect("op dir");
+        let directory = fsx::open_dir(&root, "op-0").expect("open op");
+        fsx::create_new(
+            &directory,
+            MANIFEST_NAME,
+            br#"{"version":2,"operation":"delete_bookmark","phase":"staging","entries":[
+               {"origin":[],"name":"NUL","staged":"0-x","kind":"file"}]}"#,
+        )
+        .expect("manifest");
+
+        let retained = recover(&fixture.state, &fixture.vault);
+        assert_eq!(retained.len(), 1, "{retained:?}");
+        assert!(
+            retained[0].reason.contains("Windows device"),
+            "{}",
+            retained[0].reason
+        );
+    }
+
+    #[test]
+    fn recovery_marks_what_it_could_not_resolve() {
+        let fixture = fixture();
+        let staged = fixture.stage_both();
+        let operation = staged.name.clone();
+        core::mem::forget(staged);
+        fixture.vault.remove_dir_all("Dev").expect("remove origin");
+
+        assert_eq!(recover(&fixture.state, &fixture.vault).len(), 1);
+
+        let root = fsx::open_or_create_dir(&fixture.state, STAGING_DIRECTORY).expect("root");
+        let directory = fsx::open_dir(&root, &operation).expect("op dir");
+        let manifest = read_manifest(&directory).expect("still readable");
+        assert!(
+            manifest.retained,
+            "recovery must record that it gave up, so doctor can tell this from a live operation"
+        );
+    }
+
+    #[test]
+    fn a_live_operation_is_not_marked_retained() {
+        let fixture = fixture();
+        let staged = fixture.stage_both();
+        let manifest = read_manifest(&staged.directory).expect("readable");
+        assert!(
+            !manifest.retained,
+            "an operation in progress must not look like a stuck one"
+        );
+        staged.rollback().expect("rollback");
+    }
+
     #[test]
     fn entries_with_the_same_name_do_not_collide_in_staging() {
         let fixture = fixture();
@@ -866,11 +1516,19 @@ mod tests {
 
         let mut staged =
             Staged::open(&fixture.state, &fixture.vault, "delete_bookmark", "a1").expect("staging");
+        let one = file_identity(&fixture.dev(), "React--a1.md");
+        let two = file_identity(&other, "React--a1.md");
         staged
-            .take(&fixture.dev(), "Dev", "React--a1.md", false)
+            .take(
+                &fixture.dev(),
+                &dev_components(),
+                "React--a1.md",
+                false,
+                one,
+            )
             .expect("stage one");
         staged
-            .take(&other, "Other", "React--a1.md", false)
+            .take(&other, &["Other".to_owned()], "React--a1.md", false, two)
             .expect("stage two");
         staged.rollback().expect("rollback");
 

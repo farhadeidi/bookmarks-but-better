@@ -24,6 +24,22 @@ use std::io;
 
 use cap_std::fs::Dir;
 
+use super::component;
+
+/// Rejects anything that is not one plain, portable path component.
+///
+/// Repeated here rather than left to `fsx`, because these functions reach the
+/// operating system directly — on Windows by building an ambient path — and a
+/// precondition that only the caller checks is one an FFI call does not have.
+fn guard(name: &str) -> io::Result<()> {
+    component::check(name).map_err(|error| {
+        io::Error::new(
+            io::ErrorKind::InvalidInput,
+            format!("`{name}` is not a usable name: {error}"),
+        )
+    })
+}
+
 /// Renames `from` onto `to`, replacing whatever is there.
 ///
 /// Callers must own the destination name. On Windows this is
@@ -41,6 +57,9 @@ pub(crate) fn rename_replacing(
     to: &Dir,
     to_name: &str,
 ) -> io::Result<()> {
+    guard(from_name)?;
+    guard(to_name)?;
+
     #[cfg(not(windows))]
     {
         from.rename(from_name, to, to_name)
@@ -74,6 +93,9 @@ pub(crate) fn rename_no_replace(
     to: &Dir,
     to_name: &str,
 ) -> io::Result<()> {
+    guard(from_name)?;
+    guard(to_name)?;
+
     #[cfg(target_os = "linux")]
     {
         use std::os::fd::AsFd as _;
@@ -87,7 +109,7 @@ pub(crate) fn rename_no_replace(
         .map_err(|error| io::Error::from_raw_os_error(error.raw_os_error()))
     }
 
-    #[cfg(target_vendor = "apple")]
+    #[cfg(target_os = "macos")]
     {
         use std::ffi::CString;
         use std::os::fd::AsRawFd as _;
@@ -121,7 +143,7 @@ pub(crate) fn rename_no_replace(
         move_file_ex(from, from_name, to, to_name, MOVEFILE_WRITE_THROUGH)
     }
 
-    #[cfg(not(any(target_os = "linux", target_vendor = "apple", windows)))]
+    #[cfg(not(any(target_os = "linux", target_os = "macos", windows)))]
     {
         let _ = (from, from_name, to, to_name);
         Err(io::Error::new(
@@ -131,34 +153,69 @@ pub(crate) fn rename_no_replace(
     }
 }
 
-/// Atomically swaps two directory entries.
+/// Atomically swaps two directory entries, which may be in different
+/// directories.
 ///
-/// After this returns, `a` names what `b` named and vice versa. Nothing is
-/// created or destroyed, and there is no instant in which either name is
-/// missing — which is what lets a caller verify *afterwards* that it swapped
-/// out the file it meant to, and put it back untouched if it did not.
+/// After this returns, the first name refers to what the second named and vice
+/// versa. Nothing is created or destroyed, and there is no instant in which
+/// either name is missing — which is what lets a caller verify *afterwards*
+/// that it swapped the entry it meant to, and put it back untouched if not.
 ///
 /// # Errors
 ///
 /// Returns [`io::ErrorKind::Unsupported`] where the platform has no exchange,
 /// and any other I/O error from the operation.
-pub(crate) fn exchange(dir: &Dir, a: &str, b: &str) -> io::Result<()> {
+pub(crate) fn exchange(
+    first: &Dir,
+    first_name: &str,
+    second: &Dir,
+    second_name: &str,
+) -> io::Result<()> {
+    guard(first_name)?;
+    guard(second_name)?;
+
     #[cfg(target_os = "linux")]
     {
         use std::os::fd::AsFd as _;
         rustix::fs::renameat_with(
-            dir.as_fd(),
-            a,
-            dir.as_fd(),
-            b,
+            first.as_fd(),
+            first_name,
+            second.as_fd(),
+            second_name,
             rustix::fs::RenameFlags::EXCHANGE,
         )
         .map_err(|error| io::Error::from_raw_os_error(error.raw_os_error()))
     }
 
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(target_os = "macos")]
     {
-        let _ = (dir, a, b);
+        use std::ffi::CString;
+        use std::os::fd::AsRawFd as _;
+
+        let first_c = CString::new(first_name).map_err(|_| invalid_name())?;
+        let second_c = CString::new(second_name).map_err(|_| invalid_name())?;
+        // SAFETY: both descriptors are borrowed from live `Dir` values that
+        // outlive the call, and both strings are NUL-terminated and valid for
+        // its duration. `RENAME_SWAP` exchanges the two entries atomically.
+        let result = unsafe {
+            libc::renameatx_np(
+                first.as_raw_fd(),
+                first_c.as_ptr(),
+                second.as_raw_fd(),
+                second_c.as_ptr(),
+                libc::RENAME_SWAP,
+            )
+        };
+        if result == 0 {
+            Ok(())
+        } else {
+            Err(io::Error::last_os_error())
+        }
+    }
+
+    #[cfg(not(any(target_os = "linux", target_os = "macos")))]
+    {
+        let _ = (first, first_name, second, second_name);
         Err(io::Error::new(
             io::ErrorKind::Unsupported,
             "this platform has no atomic exchange",
@@ -168,7 +225,7 @@ pub(crate) fn exchange(dir: &Dir, a: &str, b: &str) -> io::Result<()> {
 
 /// Whether [`exchange`] is implemented here.
 pub(crate) const fn exchange_is_supported() -> bool {
-    cfg!(target_os = "linux")
+    cfg!(any(target_os = "linux", target_os = "macos"))
 }
 
 /// Whether [`rename_no_replace`] is implemented here.
@@ -179,10 +236,10 @@ pub(crate) const fn exchange_is_supported() -> bool {
 /// asserted rather than assumed.
 #[cfg(test)]
 pub(crate) const fn no_replace_is_supported() -> bool {
-    cfg!(any(target_os = "linux", target_vendor = "apple", windows))
+    cfg!(any(target_os = "linux", target_os = "macos", windows))
 }
 
-#[cfg(target_vendor = "apple")]
+#[cfg(target_os = "macos")]
 fn invalid_name() -> io::Error {
     io::Error::new(
         io::ErrorKind::InvalidInput,
@@ -209,6 +266,12 @@ fn move_file_ex(
     flags: u32,
 ) -> io::Result<()> {
     use windows_sys::Win32::Storage::FileSystem::MoveFileExW;
+
+    // The names are joined onto ambient paths here, which is the one place in
+    // the crate where a component's shape decides what the operating system
+    // resolves. They are validated again immediately before that join.
+    guard(from_name)?;
+    guard(to_name)?;
 
     let source = wide(&directory_path(from)?.join(from_name));
     let destination = wide(&directory_path(to)?.join(to_name));
@@ -237,43 +300,58 @@ pub(crate) fn directory_path(dir: &Dir) -> io::Result<std::path::PathBuf> {
     };
 
     let handle = dir.as_raw_handle() as HANDLE;
+    let mut capacity = 0u32;
 
-    // SAFETY: `handle` is a live directory handle owned by `dir`. Passing a
-    // null buffer with length zero is the documented way to ask for the length.
-    let needed = unsafe {
-        GetFinalPathNameByHandleW(handle, core::ptr::null_mut(), 0, FILE_NAME_NORMALIZED)
-    };
-    if needed == 0 {
-        return Err(io::Error::last_os_error());
+    // `GetFinalPathNameByHandleW` reports "too small" by returning the size it
+    // wants, *without* setting a last-error worth reading — so a short buffer
+    // must be detected by comparing the return value with the capacity given,
+    // and retried, never turned into `last_os_error()`. The loop is bounded
+    // because a path that grows on every attempt is a filesystem racing us, not
+    // a buffer to keep enlarging.
+    for _ in 0..4 {
+        if capacity == 0 {
+            // SAFETY: `handle` is a live directory handle owned by `dir`.
+            // A null buffer with length zero is the documented length query.
+            let needed = unsafe {
+                GetFinalPathNameByHandleW(handle, core::ptr::null_mut(), 0, FILE_NAME_NORMALIZED)
+            };
+            if needed == 0 {
+                return Err(io::Error::last_os_error());
+            }
+            capacity = needed;
+            continue;
+        }
+
+        let mut buffer = vec![0u16; capacity as usize];
+        // SAFETY: as above, and `buffer` holds `capacity` writable elements.
+        let written = unsafe {
+            GetFinalPathNameByHandleW(handle, buffer.as_mut_ptr(), capacity, FILE_NAME_NORMALIZED)
+        };
+        if written == 0 {
+            return Err(io::Error::last_os_error());
+        }
+        if written >= capacity {
+            // The value is the required length, not an error. Grow and retry.
+            capacity = written.saturating_add(1);
+            continue;
+        }
+        buffer.truncate(written as usize);
+        return Ok(std::path::PathBuf::from(std::ffi::OsString::from_wide(
+            &buffer,
+        )));
     }
 
-    let mut buffer = vec![0u16; needed as usize];
-    // SAFETY: as above, and `buffer` now has exactly the capacity the previous
-    // call asked for, including room for the terminating NUL.
-    let written = unsafe {
-        GetFinalPathNameByHandleW(
-            handle,
-            buffer.as_mut_ptr(),
-            buffer.len() as u32,
-            FILE_NAME_NORMALIZED,
-        )
-    };
-    if written == 0 || written as usize >= buffer.len() + 1 {
-        return Err(io::Error::last_os_error());
-    }
-    buffer.truncate(written as usize);
-
-    Ok(std::path::PathBuf::from(std::ffi::OsString::from_wide(
-        &buffer,
-    )))
+    Err(io::Error::new(
+        io::ErrorKind::InvalidData,
+        "the directory path kept growing between queries",
+    ))
 }
 
 /// Asks Windows what object a handle refers to.
 ///
 /// The volume serial plus the file index is Windows' answer to the inode.
 /// cap-std exposes it only behind an unstable `std` feature, so the call is
-/// made here — in the one module allowed to make calls like this — rather than
-/// waiting for it to stabilise.
+/// made here — in the one module allowed to make calls like this.
 ///
 /// # Errors
 ///
@@ -316,10 +394,13 @@ mod tests {
         // These are the two facts the rest of the crate branches on; a platform
         // that answers `true` must actually implement the operation, which the
         // behavioural tests below check.
-        assert_eq!(exchange_is_supported(), cfg!(target_os = "linux"));
+        assert_eq!(
+            exchange_is_supported(),
+            cfg!(any(target_os = "linux", target_os = "macos"))
+        );
         assert_eq!(
             no_replace_is_supported(),
-            cfg!(any(target_os = "linux", target_vendor = "apple", windows))
+            cfg!(any(target_os = "linux", target_os = "macos", windows))
         );
     }
 
@@ -354,7 +435,7 @@ mod tests {
         crate::fsx::create_new(&root, "a.md", b"A").expect("create");
         crate::fsx::create_new(&root, "b.md", b"B").expect("create");
 
-        let outcome = exchange(&root, "a.md", "b.md");
+        let outcome = exchange(&root, "a.md", &root, "b.md");
         if exchange_is_supported() {
             outcome.expect("exchange");
             assert_eq!(crate::fsx::read(&root, "a.md").expect("read"), b"B");

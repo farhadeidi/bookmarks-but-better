@@ -116,6 +116,19 @@ you can see what you are losing, and then retry.
   committed and finishes what did. Nothing is ever purged: anything that cannot
   be recovered is kept, listed in `.bbb/staging/recovery.txt`, and reported in
   `GET /health` and `bbb doctor`.
+- **A staged entry is claimed only if it is still the entry that was verified.**
+  Where the platform has an atomic exchange, a placeholder is swapped in so the
+  original name is never free; the claim is then checked and reversed if it took
+  the wrong thing. An entry replaced in between is returned untouched and the
+  request fails with `stale_revision` or `subtree_changed`.
+- **The manifest is treated as hostile.** Every origin component, entry name and
+  staged name must be one plain, portable component; origins are resolved handle
+  by handle beneath the vault, never joined into a path. A manifest that fails
+  any of that is never acted on — its directory is left exactly as found and
+  reported.
+- **An undo that fails never deletes anything.** The temporary then holds the
+  user's evicted bytes, so it is moved into staging under a manifest that says
+  where it belongs, and restored at the next start.
 - **No clobbering.** Creates use `create_new`; file moves claim the destination
   name first and rename over their own placeholder; directory moves use a real
   no-replace rename, and a platform without one refuses the move rather than
@@ -142,6 +155,9 @@ Everything above holds on every platform except where this table says otherwise.
 | Commit binding | `renameat2(RENAME_EXCHANGE)` then verify — no window | re-open, compare identity + content, rename | same as macOS | same, identity unavailable, content only |
 | File identity | inode | inode | `GetFileInformationByHandle` | none; content comparison only |
 | Directory move | `renameat2(RENAME_NOREPLACE)` | `renameatx_np(RENAME_EXCL)` | `MoveFileExW` without `REPLACE_EXISTING` | **refused**, `501 unsupported_operation` |
+
+`cfg` is keyed on `target_os = "macos"`, not on the Apple vendor: iOS and the
+rest are not targets here and would not have been tested.
 | Symlink refusal | `O_NOFOLLOW` | `O_NOFOLLOW` | reparse-point equivalent | as the platform allows |
 
 The one place `unsafe` appears in this crate is `src/fsx/platform.rs`, which
@@ -156,7 +172,14 @@ rustup target add x86_64-pc-windows-msvc
 cargo check --workspace --all-targets --target x86_64-pc-windows-msvc
 ```
 
-Crash recovery is tested by arming a fault at each stage transition — before
+`bbb doctor` reports a staging directory only when recovery marked it retained
+or its manifest is unusable; an operation a running daemon is in the middle of
+is not a fault, and is passed over.
+
+Races are tested by interposing at the instant between recording an entry and
+claiming it — replacing the file or directory exactly there — and asserting the
+replacement survives and the request is refused. Crash recovery is tested by
+arming a fault at each stage transition — before
 the first rename, between renames, either side of the phase flip, and part-way
 through destroying — letting the real staging code die there, and then running
 recovery against whatever it left on disk.

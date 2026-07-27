@@ -61,9 +61,10 @@ tracing-subscriber = { version = "0.3.23", features = ["json", "env-filter"] }
 [target.'cfg(target_os = "linux")'.dependencies]
 rustix = { version = "1.1.4", features = ["fs"] }
 
-# `renameatx_np(RENAME_EXCL)`: Apple's handle-relative no-replace rename. It is
-# the only way to move a directory there without silently clobbering.
-[target.'cfg(target_vendor = "apple")'.dependencies]
+# `renameatx_np`: macOS's handle-relative rename, which offers both
+# `RENAME_EXCL` (never replace) and `RENAME_SWAP` (atomic exchange). Scoped to
+# macOS rather than every Apple vendor, since only macOS is a target here.
+[target.'cfg(target_os = "macos")'.dependencies]
 libc = "0.2.189"
 
 # `MoveFileExW` for durable replacement (`WRITE_THROUGH`) and for the

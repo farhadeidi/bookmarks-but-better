@@ -280,6 +280,9 @@ fn run_doctor(vault: &std::path::Path) -> ExitCode {
     }
     println!("  bookmarks      {}", report.bookmarks);
     println!("  folders        {}", report.folders);
+    if report.daemon_running {
+        println!("  daemon         running (the vault may change while you read this)");
+    }
     println!("  errors         {}", report.errors.len());
     println!("  warnings       {}", report.warnings.len());
 

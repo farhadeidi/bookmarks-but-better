@@ -15,6 +15,11 @@ use bbb_vault_core::{Severity, VaultScan, scan};
 /// A summary of one vault.
 #[derive(Debug, Clone)]
 pub struct Report {
+    /// Whether a daemon currently holds the vault's lock.
+    ///
+    /// Reported for context: a vault being served can change between the scan
+    /// and the moment the report is read.
+    pub daemon_running: bool,
     /// How many bookmarks were found.
     pub bookmarks: usize,
     /// How many directories were found, excluding the root.
@@ -56,36 +61,8 @@ pub fn examine(root: &Path) -> std::io::Result<Report> {
     let scan = scan(root)?;
     let mut report = summarize(&scan);
     report.errors.extend(staged_findings(root));
+    report.daemon_running = daemon_is_running(root);
     Ok(report)
-}
-
-/// Entries left in `.bbb/staging` that a previous run could not resolve.
-///
-/// Read-only, like everything else here: an operation directory that still has
-/// a manifest is reported, never cleaned up. Recovery runs when a daemon takes
-/// the lock, and doing it from `doctor` would race that daemon.
-fn staged_findings(root: &Path) -> Vec<Finding> {
-    let staging = root.join(".bbb").join("staging");
-    let Ok(entries) = std::fs::read_dir(&staging) else {
-        return Vec::new();
-    };
-
-    let mut findings: Vec<Finding> = entries
-        .flatten()
-        .filter(|entry| entry.path().is_dir())
-        .map(|entry| {
-            let name = entry.file_name().to_string_lossy().into_owned();
-            Finding {
-                code: "staged_entries_retained",
-                path: format!(".bbb/staging/{name}"),
-                detail: "entries from an interrupted change are held here; see \
-                         .bbb/staging/recovery.txt for what they are and where they belong"
-                    .to_owned(),
-            }
-        })
-        .collect();
-    findings.sort_by(|left, right| left.path.cmp(&right.path));
-    findings
 }
 
 fn summarize(scan: &VaultScan) -> Report {
@@ -104,6 +81,7 @@ fn summarize(scan: &VaultScan) -> Report {
     }
 
     Report {
+        daemon_running: false,
         bookmarks: scan.bookmarks().count(),
         folders: count_folders(scan.folder()),
         errors,
@@ -114,6 +92,56 @@ fn summarize(scan: &VaultScan) -> Report {
 
 fn count_folders(folder: &bbb_vault_core::FolderNode) -> usize {
     folder.folders().len() + folder.folders().iter().map(count_folders).sum::<usize>()
+}
+
+/// Entries in `.bbb/staging` that need a person.
+///
+/// The judgement itself lives in the staging module, so `doctor` and recovery
+/// cannot disagree about what counts as stuck. A staging directory is *not* by
+/// itself a problem: a running daemon creates one for the duration of every
+/// delete, and reporting that would make `doctor` fail at random during
+/// ordinary use.
+///
+/// Read-only: recovery happens when a daemon takes the lock, and doing it from
+/// `doctor` would race that daemon.
+fn staged_findings(root: &Path) -> Vec<Finding> {
+    let Ok(handle) = crate::fsx::open_root(root) else {
+        return Vec::new();
+    };
+    let Ok(state) = crate::fsx::open_state_dir(&handle) else {
+        return Vec::new();
+    };
+
+    crate::staging::needs_attention(&state)
+        .into_iter()
+        .map(|(path, detail)| Finding {
+            code: "staged_entries_retained",
+            path,
+            detail,
+        })
+        .collect()
+}
+
+/// Whether another process currently holds this vault.
+///
+/// Reported so that a person reading `doctor` output knows whether what they
+/// are looking at can change underneath them.
+fn daemon_is_running(root: &Path) -> bool {
+    let Ok(handle) = std::fs::File::options()
+        .read(true)
+        .write(true)
+        .open(root.join(".bbb").join("lock"))
+    else {
+        return false;
+    };
+    match handle.try_lock() {
+        Ok(()) => {
+            let _ = handle.unlock();
+            false
+        }
+        Err(std::fs::TryLockError::WouldBlock) => true,
+        Err(std::fs::TryLockError::Error(_)) => false,
+    }
 }
 
 #[cfg(test)]

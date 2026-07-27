@@ -46,10 +46,53 @@ use cap_fs_ext::{DirExt as _, FollowSymlinks, OpenOptionsFollowExt as _};
 use cap_std::ambient_authority;
 use cap_std::fs::{Dir, OpenOptions};
 
+pub(crate) mod component;
 mod ident;
 pub(crate) mod platform;
 
 pub(crate) use ident::FileIdentity;
+
+#[cfg(test)]
+thread_local! {
+    /// Makes the next undo fail, so its consequences can be asserted.
+    static FAIL_UNDO: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// Arms a simulated failure of the next undo on this thread.
+///
+/// An undo failing is the one path that leaves the user's bytes somewhere
+/// other than where they belong, and it cannot be provoked with permissions
+/// alone, so it is switched on directly.
+#[cfg(test)]
+pub(crate) fn fail_next_undo() {
+    FAIL_UNDO.with(|flag| flag.set(true));
+}
+
+#[cfg(test)]
+fn undo_failure() -> Option<io::Error> {
+    FAIL_UNDO
+        .with(|flag| flag.replace(false))
+        .then(|| io::Error::other("simulated undo failure"))
+}
+
+#[cfg(not(test))]
+const fn undo_failure() -> Option<io::Error> {
+    None
+}
+
+/// Rejects anything that is not one plain, portable path component.
+///
+/// Every primitive below calls this on every name it is given, rather than
+/// trusting its caller to have done so. A precondition checked only at the
+/// boundary is a precondition the next call site forgets.
+fn guard(name: &str) -> io::Result<()> {
+    component::check(name).map_err(|error| {
+        io::Error::new(
+            io::ErrorKind::InvalidInput,
+            format!("`{name}` is not a usable name: {error}"),
+        )
+    })
+}
 
 /// The identity of an open directory, for binding an operation to it.
 ///
@@ -119,15 +162,31 @@ pub(crate) fn open_root(root: &Path) -> io::Result<Dir> {
 /// directory, and [`io::ErrorKind::InvalidInput`] for a component that is not a
 /// plain name.
 pub(crate) fn open_relative_dir(root: &Dir, relative: &str) -> io::Result<Dir> {
+    let components = component::split(relative).map_err(|(part, error)| {
+        io::Error::new(
+            io::ErrorKind::InvalidInput,
+            format!("`{part}` is not a usable path component: {error}"),
+        )
+    })?;
+    open_components(root, &components)
+}
+
+/// Opens a directory by walking already-validated components, one handle at a
+/// time.
+///
+/// This is the only way a path from a manifest is ever resolved. Each component
+/// is opened against the previous handle with no-follow, so the result is
+/// beneath `root` by construction rather than by a check on a joined string.
+///
+/// # Errors
+///
+/// Returns the I/O error of the first component that cannot be opened, and
+/// [`io::ErrorKind::InvalidInput`] for a component that is not a plain name.
+pub(crate) fn open_components(root: &Dir, components: &[String]) -> io::Result<Dir> {
     let mut current = root.try_clone()?;
-    for component in relative.split('/').filter(|part| !part.is_empty()) {
-        if component == "." || component == ".." {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidInput,
-                "a vault-relative path never contains `.` or `..`",
-            ));
-        }
-        current = current.open_dir_nofollow(component)?;
+    for name in components {
+        guard(name)?;
+        current = current.open_dir_nofollow(name.as_str())?;
     }
     Ok(current)
 }
@@ -139,6 +198,7 @@ pub(crate) fn open_relative_dir(root: &Dir, relative: &str) -> io::Result<Dir> {
 /// Returns the underlying I/O error; a symlink at `name` fails rather than
 /// being read through.
 pub(crate) fn read(dir: &Dir, name: &str) -> io::Result<Vec<u8>> {
+    guard(name)?;
     let mut file = dir.open_with(name, &read_options())?;
     let mut bytes = Vec::new();
     file.read_to_end(&mut bytes)?;
@@ -156,6 +216,7 @@ pub(crate) fn read(dir: &Dir, name: &str) -> io::Result<Vec<u8>> {
 /// Returns [`io::ErrorKind::AlreadyExists`] when the name is taken, and any
 /// other I/O error from the write or the sync.
 pub(crate) fn create_new(dir: &Dir, name: &str, bytes: &[u8]) -> io::Result<()> {
+    guard(name)?;
     let mut file = dir.open_with(name, &create_new_options())?;
     file.write_all(bytes)?;
     file.sync_all()?;
@@ -189,6 +250,7 @@ impl Validated {
 ///
 /// Returns the underlying I/O error.
 pub(crate) fn read_with_identity(dir: &Dir, name: &str) -> io::Result<Validated> {
+    guard(name)?;
     let mut file = dir.open_with(name, &read_options())?;
     let identity = ident::of(&file)?;
     let mut bytes = Vec::new();
@@ -203,6 +265,17 @@ pub(crate) enum CommitError {
     Stale,
     /// The operation failed for an ordinary I/O reason.
     Io(io::Error),
+    /// A swap could not be undone, so the user's bytes are at `temporary`.
+    ///
+    /// The temporary must not be removed: after a successful exchange it holds
+    /// the file that was evicted from the destination, which is the user's only
+    /// copy. The caller is responsible for rescuing it.
+    UndoFailed {
+        /// The name, in the same directory, now holding the user's bytes.
+        temporary: String,
+        /// Why the undo failed.
+        cause: io::Error,
+    },
 }
 
 impl From<io::Error> for CommitError {
@@ -253,13 +326,21 @@ pub(crate) fn replace_validated(
         return Err(CommitError::Io(error));
     }
 
-    let outcome = commit(dir, &temporary, name, validated);
-    if outcome.is_err() {
-        // On failure the temporary may or may not still exist, depending on how
-        // far the commit got; removing it is best-effort either way.
-        let _ = remove_file(dir, &temporary);
+    match commit(dir, &temporary, name, validated) {
+        Ok(()) => {}
+        // The temporary still holds only the bytes this call produced, so
+        // removing it loses nothing.
+        Err(error @ (CommitError::Stale | CommitError::Io(_))) => {
+            let _ = remove_file(dir, &temporary);
+            return Err(error);
+        }
+        // A failed undo means the temporary holds the *user's* evicted file.
+        // Deleting it here would destroy the very thing the undo was trying to
+        // save, so it is left exactly where it is and named to the caller.
+        Err(CommitError::UndoFailed { cause, .. }) => {
+            return Err(CommitError::UndoFailed { temporary, cause });
+        }
     }
-    outcome?;
 
     sync_dir(dir);
     Ok(())
@@ -274,14 +355,14 @@ fn commit(
 ) -> Result<(), CommitError> {
     if platform::exchange_is_supported() {
         // One atomic step: after it, `temporary` names whatever `name` named.
-        platform::exchange(dir, temporary, name)?;
+        platform::exchange(dir, temporary, dir, name)?;
 
         let evicted = match read_with_identity(dir, temporary) {
             Ok(evicted) => evicted,
             Err(error) => {
                 // The swap happened but the result cannot be read. Undo it, so
                 // the vault is left exactly as it was found.
-                let _ = platform::exchange(dir, temporary, name);
+                let _ = platform::exchange(dir, temporary, dir, name);
                 return Err(CommitError::Io(error));
             }
         };
@@ -291,7 +372,14 @@ fn commit(
         {
             // Somebody replaced the file between validation and now. Put their
             // version back and refuse; they lose nothing.
-            platform::exchange(dir, temporary, name)?;
+            let undo =
+                undo_failure().map_or_else(|| platform::exchange(dir, temporary, dir, name), Err);
+            if let Err(cause) = undo {
+                return Err(CommitError::UndoFailed {
+                    temporary: temporary.to_owned(),
+                    cause,
+                });
+            }
             return Err(CommitError::Stale);
         }
 
@@ -322,7 +410,43 @@ fn commit(
 ///
 /// Returns the underlying I/O error.
 pub(crate) fn remove_file(dir: &Dir, name: &str) -> io::Result<()> {
+    guard(name)?;
     dir.remove_file_or_symlink(name)
+}
+
+/// Removes a directory and everything in it, through `dir`.
+///
+/// # Errors
+///
+/// Returns the underlying I/O error.
+pub(crate) fn remove_dir_all(dir: &Dir, name: &str) -> io::Result<()> {
+    guard(name)?;
+    dir.remove_dir_all(name)
+}
+
+/// Creates an empty directory, failing if the name is taken.
+///
+/// # Errors
+///
+/// Returns [`io::ErrorKind::AlreadyExists`] when the name is taken.
+pub(crate) fn create_dir(dir: &Dir, name: &str) -> io::Result<()> {
+    guard(name)?;
+    dir.create_dir(name)
+}
+
+/// Opens a child directory, refusing to follow a link.
+///
+/// # Errors
+///
+/// Returns the underlying I/O error.
+pub(crate) fn open_dir(dir: &Dir, name: &str) -> io::Result<Dir> {
+    guard(name)?;
+    dir.open_dir_nofollow(name)
+}
+
+/// Whether `name` exists in `dir`, judged without following links.
+pub(crate) fn exists(dir: &Dir, name: &str) -> bool {
+    guard(name).is_ok() && dir.symlink_metadata(name).is_ok()
 }
 
 /// Creates a uniquely named temporary file in `dir` and returns it, open.
@@ -373,6 +497,8 @@ fn create_temp(dir: &Dir, destination: &str) -> io::Result<(String, cap_std::fs:
 /// Returns [`io::ErrorKind::AlreadyExists`] when the destination name is taken,
 /// and any other I/O error from the rename.
 pub(crate) fn move_file(from: &Dir, from_name: &str, to: &Dir, to_name: &str) -> io::Result<()> {
+    guard(from_name)?;
+    guard(to_name)?;
     // Claiming the name is the whole point: between this and the rename, no
     // other writer can take it, because it is already taken by us.
     let placeholder = to.open_with(to_name, &create_new_options())?;
@@ -386,6 +512,173 @@ pub(crate) fn move_file(from: &Dir, from_name: &str, to: &Dir, to_name: &str) ->
     sync_dir(from);
     sync_dir(to);
     Ok(())
+}
+
+/// Why a verified claim did not happen.
+#[derive(Debug)]
+pub(crate) enum ClaimError {
+    /// The entry is not the one the caller verified; it has been left alone.
+    NotTheSameEntry,
+    /// The operation failed for an ordinary I/O reason.
+    Io(io::Error),
+    /// The claim landed but could not be undone, so the destination holds the
+    /// entry and the caller must keep it.
+    UndoFailed {
+        /// Why the undo failed.
+        cause: io::Error,
+    },
+}
+
+impl From<io::Error> for ClaimError {
+    fn from(error: io::Error) -> Self {
+        Self::Io(error)
+    }
+}
+
+/// Moves `name` out of `from` into `to`, but only if it is still `expected`.
+///
+/// This is the delete-side counterpart of [`replace_validated`], and it closes
+/// the same window. Checking the identity and then renaming leaves a gap in
+/// which the entry can be replaced, and the rename would then carry away
+/// somebody else's file or directory.
+///
+/// Where the platform has an atomic exchange, a placeholder is created at the
+/// destination and swapped with the entry: the origin name is never empty, so
+/// nothing can be created there while the swap is examined, and if the wrong
+/// thing was taken the swap is reversed and the replacement is untouched.
+///
+/// Elsewhere the entry is claimed with a no-replace rename and then examined;
+/// the wrong thing is renamed straight back. The origin name is briefly absent
+/// there, which is the one difference between the two paths.
+///
+/// # Errors
+///
+/// [`ClaimError::NotTheSameEntry`] when the entry was replaced,
+/// [`ClaimError::UndoFailed`] when it was claimed and could not be given back,
+/// and [`ClaimError::Io`] for anything else.
+pub(crate) fn claim_verified(
+    from: &Dir,
+    from_name: &str,
+    to: &Dir,
+    to_name: &str,
+    is_directory: bool,
+    expected: FileIdentity,
+) -> Result<(), ClaimError> {
+    guard(from_name)?;
+    guard(to_name)?;
+
+    if platform::exchange_is_supported() {
+        // Build the placeholder first, so the swap has something to put back
+        // into the origin and that name is never momentarily free.
+        if is_directory {
+            create_dir(to, to_name)?;
+        } else {
+            drop(to.open_with(to_name, &create_new_options())?);
+        }
+        // Remembered so it can be recognised later. After the swap it sits at
+        // the origin name, and if the undo fails it has to be cleared out of
+        // the way — but only once it is known to still be ours.
+        let placeholder = claim_identity(to, to_name, is_directory)?;
+
+        if let Err(error) = platform::exchange(from, from_name, to, to_name) {
+            let _ = remove_claim(to, to_name, is_directory);
+            return Err(ClaimError::Io(error));
+        }
+
+        return match verify_claim(to, to_name, is_directory, expected) {
+            Ok(()) => {
+                // The placeholder is now sitting at the origin name; removing
+                // it completes the move.
+                remove_claim(from, from_name, is_directory)?;
+                Ok(())
+            }
+            Err(mismatch) => {
+                // Swap back: the entry returns to its name and the placeholder
+                // comes back here to be discarded.
+                let undo = undo_failure()
+                    .map_or_else(|| platform::exchange(from, from_name, to, to_name), Err);
+                if let Err(cause) = undo {
+                    // The entry stays here, and our placeholder is stranded on
+                    // the origin name. Clearing it frees that name so recovery
+                    // can put the entry back — but only if it is provably still
+                    // the placeholder this call created, never if something
+                    // else has taken the name since.
+                    if claim_identity(from, from_name, is_directory)
+                        .is_ok_and(|current| current.is_same(placeholder))
+                    {
+                        let _ = remove_claim(from, from_name, is_directory);
+                    }
+                    return Err(ClaimError::UndoFailed { cause });
+                }
+                let _ = remove_claim(to, to_name, is_directory);
+                Err(mismatch)
+            }
+        };
+    }
+
+    // No exchange here: claim the entry outright, then give it back if it turns
+    // out to be the wrong one.
+    if is_directory {
+        move_dir(from, from_name, to, to_name)?;
+    } else {
+        move_file(from, from_name, to, to_name)?;
+    }
+
+    match verify_claim(to, to_name, is_directory, expected) {
+        Ok(()) => Ok(()),
+        Err(mismatch) => {
+            let undo = undo_failure().map_or_else(
+                || {
+                    if is_directory {
+                        move_dir(to, to_name, from, from_name)
+                    } else {
+                        move_file(to, to_name, from, from_name)
+                    }
+                },
+                Err,
+            );
+            match undo {
+                Ok(()) => Err(mismatch),
+                Err(cause) => Err(ClaimError::UndoFailed { cause }),
+            }
+        }
+    }
+}
+
+/// The identity of whatever sits at `name`, file or directory.
+fn claim_identity(dir: &Dir, name: &str, is_directory: bool) -> io::Result<FileIdentity> {
+    if is_directory {
+        directory_identity(&open_dir(dir, name)?)
+    } else {
+        Ok(read_with_identity(dir, name)?.identity)
+    }
+}
+
+/// Checks that what now sits at `name` is the entry that was expected.
+fn verify_claim(
+    dir: &Dir,
+    name: &str,
+    is_directory: bool,
+    expected: FileIdentity,
+) -> Result<(), ClaimError> {
+    let actual = claim_identity(dir, name, is_directory)?;
+
+    // An identity the platform cannot supply is not evidence of a match. The
+    // caller has already compared content where it can; claiming success on
+    // `Unavailable == Unavailable` would be inventing a guarantee.
+    if expected.is_known() && actual.is_same(expected) {
+        Ok(())
+    } else {
+        Err(ClaimError::NotTheSameEntry)
+    }
+}
+
+fn remove_claim(dir: &Dir, name: &str, is_directory: bool) -> io::Result<()> {
+    if is_directory {
+        remove_dir_all(dir, name)
+    } else {
+        remove_file(dir, name)
+    }
 }
 
 /// Moves a directory between handles without ever replacing anything.
@@ -406,6 +699,8 @@ pub(crate) fn move_file(from: &Dir, from_name: &str, to: &Dir, to_name: &str) ->
 /// [`io::ErrorKind::Unsupported`] where there is no such primitive, and any
 /// other I/O error from the rename.
 pub(crate) fn move_dir(from: &Dir, from_name: &str, to: &Dir, to_name: &str) -> io::Result<()> {
+    guard(from_name)?;
+    guard(to_name)?;
     platform::rename_no_replace(from, from_name, to, to_name)?;
     sync_dir(from);
     sync_dir(to);
@@ -421,7 +716,27 @@ pub(crate) fn move_dir(from: &Dir, from_name: &str, to: &Dir, to_name: &str) -> 
 /// # Errors
 ///
 /// Returns the underlying I/O error, including the refusal above.
+/// Opens the daemon's own state directory, without creating it.
+///
+/// `.bbb` is the one name [`component::check`] refuses, because no vault
+/// content may resolve into it — so the daemon needs an explicit door of its
+/// own rather than a hole in the check.
+///
+/// # Errors
+///
+/// Returns the underlying I/O error, including a refusal when `.bbb` exists but
+/// is a link or a reparse point.
+pub(crate) fn open_state_dir(root: &Dir) -> io::Result<Dir> {
+    root.open_dir_nofollow(component::STATE_DIRECTORY)
+}
+
 pub(crate) fn open_or_create_dir(dir: &Dir, name: &str) -> io::Result<Dir> {
+    // The daemon's own state directory is the one name vault content may not
+    // use, so it is created here through the unguarded call deliberately; every
+    // other name goes through `guard`.
+    if name != component::STATE_DIRECTORY {
+        guard(name)?;
+    }
     match dir.create_dir(name) {
         Ok(()) => {}
         Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {}
@@ -494,6 +809,7 @@ mod tests {
         replace_validated(dir, name, bytes, &validated).map_err(|error| match error {
             CommitError::Io(error) => error,
             CommitError::Stale => io::Error::other("the file changed during the test"),
+            CommitError::UndoFailed { cause, .. } => cause,
         })
     }
 
