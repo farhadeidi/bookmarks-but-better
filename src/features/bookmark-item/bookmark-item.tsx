@@ -23,6 +23,7 @@ import { useUIStore } from "@/stores/ui-store"
 import { useBookmarkStore } from "@/stores/bookmark-store"
 import { useSortableBookmark, DropIndicator } from "@/features/dnd"
 import { cn } from "@/lib/utils"
+import { describeReadOnly } from "@/lib/bookmark-utils"
 
 interface BookmarkItemProps {
   bookmark: BookmarkNode
@@ -41,6 +42,10 @@ export const BookmarkItem = React.memo(function BookmarkItem({
   sortableIndex,
   folderId,
 }: BookmarkItemProps) {
+  const adapter = useBookmarkStore((s) => s.adapter)
+  const reorderEnabled = adapter?.capabilities.reorder ?? true
+  const isReadOnly = bookmark.readOnly ?? false
+
   const {
     ref: sortableRef,
     isDragging,
@@ -50,11 +55,11 @@ export const BookmarkItem = React.memo(function BookmarkItem({
     index: sortableIndex,
     folderId,
     layout,
+    disabled: !reorderEnabled || isReadOnly,
   })
 
   const openEditor = useUIStore((s) => s.openEditor)
   const openDeleteConfirm = useUIStore((s) => s.openDeleteConfirm)
-  const adapter = useBookmarkStore((s) => s.adapter)
 
   const handleCopyUrl = React.useCallback(
     (e: React.MouseEvent) => {
@@ -193,6 +198,9 @@ const HoverCardBody = React.memo(function HoverCardBody({
   onDelete: (e: React.MouseEvent) => void
   onOpenInManager?: (e: React.MouseEvent) => void
 }) {
+  const isReadOnly = bookmark.readOnly ?? false
+  const readOnlyReason = isReadOnly ? describeReadOnly(bookmark) : undefined
+
   return (
     <div className="flex flex-col gap-2">
       <div className="text-sm font-medium">{bookmark.title}</div>
@@ -204,11 +212,18 @@ const HoverCardBody = React.memo(function HoverCardBody({
       <div className="flex items-center gap-1 pt-1">
         <Tooltip>
           <TooltipTrigger
-            render={<Button variant="ghost" size="icon-sm" onClick={onEdit} />}
+            render={
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                aria-disabled={isReadOnly || undefined}
+                onClick={isReadOnly ? (e) => e.preventDefault() : onEdit}
+              />
+            }
           >
             <HugeiconsIcon icon={PencilEdit01Icon} size={14} />
           </TooltipTrigger>
-          <TooltipContent>Edit</TooltipContent>
+          <TooltipContent>{readOnlyReason ?? "Edit"}</TooltipContent>
         </Tooltip>
         <Tooltip>
           <TooltipTrigger
@@ -223,12 +238,17 @@ const HoverCardBody = React.memo(function HoverCardBody({
         <Tooltip>
           <TooltipTrigger
             render={
-              <Button variant="ghost" size="icon-sm" onClick={onDelete} />
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                aria-disabled={isReadOnly || undefined}
+                onClick={isReadOnly ? (e) => e.preventDefault() : onDelete}
+              />
             }
           >
             <HugeiconsIcon icon={Delete02Icon} size={14} />
           </TooltipTrigger>
-          <TooltipContent>Delete</TooltipContent>
+          <TooltipContent>{readOnlyReason ?? "Delete"}</TooltipContent>
         </Tooltip>
         {onOpenInManager && (
           <Tooltip>

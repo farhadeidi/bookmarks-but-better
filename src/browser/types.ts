@@ -1,3 +1,8 @@
+export interface BookmarkDiagnostic {
+  code: string
+  message: string
+}
+
 export interface BookmarkNode {
   id: string
   title: string
@@ -5,6 +10,12 @@ export interface BookmarkNode {
   parentId?: string
   children?: BookmarkNode[]
   dateAdded?: number
+  /** Content revision used for optimistic-concurrency mutations. Daemon-only. */
+  revision?: string
+  /** True when the daemon cannot safely mutate this node. Daemon-only. */
+  readOnly?: boolean
+  /** Why a node is read-only or otherwise flagged. Daemon-only. */
+  diagnostics?: BookmarkDiagnostic[]
 }
 
 export interface BookmarkAdapter {
@@ -30,6 +41,8 @@ export interface BookmarkAdapter {
   onRemoved(callback: () => void): () => void
   onMoved(callback: () => void): () => void
   openInManager(id: string): Promise<void>
+  /** Releases adapter-owned resources (e.g. an SSE connection). Optional: only the daemon adapter needs it. */
+  dispose?(): void
 }
 
 export interface StorageAdapter {
@@ -47,6 +60,12 @@ export interface FaviconProvider {
 export interface AdapterCapabilities {
   /** Whether "open in bookmark manager" is supported. False on Firefox and Standalone. */
   openInManager: boolean
+  /**
+   * Whether persisted drag-and-drop reordering/moving is supported. False in
+   * daemon mode: sibling ordering is deterministic server-side and the
+   * byte-preserving reorder mutation path hasn't shipped yet.
+   */
+  reorder: boolean
 }
 
 export interface BrowserAdapter {

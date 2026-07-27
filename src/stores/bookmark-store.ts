@@ -2,11 +2,20 @@ import { create } from "zustand"
 import type { BookmarkNode, BrowserAdapter } from "@/browser"
 import { debounce } from "@/lib/bookmark-utils"
 
+export type BookmarkStoreStatus = "loading" | "ready" | "unavailable"
+
+function toErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : "Something went wrong."
+}
+
 interface BookmarkState {
   tree: BookmarkNode[]
   rootFolderId: string | null
   isLoading: boolean
   adapter: BrowserAdapter | null
+  status: BookmarkStoreStatus
+  loadError: string | null
+  mutationError: string | null
 
   // Derived
   rootFolder: BookmarkNode | null
@@ -15,6 +24,8 @@ interface BookmarkState {
   init(adapter: BrowserAdapter): Promise<void | (() => void)>
   setRootFolderId(id: string | null): void
   refresh(): Promise<void>
+  retry(): Promise<void>
+  clearMutationError(): void
   createBookmark(parentId: string, title: string, url: string): Promise<void>
   updateBookmark(
     id: string,
@@ -45,12 +56,21 @@ export const useBookmarkStore = create<BookmarkState>((set, get) => ({
   rootFolderId: null,
   isLoading: true,
   adapter: null,
+  status: "loading",
+  loadError: null,
+  mutationError: null,
   rootFolder: null,
 
   async init(adapter: BrowserAdapter) {
-    set({ adapter, isLoading: true })
+    set({ adapter, isLoading: true, status: "loading", loadError: null })
 
-    const tree = await adapter.bookmarks.getTree()
+    let tree: BookmarkNode[] = []
+    try {
+      tree = await adapter.bookmarks.getTree()
+      set({ status: "ready" })
+    } catch (error) {
+      set({ status: "unavailable", loadError: toErrorMessage(error) })
+    }
 
     const savedRootId = await adapter.storage.get<string>("rootFolderId")
 
@@ -76,6 +96,7 @@ export const useBookmarkStore = create<BookmarkState>((set, get) => ({
       for (const unsub of unsubscribers) {
         unsub()
       }
+      adapter.bookmarks.dispose?.()
     }
   },
 
@@ -90,40 +111,79 @@ export const useBookmarkStore = create<BookmarkState>((set, get) => ({
     const { adapter, rootFolderId } = get()
     if (!adapter) return
 
-    const tree = await adapter.bookmarks.getTree()
-    const rootFolder = rootFolderId ? findNode(tree, rootFolderId) : null
+    try {
+      const tree = await adapter.bookmarks.getTree()
+      const rootFolder = rootFolderId ? findNode(tree, rootFolderId) : null
+      set({ tree, rootFolder, status: "ready", loadError: null })
+    } catch (error) {
+      set({ status: "unavailable", loadError: toErrorMessage(error) })
+    }
+  },
 
-    set({ tree, rootFolder })
+  async retry() {
+    const { adapter } = get()
+    if (!adapter) return
+    set({ status: "loading", loadError: null })
+    await get().refresh()
+  },
+
+  clearMutationError() {
+    set({ mutationError: null })
   },
 
   async createBookmark(parentId: string, title: string, url: string) {
     const { adapter } = get()
     if (!adapter) return
-    await adapter.bookmarks.create({ parentId, title, url })
+    try {
+      await adapter.bookmarks.create({ parentId, title, url })
+      set({ mutationError: null })
+    } catch (error) {
+      set({ mutationError: toErrorMessage(error) })
+    }
   },
 
   async updateBookmark(id: string, changes: { title?: string; url?: string }) {
     const { adapter } = get()
     if (!adapter) return
-    await adapter.bookmarks.update(id, changes)
+    try {
+      await adapter.bookmarks.update(id, changes)
+      set({ mutationError: null })
+    } catch (error) {
+      set({ mutationError: toErrorMessage(error) })
+    }
   },
 
   async deleteBookmark(id: string) {
     const { adapter } = get()
     if (!adapter) return
-    await adapter.bookmarks.remove(id)
+    try {
+      await adapter.bookmarks.remove(id)
+      set({ mutationError: null })
+    } catch (error) {
+      set({ mutationError: toErrorMessage(error) })
+    }
   },
 
   async deleteFolder(id: string) {
     const { adapter } = get()
     if (!adapter) return
-    await adapter.bookmarks.removeTree(id)
+    try {
+      await adapter.bookmarks.removeTree(id)
+      set({ mutationError: null })
+    } catch (error) {
+      set({ mutationError: toErrorMessage(error) })
+    }
   },
 
   async createFolder(parentId: string, title: string) {
     const { adapter } = get()
     if (!adapter) return
-    await adapter.bookmarks.create({ parentId, title })
+    try {
+      await adapter.bookmarks.create({ parentId, title })
+      set({ mutationError: null })
+    } catch (error) {
+      set({ mutationError: toErrorMessage(error) })
+    }
   },
 
   async moveBookmark(
@@ -132,6 +192,11 @@ export const useBookmarkStore = create<BookmarkState>((set, get) => ({
   ) {
     const { adapter } = get()
     if (!adapter) return
-    await adapter.bookmarks.move(id, destination)
+    try {
+      await adapter.bookmarks.move(id, destination)
+      set({ mutationError: null })
+    } catch (error) {
+      set({ mutationError: toErrorMessage(error) })
+    }
   },
 }))

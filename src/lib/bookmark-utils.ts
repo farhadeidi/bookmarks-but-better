@@ -20,6 +20,17 @@ export function getDisplayRoot(
   return rootFolder ?? (tree.length > 0 ? tree[0] : null)
 }
 
+export function describeReadOnly(node: {
+  readOnly?: boolean
+  diagnostics?: { message: string }[]
+}): string {
+  const messages = node.diagnostics?.map((d) => d.message).filter(Boolean)
+  if (messages && messages.length > 0) {
+    return `Read-only: ${messages.join(" ")}`
+  }
+  return "Read-only: this item can't be safely edited right now."
+}
+
 export function debounce<T extends (...args: unknown[]) => void>(
   fn: T,
   ms: number

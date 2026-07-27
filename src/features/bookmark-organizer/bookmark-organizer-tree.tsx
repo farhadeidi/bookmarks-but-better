@@ -83,9 +83,10 @@ const BookmarkOrganizerTreeImpl = React.forwardRef<
     effectiveRootId: string | null
     bookmarks: Pick<BookmarkAdapter, "getSubTree">
     showBookmarks: boolean
+    reorderEnabled: boolean
   }
 >(function BookmarkOrganizerTreeImpl(
-  { effectiveRootId, bookmarks, showBookmarks },
+  { effectiveRootId, bookmarks, showBookmarks, reorderEnabled },
   ref
 ) {
   const openEditor = useUIStore((s) => s.openEditor)
@@ -100,12 +101,12 @@ const BookmarkOrganizerTreeImpl = React.forwardRef<
     initialState: {
       expandedItems: [BOOKMARK_ORGANIZER_ROOT_ID],
     },
-    canReorder: true,
+    canReorder: reorderEnabled,
     indent: 16,
     seperateDragHandle: true,
     features: [
       asyncDataLoaderFeature,
-      dragAndDropFeature,
+      ...(reorderEnabled ? [dragAndDropFeature] : []),
       propMemoizationFeature,
     ],
     dataLoader: {
@@ -247,6 +248,7 @@ const BookmarkOrganizerTreeImpl = React.forwardRef<
             key={item.getId()}
             item={item}
             isDragging={draggedItemIds.has(item.getId())}
+            reorderEnabled={reorderEnabled}
             onCreateItem={(type) => {
               openCreateItem({ type, parentId: item.getId() })
             }}
@@ -316,6 +318,7 @@ export function BookmarkOrganizerTree({
       effectiveRootId={effectiveRootId}
       bookmarks={adapter.bookmarks}
       showBookmarks={showBookmarks}
+      reorderEnabled={adapter.capabilities.reorder}
     />
   )
 }

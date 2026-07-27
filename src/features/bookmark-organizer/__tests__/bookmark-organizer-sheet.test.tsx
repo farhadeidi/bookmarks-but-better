@@ -46,6 +46,7 @@ describe("BookmarkOrganizerSheet", () => {
         },
         capabilities: {
           openInManager: true,
+          reorder: true,
         },
       },
       rootFolder: null,

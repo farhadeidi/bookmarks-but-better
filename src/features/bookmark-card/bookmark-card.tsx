@@ -25,6 +25,12 @@ import { usePreferencesStore } from "@/stores/preferences-store"
 import { useBookmarkStore } from "@/stores/bookmark-store"
 import { useUIStore } from "@/stores/ui-store"
 import type { BookmarkNode } from "@/browser"
+import { describeReadOnly } from "@/lib/bookmark-utils"
+import {
+  Tooltip,
+  TooltipTrigger,
+  TooltipContent,
+} from "@/components/ui/tooltip"
 
 interface FolderMenuProps {
   folder: BookmarkNode
@@ -46,6 +52,7 @@ const FolderMenu = React.memo(function FolderMenu({
   const openCreateItem = useUIStore((s) => s.openCreateItem)
 
   const canOpenInManager = adapter?.capabilities.openInManager ?? false
+  const isReadOnly = folder.readOnly ?? false
 
   return (
     <DropdownMenu>
@@ -78,10 +85,29 @@ const FolderMenu = React.memo(function FolderMenu({
           Organize bookmarks
         </DropdownMenuItem>
         <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={() => openEditor(folder)}>
-          <HugeiconsIcon icon={PencilEdit01Icon} size={14} />
-          Rename
-        </DropdownMenuItem>
+        {isReadOnly ? (
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <DropdownMenuItem
+                  aria-disabled="true"
+                  className="opacity-50"
+                  onClick={(e) => e.preventDefault()}
+                  aria-label={`Rename (${describeReadOnly(folder)})`}
+                />
+              }
+            >
+              <HugeiconsIcon icon={PencilEdit01Icon} size={14} />
+              Rename
+            </TooltipTrigger>
+            <TooltipContent>{describeReadOnly(folder)}</TooltipContent>
+          </Tooltip>
+        ) : (
+          <DropdownMenuItem onClick={() => openEditor(folder)}>
+            <HugeiconsIcon icon={PencilEdit01Icon} size={14} />
+            Rename
+          </DropdownMenuItem>
+        )}
         {canOpenInManager && (
           <DropdownMenuItem
             onClick={() => adapter?.bookmarks.openInManager(folder.id)}
@@ -91,20 +117,40 @@ const FolderMenu = React.memo(function FolderMenu({
           </DropdownMenuItem>
         )}
         <DropdownMenuSeparator />
-        <DropdownMenuItem
-          variant="destructive"
-          onClick={() =>
-            openDeleteConfirm({
-              id: folder.id,
-              title: folder.title,
-              type: "folder",
-              childCount,
-            })
-          }
-        >
-          <HugeiconsIcon icon={Delete02Icon} size={14} />
-          Delete
-        </DropdownMenuItem>
+        {isReadOnly ? (
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <DropdownMenuItem
+                  variant="destructive"
+                  aria-disabled="true"
+                  className="opacity-50"
+                  onClick={(e) => e.preventDefault()}
+                  aria-label={`Delete (${describeReadOnly(folder)})`}
+                />
+              }
+            >
+              <HugeiconsIcon icon={Delete02Icon} size={14} />
+              Delete
+            </TooltipTrigger>
+            <TooltipContent>{describeReadOnly(folder)}</TooltipContent>
+          </Tooltip>
+        ) : (
+          <DropdownMenuItem
+            variant="destructive"
+            onClick={() =>
+              openDeleteConfirm({
+                id: folder.id,
+                title: folder.title,
+                type: "folder",
+                childCount,
+              })
+            }
+          >
+            <HugeiconsIcon icon={Delete02Icon} size={14} />
+            Delete
+          </DropdownMenuItem>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   )
@@ -125,8 +171,12 @@ export const BookmarkCard = React.memo(function BookmarkCard({
   const setCardLayout = usePreferencesStore((s) => s.setCardLayout)
   const nestedFolders = usePreferencesStore((s) => s.nestedFolders)
   const adapter = useBookmarkStore((s) => s.adapter)
+  const reorderEnabled = adapter?.capabilities.reorder ?? true
 
-  const { ref: dropRef, isOver } = useFolderDropTarget({ folderId: folder.id })
+  const { ref: dropRef, isOver } = useFolderDropTarget({
+    folderId: folder.id,
+    disabled: !reorderEnabled,
+  })
 
   const children = folder.children ?? []
 

@@ -16,11 +16,16 @@ export function DndMonitor() {
   const moveBookmark = useBookmarkStore((s) => s.moveBookmark)
   const rootFolder = useBookmarkStore((s) => s.rootFolder)
   const tree = useBookmarkStore((s) => s.tree)
+  const reorderEnabled = useBookmarkStore(
+    (s) => s.adapter?.capabilities.reorder ?? true
+  )
   const nestedFolders = usePreferencesStore((s) => s.nestedFolders)
   const folderOrder = usePreferencesStore((s) => s.folderOrder)
   const setFolderOrder = usePreferencesStore((s) => s.setFolderOrder)
 
   useEffect(() => {
+    if (!reorderEnabled) return
+
     return monitorForElements({
       onDrop({ source, location }) {
         const target = location.current.dropTargets[0]
@@ -132,6 +137,7 @@ export function DndMonitor() {
     moveBookmark,
     rootFolder,
     tree,
+    reorderEnabled,
     nestedFolders,
     folderOrder,
     setFolderOrder,

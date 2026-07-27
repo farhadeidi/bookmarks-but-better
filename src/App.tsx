@@ -74,6 +74,9 @@ export function App() {
   } = useAppBootstrap()
   const openSettings = useUIStore((s) => s.openSettings)
   const isLoading = useBookmarkStore((s) => s.isLoading)
+  const status = useBookmarkStore((s) => s.status)
+  const loadError = useBookmarkStore((s) => s.loadError)
+  const retry = useBookmarkStore((s) => s.retry)
   const openBookmarkOrganizer = useUIStore((s) => s.openBookmarkOrganizer)
   const colorTheme = usePreferencesStore((s) => s.colorTheme)
   const setColorTheme = usePreferencesStore((s) => s.setColorTheme)
@@ -95,7 +98,22 @@ export function App() {
     <ScrollArea className="h-svh bg-background text-foreground">
       {/* Main content */}
       <main className="px-4 pt-8 pb-24">
-        {isLoading ? (
+        {status === "unavailable" ? (
+          <div
+            role="alert"
+            className="flex flex-col items-center gap-3 p-12 text-center text-muted-foreground"
+          >
+            <p className="font-medium text-foreground">
+              Bookmarks are unavailable.
+            </p>
+            <p className="text-sm">
+              {loadError ?? "Could not reach the bookmark source."}
+            </p>
+            <Button variant="outline" size="sm" onClick={() => void retry()}>
+              Retry
+            </Button>
+          </div>
+        ) : isLoading || status === "loading" ? (
           <div className="flex items-center justify-center p-12 text-muted-foreground">
             Loading bookmarks...
           </div>

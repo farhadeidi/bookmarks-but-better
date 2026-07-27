@@ -49,10 +49,6 @@ function isBrowserExtension(): boolean {
   }
 }
 
-function isFirefoxBuild(): boolean {
-  return import.meta.env.VITE_BUILD_TARGET === "firefox"
-}
-
 function createChromeAdapter(): BrowserAdapter {
   return {
     bookmarks: new ChromeBookmarkAdapter(),
@@ -60,6 +56,7 @@ function createChromeAdapter(): BrowserAdapter {
     favicon: new ChromeFaviconAdapter(),
     capabilities: {
       openInManager: true,
+      reorder: true,
     },
   }
 }
@@ -71,6 +68,7 @@ function createFirefoxAdapter(): BrowserAdapter {
     favicon: new FirefoxFaviconAdapter(),
     capabilities: {
       openInManager: false,
+      reorder: true,
     },
   }
 }
@@ -82,18 +80,45 @@ function createStandaloneAdapter(): BrowserAdapter {
     favicon: new StandaloneFaviconAdapter(),
     capabilities: {
       openInManager: false,
+      reorder: true,
     },
   }
 }
 
-export async function detectAdapter(): Promise<BrowserAdapter> {
+interface DetectAdapterOptions {
+  /**
+   * Overrides the build target normally read from `import.meta.env.VITE_BUILD_TARGET`.
+   * Test-only seam — production callers never pass this.
+   */
+  buildTarget?: string
+}
+
+function resolveBuildTarget(
+  options?: DetectAdapterOptions
+): string | undefined {
+  return options?.buildTarget ?? import.meta.env.VITE_BUILD_TARGET
+}
+
+export async function detectAdapter(
+  options?: DetectAdapterOptions
+): Promise<BrowserAdapter> {
+  const buildTarget = resolveBuildTarget(options)
+
+  // The daemon build is served by the daemon itself on a fixed same-origin
+  // API, so there is nothing to detect or configure: skip the adapter-mode
+  // preference and browser-extension checks entirely.
+  if (buildTarget === "daemon") {
+    const { createDaemonAdapter } = await import("./daemon")
+    return createDaemonAdapter()
+  }
+
   const preference = await getAdapterModePreference()
 
   if (preference === "standalone") {
     return createStandaloneAdapter()
   }
 
-  if (isFirefoxBuild() && isBrowserExtension()) {
+  if (buildTarget === "firefox" && isBrowserExtension()) {
     await migrateSyncToLocal()
     return createFirefoxAdapter()
   }

@@ -121,14 +121,16 @@ export function BookmarkGrid() {
   const rootFolder = useBookmarkStore((s) => s.rootFolder)
   const tree = useBookmarkStore((s) => s.tree)
   const isLoading = useBookmarkStore((s) => s.isLoading)
+  const reorderEnabled = useBookmarkStore(
+    (s) => s.adapter?.capabilities.reorder ?? true
+  )
   const nestedFolders = usePreferencesStore((s) => s.nestedFolders)
   const maxColumns = usePreferencesStore((s) => s.maxColumns)
   const containerMode = usePreferencesStore((s) => s.containerMode)
   const cardLayouts = usePreferencesStore((s) => s.cardLayouts)
   const folderOrder = usePreferencesStore((s) => s.folderOrder)
-  const experimentalCardDrag = usePreferencesStore(
-    (s) => s.experimentalCardDrag
-  )
+  const experimentalCardDrag =
+    usePreferencesStore((s) => s.experimentalCardDrag) && reorderEnabled
 
   const columnCount = useColumnCount(maxColumns)
   const displayRoot = rootFolder ?? (tree.length > 0 ? tree[0] : null)
