@@ -1,4 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from "vitest"
+import { beforeEach, describe, expect, it, vi, type Mock } from "vitest"
+import type { BookmarkAdapter } from "@/browser"
 import {
   BOOKMARK_ORGANIZER_ROOT_ID,
   loadOrganizerChildren,
@@ -6,7 +7,10 @@ import {
 } from "../bookmark-organizer-data"
 
 type MockBookmarks = {
-  getSubTree: ReturnType<typeof vi.fn>
+  // `ReturnType<typeof vi.fn>` captures vi.fn's generic constraint
+  // (`Mock<Procedure | Constructable>`), not a concrete callable mock, so it
+  // never structurally matches `Pick<BookmarkAdapter, "getSubTree">` below.
+  getSubTree: Mock<BookmarkAdapter["getSubTree"]>
 }
 
 function createBookmarks(mock?: Partial<MockBookmarks>): MockBookmarks {

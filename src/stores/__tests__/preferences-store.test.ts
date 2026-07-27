@@ -35,9 +35,12 @@ function createChromeLikeAdapter(): BrowserAdapter {
       openInManager: vi.fn(),
     },
     storage: {
-      get: vi.fn(async (key: string) =>
-        backing.has(key) ? backing.get(key) : null
-      ),
+      // Not wrapped in vi.fn(): this test never spies on `get`, and
+      // Mock<T>'s generic collapses a truly generic function's return type
+      // to `unknown`, so a plain function is both simpler and correctly typed.
+      get: async <T>(key: string): Promise<T | null> => {
+        return backing.has(key) ? (backing.get(key) as T) : null
+      },
       set: vi.fn(async (key: string, value: unknown) => {
         backing.set(key, value)
       }),
