@@ -1,0 +1,2 @@
+# Fixtures are byte-exact: CRLF, BOM and invalid UTF-8 are the point.
+* -text

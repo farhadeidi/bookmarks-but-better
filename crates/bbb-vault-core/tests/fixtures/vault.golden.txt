@@ -1,0 +1,18 @@
+folder "." id=r00tr00t title="vault" access=read_write
+  folder "archive" id=arch1ve0 title="Archive" access=read_write
+    bookmark "archive/Copy of Zebra--z1z2z3z4.md" id=z1z2z3z4 title="Copy of Zebra" url="https://zebra.example" logo="-" access=read_only
+    bookmark "archive/Old--o1o2o3o4.md" id=o1o2o3o4 title="Old" url="https://old.example" logo="-" access=read_write
+  folder "Reading list" id=read1ist title="Reading List" access=read_write
+    folder "Reading list/broken" id=- title="broken" access=read_only
+    bookmark "Reading list/renamed-by-hand.md" id=h1h2h3h4 title="Renamed by hand" url="https://example.com/renamed" logo="-" access=read_write
+    bookmark "Reading list/Rust Book--r1r2r3r4.md" id=r1r2r3r4 title="The Rust Book" url="https://doc.rust-lang.org/book/" logo="-" access=read_write
+  bookmark "apple--a1a1a1a1.md" id=a1a1a1a1 title="apple" url="https://apple.example" logo="-" access=read_write
+  bookmark "Zebra--z1z2z3z4.md" id=z1z2z3z4 title="Zebra" url="https://zebra.example" logo="Zebra--z1z2z3z4.assets/logo.svg" access=read_write
+  bookmark "Éclair--e1e1e1e1.md" id=e1e1e1e1 title="Éclair" url="https://eclair.example" logo="-" access=read_write
+
+diagnostics:
+  error   duplicate_id             archive/Copy of Zebra--z1z2z3z4.md
+  error   invalid_utf8             Reading list/broken/mojibake--m1m2m3m4.md
+  error   unterminated_frontmatter Reading list/broken/unterminated--u1u2u3u4.md
+  warning missing_folder_metadata  Reading list/broken
+  warning filename_id_mismatch     Reading list/renamed-by-hand.md

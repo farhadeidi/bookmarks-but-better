@@ -1,0 +1,23 @@
+[package]
+name = "bbb-vault-core"
+description = "Canonical Markdown vault format for Bookmarks But Better: parsing, validation, deterministic scanning and byte-preserving updates."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+readme = "README.md"
+keywords = ["bookmarks", "markdown", "frontmatter", "vault"]
+categories = ["parser-implementations", "filesystem"]
+
+# This crate deliberately has no dependencies. Everything it needs (a
+# line-oriented YAML front matter scanner that records byte ranges, a content
+# fingerprint, and a symlink-free directory walk) is small, needs exact control
+# over bytes, and is covered by golden tests in `tests/`.
+[dependencies]
+
+[dev-dependencies]
+
+[lints]
+workspace = true
