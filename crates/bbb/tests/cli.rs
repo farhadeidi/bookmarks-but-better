@@ -47,6 +47,23 @@ fn init_creates_the_root_metadata_and_is_idempotent() {
 }
 
 #[test]
+fn init_creates_a_missing_vault_directory_but_not_missing_parents() {
+    let parent = tempfile::tempdir().expect("temp dir");
+    let missing = parent.path().join("Bookmarks");
+    let missing_arg = vault_arg(&missing);
+
+    let created = bbb(&["init", "--vault", &missing_arg]);
+    assert!(created.status.success(), "{}", stderr(&created));
+    assert!(missing.join(".bbb-folder.md").is_file());
+
+    let nested = parent.path().join("missing-parent").join("Bookmarks");
+    let nested_arg = vault_arg(&nested);
+    let refused = bbb(&["init", "--vault", &nested_arg]);
+    assert!(!refused.status.success(), "{}", stdout(&refused));
+    assert!(!parent.path().join("missing-parent").exists());
+}
+
+#[test]
 fn doctor_fails_on_an_uninitialized_directory_and_passes_on_a_vault() {
     let directory = tempfile::tempdir().expect("temp dir");
     let vault = vault_arg(directory.path());

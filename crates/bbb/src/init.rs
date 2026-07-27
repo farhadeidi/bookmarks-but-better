@@ -9,6 +9,7 @@
 //! diagnostic until something explicitly gives them one, and the bookmarks
 //! inside them stay visible and editable throughout.
 
+use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 
@@ -61,6 +62,31 @@ impl InitOutcome {
 /// unusable, because overwriting it would destroy an identity the daemon cannot
 /// read but a future version might.
 pub fn initialize(root: &Path) -> Result<InitOutcome, InitError> {
+    match fs::symlink_metadata(root) {
+        Ok(metadata) if metadata.file_type().is_symlink() || !metadata.is_dir() => {
+            return Err(InitError::Unreadable {
+                path: root.to_path_buf(),
+                error: io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    "the vault root is not a real directory",
+                ),
+            });
+        }
+        Ok(_) => {}
+        Err(error) if error.kind() == io::ErrorKind::NotFound => {
+            fs::create_dir(root).map_err(|error| InitError::Unreadable {
+                path: root.to_path_buf(),
+                error,
+            })?;
+        }
+        Err(error) => {
+            return Err(InitError::Unreadable {
+                path: root.to_path_buf(),
+                error,
+            });
+        }
+    }
+
     let scan = scan(root).map_err(|error| InitError::Unreadable {
         path: root.to_path_buf(),
         error,
@@ -206,5 +232,28 @@ mod tests {
             !dir.path().join("Nested").join(FOLDER_FILE_NAME).exists(),
             "init must write only the root metadata file"
         );
+    }
+
+    #[test]
+    fn initialization_creates_the_requested_missing_directory_only() {
+        let parent = tempfile::tempdir().expect("temp dir");
+        let root = parent.path().join("Bookmarks");
+
+        let outcome = initialize(&root).expect("init");
+
+        assert!(outcome.created());
+        assert!(root.is_dir());
+        assert!(root.join(FOLDER_FILE_NAME).is_file());
+    }
+
+    #[test]
+    fn initialization_does_not_create_missing_parent_directories() {
+        let parent = tempfile::tempdir().expect("temp dir");
+        let root = parent.path().join("missing").join("Bookmarks");
+
+        let error = initialize(&root).expect_err("missing parent is refused");
+
+        assert!(matches!(error, InitError::Unreadable { .. }));
+        assert!(!parent.path().join("missing").exists());
     }
 }

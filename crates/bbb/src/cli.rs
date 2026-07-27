@@ -70,7 +70,8 @@ pub enum Command {
 
     /// Make a directory into a vault by writing its root metadata file.
     Init {
-        /// The directory to initialize. Nothing below it is written.
+        /// The directory to initialize. It is created when only this final path
+        /// component is missing; parent directories must already exist.
         #[arg(long, value_name = "PATH")]
         vault: PathBuf,
     },
