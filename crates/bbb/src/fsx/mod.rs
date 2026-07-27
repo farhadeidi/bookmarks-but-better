@@ -21,13 +21,44 @@
 //! Durably replacing a file is four steps, and each platform supports a
 //! different subset of them. Keeping the sequence in one place is what stops
 //! three call sites from each getting a different part of it wrong.
+//!
+//! # Binding a commit to what was validated
+//!
+//! Optimistic concurrency reads a file, decides its revision is current, and
+//! writes. Between those two moments the name can come to mean a different
+//! file, and a rename onto the *name* would then destroy an edit nobody
+//! examined. [`replace_validated`] closes that:
+//!
+//! * Where the kernel offers an atomic exchange (Linux), the new file is
+//!   swapped with the target in one operation and the evicted file is read
+//!   afterwards. If it is not the bytes that were validated, the swap is undone
+//!   and the caller is told the revision is stale. Nothing is ever lost,
+//!   because the exchange only ever moved two entries that both still exist.
+//! * Elsewhere the target is re-opened no-follow immediately before the rename
+//!   and its identity *and* contents are compared with what was validated. The
+//!   remaining window is one syscall wide and is documented rather than denied.
 
 use std::io::{self, Read as _, Write as _};
+use std::path::{Component, Path};
 
+use bbb_vault_core::Revision;
 use cap_fs_ext::{DirExt as _, FollowSymlinks, OpenOptionsFollowExt as _};
 use cap_std::ambient_authority;
 use cap_std::fs::{Dir, OpenOptions};
-use std::path::{Component, Path};
+
+mod ident;
+pub(crate) mod platform;
+
+pub(crate) use ident::FileIdentity;
+
+/// The identity of an open directory, for binding an operation to it.
+///
+/// # Errors
+///
+/// Returns the underlying I/O error from inspecting the handle.
+pub(crate) fn directory_identity(dir: &Dir) -> io::Result<FileIdentity> {
+    ident::of_dir(dir)
+}
 
 /// How many times a unique temporary name is retried before giving up.
 ///
@@ -132,7 +163,55 @@ pub(crate) fn create_new(dir: &Dir, name: &str, bytes: &[u8]) -> io::Result<()> 
     Ok(())
 }
 
-/// Durably replaces `name` with `bytes`.
+/// A file read together with the identity of the object it came from.
+#[derive(Debug)]
+pub(crate) struct Validated {
+    /// The exact bytes read.
+    pub(crate) bytes: Vec<u8>,
+    /// What the operating system calls the file those bytes came from.
+    pub(crate) identity: FileIdentity,
+}
+
+impl Validated {
+    /// The revision of the bytes that were read.
+    pub(crate) fn revision(&self) -> Revision {
+        Revision::of(&self.bytes)
+    }
+}
+
+/// Reads a file and its identity from one open handle.
+///
+/// Both facts come from the same `open`, so they describe the same object;
+/// reading the bytes and then stat-ing the name would be two resolutions and
+/// could describe two different files.
+///
+/// # Errors
+///
+/// Returns the underlying I/O error.
+pub(crate) fn read_with_identity(dir: &Dir, name: &str) -> io::Result<Validated> {
+    let mut file = dir.open_with(name, &read_options())?;
+    let identity = ident::of(&file)?;
+    let mut bytes = Vec::new();
+    file.read_to_end(&mut bytes)?;
+    Ok(Validated { bytes, identity })
+}
+
+/// Why a validated commit did not happen.
+#[derive(Debug)]
+pub(crate) enum CommitError {
+    /// The file is no longer the one that was validated.
+    Stale,
+    /// The operation failed for an ordinary I/O reason.
+    Io(io::Error),
+}
+
+impl From<io::Error> for CommitError {
+    fn from(error: io::Error) -> Self {
+        Self::Io(error)
+    }
+}
+
+/// Durably replaces `name` with `bytes`, but only if it still holds `validated`.
 ///
 /// The sequence, and why each step is there:
 ///
@@ -143,19 +222,25 @@ pub(crate) fn create_new(dir: &Dir, name: &str, bytes: &[u8]) -> io::Result<()> 
 /// 2. `fsync` the temporary file, so its contents reach the disk before any
 ///    name points at them. Without this a crash can leave `name` pointing at a
 ///    file of zeroes.
-/// 3. Rename over `name`. This is atomic on POSIX, and on Windows it lands on
-///    `MoveFileExW` with `MOVEFILE_REPLACE_EXISTING`, which is atomic on a
-///    single volume. A reader sees all of the old bytes or all of the new ones.
-/// 4. `fsync` the directory, so the rename itself survives a power loss. This
-///    step is Unix-only: Windows has no portable equivalent, and its absence is
-///    why the durability guarantee is documented as "best available" rather
-///    than "identical everywhere".
+/// 3. Commit, bound to `validated` — see the module documentation. On Linux an
+///    atomic exchange followed by a check of what was evicted; elsewhere a
+///    re-open, an identity and content comparison, and a rename.
+/// 4. `fsync` the directory, so the rename itself survives a power loss. Unix
+///    only: Windows has no portable equivalent, and instead the rename itself
+///    is issued with `MOVEFILE_WRITE_THROUGH`.
 ///
 /// # Errors
 ///
-/// Returns any I/O error from the sequence. On failure the destination still
-/// holds its previous bytes and the temporary file is removed.
-pub(crate) fn replace(dir: &Dir, name: &str, bytes: &[u8]) -> io::Result<()> {
+/// Returns [`CommitError::Stale`] when the file changed since it was validated,
+/// leaving that change intact, and [`CommitError::Io`] for anything else. On
+/// either failure the destination keeps its current bytes and the temporary
+/// file is removed.
+pub(crate) fn replace_validated(
+    dir: &Dir,
+    name: &str,
+    bytes: &[u8],
+    validated: &Validated,
+) -> Result<(), CommitError> {
     // The name and the open handle come back together. Claiming a name and
     // then reopening it by that name would be two resolutions of one string —
     // exactly the pattern this module exists to avoid.
@@ -164,17 +249,80 @@ pub(crate) fn replace(dir: &Dir, name: &str, bytes: &[u8]) -> io::Result<()> {
     let write = file.write_all(bytes).and_then(|()| file.sync_all());
     drop(file);
     if let Err(error) = write {
-        let _ = dir.remove_file(&temporary);
-        return Err(error);
+        let _ = remove_file(dir, &temporary);
+        return Err(CommitError::Io(error));
     }
 
-    if let Err(error) = dir.rename(&temporary, dir, name) {
-        let _ = dir.remove_file(&temporary);
-        return Err(error);
+    let outcome = commit(dir, &temporary, name, validated);
+    if outcome.is_err() {
+        // On failure the temporary may or may not still exist, depending on how
+        // far the commit got; removing it is best-effort either way.
+        let _ = remove_file(dir, &temporary);
     }
+    outcome?;
 
     sync_dir(dir);
     Ok(())
+}
+
+/// Puts the temporary file in place of `name`, refusing if it changed.
+fn commit(
+    dir: &Dir,
+    temporary: &str,
+    name: &str,
+    validated: &Validated,
+) -> Result<(), CommitError> {
+    if platform::exchange_is_supported() {
+        // One atomic step: after it, `temporary` names whatever `name` named.
+        platform::exchange(dir, temporary, name)?;
+
+        let evicted = match read_with_identity(dir, temporary) {
+            Ok(evicted) => evicted,
+            Err(error) => {
+                // The swap happened but the result cannot be read. Undo it, so
+                // the vault is left exactly as it was found.
+                let _ = platform::exchange(dir, temporary, name);
+                return Err(CommitError::Io(error));
+            }
+        };
+
+        if evicted.revision() != validated.revision()
+            || (validated.identity.is_known() && !evicted.identity.is_same(validated.identity))
+        {
+            // Somebody replaced the file between validation and now. Put their
+            // version back and refuse; they lose nothing.
+            platform::exchange(dir, temporary, name)?;
+            return Err(CommitError::Stale);
+        }
+
+        // The swap is confirmed, so the temporary name now holds the superseded
+        // file. It is the old content, and removing it is what completes the
+        // replacement — the non-exchange path below gets this for free, because
+        // there the rename consumes the temporary.
+        remove_file(dir, temporary)?;
+        return Ok(());
+    }
+
+    // No exchange here. Re-open the target and compare identity and content
+    // immediately before the rename, so the gap is one syscall rather than the
+    // whole request.
+    let current = read_with_identity(dir, name)?;
+    if current.revision() != validated.revision()
+        || (validated.identity.is_known() && !current.identity.is_same(validated.identity))
+    {
+        return Err(CommitError::Stale);
+    }
+    platform::rename_replacing(dir, temporary, dir, name)?;
+    Ok(())
+}
+
+/// Removes a file or link through `dir`, never following it.
+///
+/// # Errors
+///
+/// Returns the underlying I/O error.
+pub(crate) fn remove_file(dir: &Dir, name: &str) -> io::Result<()> {
+    dir.remove_file_or_symlink(name)
 }
 
 /// Creates a uniquely named temporary file in `dir` and returns it, open.
@@ -230,7 +378,7 @@ pub(crate) fn move_file(from: &Dir, from_name: &str, to: &Dir, to_name: &str) ->
     let placeholder = to.open_with(to_name, &create_new_options())?;
     drop(placeholder);
 
-    if let Err(error) = from.rename(from_name, to, to_name) {
+    if let Err(error) = platform::rename_replacing(from, from_name, to, to_name) {
         let _ = to.remove_file(to_name);
         return Err(error);
     }
@@ -242,47 +390,23 @@ pub(crate) fn move_file(from: &Dir, from_name: &str, to: &Dir, to_name: &str) ->
 
 /// Moves a directory between handles without ever replacing anything.
 ///
-/// On Linux this is one `renameat2` with `RENAME_NOREPLACE`, which the kernel
-/// guarantees will fail rather than clobber — there is no window at all.
+/// Each platform uses its own no-replace rename: `renameat2(RENAME_NOREPLACE)`
+/// on Linux, `renameatx_np(RENAME_EXCL)` on macOS, `MoveFileExW` without
+/// `MOVEFILE_REPLACE_EXISTING` on Windows. Each makes the kernel refuse rather
+/// than clobber, so there is no window at all.
 ///
-/// Elsewhere there is no such syscall exposed, and a directory cannot be
-/// reserved the way a file can: creating a placeholder directory would have to
-/// be removed again before the rename, reopening the very gap it was meant to
-/// close. So the destination is probed with a no-follow `symlink_metadata` and
-/// the rename follows immediately. The residual window is documented rather
-/// than papered over: it is small, it requires an adversary writing into the
-/// destination directory at that instant, and closing it needs a syscall those
-/// platforms do not offer.
+/// A platform with none of those refuses the move with
+/// [`io::ErrorKind::Unsupported`]. Probing the destination and renaming anyway
+/// would look like it worked and would occasionally destroy a directory, which
+/// is worse than not offering the feature.
 ///
 /// # Errors
 ///
 /// Returns [`io::ErrorKind::AlreadyExists`] when the destination name is taken,
-/// and any other I/O error from the rename.
+/// [`io::ErrorKind::Unsupported`] where there is no such primitive, and any
+/// other I/O error from the rename.
 pub(crate) fn move_dir(from: &Dir, from_name: &str, to: &Dir, to_name: &str) -> io::Result<()> {
-    #[cfg(target_os = "linux")]
-    {
-        use std::os::fd::AsFd as _;
-        rustix::fs::renameat_with(
-            from.as_fd(),
-            from_name,
-            to.as_fd(),
-            to_name,
-            rustix::fs::RenameFlags::NOREPLACE,
-        )
-        .map_err(|error| io::Error::from_raw_os_error(error.raw_os_error()))?;
-    }
-
-    #[cfg(not(target_os = "linux"))]
-    {
-        if to.symlink_metadata(to_name).is_ok() {
-            return Err(io::Error::new(
-                io::ErrorKind::AlreadyExists,
-                "the destination name is already taken",
-            ));
-        }
-        from.rename(from_name, to, to_name)?;
-    }
-
+    platform::rename_no_replace(from, from_name, to, to_name)?;
     sync_dir(from);
     sync_dir(to);
     Ok(())
@@ -360,6 +484,18 @@ pub(crate) fn lock_file_options() -> OpenOptions {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Replaces `name` after validating whatever is currently there.
+    ///
+    /// Tests that are not about the concurrency protocol use this so they read
+    /// as "overwrite this file"; the protocol itself is tested separately.
+    fn replace(dir: &Dir, name: &str, bytes: &[u8]) -> io::Result<()> {
+        let validated = read_with_identity(dir, name)?;
+        replace_validated(dir, name, bytes, &validated).map_err(|error| match error {
+            CommitError::Io(error) => error,
+            CommitError::Stale => io::Error::other("the file changed during the test"),
+        })
+    }
 
     fn temp_root() -> (tempfile::TempDir, Dir) {
         let directory = tempfile::tempdir().expect("temp dir");
@@ -489,9 +625,13 @@ mod tests {
             read(&root, "trap.md").is_err(),
             "a read must not follow the link"
         );
-        // A replace writes a fresh temporary and renames over the link, which
-        // removes the link. What must never happen is the target changing.
-        replace(&root, "trap.md", b"owned").expect("replace");
+        // A replacement is bound to the file it validated, and a link cannot be
+        // opened no-follow, so there is nothing to validate and the write is
+        // refused before a single byte is produced.
+        assert!(
+            replace(&root, "trap.md", b"owned").is_err(),
+            "a replacement through a link must be refused"
+        );
         assert_eq!(
             std::fs::read(&outside).expect("read outside"),
             b"untouched",

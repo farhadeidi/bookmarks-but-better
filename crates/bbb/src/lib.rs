@@ -54,7 +54,9 @@
 //! # }
 //! ```
 
-#![forbid(unsafe_code)]
+// Denied rather than forbidden so that `fsx::platform` — the single module
+// holding this crate's FFI — can allow it. Nothing else may.
+#![deny(unsafe_code)]
 
 mod clock;
 mod extract;

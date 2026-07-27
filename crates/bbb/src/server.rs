@@ -120,14 +120,23 @@ impl Daemon {
             })?;
 
         // The lock is held, so anything left in staging belongs to a run that
-        // is no longer alive and is safe to clear.
-        staging::purge(&state);
+        // is no longer alive. Each interrupted operation is finished or undone
+        // according to its own manifest; nothing is ever discarded.
+        let notices = staging::recover(&state, &root);
+        for notice in &notices {
+            tracing::error!(
+                directory = %notice.directory,
+                operation = %notice.operation,
+                "entries from an interrupted change were kept and need attention"
+            );
+        }
 
-        let vault =
-            Vault::open_with_state(&options.vault, state).map_err(|error| StartError::Vault {
+        let vault = Vault::open_with_state(&options.vault, state, notices).map_err(|error| {
+            StartError::Vault {
                 path: options.vault.clone(),
                 error,
-            })?;
+            }
+        })?;
         if vault.snapshot().scan.folder().id().is_none() {
             return Err(StartError::NotAVault {
                 path: options.vault.clone(),

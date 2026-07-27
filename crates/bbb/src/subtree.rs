@@ -11,7 +11,11 @@
 //!
 //! * every file in it is one the vault manages — a `.bbb-folder.md`, a scanned
 //!   bookmark, or a file inside a scanned bookmark's `.assets` directory — and
-//! * every one of those bookmarks still has the exact bytes the scan saw.
+//! * every one of those bookmarks **and every nested `.bbb-folder.md`** still
+//!   has the exact bytes the scan saw. The nested metadata files matter as much
+//!   as the bookmarks: they carry the identities of the folders about to be
+//!   destroyed, and one changing means a folder was re-identified underneath
+//!   the request.
 //!
 //! Anything else refuses. A stray `notes.txt`, an `.obsidian` directory, a
 //! symbolic link, a bookmark an editor touched a moment ago: each of those is a
@@ -93,6 +97,12 @@ struct Expected {
     bookmarks: HashMap<String, Revision>,
     /// Vault-relative path of each managed directory.
     directories: Vec<String>,
+    /// Vault-relative path of each nested `.bbb-folder.md`, to its revision.
+    ///
+    /// A directory whose metadata has no revision has no usable identity
+    /// either, and is absent here — which makes it unknown, and blocks the
+    /// delete, which is the right answer for a folder the vault cannot name.
+    folder_metadata: HashMap<String, Revision>,
     /// Vault-relative path of each `.assets` directory the scan implies.
     assets: Vec<String>,
 }
@@ -108,6 +118,7 @@ pub(crate) fn verify_deletable(handle: &Dir, folder: &FolderNode) -> Result<(), 
     let mut expected = Expected {
         bookmarks: HashMap::new(),
         directories: Vec::new(),
+        folder_metadata: HashMap::new(),
         assets: Vec::new(),
     };
     collect(folder, &mut expected);
@@ -128,6 +139,11 @@ pub(crate) fn verify_deletable(handle: &Dir, folder: &FolderNode) -> Result<(), 
 
 fn collect(folder: &FolderNode, expected: &mut Expected) {
     expected.directories.push(folder.relative_path().to_owned());
+    if let Some(revision) = folder.revision() {
+        expected
+            .folder_metadata
+            .insert(join(folder.relative_path(), FOLDER_FILE_NAME), revision);
+    }
     for bookmark in folder.bookmarks() {
         expected
             .bookmarks
@@ -201,15 +217,19 @@ fn walk(
                     })?;
             walk(&child_handle, &child, expected, unknown)?;
         } else if file_type.is_file() {
-            verify_file(handle, name, &child, relative, expected, unknown)?;
+            verify_file(handle, name, &child, expected, unknown)?;
         } else {
             unknown.push(child);
         }
     }
 
-    // Every bookmark the scan recorded here must still be present. One that
-    // vanished means the subtree moved underneath the request.
-    for path in expected.bookmarks.keys() {
+    // Every managed file the scan recorded here must still be present. One
+    // that vanished means the subtree moved underneath the request.
+    for path in expected
+        .bookmarks
+        .keys()
+        .chain(expected.folder_metadata.keys())
+    {
         if parent_of(path) == relative && !handle.exists(file_name_of(path)) {
             return Err(SubtreeRefusal::Changed {
                 path: path.clone(),
@@ -225,19 +245,18 @@ fn verify_file(
     handle: &Dir,
     name: &str,
     child: &str,
-    relative: &str,
     expected: &Expected,
     unknown: &mut Vec<String>,
 ) -> Result<(), SubtreeRefusal> {
     if name == FOLDER_FILE_NAME {
-        // The folder metadata of a directory the scan knows about. Its own
-        // revision was already checked by the caller for the target folder; for
-        // nested ones its presence is what the scan implies.
-        if expected.directories.iter().any(|path| path == relative) {
+        // A folder's metadata is checked exactly like a bookmark: it is a
+        // managed file with a revision the scan recorded, and it carries the
+        // identity of a directory this delete is about to destroy.
+        let Some(revision) = expected.folder_metadata.get(child) else {
+            unknown.push(child.to_owned());
             return Ok(());
-        }
-        unknown.push(child.to_owned());
-        return Ok(());
+        };
+        return compare(handle, name, child, *revision);
     }
 
     let Some(revision) = expected.bookmarks.get(child) else {
@@ -247,11 +266,21 @@ fn verify_file(
         return Ok(());
     };
 
+    compare(handle, name, child, *revision)
+}
+
+/// Refuses unless the file's current bytes match what the scan recorded.
+fn compare(
+    handle: &Dir,
+    name: &str,
+    child: &str,
+    revision: Revision,
+) -> Result<(), SubtreeRefusal> {
     let bytes = fsx::read(handle, name).map_err(|error| SubtreeRefusal::Unreadable {
         path: child.to_owned(),
         error,
     })?;
-    if Revision::of(&bytes) != *revision {
+    if Revision::of(&bytes) != revision {
         return Err(SubtreeRefusal::Changed {
             path: child.to_owned(),
             reason: "changed on disk",
@@ -288,6 +317,22 @@ fn display(relative: &str) -> String {
 mod tests {
     use super::*;
     use bbb_vault_core::scan;
+
+    /// A vault holding `Dev/Nested/` and a managed bookmark in each.
+    fn vault_with_nested_folder() -> (tempfile::TempDir, VaultScanHolder) {
+        let directory = tempfile::tempdir().expect("temp dir");
+        crate::init::initialize(directory.path()).expect("initialize");
+        for (path, id) in [("Dev", "1111aaaa"), ("Dev/Nested", "3333cccc")] {
+            std::fs::create_dir(directory.path().join(path)).expect("create dir");
+            std::fs::write(
+                directory.path().join(path).join(FOLDER_FILE_NAME),
+                format!("---\nbbb_id: {id}\n---\n"),
+            )
+            .expect("folder metadata");
+        }
+        let scanned = scan(directory.path()).expect("scan");
+        (directory, VaultScanHolder(scanned))
+    }
 
     /// A vault holding `Dev/` with one managed bookmark inside it.
     fn vault_with_folder() -> (tempfile::TempDir, VaultScanHolder) {
@@ -411,6 +456,45 @@ mod tests {
         let detail = refusal.detail();
         assert!(detail.contains("10 entries"), "{detail}");
         assert!(detail.contains("and 7 more"), "{detail}");
+    }
+
+    #[test]
+    fn a_nested_folder_metadata_change_refuses_the_delete() {
+        let (directory, scan) = vault_with_nested_folder();
+        verify_deletable(&handle(directory.path()), scan.folder()).expect("deletable as scanned");
+
+        // A nested `.bbb-folder.md` carries the identity of a directory this
+        // delete would destroy. One changing means a folder was re-identified
+        // after the plan was made, which is exactly as disqualifying as a
+        // bookmark changing.
+        std::fs::write(
+            directory.path().join("Dev/Nested").join(FOLDER_FILE_NAME),
+            "---\nbbb_id: 3333cccc\nbbb_title: Renamed\n---\n",
+        )
+        .expect("external edit");
+
+        let refusal = verify_deletable(&handle(directory.path()), scan.folder())
+            .expect_err("a changed nested metadata file must refuse");
+        match &refusal {
+            SubtreeRefusal::Changed { path, .. } => {
+                assert_eq!(path, "Dev/Nested/.bbb-folder.md");
+            }
+            other => panic!("{other:?}"),
+        }
+    }
+
+    #[test]
+    fn a_nested_folder_metadata_file_that_vanished_refuses_the_delete() {
+        let (directory, scan) = vault_with_nested_folder();
+        std::fs::remove_file(directory.path().join("Dev/Nested").join(FOLDER_FILE_NAME))
+            .expect("remove");
+
+        let refusal = verify_deletable(&handle(directory.path()), scan.folder())
+            .expect_err("a missing nested metadata file must refuse");
+        assert!(
+            matches!(refusal, SubtreeRefusal::Changed { .. }),
+            "{refusal:?}"
+        );
     }
 
     #[test]

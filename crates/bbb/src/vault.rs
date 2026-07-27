@@ -11,19 +11,27 @@
 //! the vault sizes this milestone targets it is not a price worth optimising
 //! away yet.
 //!
-//! # Why there are two gates
+//! # The operation gate
 //!
-//! The **write gate** serialises mutations against each other. The **scan
-//! gate** is held across each scan *and* the publish that follows it, by every
-//! caller — mutations, the watcher, the periodic reconcile and `POST /rescan`.
+//! There is exactly one mutex, and this is the whole locking design:
 //!
-//! The second gate exists because a scan and a publish that are not atomic
-//! together can be interleaved: a slow watcher scan that began before a
-//! mutation can finish after it and publish a tree that predates the write,
-//! silently reverting the daemon's own view of the vault until something else
-//! happens to rescan. Holding one gate across both makes publishes totally
-//! ordered by the moment their scan ran, so the newest scan always wins. Lock
-//! order is always write gate then scan gate; nothing takes them the other way.
+//! ```text
+//! LOCK ORDER: operation gate -> published (RwLock)
+//!             nothing ever takes them in the other order
+//! ```
+//!
+//! Every mutation holds the gate for its **entire** duration, and every
+//! scan-and-publish holds it too. Two properties follow, and both are needed:
+//!
+//! * A reconcile cannot observe a mutation's transient state. A delete moves a
+//!   bookmark and then its assets; a scan between those two steps would publish
+//!   a tree in which the bookmark has vanished and the assets have not, and a
+//!   watcher would happily broadcast it as a change.
+//! * Publishes are totally ordered by the moment their scan ran, so a slow scan
+//!   can never land after a newer one and silently revert the served tree.
+//!
+//! Reads never take the gate: `GET /tree` clones the last published snapshot,
+//! so a long mutation never blocks the UI.
 //!
 //! # Why the generation is content-derived
 //!
@@ -94,11 +102,11 @@ pub struct Vault {
     /// read-only, which is the offline `bbb rescan` path and never mutates.
     state: Option<Dir>,
     published: RwLock<VaultState>,
-    /// Serialises mutations inside this process. The on-disk lock keeps other
-    /// processes out; this keeps our own request handlers from interleaving.
-    write_gate: Mutex<()>,
-    /// Held across scan *and* publish, so publishes are ordered by their scan.
-    scan_gate: Mutex<()>,
+    /// The one lock. Held for a whole mutation, and across every scan and the
+    /// publish that follows it. See the module documentation.
+    operation_gate: Mutex<()>,
+    /// Entries a previous run left staged that recovery could not resolve.
+    notices: Vec<crate::staging::Retained>,
     changes: broadcast::Sender<u64>,
 }
 
@@ -138,8 +146,32 @@ impl Vault {
     /// # Errors
     ///
     /// As [`Vault::open`].
-    pub(crate) fn open_with_state(root: &Path, state: Dir) -> io::Result<Self> {
-        Self::build(root, Some(state))
+    pub(crate) fn open_with_state(
+        root: &Path,
+        state: Dir,
+        notices: Vec<crate::staging::Retained>,
+    ) -> io::Result<Self> {
+        let mut vault = Self::build(root, Some(state))?;
+        vault.notices = notices;
+        Ok(vault)
+    }
+
+    /// Problems the daemon itself has to report, beyond what the scan found.
+    ///
+    /// Currently: entries a previous run left staged that recovery could not
+    /// restore or destroy. They are reported until a human resolves them.
+    #[must_use]
+    pub fn notices(&self) -> Vec<crate::dto::DiagnosticDto> {
+        self.notices
+            .iter()
+            .map(|retained| crate::dto::DiagnosticDto {
+                code: "staged_entries_retained".to_owned(),
+                severity: "error".to_owned(),
+                detail: retained.summary(),
+                path: Some(retained.directory.clone()),
+                line: None,
+            })
+            .collect()
     }
 
     fn build(root_path: &Path, state: Option<Dir>) -> io::Result<Self> {
@@ -157,8 +189,8 @@ impl Vault {
                 generation: 1,
                 fingerprint,
             }),
-            write_gate: Mutex::new(()),
-            scan_gate: Mutex::new(()),
+            operation_gate: Mutex::new(()),
+            notices: Vec::new(),
             changes,
         })
     }
@@ -195,7 +227,12 @@ impl Vault {
     ///
     /// Returns [`ProblemCode::VaultUnavailable`] when the vault cannot be read.
     pub fn reconcile(&self) -> Result<(Snapshot, bool), Problem> {
-        let _gate = self.scan_gate();
+        let _gate = self.gate();
+        self.reconcile_locked()
+    }
+
+    /// As [`Vault::reconcile`], for a caller that already holds the gate.
+    fn reconcile_locked(&self) -> Result<(Snapshot, bool), Problem> {
         let scan = self.scan_now()?;
         Ok(self.publish(scan))
     }
@@ -234,7 +271,7 @@ impl Vault {
         title: &str,
         url: Option<&str>,
     ) -> Result<BookmarkDto, Problem> {
-        let _write = self.write_gate();
+        let _gate = self.gate();
         let scan = self.plan_scan()?;
         let parent_node = writable_folder(&scan, parent)?;
         let title = validated_title(title)?;
@@ -275,7 +312,7 @@ impl Vault {
         title: Option<&str>,
         url: Option<&str>,
     ) -> Result<BookmarkDto, Problem> {
-        let _write = self.write_gate();
+        let _gate = self.gate();
         let expected = parse_revision(revision)?;
         let scan = self.plan_scan()?;
 
@@ -317,7 +354,7 @@ impl Vault {
     /// [`ProblemCode::ReadOnly`], [`ProblemCode::PartialFailure`] when a
     /// rollback itself failed, or [`ProblemCode::VaultUnavailable`].
     pub fn delete_bookmark(&self, reference: &EntryRef, revision: &str) -> Result<(), Problem> {
-        let _write = self.write_gate();
+        let _gate = self.gate();
         let expected = parse_revision(revision)?;
         let scan = self.plan_scan()?;
 
@@ -331,21 +368,31 @@ impl Vault {
             }
         };
         require_writable(node.access(), "the bookmark")?;
+        let parent_relative = parent_path(node.relative_path()).to_owned();
         let dir = self.parent_dir_of(node.relative_path())?;
-        check_revision(expected, revision_of(&dir, node.file_name())?)?;
+
+        // The bytes and the file's identity come from one handle, so the
+        // revision check and the removal are about the same object.
+        let validated = read_validated(&dir, node.file_name())?;
+        check_revision(expected, validated.revision())?;
 
         let assets = assets_directory_name(node.file_name());
         let has_assets = is_directory(&dir, &assets);
 
-        let mut staged = self.staging(node.id().as_str())?;
-        if let Err(error) = staged.take(&dir, node.file_name(), false) {
+        let mut staged = self.staging("delete_bookmark", node.id().as_str())?;
+
+        // Immediately before the entry leaves the vault, confirm the name still
+        // means the file that was validated. An external replacement in between
+        // is a conflict, and that replacement is left alone.
+        confirm_unchanged(&dir, node.file_name(), &validated)?;
+        if let Err(error) = staged.take(&dir, &parent_relative, node.file_name(), false) {
             return Err(rollback(
                 staged,
                 "the bookmark could not be removed",
                 &error,
             ));
         }
-        if has_assets && let Err(error) = staged.take(&dir, &assets, true) {
+        if has_assets && let Err(error) = staged.take(&dir, &parent_relative, &assets, true) {
             return Err(rollback(
                 staged,
                 "the bookmark's assets could not be removed",
@@ -356,7 +403,7 @@ impl Vault {
         staged
             .commit()
             .map_err(|error| io_problem("the staged entries could not be destroyed", &error))?;
-        self.reconcile()?;
+        self.reconcile_locked()?;
         Ok(())
     }
 
@@ -380,7 +427,7 @@ impl Vault {
         revision: &str,
         recursive: bool,
     ) -> Result<(), Problem> {
-        let _write = self.write_gate();
+        let _gate = self.gate();
         let expected = parse_revision(revision)?;
         let scan = self.plan_scan()?;
 
@@ -404,6 +451,13 @@ impl Vault {
         let handle = self.dir_of(node.relative_path())?;
         check_revision(expected, revision_of(&handle, FOLDER_FILE_NAME)?)?;
 
+        // The identity of the directory that is about to be verified. The
+        // staging rename below names a directory *entry*, and an entry can be
+        // repointed; this is what proves the entry still leads to the tree that
+        // was actually checked.
+        let verified = fsx::directory_identity(&handle)
+            .map_err(|error| io_problem("the folder could not be identified", &error))?;
+
         let occupants = occupant_count(&handle)?;
         if occupants > 0 && !recursive {
             return Err(Problem::new(
@@ -419,19 +473,22 @@ impl Vault {
         }
         drop(handle);
 
+        let parent_relative = parent_path(node.relative_path()).to_owned();
         let parent = self.parent_dir_of(node.relative_path())?;
+        confirm_same_directory(&parent, node.directory_name(), verified)?;
+
         let staging_id = node
             .id()
             .map_or_else(|| "folder".to_owned(), |id| id.as_str().to_owned());
-        let mut staged = self.staging(&staging_id)?;
-        if let Err(error) = staged.take(&parent, node.directory_name(), true) {
+        let mut staged = self.staging("delete_folder", &staging_id)?;
+        if let Err(error) = staged.take(&parent, &parent_relative, node.directory_name(), true) {
             return Err(rollback(staged, "the folder could not be removed", &error));
         }
 
         staged
             .commit()
             .map_err(|error| io_problem("the staged folder could not be destroyed", &error))?;
-        self.reconcile()?;
+        self.reconcile_locked()?;
         Ok(())
     }
 
@@ -452,7 +509,7 @@ impl Vault {
         revision: &str,
         parent: &EntryRef,
     ) -> Result<BookmarkDto, Problem> {
-        let _write = self.write_gate();
+        let _gate = self.gate();
         let expected = parse_revision(revision)?;
         let scan = self.plan_scan()?;
         let destination_node = writable_folder(&scan, parent)?;
@@ -492,14 +549,14 @@ impl Vault {
     // -- internals --------------------------------------------------------
 
     /// Opens a staging area for one operation.
-    fn staging(&self, id: &str) -> Result<Staged, Problem> {
+    fn staging(&self, operation: &str, id: &str) -> Result<Staged, Problem> {
         let state = self.state.as_ref().ok_or_else(|| {
             Problem::new(
                 ProblemCode::VaultUnavailable,
                 "this vault was opened for reading only",
             )
         })?;
-        Staged::open(state, id)
+        Staged::open(state, &self.root, operation, id)
             .map_err(|error| io_problem("the staging area could not be opened", &error))
     }
 
@@ -514,14 +571,9 @@ impl Vault {
         self.dir_of(parent_path(relative))
     }
 
-    fn write_gate(&self) -> MutexGuard<'_, ()> {
-        self.write_gate
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-    }
-
-    fn scan_gate(&self) -> MutexGuard<'_, ()> {
-        self.scan_gate
+    /// Takes the one lock. See the module documentation for the order.
+    fn gate(&self) -> MutexGuard<'_, ()> {
+        self.operation_gate
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
     }
@@ -534,9 +586,9 @@ impl Vault {
 
     /// The authoritative scan a mutation plans against.
     ///
-    /// Taken under the scan gate so it cannot observe the vault mid-publish.
+    /// The caller already holds the gate, so this cannot observe another
+    /// mutation's half-finished state.
     fn plan_scan(&self) -> Result<VaultScan, Problem> {
-        let _gate = self.scan_gate();
         self.scan_now()
     }
 
@@ -572,7 +624,7 @@ impl Vault {
 
     /// Publishes the post-mutation tree and renders the affected entry from it.
     fn settle(&self, reference: &EntryRef) -> Result<BookmarkDto, Problem> {
-        let (snapshot, _) = self.reconcile()?;
+        let (snapshot, _) = self.reconcile_locked()?;
         let located = locate(&snapshot.scan, reference)?;
         Ok(located.to_dto(&snapshot.scan))
     }
@@ -639,6 +691,11 @@ fn create_folder_directory(
 }
 
 /// Applies a title and URL change to one bookmark file.
+///
+/// The bytes and the file's identity are read from one handle, and the commit
+/// is bound to both: if the name comes to mean a different file before the new
+/// content lands, the write is refused as stale and that file is left exactly
+/// as it is. See [`crate::fsx::replace_validated`].
 fn update_bookmark(
     dir: &Dir,
     name: &str,
@@ -646,10 +703,11 @@ fn update_bookmark(
     title: Option<&str>,
     url: Option<&str>,
 ) -> Result<(), Problem> {
-    let source = read_entry(dir, name)?;
-    check_revision(expected, Revision::of(&source))?;
+    let validated = read_validated(dir, name)?;
+    check_revision(expected, validated.revision())?;
+    let source = &validated.bytes;
 
-    let file = BookmarkFile::parse(&source).map_err(|error| {
+    let file = BookmarkFile::parse(source).map_err(|error| {
         Problem::new(
             ProblemCode::ReadOnly,
             format!("the bookmark cannot be updated: {error}"),
@@ -674,26 +732,27 @@ fn update_bookmark(
     // have, the request was a no-op and must not touch the disk — stamping
     // `bbb_updated` first would have made it one.
     let probe = file
-        .apply(&source, &requested(None))
+        .apply(source, &requested(None))
         .map_err(|e| update_problem(&e))?;
-    if probe == source {
+    if probe == *source {
         return Ok(());
     }
 
     let now = clock::now_rfc3339();
     let bytes = file
-        .apply(&source, &requested(Some(&now)))
+        .apply(source, &requested(Some(&now)))
         .map_err(|e| update_problem(&e))?;
-    fsx::replace(dir, name, &bytes)
-        .map_err(|error| io_problem("the bookmark could not be written", &error))
+    fsx::replace_validated(dir, name, &bytes, &validated)
+        .map_err(|error| commit_problem("the bookmark could not be written", error))
 }
 
-/// Applies a title change to one `.bbb-folder.md`.
+/// Applies a title change to one `.bbb-folder.md`, bound to its identity.
 fn update_folder(dir: &Dir, expected: Revision, title: Option<&str>) -> Result<(), Problem> {
-    let source = read_entry(dir, FOLDER_FILE_NAME)?;
-    check_revision(expected, Revision::of(&source))?;
+    let validated = read_validated(dir, FOLDER_FILE_NAME)?;
+    check_revision(expected, validated.revision())?;
+    let source = &validated.bytes;
 
-    let file = FolderFile::parse(&source).map_err(|error| {
+    let file = FolderFile::parse(source).map_err(|error| {
         Problem::new(
             ProblemCode::ReadOnly,
             format!("the folder metadata cannot be updated: {error}"),
@@ -705,13 +764,13 @@ fn update_folder(dir: &Dir, expected: Revision, title: Option<&str>) -> Result<(
         update = update.title(title);
     }
     let bytes = file
-        .apply(&source, &update)
+        .apply(source, &update)
         .map_err(|e| update_problem(&e))?;
-    if bytes == source {
+    if bytes == *source {
         return Ok(());
     }
-    fsx::replace(dir, FOLDER_FILE_NAME, &bytes)
-        .map_err(|error| io_problem("the folder metadata could not be written", &error))
+    fsx::replace_validated(dir, FOLDER_FILE_NAME, &bytes, &validated)
+        .map_err(|error| commit_problem("the folder metadata could not be written", error))
 }
 
 /// Renames a bookmark into `destination`, taking its assets with it.
@@ -783,10 +842,23 @@ fn move_folder(source: &Dir, node: &FolderNode, destination: &Dir) -> Result<(),
                 }
                 candidate = names.allocate_folder(node.title());
             }
+            Err(error) if error.kind() == io::ErrorKind::Unsupported => {
+                return Err(unsupported_folder_move());
+            }
             Err(error) => return Err(io_problem("the folder could not be moved", &error)),
         }
     }
     Err(name_exhausted())
+}
+
+/// The refusal on a platform with no no-replace directory rename.
+fn unsupported_folder_move() -> Problem {
+    Problem::new(
+        ProblemCode::UnsupportedOperation,
+        "moving a folder needs a rename this platform cannot perform without risking the \
+         destruction of whatever is already at the destination, so it is refused. Move the \
+         directory in a file manager and rescan",
+    )
 }
 
 fn guard_move_into_self(node: &FolderNode, destination: &FolderNode) -> Result<(), Problem> {
@@ -954,6 +1026,29 @@ fn is_directory(dir: &Dir, name: &str) -> bool {
         .is_ok_and(|metadata| metadata.is_dir())
 }
 
+/// Reads an entry together with the identity of the file it came from.
+fn read_validated(dir: &Dir, name: &str) -> Result<fsx::Validated, Problem> {
+    fsx::read_with_identity(dir, name).map_err(|error| match error.kind() {
+        io::ErrorKind::NotFound => Problem::new(
+            ProblemCode::NotFound,
+            "the entry is no longer on disk; rescan and retry",
+        ),
+        _ => io_problem("the entry could not be read", &error),
+    })
+}
+
+/// Turns a bound-commit failure into the right refusal.
+fn commit_problem(context: &str, error: fsx::CommitError) -> Problem {
+    match error {
+        fsx::CommitError::Stale => Problem::new(
+            ProblemCode::StaleRevision,
+            "the entry was replaced on disk while this change was being written; the replacement \
+             has been left untouched. Reload it and reapply the change",
+        ),
+        fsx::CommitError::Io(error) => io_problem(context, &error),
+    }
+}
+
 fn read_entry(dir: &Dir, name: &str) -> Result<Vec<u8>, Problem> {
     fsx::read(dir, name).map_err(|error| match error.kind() {
         io::ErrorKind::NotFound => Problem::new(
@@ -962,6 +1057,52 @@ fn read_entry(dir: &Dir, name: &str) -> Result<Vec<u8>, Problem> {
         ),
         _ => io_problem("the entry could not be read", &error),
     })
+}
+
+/// Refuses unless `name` still leads to the file that was validated.
+///
+/// Run immediately before an entry leaves the vault, so the gap between the
+/// check and the rename is one syscall rather than a whole request. An entry
+/// replaced in the meantime is a conflict, and the replacement stays.
+fn confirm_unchanged(dir: &Dir, name: &str, validated: &fsx::Validated) -> Result<(), Problem> {
+    let current = read_validated(dir, name)?;
+    let same_file = !validated.identity.is_known() || current.identity.is_same(validated.identity);
+    if current.revision() == validated.revision() && same_file {
+        return Ok(());
+    }
+    Err(Problem::new(
+        ProblemCode::StaleRevision,
+        "the entry was replaced on disk after this request was checked; the replacement has been \
+         left untouched. Reload it and retry",
+    ))
+}
+
+/// Refuses unless `name` in `parent` still leads to the verified directory.
+///
+/// A recursive delete inspects a whole subtree through one handle and then
+/// removes a *name*. Without this, repointing that name after the inspection
+/// would have the daemon destroy something it never looked at.
+fn confirm_same_directory(
+    parent: &Dir,
+    name: &str,
+    verified: fsx::FileIdentity,
+) -> Result<(), Problem> {
+    let current = parent
+        .open_dir_nofollow(name)
+        .map_err(|error| io_problem("the folder could not be reopened", &error))
+        .and_then(|handle| {
+            fsx::directory_identity(&handle)
+                .map_err(|error| io_problem("the folder could not be identified", &error))
+        })?;
+
+    if verified.is_known() && current.is_same(verified) {
+        return Ok(());
+    }
+    Err(Problem::new(
+        ProblemCode::SubtreeChanged,
+        "the folder was replaced on disk after its contents were checked; nothing has been \
+         deleted. Rescan and retry",
+    ))
 }
 
 fn revision_of(dir: &Dir, name: &str) -> Result<Revision, Problem> {

@@ -45,6 +45,8 @@ pub enum ProblemCode {
     SubtreeChanged,
     /// A multi-step change failed and could not be undone.
     PartialFailure,
+    /// The operation needs a filesystem primitive this platform lacks.
+    UnsupportedOperation,
     /// The move would place a folder inside itself.
     MoveIntoSelf,
     /// The `Host` header is missing or is not a loopback name.
@@ -69,6 +71,7 @@ impl ProblemCode {
             Self::SubtreeHasUnknownFiles => "subtree_has_unknown_files",
             Self::SubtreeChanged => "subtree_changed",
             Self::PartialFailure => "partial_failure",
+            Self::UnsupportedOperation => "unsupported_operation",
             Self::MoveIntoSelf => "move_into_self",
             Self::HostNotAllowed => "host_not_allowed",
             Self::VaultUnavailable => "vault_unavailable",
@@ -94,6 +97,7 @@ impl ProblemCode {
             }
             Self::HostNotAllowed => StatusCode::FORBIDDEN,
             Self::VaultUnavailable | Self::PartialFailure => StatusCode::INTERNAL_SERVER_ERROR,
+            Self::UnsupportedOperation => StatusCode::NOT_IMPLEMENTED,
         }
     }
 
@@ -112,6 +116,7 @@ impl ProblemCode {
             Self::SubtreeHasUnknownFiles => "Folder holds unmanaged files",
             Self::SubtreeChanged => "Folder changed while being deleted",
             Self::PartialFailure => "Change partly applied",
+            Self::UnsupportedOperation => "Not supported on this platform",
             Self::MoveIntoSelf => "Cannot move a folder into itself",
             Self::HostNotAllowed => "Host not allowed",
             Self::VaultUnavailable => "Vault unavailable",

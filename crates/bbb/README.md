@@ -78,6 +78,7 @@ stable `code`.
 | `move_into_self`    | 422    | a folder cannot contain itself                  |
 | `vault_unavailable` | 500    | the vault could not be read or written          |
 | `partial_failure`   | 500    | a multi-step change failed and could not be undone |
+| `unsupported_operation` | 501 | the platform lacks a primitive the operation needs |
 
 ### Deleting a folder
 
@@ -101,18 +102,24 @@ you can see what you are losing, and then retry.
   409 and the file is left alone.
 - **No lost bytes.** Updates use the format core's surgical patching, then a
   uniquely named temporary file created with `create_new` in the destination
-  directory, `fsync`, rename, and a directory `fsync` on Unix. On Windows the
-  rename lands on `MoveFileExW(MOVEFILE_REPLACE_EXISTING)`, which is atomic on
-  one volume; there is no portable directory `fsync`, which is why the
-  durability guarantee is "best available" rather than identical everywhere. A
-  no-op update writes nothing at all.
+  directory, `fsync`, and a commit bound to the exact file that was validated.
+  A no-op update writes nothing at all.
+- **A commit cannot hit the wrong file.** On Linux the new file is swapped in
+  with `renameat2(RENAME_EXCHANGE)` and the evicted file is then read back: if
+  it is not the bytes that were validated, the swap is undone and the caller
+  gets `stale_revision` with the other file untouched. Elsewhere the target is
+  re-opened no-follow and its identity *and* contents are compared immediately
+  before the rename.
 - **Nothing is deleted in place.** Deletions rename entries into
-  `<vault>/.bbb/staging` first and destroy them only once every entry has
-  moved, so a failure part-way is rolled back and a crash leaves bytes in a
-  directory the scanner ignores — purged by the next daemon to take the lock.
-- **No clobbering.** Creates use `create_new`; moves claim the destination name
-  first (`renameat2(RENAME_NOREPLACE)` on Linux), so a rename can never destroy
-  a file that is already there.
+  `<vault>/.bbb/staging` under a durable, two-phase manifest, and destroy them
+  only after the phase flips to `committed`. Startup rolls back what never
+  committed and finishes what did. Nothing is ever purged: anything that cannot
+  be recovered is kept, listed in `.bbb/staging/recovery.txt`, and reported in
+  `GET /health` and `bbb doctor`.
+- **No clobbering.** Creates use `create_new`; file moves claim the destination
+  name first and rename over their own placeholder; directory moves use a real
+  no-replace rename, and a platform without one refuses the move rather than
+  probing and hoping.
 - **Stable identities.** Identity lives in front matter, so it survives moves,
   renames and restarts.
 - **Loopback only.** The bind address is loopback and the `Host` header is
@@ -125,8 +132,31 @@ you can see what you are losing, and then retry.
   `--ui-dir`.
 - **Logs carry no bookmark content** — counts, identities, codes and paths only.
 
+## Platform behaviour
+
+Everything above holds on every platform except where this table says otherwise.
+
+| Operation | Linux | macOS | Windows | Other |
+| --------- | ----- | ----- | ------- | ----- |
+| Durable replacement | `fsync` + rename + dir `fsync` | same | `MoveFileExW(REPLACE_EXISTING \| WRITE_THROUGH)`; no directory `fsync` exists | rename + dir `fsync` |
+| Commit binding | `renameat2(RENAME_EXCHANGE)` then verify — no window | re-open, compare identity + content, rename | same as macOS | same, identity unavailable, content only |
+| File identity | inode | inode | `GetFileInformationByHandle` | none; content comparison only |
+| Directory move | `renameat2(RENAME_NOREPLACE)` | `renameatx_np(RENAME_EXCL)` | `MoveFileExW` without `REPLACE_EXISTING` | **refused**, `501 unsupported_operation` |
+| Symlink refusal | `O_NOFOLLOW` | `O_NOFOLLOW` | reparse-point equivalent | as the platform allows |
+
+The one place `unsafe` appears in this crate is `src/fsx/platform.rs`, which
+holds every FFI call; the crate denies it everywhere else.
+
 ## Testing
 
 ```sh
 cargo test -p bbb
+# the cfg(windows) code, checked from any host:
+rustup target add x86_64-pc-windows-msvc
+cargo check --workspace --all-targets --target x86_64-pc-windows-msvc
 ```
+
+Crash recovery is tested by arming a fault at each stage transition — before
+the first rename, between renames, either side of the phase flip, and part-way
+through destroying — letting the real staging code die there, and then running
+recovery against whatever it left on disk.

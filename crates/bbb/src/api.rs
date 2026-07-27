@@ -83,7 +83,9 @@ async fn health(State(state): State<ApiState>) -> Json<HealthResponse> {
         status: "ok",
         version: env!("CARGO_PKG_VERSION"),
         generation: snapshot.generation,
-        warnings: dto::warnings(&snapshot.scan),
+        // The vault's own diagnostics, plus anything the daemon has to say —
+        // notably entries a crashed run left staged, which no scan can see.
+        warnings: warnings(&state, &snapshot.scan),
     })
 }
 
@@ -98,7 +100,7 @@ async fn rescan(State(state): State<ApiState>) -> Result<Json<RescanResponse>, P
     Ok(Json(RescanResponse {
         generation: snapshot.generation,
         changed,
-        warnings: dto::warnings(&snapshot.scan),
+        warnings: warnings(&state, &snapshot.scan),
     }))
 }
 
@@ -245,6 +247,13 @@ fn logged<T>(
         }
     }
     result
+}
+
+/// Everything worth warning a client about, from the vault and the daemon.
+fn warnings(state: &ApiState, scan: &bbb_vault_core::VaultScan) -> Vec<crate::dto::DiagnosticDto> {
+    let mut warnings = state.vault.notices();
+    warnings.extend(dto::warnings(scan));
+    warnings
 }
 
 fn parse_reference(text: &str) -> Result<EntryRef, Problem> {

@@ -3,6 +3,10 @@
 //! Doctor never writes. Its job is to turn a scan into something a person can
 //! act on, and to exit non-zero when the vault holds a problem that makes an
 //! entry read-only — so it can be used in a script.
+//!
+//! It also looks in `.bbb/staging`, which no scan covers: entries a crashed run
+//! left behind and that recovery could not resolve live there, and a user who
+//! never reads the daemon's log needs some way to find out.
 
 use std::path::Path;
 
@@ -50,7 +54,38 @@ impl Report {
 /// symbolic link as a vault root.
 pub fn examine(root: &Path) -> std::io::Result<Report> {
     let scan = scan(root)?;
-    Ok(summarize(&scan))
+    let mut report = summarize(&scan);
+    report.errors.extend(staged_findings(root));
+    Ok(report)
+}
+
+/// Entries left in `.bbb/staging` that a previous run could not resolve.
+///
+/// Read-only, like everything else here: an operation directory that still has
+/// a manifest is reported, never cleaned up. Recovery runs when a daemon takes
+/// the lock, and doing it from `doctor` would race that daemon.
+fn staged_findings(root: &Path) -> Vec<Finding> {
+    let staging = root.join(".bbb").join("staging");
+    let Ok(entries) = std::fs::read_dir(&staging) else {
+        return Vec::new();
+    };
+
+    let mut findings: Vec<Finding> = entries
+        .flatten()
+        .filter(|entry| entry.path().is_dir())
+        .map(|entry| {
+            let name = entry.file_name().to_string_lossy().into_owned();
+            Finding {
+                code: "staged_entries_retained",
+                path: format!(".bbb/staging/{name}"),
+                detail: "entries from an interrupted change are held here; see \
+                         .bbb/staging/recovery.txt for what they are and where they belong"
+                    .to_owned(),
+            }
+        })
+        .collect();
+    findings.sort_by(|left, right| left.path.cmp(&right.path));
+    findings
 }
 
 fn summarize(scan: &VaultScan) -> Report {

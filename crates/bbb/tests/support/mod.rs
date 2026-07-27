@@ -43,6 +43,14 @@ impl Harness {
         Self { daemon, directory }
     }
 
+    /// Opens a daemon over a vault the test prepared itself.
+    ///
+    /// Used where the on-disk state before start-up is the thing under test,
+    /// such as the residue an interrupted change leaves behind.
+    pub(crate) fn adopt(directory: TempDir) -> Self {
+        Self::reopen(directory)
+    }
+
     /// Opens a *second* daemon over the same directory, for restart tests.
     ///
     /// The caller must have dropped the first one; the vault admits one writer.
