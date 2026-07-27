@@ -252,15 +252,21 @@ export function SettingsDialog() {
               <div className="flex flex-col gap-2">
                 <Label className="text-sm font-medium">Bookmarks Data</Label>
                 <div className="flex gap-2">
-                  <Button variant="outline" size="sm" onClick={handleImport}>
-                    Import
-                  </Button>
+                  {/* The vault is the source of truth in daemon mode, so
+                      client-side HTML import isn't offered there yet. */}
+                  {import.meta.env.VITE_BUILD_TARGET !== "daemon" && (
+                    <Button variant="outline" size="sm" onClick={handleImport}>
+                      Import
+                    </Button>
+                  )}
                   <Button variant="outline" size="sm" onClick={handleExport}>
                     Export
                   </Button>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Import or export bookmarks as HTML (standard browser format).
+                  {import.meta.env.VITE_BUILD_TARGET === "daemon"
+                    ? "Export bookmarks as HTML (standard browser format)."
+                    : "Import or export bookmarks as HTML (standard browser format)."}
                 </p>
               </div>
             </div>

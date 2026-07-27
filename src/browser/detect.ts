@@ -56,6 +56,7 @@ function createChromeAdapter(): BrowserAdapter {
     favicon: new ChromeFaviconAdapter(),
     capabilities: {
       openInManager: true,
+      move: true,
       reorder: true,
     },
   }
@@ -68,6 +69,7 @@ function createFirefoxAdapter(): BrowserAdapter {
     favicon: new FirefoxFaviconAdapter(),
     capabilities: {
       openInManager: false,
+      move: true,
       reorder: true,
     },
   }
@@ -80,6 +82,7 @@ function createStandaloneAdapter(): BrowserAdapter {
     favicon: new StandaloneFaviconAdapter(),
     capabilities: {
       openInManager: false,
+      move: true,
       reorder: true,
     },
   }

@@ -171,11 +171,13 @@ export const BookmarkCard = React.memo(function BookmarkCard({
   const setCardLayout = usePreferencesStore((s) => s.setCardLayout)
   const nestedFolders = usePreferencesStore((s) => s.nestedFolders)
   const adapter = useBookmarkStore((s) => s.adapter)
-  const reorderEnabled = adapter?.capabilities.reorder ?? true
+  // Dropping a bookmark onto a folder card moves it there (cross-folder),
+  // which the daemon allows — this isn't a same-parent reorder.
+  const moveEnabled = adapter?.capabilities.move ?? true
 
   const { ref: dropRef, isOver } = useFolderDropTarget({
     folderId: folder.id,
-    disabled: !reorderEnabled,
+    disabled: !moveEnabled,
   })
 
   const children = folder.children ?? []

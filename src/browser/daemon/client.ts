@@ -1,16 +1,11 @@
 import type { BookmarkNode } from "../types"
 
-/**
- * Wire contract assumed for the daemon HTTP API. The daemon itself lives in
- * a separate workspace and hadn't landed yet when this client was written,
- * so these shapes are this slice's documented assumption, not a verified
- * contract. See the module-level endpoints below for the exact paths.
- */
 const API_BASE = "/api/v1"
 const DEFAULT_TIMEOUT_MS = 10_000
 
 export class DaemonApiError extends Error {
   readonly status?: number
+  readonly code?: string
   readonly title?: string
   readonly detail?: string
   readonly isTimeout: boolean
@@ -19,6 +14,7 @@ export class DaemonApiError extends Error {
     message: string,
     opts: {
       status?: number
+      code?: string
       title?: string
       detail?: string
       isTimeout?: boolean
@@ -27,6 +23,7 @@ export class DaemonApiError extends Error {
     super(message)
     this.name = "DaemonApiError"
     this.status = opts.status
+    this.code = opts.code
     this.title = opts.title
     this.detail = opts.detail
     this.isTimeout = opts.isTimeout ?? false
@@ -37,6 +34,7 @@ interface ProblemJson {
   type?: string
   title?: string
   status?: number
+  code?: string
   detail?: string
   instance?: string
 }
@@ -91,6 +89,7 @@ async function request<T>(
         `${response.status} ${response.statusText}`,
       {
         status: response.status,
+        code: problem?.code,
         title: problem?.title,
         detail: problem?.detail,
       }
@@ -107,6 +106,9 @@ async function request<T>(
 
 export interface DaemonHealth {
   status: string
+  version?: string
+  generation?: number
+  warnings?: string[]
 }
 
 export function fetchHealth(): Promise<DaemonHealth> {
@@ -114,19 +116,16 @@ export function fetchHealth(): Promise<DaemonHealth> {
 }
 
 export interface DaemonTreeResponse {
-  root: BookmarkNode
-}
-
-export interface DaemonNodeResponse {
-  node: BookmarkNode
+  tree: BookmarkNode[]
 }
 
 export function fetchTree(): Promise<DaemonTreeResponse> {
   return request<DaemonTreeResponse>("/tree")
 }
 
-export function fetchSubTree(id: string): Promise<DaemonNodeResponse> {
-  return request<DaemonNodeResponse>(`/tree/${encodeURIComponent(id)}`)
+/** Bare DTO, not wrapped — the daemon exposes a single item under /bookmarks/:id regardless of kind. */
+export function fetchNode(id: string): Promise<BookmarkNode> {
+  return request<BookmarkNode>(`/bookmarks/${encodeURIComponent(id)}`)
 }
 
 export type DaemonNodeKind = "bookmark" | "folder"
@@ -145,47 +144,44 @@ export function createNode(
   })
 }
 
+/** PATCH always targets /bookmarks/:id, even for a folder. */
 export function updateNode(
-  kind: DaemonNodeKind,
   id: string,
   body: { revision: string; title?: string; url?: string }
 ): Promise<BookmarkNode> {
-  return request<BookmarkNode>(
-    `/${segmentFor(kind)}/${encodeURIComponent(id)}`,
-    {
-      method: "PATCH",
-      body: JSON.stringify(body),
-    }
-  )
+  return request<BookmarkNode>(`/bookmarks/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  })
 }
 
+/** DELETE keeps kind routing; a folder delete of a non-empty directory needs `recursive`. */
 export function deleteNode(
   kind: DaemonNodeKind,
   id: string,
-  revision: string
+  revision: string,
+  opts: { recursive?: boolean } = {}
 ): Promise<void> {
+  const params = new URLSearchParams({ revision })
+  if (opts.recursive) params.set("recursive", "true")
   return request<void>(
-    `/${segmentFor(kind)}/${encodeURIComponent(id)}?revision=${encodeURIComponent(revision)}`,
+    `/${segmentFor(kind)}/${encodeURIComponent(id)}?${params.toString()}`,
     { method: "DELETE" }
   )
 }
 
+/** Move always targets /bookmarks/:id, even for a folder. */
 export function moveNode(
-  kind: DaemonNodeKind,
   id: string,
   body: { revision: string; parentId: string }
 ): Promise<BookmarkNode | undefined> {
   return request<BookmarkNode | undefined>(
-    `/${segmentFor(kind)}/${encodeURIComponent(id)}/move`,
+    `/bookmarks/${encodeURIComponent(id)}/move`,
     {
       method: "POST",
       body: JSON.stringify(body),
     }
   )
-}
-
-export function triggerRescan(): Promise<void> {
-  return request<void>("/rescan", { method: "POST" })
 }
 
 export const DAEMON_EVENTS_PATH = `${API_BASE}/events`

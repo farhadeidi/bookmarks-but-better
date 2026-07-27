@@ -12,18 +12,12 @@ export function createDaemonAdapter(): BrowserAdapter {
     favicon: new DaemonFaviconAdapter(),
     capabilities: {
       openInManager: false,
+      move: true,
       reorder: false,
     },
   }
 }
 
 export { DaemonBookmarkAdapter } from "./bookmarks"
-export { DaemonFaviconAdapter } from "./favicon"
-export { localFaviconDataUri } from "./favicon"
+export { DaemonFaviconAdapter, localFaviconDataUri } from "./favicon"
 export { connectDaemonEvents } from "./sse"
-export {
-  DaemonApiError,
-  fetchHealth,
-  triggerRescan,
-  DAEMON_EVENTS_PATH,
-} from "./client"

@@ -1,6 +1,9 @@
 export interface BookmarkDiagnostic {
   code: string
-  message: string
+  severity: string
+  detail: string
+  path?: string
+  line?: number
 }
 
 export interface BookmarkNode {
@@ -43,6 +46,13 @@ export interface BookmarkAdapter {
   openInManager(id: string): Promise<void>
   /** Releases adapter-owned resources (e.g. an SSE connection). Optional: only the daemon adapter needs it. */
   dispose?(): void
+  /** Cheap connectivity/readiness probe. Optional: only the daemon adapter needs it. */
+  checkHealth?(): Promise<AdapterHealth>
+}
+
+export interface AdapterHealth {
+  ready: boolean
+  warnings?: string[]
 }
 
 export interface StorageAdapter {
@@ -60,10 +70,13 @@ export interface FaviconProvider {
 export interface AdapterCapabilities {
   /** Whether "open in bookmark manager" is supported. False on Firefox and Standalone. */
   openInManager: boolean
+  /** Whether a node can be moved to a different parent folder. */
+  move: boolean
   /**
-   * Whether persisted drag-and-drop reordering/moving is supported. False in
+   * Whether persisted same-parent sibling reordering is supported. False in
    * daemon mode: sibling ordering is deterministic server-side and the
-   * byte-preserving reorder mutation path hasn't shipped yet.
+   * byte-preserving reorder mutation path hasn't shipped yet. Cross-folder
+   * moves are a separate capability — see `move`.
    */
   reorder: boolean
 }

@@ -4,8 +4,49 @@ import { debounce } from "@/lib/bookmark-utils"
 
 export type BookmarkStoreStatus = "loading" | "ready" | "unavailable"
 
+/**
+ * Duck-typed against `DaemonApiError` (src/browser/daemon/client.ts) without
+ * importing it directly, so this store stays adapter-agnostic — other
+ * adapters' errors are plain `Error`s and fall through to the generic path.
+ *
+ * The specific `code`/`status` values checked here (409 for a revision
+ * conflict, "read_only" for a read-only rejection) are this slice's
+ * assumption about what the daemon will send; they haven't been confirmed
+ * against a real daemon yet.
+ */
+interface KnownApiErrorShape {
+  status?: number
+  code?: string
+  detail?: string
+}
+
 function toErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : "Something went wrong."
+  if (!(error instanceof Error)) return "Something went wrong."
+
+  const shape = error as Error & KnownApiErrorShape
+  if (shape.code === "read_only") {
+    return shape.detail
+      ? `This item is read-only: ${shape.detail}`
+      : "This item is read-only and can't be edited."
+  }
+  if (shape.status === 409) {
+    return "This item changed elsewhere. Refresh and try again."
+  }
+  return error.message
+}
+
+async function loadTree(adapter: BrowserAdapter): Promise<BookmarkNode[]> {
+  if (adapter.bookmarks.checkHealth) {
+    const health = await adapter.bookmarks.checkHealth()
+    if (!health.ready) {
+      throw new Error(
+        health.warnings?.length
+          ? health.warnings.join(" ")
+          : "The daemon is not ready."
+      )
+    }
+  }
+  return adapter.bookmarks.getTree()
 }
 
 interface BookmarkState {
@@ -66,7 +107,7 @@ export const useBookmarkStore = create<BookmarkState>((set, get) => ({
 
     let tree: BookmarkNode[] = []
     try {
-      tree = await adapter.bookmarks.getTree()
+      tree = await loadTree(adapter)
       set({ status: "ready" })
     } catch (error) {
       set({ status: "unavailable", loadError: toErrorMessage(error) })
@@ -121,10 +162,16 @@ export const useBookmarkStore = create<BookmarkState>((set, get) => ({
   },
 
   async retry() {
-    const { adapter } = get()
+    const { adapter, rootFolderId } = get()
     if (!adapter) return
     set({ status: "loading", loadError: null })
-    await get().refresh()
+    try {
+      const tree = await loadTree(adapter)
+      const rootFolder = rootFolderId ? findNode(tree, rootFolderId) : null
+      set({ tree, rootFolder, status: "ready", loadError: null })
+    } catch (error) {
+      set({ status: "unavailable", loadError: toErrorMessage(error) })
+    }
   },
 
   clearMutationError() {

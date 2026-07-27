@@ -34,7 +34,8 @@ function readOnlyReason(itemData: OrganizerItemData | undefined): string {
 interface BookmarkOrganizerRowProps {
   item: ItemInstance<OrganizerItemData>
   isDragging: boolean
-  reorderEnabled: boolean
+  /** Whether this item can be dragged at all (a move, a reorder, or both). */
+  dragEnabled: boolean
   onRename: (item: ItemInstance<OrganizerItemData>) => void | Promise<void>
   onDelete: (item: ItemInstance<OrganizerItemData>) => void | Promise<void>
   onCreateItem: (type: "folder" | "bookmark") => void
@@ -43,7 +44,7 @@ interface BookmarkOrganizerRowProps {
 export const BookmarkOrganizerRow = React.memo(function BookmarkOrganizerRow({
   item,
   isDragging,
-  reorderEnabled,
+  dragEnabled,
   onRename,
   onDelete,
   onCreateItem,
@@ -56,7 +57,7 @@ export const BookmarkOrganizerRow = React.memo(function BookmarkOrganizerRow({
   const level = item.getItemMeta().level
   const itemProps = item.getProps()
   const isReadOnly = itemData?.readOnly ?? false
-  const canDrag = reorderEnabled && !isReadOnly
+  const canDrag = dragEnabled && !isReadOnly
 
   return (
     <div

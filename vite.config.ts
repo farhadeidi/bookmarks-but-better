@@ -8,12 +8,10 @@ import pkg from "./package.json"
 /**
  * `bun run dev:daemon-ui` runs the Vite dev server against the frontend
  * only — the Rust daemon lives in a separate workspace/branch and isn't
- * part of this build. This proxy target is this slice's assumption about
- * where a locally-running daemon will listen; it hasn't been confirmed
- * against the daemon side yet, so treat the port as provisional until both
- * sides agree on it.
+ * part of this build. Proxies /api/v1 (and the SSE /api/v1/events stream)
+ * to the daemon's fixed local port so the two can be run side by side.
  */
-const DAEMON_DEV_PROXY_PORT = 47823
+const DAEMON_DEV_PROXY_PORT = 47321
 
 // https://vite.dev/config/
 export default defineConfig({

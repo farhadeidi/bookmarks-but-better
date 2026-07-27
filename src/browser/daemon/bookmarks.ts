@@ -1,8 +1,9 @@
-import type { BookmarkAdapter, BookmarkNode } from "../types"
+import type { AdapterHealth, BookmarkAdapter, BookmarkNode } from "../types"
 import {
   createNode,
   deleteNode,
-  fetchSubTree,
+  fetchHealth,
+  fetchNode,
   fetchTree,
   moveNode,
   updateNode,
@@ -20,19 +21,22 @@ function kindOf(node: BookmarkNode): DaemonNodeKind {
 }
 
 /**
- * Talks to the daemon's fixed /api/v1 HTTP contract and mirrors the same
+ * Talks to the daemon's /api/v1 HTTP contract and mirrors the same
  * local-listener pattern the standalone (IndexedDB) adapter uses: every
  * successful mutation notifies its own listeners immediately, so the UI
  * refreshes without waiting on the SSE `changed` event. SSE still drives
  * refreshes for changes made outside this tab (another tab, an external
  * editor, a CLI rescan).
  *
- * Revisions and bookmark-vs-folder kind aren't part of the shared
- * `BookmarkAdapter` interface, so they're cached here, keyed by id, from
- * every tree/subtree response and every mutation response. `getTree()`
- * rebuilds the cache from scratch (single source of truth for a full
- * refresh); `getSubTree()` merges in, since it's used for lazy per-folder
- * loads and must not evict sibling entries.
+ * GET, PATCH, and move all address a node through the single /bookmarks/:id
+ * path regardless of whether it's a bookmark or a folder; DELETE keeps
+ * separate /bookmarks/:id and /folders/:id routes, since removing a folder
+ * needs `recursive=true`. Revision and bookmark-vs-folder kind aren't part
+ * of the shared `BookmarkAdapter` interface, so they're cached here, keyed
+ * by id, from every tree/subtree response and every mutation response.
+ * `getTree()` rebuilds the cache from scratch (single source of truth for a
+ * full refresh); `getSubTree()` merges in, since it's used for lazy
+ * per-folder loads and must not evict sibling entries.
  */
 export class DaemonBookmarkAdapter implements BookmarkAdapter {
   private nodeMeta = new Map<string, NodeMeta>()
@@ -76,15 +80,20 @@ export class DaemonBookmarkAdapter implements BookmarkAdapter {
     return meta
   }
 
+  async checkHealth(): Promise<AdapterHealth> {
+    const health = await fetchHealth()
+    return { ready: health.status === "ok", warnings: health.warnings }
+  }
+
   async getTree(): Promise<BookmarkNode[]> {
-    const { root } = await fetchTree()
+    const { tree } = await fetchTree()
     this.nodeMeta.clear()
-    this.indexNodes([root])
-    return [root]
+    this.indexNodes(tree)
+    return tree
   }
 
   async getSubTree(id: string): Promise<BookmarkNode[]> {
-    const { node } = await fetchSubTree(id)
+    const node = await fetchNode(id)
     this.indexNodes([node])
     return [node]
   }
@@ -107,7 +116,7 @@ export class DaemonBookmarkAdapter implements BookmarkAdapter {
     changes: { title?: string; url?: string }
   ): Promise<BookmarkNode> {
     const meta = this.meta(id)
-    const node = await updateNode(meta.kind, id, {
+    const node = await updateNode(id, {
       revision: meta.revision!,
       ...changes,
     })
@@ -124,19 +133,23 @@ export class DaemonBookmarkAdapter implements BookmarkAdapter {
   }
 
   async removeTree(id: string): Promise<void> {
-    await this.remove(id)
+    const meta = this.meta(id)
+    await deleteNode(meta.kind, id, meta.revision!, { recursive: true })
+    this.nodeMeta.delete(id)
+    this.notify("removed")
   }
 
   async move(
     id: string,
     destination: { parentId?: string; index: number }
   ): Promise<void> {
-    // Daemon sibling ordering is deterministic server-side (capabilities.reorder
-    // is false), so there's no index to send — only cross-folder moves apply.
+    // The daemon accepts cross-folder moves but has no notion of a
+    // within-folder index (capabilities.reorder is false), so a same-parent
+    // "reorder" with no parentId change is nothing to send.
     if (!destination.parentId) return
 
     const meta = this.meta(id)
-    const node = await moveNode(meta.kind, id, {
+    const node = await moveNode(id, {
       revision: meta.revision!,
       parentId: destination.parentId,
     })

@@ -22,11 +22,11 @@ export function getDisplayRoot(
 
 export function describeReadOnly(node: {
   readOnly?: boolean
-  diagnostics?: { message: string }[]
+  diagnostics?: { detail: string }[]
 }): string {
-  const messages = node.diagnostics?.map((d) => d.message).filter(Boolean)
-  if (messages && messages.length > 0) {
-    return `Read-only: ${messages.join(" ")}`
+  const details = node.diagnostics?.map((d) => d.detail).filter(Boolean)
+  if (details && details.length > 0) {
+    return `Read-only: ${details.join(" ")}`
   }
   return "Read-only: this item can't be safely edited right now."
 }

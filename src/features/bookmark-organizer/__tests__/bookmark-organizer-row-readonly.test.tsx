@@ -37,7 +37,11 @@ describe("BookmarkOrganizerRow read-only affordances", () => {
       childCount: 0,
       readOnly: true,
       diagnostics: [
-        { code: "invalid_frontmatter", message: "bbb_id is missing." },
+        {
+          code: "invalid_frontmatter",
+          severity: "error",
+          detail: "bbb_id is missing.",
+        },
       ],
     })
 
@@ -45,7 +49,7 @@ describe("BookmarkOrganizerRow read-only affordances", () => {
       <BookmarkOrganizerRow
         item={readOnlyItem}
         isDragging={false}
-        reorderEnabled={true}
+        dragEnabled={true}
         onRename={onRename}
         onDelete={onDelete}
         onCreateItem={() => {}}
@@ -82,7 +86,7 @@ describe("BookmarkOrganizerRow read-only affordances", () => {
       <BookmarkOrganizerRow
         item={editableItem}
         isDragging={false}
-        reorderEnabled={true}
+        dragEnabled={true}
         onRename={onRename}
         onDelete={onDelete}
         onCreateItem={() => {}}
@@ -112,7 +116,7 @@ describe("BookmarkOrganizerRow read-only affordances", () => {
       <BookmarkOrganizerRow
         item={editableItem}
         isDragging={false}
-        reorderEnabled={false}
+        dragEnabled={false}
         onRename={() => {}}
         onDelete={() => {}}
         onCreateItem={() => {}}

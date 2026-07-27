@@ -56,6 +56,7 @@ describe("detectAdapter", () => {
     const adapter = await detectAdapter({ buildTarget: "daemon" })
 
     expect(adapter.bookmarks.constructor.name).toBe("DaemonBookmarkAdapter")
+    expect(adapter.capabilities.move).toBe(true)
     expect(adapter.capabilities.reorder).toBe(false)
   })
 })

@@ -55,7 +55,7 @@ function createMockAdapter() {
       getUrl: vi.fn(),
       isAvailable: vi.fn().mockReturnValue(false),
     },
-    capabilities: { openInManager: false, reorder: true },
+    capabilities: { openInManager: false, move: true, reorder: true },
   }
 
   return { adapter, listeners }
