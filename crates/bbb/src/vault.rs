@@ -1171,8 +1171,9 @@ fn take_problem(staged: Staged, subject: &str, error: crate::staging::TakeError)
             ProblemCode::PartialFailure,
             format!(
                 "{subject} was moved out of the vault and could not be put back ({}); it is held \
-                 in the vault's `.bbb/staging` directory and is restored at the next start — see \
-                 `.bbb/staging/recovery.txt`",
+                  in the vault's `.bbb/staging` directory. Recovery will try again at the next \
+                  start; if the destination is occupied, use `bbb doctor` and see \
+                  `.bbb/staging/recovery.txt`",
                 cause.kind()
             ),
         ),

@@ -299,7 +299,7 @@ fn run_doctor(vault: &std::path::Path) -> ExitCode {
         println!("\nthe vault is healthy");
         ExitCode::SUCCESS
     } else {
-        println!("\nthe vault has problems that make entries read-only");
+        println!("\nthe vault has problems that require attention");
         ExitCode::FAILURE
     }
 }

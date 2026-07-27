@@ -17,6 +17,7 @@
     "format:check": "prettier --check \"**/*.{ts,tsx}\"",
     "typecheck": "tsc -b --noEmit",
     "test": "vitest run",
+    "test:e2e:daemon": "playwright test tests/e2e/daemon.spec.ts --reporter=line",
     "test:watch": "vitest",
     "check": "bun run format:check && bun run lint && bun run typecheck && bun run test && bun run build && bun run build:daemon",
     "preview": "vite preview",

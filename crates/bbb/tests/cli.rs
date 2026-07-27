@@ -94,7 +94,7 @@ fn doctor_reports_a_read_only_entry_and_exits_non_zero() {
     let report = stdout(&output);
     assert!(report.contains("empty_url"), "{report}");
     assert!(report.contains("Broken--aaaabbbb.md"), "{report}");
-    assert!(report.contains("read-only"), "{report}");
+    assert!(report.contains("require attention"), "{report}");
 }
 
 #[test]

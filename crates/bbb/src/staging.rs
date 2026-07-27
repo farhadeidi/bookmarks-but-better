@@ -541,7 +541,10 @@ pub(crate) fn rescue(
             }
             let _ = write_manifest(&staged.directory, &staged.manifest);
             let directory = staged_path(&staged.name);
-            format!("they are held in `{directory}` and are restored at the next start")
+            format!(
+                "they are held in `{directory}`; recovery will try again at the next start, and \
+                 will retain them there if the destination is occupied"
+            )
         }
         Err(_) => format!(
             "they remain in `{temporary}`, beside the entry; move it back over `{name}` yourself"

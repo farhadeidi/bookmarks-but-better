@@ -128,7 +128,9 @@ you can see what you are losing, and then retry.
   reported.
 - **An undo that fails never deletes anything.** The temporary then holds the
   user's evicted bytes, so it is moved into staging under a manifest that says
-  where it belongs, and restored at the next start.
+  where it belongs. Recovery tries to restore it at the next start; if the
+  destination is occupied, the bytes remain staged and `bbb doctor` explains
+  how to recover them.
 - **No clobbering.** Creates use `create_new`; file moves claim the destination
   name first and rename over their own placeholder; directory moves use a real
   no-replace rename, and a platform without one refuses the move rather than
