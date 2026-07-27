@@ -17,6 +17,8 @@ export function BookmarkOrganizerCreateDialog() {
   const closeCreateItem = useUIStore((s) => s.closeCreateItem)
   const createFolder = useBookmarkStore((s) => s.createFolder)
   const createBookmark = useBookmarkStore((s) => s.createBookmark)
+  const mutationError = useBookmarkStore((s) => s.mutationError)
+  const clearMutationError = useBookmarkStore((s) => s.clearMutationError)
 
   const [title, setTitle] = React.useState("")
   const [url, setUrl] = React.useState("")
@@ -24,7 +26,8 @@ export function BookmarkOrganizerCreateDialog() {
   React.useEffect(() => {
     setTitle("")
     setUrl("")
-  }, [creatingItem])
+    clearMutationError()
+  }, [creatingItem, clearMutationError])
 
   if (!creatingItem) {
     return null
@@ -65,6 +68,7 @@ export function BookmarkOrganizerCreateDialog() {
       await createFolder(creatingItem.parentId, normalizedTitle)
     }
 
+    if (useBookmarkStore.getState().mutationError) return
     closeCreateItem()
   }
 
@@ -113,6 +117,12 @@ export function BookmarkOrganizerCreateDialog() {
                   onChange={(event) => setUrl(event.target.value)}
                 />
               </div>
+            )}
+
+            {mutationError && (
+              <p role="alert" className="text-sm text-destructive">
+                {mutationError}
+              </p>
             )}
           </div>
 

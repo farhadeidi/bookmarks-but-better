@@ -83,15 +83,18 @@ const BookmarkOrganizerTreeImpl = React.forwardRef<
     effectiveRootId: string | null
     bookmarks: Pick<BookmarkAdapter, "getSubTree">
     showBookmarks: boolean
+    moveEnabled: boolean
+    reorderEnabled: boolean
   }
 >(function BookmarkOrganizerTreeImpl(
-  { effectiveRootId, bookmarks, showBookmarks },
+  { effectiveRootId, bookmarks, showBookmarks, moveEnabled, reorderEnabled },
   ref
 ) {
   const openEditor = useUIStore((s) => s.openEditor)
   const openDeleteConfirm = useUIStore((s) => s.openDeleteConfirm)
   const openCreateItem = useUIStore((s) => s.openCreateItem)
   const moveBookmark = useBookmarkStore((s) => s.moveBookmark)
+  const dragEnabled = moveEnabled || reorderEnabled
 
   const hasAutoExpanded = React.useRef(false)
 
@@ -100,12 +103,15 @@ const BookmarkOrganizerTreeImpl = React.forwardRef<
     initialState: {
       expandedItems: [BOOKMARK_ORGANIZER_ROOT_ID],
     },
-    canReorder: true,
+    // `canReorder` controls only same-parent sibling repositioning; a drag
+    // that reparents onto a different folder is still allowed when it's
+    // false, since that's gated separately by `moveEnabled` below.
+    canReorder: reorderEnabled,
     indent: 16,
     seperateDragHandle: true,
     features: [
       asyncDataLoaderFeature,
-      dragAndDropFeature,
+      ...(dragEnabled ? [dragAndDropFeature] : []),
       propMemoizationFeature,
     ],
     dataLoader: {
@@ -166,8 +172,18 @@ const BookmarkOrganizerTreeImpl = React.forwardRef<
       )
 
       const moves = buildSequentialMoves(items, parentId)
+      const originalParentById = new Map(
+        items.map((original) => [original.id, original.parentId])
+      )
 
       for (const move of moves) {
+        const isReparent = originalParentById.get(move.id) !== move.parentId
+        // Skip a pure same-parent position change when the adapter can't
+        // persist it — sending it anyway would just churn a revision for a
+        // write the daemon doesn't apply.
+        if (!isReparent && !reorderEnabled) continue
+        if (isReparent && !moveEnabled) continue
+
         await moveBookmark(move.id, {
           parentId: move.parentId ?? undefined,
           index: move.index,
@@ -247,6 +263,7 @@ const BookmarkOrganizerTreeImpl = React.forwardRef<
             key={item.getId()}
             item={item}
             isDragging={draggedItemIds.has(item.getId())}
+            dragEnabled={dragEnabled}
             onCreateItem={(type) => {
               openCreateItem({ type, parentId: item.getId() })
             }}
@@ -316,6 +333,8 @@ export function BookmarkOrganizerTree({
       effectiveRootId={effectiveRootId}
       bookmarks={adapter.bookmarks}
       showBookmarks={showBookmarks}
+      moveEnabled={adapter.capabilities.move}
+      reorderEnabled={adapter.capabilities.reorder}
     />
   )
 }

@@ -42,4 +42,21 @@ describe("detectAdapter", () => {
 
     expect(adapter.bookmarks.constructor.name).toBe("ChromeBookmarkAdapter")
   })
+
+  it("always selects the daemon adapter in a daemon build, ignoring any stored preference or extension context", async () => {
+    vi.stubGlobal("chrome", {
+      bookmarks: {},
+      storage: {
+        local: { get: vi.fn().mockResolvedValue({}), set: vi.fn() },
+        sync: { get: vi.fn().mockResolvedValue({}) },
+      },
+    })
+    await setAdapterModePreference("standalone")
+
+    const adapter = await detectAdapter({ buildTarget: "daemon" })
+
+    expect(adapter.bookmarks.constructor.name).toBe("DaemonBookmarkAdapter")
+    expect(adapter.capabilities.move).toBe(true)
+    expect(adapter.capabilities.reorder).toBe(false)
+  })
 })

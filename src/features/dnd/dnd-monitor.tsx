@@ -16,11 +16,19 @@ export function DndMonitor() {
   const moveBookmark = useBookmarkStore((s) => s.moveBookmark)
   const rootFolder = useBookmarkStore((s) => s.rootFolder)
   const tree = useBookmarkStore((s) => s.tree)
+  const moveEnabled = useBookmarkStore(
+    (s) => s.adapter?.capabilities.move ?? true
+  )
+  const reorderEnabled = useBookmarkStore(
+    (s) => s.adapter?.capabilities.reorder ?? true
+  )
   const nestedFolders = usePreferencesStore((s) => s.nestedFolders)
   const folderOrder = usePreferencesStore((s) => s.folderOrder)
   const setFolderOrder = usePreferencesStore((s) => s.setFolderOrder)
 
   useEffect(() => {
+    if (!moveEnabled && !reorderEnabled) return
+
     return monitorForElements({
       onDrop({ source, location }) {
         const target = location.current.dropTargets[0]
@@ -44,8 +52,10 @@ export function DndMonitor() {
     ) {
       const targetData = target.data as Record<string, unknown>
 
-      // Dropping onto a folder drop target (e.g., empty folder)
+      // Dropping onto a folder drop target (e.g., empty folder): a
+      // cross-folder move, not a same-parent reorder.
       if (targetData.type === "folder-drop-target") {
+        if (!moveEnabled) return
         const targetFolderId = targetData.folderId as string
         if (targetFolderId !== sourceData.folderId) {
           void moveBookmark(sourceData.id, {
@@ -63,7 +73,10 @@ export function DndMonitor() {
       const closestEdge = extractClosestEdge(targetData)
 
       if (sourceData.folderId === targetBookmark.folderId) {
-        // Same folder: reorder
+        // Same folder: reorder — the daemon has no persisted within-folder
+        // index, so this is exactly the capability `reorder` gates.
+        if (!reorderEnabled) return
+
         const destinationIndex = getReorderDestinationIndex({
           startIndex: sourceData.index,
           closestEdgeOfTarget: closestEdge,
@@ -78,7 +91,11 @@ export function DndMonitor() {
           index: destinationIndex,
         })
       } else {
-        // Different folder: move
+        // Different folder: a cross-folder move. The destination index is
+        // best-effort UI positioning only — adapters without `reorder`
+        // (daemon) ignore it and place the node deterministically.
+        if (!moveEnabled) return
+
         let destinationIndex = targetBookmark.index
         if (closestEdge === "bottom") {
           destinationIndex += 1
@@ -95,6 +112,10 @@ export function DndMonitor() {
       sourceData: FolderCardDragData,
       target: { data: Record<string, unknown> }
     ) {
+      // Folder cards only ever reorder among siblings — there's no
+      // cross-folder move for them, so this is gated by `reorder` alone.
+      if (!reorderEnabled) return
+
       const targetData = target.data as unknown as FolderCardDragData
       if (targetData.type !== DND_TYPE.FOLDER_CARD) return
 
@@ -132,6 +153,8 @@ export function DndMonitor() {
     moveBookmark,
     rootFolder,
     tree,
+    moveEnabled,
+    reorderEnabled,
     nestedFolders,
     folderOrder,
     setFolderOrder,

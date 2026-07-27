@@ -12,6 +12,7 @@ dist
 dist-ssr
 dist-chrome
 dist-firefox
+dist-daemon
 *.local
 *.zip
 

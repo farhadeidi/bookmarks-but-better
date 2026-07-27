@@ -3,5 +3,5 @@
 declare const __APP_VERSION__: string
 
 interface ImportMetaEnv {
-  readonly VITE_BUILD_TARGET: "chrome" | "firefox" | undefined
+  readonly VITE_BUILD_TARGET: "chrome" | "firefox" | "daemon" | undefined
 }

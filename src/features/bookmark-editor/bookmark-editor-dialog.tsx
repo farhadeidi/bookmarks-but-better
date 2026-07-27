@@ -16,6 +16,8 @@ export function BookmarkEditorDialog() {
   const editingBookmark = useUIStore((s) => s.editingBookmark)
   const closeEditor = useUIStore((s) => s.closeEditor)
   const updateBookmark = useBookmarkStore((s) => s.updateBookmark)
+  const mutationError = useBookmarkStore((s) => s.mutationError)
+  const clearMutationError = useBookmarkStore((s) => s.clearMutationError)
 
   const [title, setTitle] = React.useState("")
   const [url, setUrl] = React.useState("")
@@ -26,8 +28,9 @@ export function BookmarkEditorDialog() {
     if (editingBookmark) {
       setTitle(editingBookmark.title)
       setUrl(editingBookmark.url ?? "")
+      clearMutationError()
     }
-  }, [editingBookmark])
+  }, [editingBookmark, clearMutationError])
 
   const handleSave = async () => {
     if (!editingBookmark) return
@@ -38,6 +41,7 @@ export function BookmarkEditorDialog() {
 
     if (Object.keys(changes).length > 0) {
       await updateBookmark(editingBookmark.id, changes)
+      if (useBookmarkStore.getState().mutationError) return
     }
     closeEditor()
   }
@@ -77,6 +81,12 @@ export function BookmarkEditorDialog() {
                 placeholder="https://..."
               />
             </div>
+          )}
+
+          {mutationError && (
+            <p role="alert" className="text-sm text-destructive">
+              {mutationError}
+            </p>
           )}
         </div>
 

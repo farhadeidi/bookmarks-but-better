@@ -17,13 +17,25 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import {
+  Tooltip,
+  TooltipTrigger,
+  TooltipContent,
+} from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
+import { describeReadOnly } from "@/lib/bookmark-utils"
 import type { ItemInstance } from "@headless-tree/core"
 import type { OrganizerItemData } from "./bookmark-organizer-types"
+
+function readOnlyReason(itemData: OrganizerItemData | undefined): string {
+  return describeReadOnly(itemData ?? {})
+}
 
 interface BookmarkOrganizerRowProps {
   item: ItemInstance<OrganizerItemData>
   isDragging: boolean
+  /** Whether this item can be dragged at all (a move, a reorder, or both). */
+  dragEnabled: boolean
   onRename: (item: ItemInstance<OrganizerItemData>) => void | Promise<void>
   onDelete: (item: ItemInstance<OrganizerItemData>) => void | Promise<void>
   onCreateItem: (type: "folder" | "bookmark") => void
@@ -32,6 +44,7 @@ interface BookmarkOrganizerRowProps {
 export const BookmarkOrganizerRow = React.memo(function BookmarkOrganizerRow({
   item,
   isDragging,
+  dragEnabled,
   onRename,
   onDelete,
   onCreateItem,
@@ -43,6 +56,8 @@ export const BookmarkOrganizerRow = React.memo(function BookmarkOrganizerRow({
   const title = itemData?.title ?? item.getItemName()
   const level = item.getItemMeta().level
   const itemProps = item.getProps()
+  const isReadOnly = itemData?.readOnly ?? false
+  const canDrag = dragEnabled && !isReadOnly
 
   return (
     <div
@@ -58,14 +73,18 @@ export const BookmarkOrganizerRow = React.memo(function BookmarkOrganizerRow({
         paddingLeft: `${0.5 + level * 1.25}rem`,
       }}
     >
-      <button
-        type="button"
-        aria-label="Drag item"
-        className="flex size-7 cursor-grab touch-none items-center justify-center rounded-md text-muted-foreground/60 transition-colors hover:bg-muted hover:text-foreground"
-        {...item.getDragHandleProps()}
-      >
-        <HugeiconsIcon icon={DragDropHorizontalIcon} size={16} />
-      </button>
+      {canDrag ? (
+        <button
+          type="button"
+          aria-label="Drag item"
+          className="flex size-7 cursor-grab touch-none items-center justify-center rounded-md text-muted-foreground/60 transition-colors hover:bg-muted hover:text-foreground"
+          {...item.getDragHandleProps()}
+        >
+          <HugeiconsIcon icon={DragDropHorizontalIcon} size={16} />
+        </button>
+      ) : (
+        <span className="size-7" aria-hidden="true" />
+      )}
 
       {isFolder ? (
         <button
@@ -164,36 +183,84 @@ export const BookmarkOrganizerRow = React.memo(function BookmarkOrganizerRow({
           </DropdownMenu>
         )}
 
-        <Button
-          type="button"
-          variant="secondary"
-          size="icon-xs"
-          aria-label="Rename item"
-          title="Rename"
-          className="bg-transparent group-hover/row:bg-secondary"
-          onClick={(event) => {
-            event.preventDefault()
-            event.stopPropagation()
-            void onRename(item)
-          }}
-        >
-          <HugeiconsIcon icon={PencilEdit01Icon} />
-        </Button>
-        <Button
-          type="button"
-          variant="secondary"
-          size="icon-xs"
-          aria-label="Delete item"
-          title="Delete"
-          className="bg-transparent group-hover/row:bg-secondary"
-          onClick={(event) => {
-            event.preventDefault()
-            event.stopPropagation()
-            void onDelete(item)
-          }}
-        >
-          <HugeiconsIcon icon={Delete02Icon} />
-        </Button>
+        {isReadOnly ? (
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="icon-xs"
+                  aria-label="Rename item (read-only)"
+                  aria-disabled="true"
+                  className="bg-transparent opacity-50 group-hover/row:bg-secondary"
+                  onClick={(event) => {
+                    event.preventDefault()
+                    event.stopPropagation()
+                  }}
+                />
+              }
+            >
+              <HugeiconsIcon icon={PencilEdit01Icon} />
+            </TooltipTrigger>
+            <TooltipContent>{readOnlyReason(itemData)}</TooltipContent>
+          </Tooltip>
+        ) : (
+          <Button
+            type="button"
+            variant="secondary"
+            size="icon-xs"
+            aria-label="Rename item"
+            title="Rename"
+            className="bg-transparent group-hover/row:bg-secondary"
+            onClick={(event) => {
+              event.preventDefault()
+              event.stopPropagation()
+              void onRename(item)
+            }}
+          >
+            <HugeiconsIcon icon={PencilEdit01Icon} />
+          </Button>
+        )}
+        {isReadOnly ? (
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="icon-xs"
+                  aria-label="Delete item (read-only)"
+                  aria-disabled="true"
+                  className="bg-transparent opacity-50 group-hover/row:bg-secondary"
+                  onClick={(event) => {
+                    event.preventDefault()
+                    event.stopPropagation()
+                  }}
+                />
+              }
+            >
+              <HugeiconsIcon icon={Delete02Icon} />
+            </TooltipTrigger>
+            <TooltipContent>{readOnlyReason(itemData)}</TooltipContent>
+          </Tooltip>
+        ) : (
+          <Button
+            type="button"
+            variant="secondary"
+            size="icon-xs"
+            aria-label="Delete item"
+            title="Delete"
+            className="bg-transparent group-hover/row:bg-secondary"
+            onClick={(event) => {
+              event.preventDefault()
+              event.stopPropagation()
+              void onDelete(item)
+            }}
+          >
+            <HugeiconsIcon icon={Delete02Icon} />
+          </Button>
+        )}
       </div>
     </div>
   )
