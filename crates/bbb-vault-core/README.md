@@ -63,9 +63,12 @@ and resolves every child against that handle with the no-follow flag
 reparse-point equivalent on Windows). Sizes come from the open handle, and reads
 are bounded by the handle rather than by a previously observed length.
 
-A vault root that is itself a link is refused. Where the root has a parent it is
-opened *through* a handle on that parent with no-follow, so even the rejection is
-race-free.
+A vault root that is itself a link is refused, and the refusal is race-free for
+every root whose final component is a name — absolute, relative, or a bare
+`vault` resolved against the working directory. The directory holding the name is
+opened first, and the name is resolved against that handle with no-follow. A path
+ending in `/`, `.` or `..` names no directory entry at all, so there is nothing to
+substitute and it is opened directly.
 
 ## Dependencies
 
@@ -93,6 +96,3 @@ Each one replaces something that must not be hand-rolled.
 * On Windows, "not a link" means "not a reparse point" as `cap-primitives`
   implements it. That covers symlinks and directory junctions; exotic reparse
   tag types are refused conservatively rather than classified individually.
-* The one place a check-then-use window remains is a vault root with no parent
-  component (a filesystem root, or a bare relative name). Such a root is a
-  deliberately configured, trusted path.

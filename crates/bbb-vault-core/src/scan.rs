@@ -383,26 +383,38 @@ pub fn scan_with(root: &Path, options: ScanOptions) -> io::Result<VaultScan> {
 
 /// Opens the vault root, refusing a root that is itself a link.
 ///
-/// Where the root has a parent, the directory is opened *through a handle on
-/// that parent* with the no-follow flag, so the rejection is race-free: there is
-/// no window in which the name could be swapped. A root with no parent (a
-/// filesystem root, or a bare relative name with no parent component) is opened
-/// directly and checked with `symlink_metadata`; that check is not race-free,
-/// but such a root is a deliberately configured, trusted path.
+/// The final path component decides how this can be done safely.
+///
+/// When it is an ordinary *name* — `/srv/vault`, `../vault`, or a bare `vault` —
+/// that name is a directory entry someone could replace with a link, so it is
+/// never opened by path. The directory holding it is opened first, and the name
+/// is then resolved against that handle with the no-follow flag. There is no
+/// window between deciding the root is a real directory and opening it: the
+/// kernel refuses the link at the `openat` itself. A bare relative name has an
+/// empty parent, which means the working directory, so `.` is the handle it is
+/// resolved against.
+///
+/// When the final component is not a name — a filesystem root such as `/` or
+/// `C:\`, or a `.` or `..` that ends the path — there is no directory entry to
+/// substitute anything for, and the path is opened directly. This is not a
+/// weaker check; it is the absence of anything to check.
 fn open_vault_root(root: &Path) -> io::Result<Dir> {
-    let has_usable_parent = root
-        .parent()
-        .is_some_and(|parent| !parent.as_os_str().is_empty());
-    let file_name = root.file_name().filter(|_| has_usable_parent);
-    let is_normal_component = root
-        .components()
-        .next_back()
-        .is_some_and(|component| matches!(component, Component::Normal(_)));
+    let authority = ambient_authority();
 
-    if let (Some(name), true) = (file_name, is_normal_component) {
-        let parent = root.parent().unwrap_or_else(|| Path::new("."));
-        let parent = Dir::open_ambient_dir(parent, ambient_authority())?;
-        return parent.open_dir_nofollow(name).map_err(|error| {
+    let Some(Component::Normal(name)) = root.components().next_back() else {
+        return Dir::open_ambient_dir(root, authority);
+    };
+
+    // `Path::parent` yields an empty path for a bare relative name; the
+    // directory that holds it is the working directory.
+    let parent = match root.parent() {
+        Some(parent) if !parent.as_os_str().is_empty() => parent,
+        _ => Path::new("."),
+    };
+
+    Dir::open_ambient_dir(parent, authority)?
+        .open_dir_nofollow(name)
+        .map_err(|error| {
             io::Error::new(
                 error.kind(),
                 format!(
@@ -411,19 +423,7 @@ fn open_vault_root(root: &Path) -> io::Result<Dir> {
                     root.display()
                 ),
             )
-        });
-    }
-
-    if std::fs::symlink_metadata(root)?.file_type().is_symlink() {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidInput,
-            format!(
-                "the vault root {} is a symbolic link; point the vault at the real directory",
-                root.display()
-            ),
-        ));
-    }
-    Dir::open_ambient_dir(root, ambient_authority())
+        })
 }
 
 /// What a single directory contributes to the tree while it is being built.
