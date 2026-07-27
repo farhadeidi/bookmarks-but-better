@@ -152,9 +152,13 @@ async fn a_recursive_delete_refuses_a_folder_holding_unmanaged_files() {
 
     let before = vault_files(harness.root());
     let response = harness
-        .delete(&format!(
-            "/api/v1/folders/{folder_id}?revision={revision}&recursive=true"
-        ))
+        .delete_entry(
+            "folders",
+            &folder_id,
+            &revision,
+            &root_id,
+            "&recursive=true",
+        )
         .await;
 
     let problem = response.expect_problem(StatusCode::CONFLICT, "subtree_has_unknown_files");
@@ -197,9 +201,13 @@ async fn a_recursive_delete_refuses_a_folder_holding_a_symlink() {
     harness.post("/api/v1/rescan", &json!({})).await;
 
     harness
-        .delete(&format!(
-            "/api/v1/folders/{folder_id}?revision={revision}&recursive=true"
-        ))
+        .delete_entry(
+            "folders",
+            &folder_id,
+            &revision,
+            &root_id,
+            "&recursive=true",
+        )
         .await
         .expect_problem(StatusCode::CONFLICT, "subtree_has_unknown_files");
 
@@ -229,9 +237,13 @@ async fn a_recursive_delete_succeeds_when_the_whole_subtree_is_managed() {
         .await;
 
     let response = harness
-        .delete(&format!(
-            "/api/v1/folders/{folder_id}?revision={revision}&recursive=true"
-        ))
+        .delete_entry(
+            "folders",
+            &folder_id,
+            &revision,
+            &root_id,
+            "&recursive=true",
+        )
         .await;
     assert_eq!(
         response.status,
@@ -269,9 +281,13 @@ async fn a_recursive_delete_keeps_a_bookmarks_assets_with_it() {
     harness.post("/api/v1/rescan", &json!({})).await;
 
     let response = harness
-        .delete(&format!(
-            "/api/v1/folders/{folder_id}?revision={revision}&recursive=true"
-        ))
+        .delete_entry(
+            "folders",
+            &folder_id,
+            &revision,
+            &root_id,
+            "&recursive=true",
+        )
         .await;
     assert_eq!(
         response.status,
@@ -303,10 +319,7 @@ async fn a_move_never_overwrites_a_file_squatting_on_the_target_name() {
     write_external(harness.root(), &squatter, "PRECIOUS");
 
     let response = harness
-        .post(
-            &format!("/api/v1/bookmarks/{id}/move"),
-            &json!({ "revision": revision, "parentId": folder_id }),
-        )
+        .move_entry(&id, &revision, &root_id, &folder_id, None)
         .await;
     assert_eq!(response.status, StatusCode::OK, "{}", response.text());
 
@@ -547,7 +560,7 @@ async fn a_delete_rolls_back_when_the_assets_cannot_be_moved() {
     fs::set_permissions(&assets, fs::Permissions::from_mode(0o500)).expect("chmod");
 
     let response = harness
-        .delete(&format!("/api/v1/bookmarks/{id}?revision={revision}"))
+        .delete_entry("bookmarks", &id, &revision, &root_id, "")
         .await;
     let restored = markdown.is_file();
     fs::set_permissions(&assets, fs::Permissions::from_mode(0o700)).expect("chmod back");
@@ -592,10 +605,7 @@ async fn a_failed_move_leaves_the_bookmark_where_it_was() {
     fs::set_permissions(&destination, fs::Permissions::from_mode(0o500)).expect("chmod");
 
     let response = harness
-        .post(
-            &format!("/api/v1/bookmarks/{id}/move"),
-            &json!({ "revision": revision, "parentId": folder_id }),
-        )
+        .move_entry(&id, &revision, &root_id, &folder_id, None)
         .await;
     let still_there = markdown.is_file();
     fs::set_permissions(&destination, fs::Permissions::from_mode(0o700)).expect("chmod back");
@@ -746,7 +756,7 @@ async fn a_file_replaced_before_a_delete_is_a_conflict_and_survives() {
     fs::write(&path, &theirs).expect("write theirs");
 
     harness
-        .delete(&format!("/api/v1/bookmarks/{id}?revision={revision}"))
+        .delete_entry("bookmarks", &id, &revision, &root_id, "")
         .await
         .expect_problem(StatusCode::CONFLICT, "stale_revision");
 
@@ -810,10 +820,7 @@ async fn a_folder_move_either_works_or_is_refused_as_unsupported() {
     let destination_id = destination["id"].as_str().expect("an id").to_owned();
 
     let response = harness
-        .post(
-            &format!("/api/v1/bookmarks/{source_id}/move"),
-            &json!({ "revision": revision, "parentId": destination_id }),
-        )
+        .move_entry(&source_id, &revision, &root_id, &destination_id, None)
         .await;
 
     // Linux, macOS and Windows all have a no-replace rename, so the move works
@@ -849,10 +856,7 @@ async fn a_folder_move_never_overwrites_a_directory_squatting_on_the_name() {
     );
 
     let response = harness
-        .post(
-            &format!("/api/v1/bookmarks/{source_id}/move"),
-            &json!({ "revision": revision, "parentId": destination_id }),
-        )
+        .move_entry(&source_id, &revision, &root_id, &destination_id, None)
         .await;
 
     assert_eq!(
@@ -925,7 +929,7 @@ async fn a_reconcile_never_publishes_a_half_finished_delete() {
             .and_then(|value| value.as_str())
             .map_or_else(|| revision.clone(), str::to_owned);
         let response = harness
-            .delete(&format!("/api/v1/bookmarks/{id}?revision={revision}"))
+            .delete_entry("bookmarks", id, &revision, &root_id, "")
             .await;
         assert_eq!(
             response.status,

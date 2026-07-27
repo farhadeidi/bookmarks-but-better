@@ -6,7 +6,8 @@ use std::fmt::Write as _;
 use std::fs;
 
 use bbb_vault_core::{
-    Access, BookmarkNode, DiagnosticCode, FolderNode, Id, ScanOptions, VaultScan, scan, scan_with,
+    Access, BookmarkNode, ChildNode, DiagnosticCode, FolderNode, Id, ScanOptions, VaultScan, scan,
+    scan_with,
 };
 
 use support::{
@@ -41,19 +42,21 @@ fn render_folder(out: &mut String, folder: &FolderNode, depth: usize) {
     let indent = "  ".repeat(depth);
     let _ = writeln!(
         out,
-        "{indent}folder {:?} id={} title={:?} access={}",
+        "{indent}folder {:?} id={} title={:?} access={} order={}",
         display(folder.relative_path()),
         folder
             .id()
             .map_or_else(|| "-".to_owned(), |id| id.to_string()),
         folder.title(),
-        folder.access().as_str()
+        folder.access().as_str(),
+        folder.state_access().as_str()
     );
-    for child in folder.folders() {
-        render_folder(out, child, depth + 1);
-    }
-    for bookmark in folder.bookmarks() {
-        render_bookmark(out, bookmark, depth + 1);
+    // The mixed list, in the one order the vault says its children are in.
+    for child in folder.children() {
+        match child {
+            ChildNode::Folder(child) => render_folder(out, child, depth + 1),
+            ChildNode::Bookmark(child) => render_bookmark(out, child, depth + 1),
+        }
     }
 }
 
@@ -93,20 +96,32 @@ fn scanning_twice_produces_identical_output() {
     assert_eq!(render(&scan_fixture()), render(&scan_fixture()));
 }
 
+/// A folder with no `.bbb-state.json` is shown in migration order: folders
+/// first, then by the creation timestamp each entry carries and its stable
+/// identity. Nothing here depends on the title, the filesystem's listing order
+/// or the platform, which is what makes it the same everywhere.
 #[test]
-fn siblings_are_ordered_folders_first_then_by_folded_title() {
+fn a_folder_without_recorded_order_uses_the_migration_order() {
     let scan = scan_fixture();
     let root = scan.folder();
 
-    let folders: Vec<_> = root.folders().iter().map(FolderNode::title).collect();
-    assert_eq!(folders, ["Archive", "Reading List"]);
+    let folders: Vec<_> = root.folders().map(FolderNode::title).collect();
+    assert_eq!(
+        folders,
+        ["Archive", "Reading List"],
+        "arch1ve0 comes before read1ist"
+    );
 
-    // The sort key is the canonical caseless fold, so case is ignored and
-    // `Éclair` decomposes to `e` plus a combining acute — which puts it where a
-    // reader expects it, between `apple` and `Zebra`, rather than after every
-    // ASCII name as raw code point order would.
-    let bookmarks: Vec<_> = root.bookmarks().iter().map(BookmarkNode::title).collect();
+    // All three share a creation timestamp, so the identity decides.
+    let bookmarks: Vec<_> = root.bookmarks().map(BookmarkNode::title).collect();
     assert_eq!(bookmarks, ["apple", "Éclair", "Zebra"]);
+
+    // And the mixed list puts the two groups in that same order.
+    let children: Vec<_> = root.children().iter().map(ChildNode::title).collect();
+    assert_eq!(
+        children,
+        ["Archive", "Reading List", "apple", "Éclair", "Zebra"]
+    );
 }
 
 #[test]
@@ -394,7 +409,7 @@ fn case_insensitive_sibling_collisions_are_reported() {
         .collect();
     assert_eq!(collisions.len(), 1, "{collisions:?}");
     assert_eq!(collisions[0].path(), Some("work"));
-    assert_eq!(scan.folder().folders().len(), 2);
+    assert_eq!(scan.folder().folders().count(), 2);
 }
 
 #[cfg(unix)]
@@ -476,7 +491,6 @@ fn symbolic_links_are_never_followed() {
     let hijacked = scan
         .folder()
         .folders()
-        .iter()
         .find(|folder| folder.relative_path() == "hijacked")
         .expect("the directory itself is still listed");
     assert_eq!(

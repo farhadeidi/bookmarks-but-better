@@ -165,6 +165,8 @@ dependencies = [
  "caseless",
  "getrandom",
  "saphyr-parser",
+ "serde",
+ "serde_json",
  "sha2",
  "unicode-normalization",
 ]

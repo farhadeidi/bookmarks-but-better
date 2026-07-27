@@ -286,6 +286,9 @@ fn run_doctor(vault: &std::path::Path) -> ExitCode {
     }
     println!("  errors         {}", report.errors.len());
     println!("  warnings       {}", report.warnings.len());
+    if !report.unorderable.is_empty() {
+        println!("  unorderable    {} folders", report.unorderable.len());
+    }
 
     for finding in &report.errors {
         println!("\nerror  [{}] {}", finding.code, finding.path);
@@ -293,6 +296,13 @@ fn run_doctor(vault: &std::path::Path) -> ExitCode {
     }
     for finding in &report.warnings {
         println!("\nwarn   [{}] {}", finding.code, finding.path);
+        println!("       {}", finding.detail);
+    }
+    // Not an error: nothing is at risk and every other operation still works.
+    // It is called out anyway because a reorder that is refused looks like a
+    // bug from the outside, and this is the one place that explains it.
+    for finding in &report.unorderable {
+        println!("\norder  [{}] {}", finding.code, finding.path);
         println!("       {}", finding.detail);
     }
 

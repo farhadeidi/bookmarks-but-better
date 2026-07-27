@@ -21,18 +21,20 @@ use axum::Router;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::response::sse::{Event, KeepAlive, Sse};
-use axum::routing::{delete, get, patch, post};
+use axum::routing::{delete, get, patch, post, put};
 use tokio_stream::wrappers::BroadcastStream;
 use tokio_stream::{Stream, StreamExt as _};
 
+use bbb_vault_core::{ChildKind, Id};
+
 use crate::dto::{
     self, BookmarkDto, CreateBookmarkRequest, CreateFolderRequest, DeleteQuery, HealthResponse,
-    MoveRequest, RescanResponse, TreeResponse, UpdateRequest,
+    MoveRequest, OrderChild, OrderRequest, Placement, RescanResponse, TreeResponse, UpdateRequest,
 };
 use crate::entry::EntryRef;
 use crate::extract::{ApiJson, ApiQuery};
 use crate::problem::{Problem, ProblemCode};
-use crate::vault::Vault;
+use crate::vault::{MovePlan, Vault};
 
 /// How often an idle event stream is nudged so proxies and clients keep it open.
 const SSE_KEEP_ALIVE: Duration = Duration::from_secs(15);
@@ -62,6 +64,7 @@ pub fn router(state: ApiState) -> Router {
         .route("/bookmarks/{id}/move", post(move_entry))
         .route("/folders", post(create_folder))
         .route("/folders/{id}", delete(delete_folder))
+        .route("/folders/{id}/order", put(set_order))
         .fallback(unknown_route)
         .with_state(state)
 }
@@ -122,7 +125,14 @@ async fn create_bookmark(
     let created = logged(
         "create_bookmark",
         &request.parent_id,
-        blocking(move || vault.create(&parent, &request.title, request.url.as_deref())).await,
+        blocking(move || {
+            let placement = Placement {
+                index: request.index,
+                parent_state_revision: request.parent_state_revision,
+            };
+            vault.create(&parent, &request.title, request.url.as_deref(), &placement)
+        })
+        .await,
     )?;
     Ok((StatusCode::CREATED, Json(created)))
 }
@@ -136,7 +146,14 @@ async fn create_folder(
     let created = logged(
         "create_folder",
         &request.parent_id,
-        blocking(move || vault.create(&parent, &request.title, None)).await,
+        blocking(move || {
+            let placement = Placement {
+                index: request.index,
+                parent_state_revision: request.parent_state_revision,
+            };
+            vault.create(&parent, &request.title, None, &placement)
+        })
+        .await,
     )?;
     Ok((StatusCode::CREATED, Json(created)))
 }
@@ -168,7 +185,14 @@ async fn move_entry(
     let reference = parse_reference(&id)?;
     let parent = parse_reference(&request.parent_id)?;
     let vault = Arc::clone(&state.vault);
-    let moved = blocking(move || vault.move_entry(&reference, &request.revision, &parent)).await;
+    let plan = MovePlan {
+        revision: request.revision,
+        parent,
+        index: request.index,
+        source_state_revision: request.source_state_revision,
+        destination_state_revision: request.destination_state_revision,
+    };
+    let moved = blocking(move || vault.move_entry(&reference, &plan)).await;
     logged("move", &id, moved).map(Json)
 }
 
@@ -179,7 +203,14 @@ async fn delete_bookmark(
 ) -> Result<StatusCode, Problem> {
     let reference = parse_reference(&id)?;
     let vault = Arc::clone(&state.vault);
-    let deleted = blocking(move || vault.delete_bookmark(&reference, &query.revision)).await;
+    let deleted = blocking(move || {
+        vault.delete_bookmark(
+            &reference,
+            &query.revision,
+            query.parent_state_revision.as_deref(),
+        )
+    })
+    .await;
     logged("delete_bookmark", &id, deleted)?;
     Ok(StatusCode::NO_CONTENT)
 }
@@ -191,10 +222,56 @@ async fn delete_folder(
 ) -> Result<StatusCode, Problem> {
     let reference = parse_reference(&id)?;
     let vault = Arc::clone(&state.vault);
-    let deleted =
-        blocking(move || vault.delete_folder(&reference, &query.revision, query.recursive)).await;
+    let deleted = blocking(move || {
+        vault.delete_folder(
+            &reference,
+            &query.revision,
+            query.parent_state_revision.as_deref(),
+            query.recursive,
+        )
+    })
+    .await;
     logged("delete_folder", &id, deleted)?;
     Ok(StatusCode::NO_CONTENT)
+}
+
+/// Replaces a folder's child order.
+///
+/// `PUT` rather than `PATCH` because the body is the whole order, not a change
+/// to it: sending the same order twice is the same request twice, and the
+/// second one writes nothing.
+async fn set_order(
+    State(state): State<ApiState>,
+    Path(id): Path<String>,
+    ApiJson(request): ApiJson<OrderRequest>,
+) -> Result<Json<BookmarkDto>, Problem> {
+    let reference = parse_reference(&id)?;
+    let children = request
+        .children
+        .iter()
+        .map(parse_order_child)
+        .collect::<Result<Vec<_>, _>>()?;
+    let vault = Arc::clone(&state.vault);
+    let ordered =
+        blocking(move || vault.set_order(&reference, request.state_revision.as_deref(), &children))
+            .await;
+    logged("set_order", &id, ordered).map(Json)
+}
+
+fn parse_order_child(child: &OrderChild) -> Result<(Id, ChildKind), Problem> {
+    let id = Id::parse(&child.id).map_err(|error| {
+        Problem::new(
+            ProblemCode::InvalidRequest,
+            format!("`{}` is not an entry id: {error}", child.id),
+        )
+    })?;
+    let kind = ChildKind::parse(&child.kind).ok_or_else(|| {
+        Problem::new(
+            ProblemCode::InvalidRequest,
+            format!("`{}` is not a kind; use `bookmark` or `folder`", child.kind),
+        )
+    })?;
+    Ok((id, kind))
 }
 
 /// Streams one `changed` event per generation.

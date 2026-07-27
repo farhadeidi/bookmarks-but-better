@@ -1,4 +1,4 @@
-//! Reversible deletion, and recovery from an interrupted one.
+//! One reversible change, and recovery from an interrupted one.
 //!
 //! A multi-file operation that deletes as it goes cannot be undone: once the
 //! third file is gone, a failure on the fourth leaves a vault the daemon can
@@ -6,6 +6,20 @@
 //! *renamed* into `<vault>/.bbb/staging/<id>/`, one atomic operation per entry
 //! on the same filesystem, and only once every entry has moved are they
 //! destroyed.
+//!
+//! # Child order files are part of the same transaction
+//!
+//! A change to what a folder holds is also a change to the order it holds it
+//! in, and a cross-parent move is two of those at once. Bolting a best-effort
+//! `.bbb-state.json` write onto the side of this protocol would reintroduce
+//! exactly the failure mode it exists to prevent: a crash between the two
+//! leaving a vault nothing can finish or undo.
+//!
+//! So a state write is recorded here too. Before the new bytes are written the
+//! previous ones are copied into the operation directory and named in the
+//! manifest, so a rollback — in this process or in a later one — puts the old
+//! order back, and a folder that had no state file at all has it removed again.
+//! [`Staged::write_state`] is the only way the daemon writes one.
 //!
 //! # The manifest is the protocol
 //!
@@ -54,6 +68,8 @@ use cap_fs_ext::DirExt as _;
 use cap_std::fs::Dir;
 use serde::{Deserialize, Serialize};
 
+use bbb_vault_core::STATE_FILE_NAME;
+
 use crate::fsx::{self, component};
 
 /// The staging directory's name inside the daemon's state directory.
@@ -62,8 +78,16 @@ pub(crate) const STAGING_DIRECTORY: &str = "staging";
 const MANIFEST_NAME: &str = "manifest.json";
 /// Where retained entries are explained, in the staging root.
 const RECOVERY_NAME: &str = "recovery.txt";
-/// The manifest format this build writes and understands.
-const MANIFEST_VERSION: u32 = 2;
+/// The manifest format this build writes.
+const MANIFEST_VERSION: u32 = 3;
+
+/// The manifest formats this build can still recover from.
+///
+/// Version 2 is what the previous release wrote. It has no `states` list, which
+/// deserialises to an empty one, and everything else about it is unchanged — so
+/// a vault upgraded mid-delete is still finished or undone correctly rather
+/// than having its residue declared unreadable and left to a human.
+const RECOVERABLE_VERSIONS: &[u32] = &[2, MANIFEST_VERSION];
 
 /// How far an operation has got.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -99,6 +123,52 @@ struct Entry {
     staged: String,
     /// Whether it is a file or a directory.
     kind: Kind,
+}
+
+/// One folder's child order file, as this operation found it.
+///
+/// The `origin` is a component vector for the same reason [`Entry`]'s is: there
+/// is no string for a separator to hide in, and it is walked one handle at a
+/// time. The name inside the folder is always `.bbb-state.json`, so it is not
+/// recorded and cannot be redirected by a hand-edited manifest.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct StateRecord {
+    /// The vault-relative directory whose order file this is; empty is the root.
+    origin: Vec<String>,
+    /// The name, inside the operation directory, holding the bytes that were
+    /// there before. Absent when the folder had no order file at all, in which
+    /// case undoing means removing the one this operation created.
+    #[serde(default)]
+    backup: Option<String>,
+    /// Whether the new bytes actually reached the folder.
+    ///
+    /// Written `false` first, exactly like an [`Entry`] is recorded before it
+    /// moves: a record of something that did not happen is trivial to undo,
+    /// whereas a write with no record could not be undone at all.
+    applied: bool,
+}
+
+impl StateRecord {
+    /// Checks every field a filesystem operation would be driven from.
+    fn validate(&self) -> Result<(), String> {
+        component::check_all(&self.origin).map_err(|(part, error)| {
+            format!("its order file's origin component `{part}` is unusable: {error}")
+        })?;
+        if let Some(backup) = &self.backup {
+            component::check(backup)
+                .map_err(|error| format!("its backup name `{backup}` is unusable: {error}"))?;
+        }
+        Ok(())
+    }
+
+    /// The origin as a display string, for a message a person reads.
+    fn origin_display(&self) -> String {
+        if self.origin.is_empty() {
+            "the vault root".to_owned()
+        } else {
+            self.origin.join("/")
+        }
+    }
 }
 
 impl Entry {
@@ -141,12 +211,17 @@ struct Manifest {
     retained: bool,
     /// Every entry it moved, or was about to move.
     entries: Vec<Entry>,
+    /// Every child order file it rewrote, or was about to rewrite.
+    ///
+    /// Absent in a version 2 manifest, which predates ordering entirely.
+    #[serde(default)]
+    states: Vec<StateRecord>,
 }
 
 impl Manifest {
     /// Checks every field a filesystem operation would be driven from.
     fn validate(&self) -> Result<(), String> {
-        if self.version != MANIFEST_VERSION {
+        if !RECOVERABLE_VERSIONS.contains(&self.version) {
             return Err(format!(
                 "its manifest is version {}, which this build does not understand",
                 self.version
@@ -165,7 +240,15 @@ impl Manifest {
         for entry in &self.entries {
             entry.validate()?;
         }
+        for state in &self.states {
+            state.validate()?;
+        }
         Ok(())
+    }
+
+    /// Whether this operation has anything left that needs undoing or removing.
+    fn is_empty(&self) -> bool {
+        self.entries.is_empty() && self.states.is_empty()
     }
 }
 
@@ -194,6 +277,13 @@ pub(crate) enum FaultPoint {
     /// A test interposes here to replace the entry, which is the race the
     /// verified claim exists to survive.
     BeforeClaim,
+    /// After a child order file is recorded, before its new bytes are written.
+    BeforeStateWrite,
+    /// Immediately after a child order file's new bytes have landed.
+    ///
+    /// A cross-parent move reaches this twice, once per folder, which is the
+    /// half-applied state recovery has to undo.
+    AfterStateWrite,
 }
 
 #[cfg(test)]
@@ -237,7 +327,8 @@ pub(crate) enum TakeError {
     Io(io::Error),
 }
 
-/// A set of entries moved out of the vault, pending destruction.
+/// One in-flight change: entries moved out of the vault, and child order files
+/// rewritten, under a single durable record.
 #[derive(Debug)]
 pub(crate) struct Staged {
     /// The `.bbb/staging/<id>` handle everything is renamed into.
@@ -269,6 +360,7 @@ impl Staged {
             phase: Phase::Staging,
             retained: false,
             entries: Vec::new(),
+            states: Vec::new(),
         };
         write_manifest(&directory, &manifest)?;
 
@@ -357,6 +449,84 @@ impl Staged {
         }
     }
 
+    /// Writes one folder's child order file as part of this change.
+    ///
+    /// `folder` must be the folder's own directory handle, and `current` the
+    /// state file as it was read from it — which is what binds the write to the
+    /// exact file whose revision the caller checked. Pass `None` when the
+    /// folder has no order file yet; one is then created, and undoing means
+    /// removing it again.
+    ///
+    /// The previous bytes are copied into this operation's directory and named
+    /// in the manifest *before* anything is written, so an interrupted run has
+    /// a record of both what changed and what it used to be.
+    ///
+    /// # Errors
+    ///
+    /// Returns any I/O error, having left the folder's order file exactly as it
+    /// was. The caller should [`Staged::rollback`].
+    pub(crate) fn write_state(
+        &mut self,
+        folder: &Dir,
+        folder_components: &[String],
+        bytes: &[u8],
+        current: Option<&fsx::Validated>,
+    ) -> io::Result<()> {
+        component::check_all(folder_components)
+            .map_err(|(part, error)| invalid(&part, &error.to_string()))?;
+
+        // Positional, like a staged entry's name, so two folders in one change
+        // cannot collide.
+        let backup = match current {
+            Some(current) => {
+                let name = format!("state-{}.json", self.manifest.states.len());
+                fsx::create_new(&self.directory, &name, &current.bytes)?;
+                Some(name)
+            }
+            None => None,
+        };
+
+        self.manifest.states.push(StateRecord {
+            origin: folder_components.to_vec(),
+            backup,
+            applied: false,
+        });
+        write_manifest(&self.directory, &self.manifest)?;
+        trip(FaultPoint::BeforeStateWrite);
+
+        let written = match current {
+            Some(current) => fsx::replace_validated(folder, STATE_FILE_NAME, bytes, current)
+                .map_err(|error| match error {
+                    fsx::CommitError::Io(error)
+                    | fsx::CommitError::UndoFailed { cause: error, .. } => error,
+                    fsx::CommitError::Stale => io::Error::new(
+                        io::ErrorKind::AlreadyExists,
+                        "the child order file changed while it was being written",
+                    ),
+                }),
+            None => fsx::create_new(folder, STATE_FILE_NAME, bytes),
+        };
+
+        if let Err(error) = written {
+            // The record describes a write that did not happen; dropping it is
+            // safe precisely because nothing landed.
+            if let Some(record) = self.manifest.states.pop()
+                && let Some(backup) = record.backup
+            {
+                let _ = fsx::remove_file(&self.directory, &backup);
+            }
+            let _ = write_manifest(&self.directory, &self.manifest);
+            return Err(error);
+        }
+
+        if let Some(record) = self.manifest.states.last_mut() {
+            record.applied = true;
+        }
+        write_manifest(&self.directory, &self.manifest)?;
+        trip(FaultPoint::AfterStateWrite);
+        Ok(())
+    }
+
     /// Commits the deletion: flips the phase, then destroys the entries.
     ///
     /// The phase flip is the point of no return. After it, an interrupted run
@@ -381,21 +551,22 @@ impl Staged {
         Ok(())
     }
 
-    /// Puts every staged entry back where it came from.
+    /// Puts every child order file and every staged entry back.
     ///
-    /// Restores run newest-first, so a directory staged before its former
-    /// contents is put back before them.
+    /// Undoing runs newest-first, so the order files go back before the entries
+    /// they describe and a directory staged before its former contents is put
+    /// back before them.
     ///
     /// # Errors
     ///
-    /// Returns the first restore failure, having attempted every entry.
-    /// Anything that could not be restored stays in staging with its manifest
-    /// intact, so recovery and `bbb doctor` can still describe it.
+    /// Returns the first failure, having attempted everything. Anything that
+    /// could not be undone stays in staging with its manifest intact, so
+    /// recovery and `bbb doctor` can still describe it.
     pub(crate) fn rollback(mut self) -> io::Result<()> {
-        let outcome = restore_all(&self.directory, &self.vault, &mut self.manifest);
+        let outcome = undo_all(&self.directory, &self.vault, &mut self.manifest);
         let _ = write_manifest(&self.directory, &self.manifest);
 
-        if self.manifest.entries.is_empty() {
+        if self.manifest.is_empty() {
             drop(self.directory);
             let _ = self.root.remove_dir_all(&self.name);
         }
@@ -613,9 +784,9 @@ fn recover_one(root: &Dir, vault: &Dir, name: &str) -> Option<Retained> {
 
     match manifest.phase {
         Phase::Staging => {
-            let outcome = restore_all(&directory, vault, &mut manifest);
+            let outcome = undo_all(&directory, vault, &mut manifest);
             let _ = write_manifest(&directory, &manifest);
-            if manifest.entries.is_empty() {
+            if manifest.is_empty() {
                 drop(directory);
                 let _ = root.remove_dir_all(name);
                 tracing::info!(
@@ -629,7 +800,12 @@ fn recover_one(root: &Dir, vault: &Dir, name: &str) -> Option<Retained> {
             Some(Retained {
                 directory: staged_path(name),
                 operation: manifest.operation.clone(),
-                entries: manifest.entries.iter().map(describe).collect(),
+                entries: manifest
+                    .entries
+                    .iter()
+                    .map(describe)
+                    .chain(manifest.states.iter().map(describe_state))
+                    .collect(),
                 reason: outcome.err().map_or_else(
                     || "they could not be restored".to_owned(),
                     |error| error.kind().to_string(),
@@ -662,28 +838,71 @@ fn recover_one(root: &Dir, vault: &Dir, name: &str) -> Option<Retained> {
     }
 }
 
-/// Moves every entry back, dropping from `manifest` those that made it.
+/// Undoes everything the operation did, dropping from `manifest` what succeeds.
+///
+/// The order files go first, because an entry's membership record must not
+/// outlive the entry itself: putting a bookmark back into a folder whose order
+/// file has already been reverted is fine, while the reverse would leave the
+/// order naming something that is not there yet.
 ///
 /// An entry whose staged file is absent was recorded but never moved — the
-/// manifest is written first on purpose — and counts as restored.
-fn restore_all(directory: &Dir, vault: &Dir, manifest: &mut Manifest) -> io::Result<()> {
+/// manifest is written first on purpose — and counts as restored. A state
+/// record that was never applied is the same case.
+fn undo_all(directory: &Dir, vault: &Dir, manifest: &mut Manifest) -> io::Result<()> {
     let mut failure = None;
-    let mut kept = Vec::new();
 
+    let mut kept_states = Vec::new();
+    for state in manifest.states.iter().rev() {
+        if let Err(error) = undo_state(directory, vault, state) {
+            failure.get_or_insert(error);
+            kept_states.push(state.clone());
+        }
+    }
+    kept_states.reverse();
+    manifest.states = kept_states;
+
+    let mut kept = Vec::new();
     for entry in manifest.entries.iter().rev() {
         if let Err(error) = restore_one(directory, vault, entry) {
-            if failure.is_none() {
-                failure = Some(error);
-            }
+            failure.get_or_insert(error);
             kept.push(entry.clone());
         }
     }
-
     kept.reverse();
     manifest.entries = kept;
+
     match failure {
         Some(error) => Err(error),
         None => Ok(()),
+    }
+}
+
+/// Puts one folder's child order file back the way this operation found it.
+fn undo_state(directory: &Dir, vault: &Dir, state: &StateRecord) -> io::Result<()> {
+    // Validated at the point of use: this is reachable from recovery, whose
+    // manifest came off disk, and from rollback, whose did not.
+    state
+        .validate()
+        .map_err(|reason| io::Error::new(io::ErrorKind::InvalidInput, reason))?;
+
+    if !state.applied {
+        // Recorded but never written; there is nothing to put back.
+        return Ok(());
+    }
+
+    let folder = fsx::open_components(vault, &state.origin)?;
+    match &state.backup {
+        Some(backup) => {
+            let bytes = fsx::read(directory, backup)?;
+            fsx::write_replacing(&folder, STATE_FILE_NAME, &bytes)
+        }
+        // The folder had no order file, so this operation created it and undoing
+        // means it should have none again. An order file that is already gone is
+        // the outcome that was wanted.
+        None => match fsx::remove_file(&folder, STATE_FILE_NAME) {
+            Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
+            other => other,
+        },
     }
 }
 
@@ -707,8 +926,19 @@ fn restore_one(directory: &Dir, vault: &Dir, entry: &Entry) -> io::Result<()> {
     }
 }
 
-/// Removes every staged entry the manifest names.
+/// Removes every staged entry the manifest names, and every order-file backup.
+///
+/// A backup only ever holds bytes the daemon itself wrote a moment earlier, and
+/// once the change has committed it is the superseded copy — so unlike a staged
+/// entry it is never something a person needs back.
 fn destroy(directory: &Dir, manifest: &Manifest) {
+    for state in &manifest.states {
+        if let Some(backup) = &state.backup
+            && component::check(backup).is_ok()
+        {
+            let _ = fsx::remove_file(directory, backup);
+        }
+    }
     for (index, entry) in manifest.entries.iter().enumerate() {
         if index > 0 {
             trip(FaultPoint::MidDestroy);
@@ -807,6 +1037,19 @@ fn describe(entry: &Entry) -> String {
         entry.origin_display(),
         entry.name
     )
+}
+
+fn describe_state(state: &StateRecord) -> String {
+    match &state.backup {
+        Some(backup) => format!(
+            "{backup} is the child order {} had before this change",
+            state.origin_display()
+        ),
+        None => format!(
+            "{} was given a child order file this change meant to remove again",
+            state.origin_display()
+        ),
+    }
 }
 
 fn staged_entry_names(directory: &Dir) -> Vec<String> {
@@ -1540,5 +1783,257 @@ mod tests {
             b"bookmark"
         );
         assert_eq!(fsx::read(&other, "React--a1.md").expect("read"), b"other");
+    }
+
+    // -- child order files -------------------------------------------------
+
+    const FIRST: &[u8] = b"{\n  \"version\": 1,\n  \"children\": []\n}\n";
+    const SECOND: &[u8] = b"{\n  \"version\": 1,\n  \"children\": [1]\n}\n";
+
+    impl Fixture {
+        /// The child order file `Dev` currently has, if any.
+        fn dev_order(&self) -> Option<Vec<u8>> {
+            fsx::read(&self.dev(), STATE_FILE_NAME).ok()
+        }
+
+        /// Gives `Dev` an order file, outside any transaction.
+        fn seed_dev_order(&self, bytes: &[u8]) {
+            fsx::create_new(&self.dev(), STATE_FILE_NAME, bytes).expect("seed order");
+        }
+
+        /// Writes `bytes` as `Dev`'s order inside `staged`.
+        fn write_dev_order(&self, staged: &mut Staged, bytes: &[u8]) {
+            let dev = self.dev();
+            let current = fsx::read_with_identity(&dev, STATE_FILE_NAME).ok();
+            staged
+                .write_state(&dev, &dev_components(), bytes, current.as_ref())
+                .expect("write order");
+        }
+    }
+
+    #[test]
+    fn a_rollback_puts_a_replaced_child_order_back() {
+        let fixture = fixture();
+        fixture.seed_dev_order(FIRST);
+
+        let mut staged =
+            Staged::open(&fixture.state, &fixture.vault, "set_order", "dev").expect("staging");
+        fixture.write_dev_order(&mut staged, SECOND);
+        assert_eq!(fixture.dev_order().as_deref(), Some(SECOND));
+
+        staged.rollback().expect("rollback");
+        assert_eq!(
+            fixture.dev_order().as_deref(),
+            Some(FIRST),
+            "the order the change found is the order it leaves behind"
+        );
+        assert!(fixture.staging_is_clear());
+    }
+
+    #[test]
+    fn a_rollback_removes_a_child_order_the_change_created() {
+        let fixture = fixture();
+        assert!(fixture.dev_order().is_none());
+
+        let mut staged =
+            Staged::open(&fixture.state, &fixture.vault, "create", "dev").expect("staging");
+        fixture.write_dev_order(&mut staged, FIRST);
+        assert!(fixture.dev_order().is_some());
+
+        staged.rollback().expect("rollback");
+        assert!(
+            fixture.dev_order().is_none(),
+            "a folder that had no order file must not be left with one"
+        );
+        assert!(fixture.staging_is_clear());
+    }
+
+    #[test]
+    fn a_commit_keeps_the_new_child_order_and_clears_the_backup() {
+        let fixture = fixture();
+        fixture.seed_dev_order(FIRST);
+
+        let mut staged =
+            Staged::open(&fixture.state, &fixture.vault, "set_order", "dev").expect("staging");
+        fixture.write_dev_order(&mut staged, SECOND);
+        staged.commit().expect("commit");
+
+        assert_eq!(fixture.dev_order().as_deref(), Some(SECOND));
+        assert!(
+            fixture.staging_is_clear(),
+            "the backup goes with the commit"
+        );
+    }
+
+    #[test]
+    fn a_crash_before_a_child_order_is_written_leaves_it_alone() {
+        let fixture = fixture();
+        fixture.seed_dev_order(FIRST);
+
+        crash_at(FaultPoint::BeforeStateWrite, || {
+            let mut staged =
+                Staged::open(&fixture.state, &fixture.vault, "set_order", "dev").expect("staging");
+            fixture.write_dev_order(&mut staged, SECOND);
+        });
+        assert_eq!(
+            fixture.dev_order().as_deref(),
+            Some(FIRST),
+            "nothing landed"
+        );
+
+        let retained = recover(&fixture.state, &fixture.vault);
+        assert!(retained.is_empty(), "{retained:?}");
+        assert_eq!(fixture.dev_order().as_deref(), Some(FIRST));
+        assert!(fixture.staging_is_clear());
+    }
+
+    #[test]
+    fn a_crash_after_a_child_order_is_written_is_rolled_back() {
+        let fixture = fixture();
+        fixture.seed_dev_order(FIRST);
+
+        crash_at(FaultPoint::AfterStateWrite, || {
+            let mut staged =
+                Staged::open(&fixture.state, &fixture.vault, "set_order", "dev").expect("staging");
+            fixture.write_dev_order(&mut staged, SECOND);
+        });
+        assert_eq!(
+            fixture.dev_order().as_deref(),
+            Some(SECOND),
+            "the new bytes did land, and the change never committed"
+        );
+
+        let retained = recover(&fixture.state, &fixture.vault);
+        assert!(retained.is_empty(), "{retained:?}");
+        assert_eq!(
+            fixture.dev_order().as_deref(),
+            Some(FIRST),
+            "so recovery puts the previous order back"
+        );
+        assert!(fixture.staging_is_clear());
+    }
+
+    /// A cross-parent move writes two order files. A crash between them is the
+    /// half-applied case: one folder has been told the entry left and the other
+    /// has not been told it arrived.
+    #[test]
+    fn a_crash_between_two_child_order_writes_undoes_both() {
+        let fixture = fixture();
+        fixture.vault.create_dir("Other").expect("create Other");
+        let other_components = vec!["Other".to_owned()];
+        fixture.seed_dev_order(FIRST);
+        let other = fixture.vault.open_dir_nofollow("Other").expect("open");
+        fsx::create_new(&other, STATE_FILE_NAME, FIRST).expect("seed other");
+
+        crash_at(FaultPoint::AfterStateWrite, || {
+            let mut staged =
+                Staged::open(&fixture.state, &fixture.vault, "move", "a1").expect("staging");
+            fixture.write_dev_order(&mut staged, SECOND);
+            let other = fixture.vault.open_dir_nofollow("Other").expect("open");
+            let current = fsx::read_with_identity(&other, STATE_FILE_NAME).ok();
+            staged
+                .write_state(&other, &other_components, SECOND, current.as_ref())
+                .expect("write second order");
+        });
+
+        let retained = recover(&fixture.state, &fixture.vault);
+        assert!(retained.is_empty(), "{retained:?}");
+        assert_eq!(fixture.dev_order().as_deref(), Some(FIRST));
+        let other = fixture.vault.open_dir_nofollow("Other").expect("open");
+        assert_eq!(
+            fsx::read(&other, STATE_FILE_NAME).expect("read").as_slice(),
+            FIRST,
+            "both folders are back where they started, or neither is"
+        );
+        assert!(fixture.staging_is_clear());
+    }
+
+    #[test]
+    fn a_committed_change_that_also_moved_an_entry_is_completed_after_a_crash() {
+        let fixture = fixture();
+        fixture.seed_dev_order(FIRST);
+
+        let mut staged = fixture.stage_both();
+        fixture.write_dev_order(&mut staged, SECOND);
+        crash_at(FaultPoint::AfterPhaseFlip, move || {
+            let _ = staged.commit();
+        });
+
+        let retained = recover(&fixture.state, &fixture.vault);
+        assert!(retained.is_empty(), "{retained:?}");
+        assert!(!fixture.bookmark_is_present(), "the delete is finished");
+        assert_eq!(
+            fixture.dev_order().as_deref(),
+            Some(SECOND),
+            "and the order it produced stands"
+        );
+        assert!(fixture.staging_is_clear());
+    }
+
+    #[test]
+    fn a_state_write_and_an_entry_are_undone_together() {
+        let fixture = fixture();
+        fixture.seed_dev_order(FIRST);
+
+        let mut staged = fixture.stage_both();
+        fixture.write_dev_order(&mut staged, SECOND);
+        assert!(!fixture.bookmark_is_present());
+
+        staged.rollback().expect("rollback");
+
+        assert!(fixture.bookmark_is_present());
+        assert!(fixture.assets_are_present());
+        assert_eq!(fixture.dev_order().as_deref(), Some(FIRST));
+        assert!(fixture.staging_is_clear());
+    }
+
+    /// The previous release wrote version 2 manifests, which have no order
+    /// records at all. A vault upgraded mid-delete still has to be finished or
+    /// undone rather than declared unreadable and left to a human.
+    #[test]
+    fn a_version_2_manifest_from_an_older_build_still_recovers() {
+        let fixture = fixture();
+        let root = fsx::open_or_create_dir(&fixture.state, STAGING_DIRECTORY).expect("root");
+        fsx::create_dir(&root, "a1-0").expect("op dir");
+        let directory = fsx::open_dir(&root, "a1-0").expect("open op");
+        fsx::create_new(
+            &directory,
+            MANIFEST_NAME,
+            br#"{"version":2,"operation":"delete_bookmark","phase":"staging","entries":[
+               {"origin":["Dev"],"name":"Restored--a1.md","staged":"0-x","kind":"file"}]}"#,
+        )
+        .expect("manifest");
+        fsx::create_new(&directory, "0-x", b"older bytes").expect("staged entry");
+
+        let retained = recover(&fixture.state, &fixture.vault);
+        assert!(retained.is_empty(), "{retained:?}");
+        assert_eq!(
+            fsx::read(&fixture.dev(), "Restored--a1.md").expect("read"),
+            b"older bytes",
+            "an older manifest is still acted on"
+        );
+    }
+
+    #[test]
+    fn a_manifest_with_an_escaping_order_origin_is_never_acted_on() {
+        let fixture = fixture();
+        let root = fsx::open_or_create_dir(&fixture.state, STAGING_DIRECTORY).expect("root");
+        fsx::create_dir(&root, "op-0").expect("op dir");
+        let directory = fsx::open_dir(&root, "op-0").expect("open op");
+        fsx::create_new(
+            &directory,
+            MANIFEST_NAME,
+            br#"{"version":3,"operation":"set_order","phase":"staging","entries":[],
+               "states":[{"origin":["..",".."],"backup":"state-0.json","applied":true}]}"#,
+        )
+        .expect("manifest");
+        fsx::create_new(&directory, "state-0.json", b"hostile").expect("backup");
+
+        let retained = recover(&fixture.state, &fixture.vault);
+        assert_eq!(retained.len(), 1, "{retained:?}");
+        assert!(
+            fsx::exists(&directory, "state-0.json"),
+            "a record that cannot be trusted is not a licence to write anything"
+        );
     }
 }

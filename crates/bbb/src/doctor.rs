@@ -10,7 +10,7 @@
 
 use std::path::Path;
 
-use bbb_vault_core::{Severity, VaultScan, scan};
+use bbb_vault_core::{FolderNode, Severity, StateAccess, VaultScan, scan};
 
 /// A summary of one vault.
 #[derive(Debug, Clone)]
@@ -30,6 +30,13 @@ pub struct Report {
     pub warnings: Vec<Finding>,
     /// Whether the root has a usable `.bbb-folder.md`.
     pub initialized: bool,
+    /// Folders whose child order file the daemon must not rewrite, so their
+    /// entries cannot be reordered until a person fixes or removes it.
+    ///
+    /// Reported separately from `warnings` because the fix is a specific one —
+    /// repair or delete one named file — and because it is the only thing that
+    /// silently takes a feature away rather than an entry.
+    pub unorderable: Vec<Finding>,
 }
 
 /// One diagnostic, flattened for printing.
@@ -80,6 +87,9 @@ fn summarize(scan: &VaultScan) -> Report {
         }
     }
 
+    let mut unorderable = Vec::new();
+    collect_unorderable(scan.folder(), &mut unorderable);
+
     Report {
         daemon_running: false,
         bookmarks: scan.bookmarks().count(),
@@ -87,11 +97,36 @@ fn summarize(scan: &VaultScan) -> Report {
         errors,
         warnings,
         initialized: scan.folder().id().is_some(),
+        unorderable,
+    }
+}
+
+/// Every folder whose recorded child order is stuck read-only.
+fn collect_unorderable(folder: &FolderNode, out: &mut Vec<Finding>) {
+    if folder.state_access() == StateAccess::ReadOnly {
+        out.push(Finding {
+            code: "state_read_only",
+            path: if folder.relative_path().is_empty() {
+                ".".to_owned()
+            } else {
+                folder.relative_path().to_owned()
+            },
+            detail: "this folder's `.bbb-state.json` holds something this build must not \
+                     overwrite, so its entries cannot be reordered; the folder's own diagnostics \
+                     say what, and removing the file restores the migration order"
+                .to_owned(),
+        });
+    }
+    for child in folder.folders() {
+        collect_unorderable(child, out);
     }
 }
 
 fn count_folders(folder: &bbb_vault_core::FolderNode) -> usize {
-    folder.folders().len() + folder.folders().iter().map(count_folders).sum::<usize>()
+    folder
+        .folders()
+        .map(|child| 1 + count_folders(child))
+        .sum::<usize>()
 }
 
 /// Entries in `.bbb/staging` that need a person.
@@ -164,5 +199,44 @@ mod tests {
         assert!(report.is_healthy(), "{:?}", report.errors);
         assert_eq!(report.bookmarks, 0);
         assert_eq!(report.folders, 0);
+        assert!(report.unorderable.is_empty());
+    }
+
+    #[test]
+    fn a_child_order_file_that_cannot_be_rewritten_is_named() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        crate::init::initialize(dir.path()).expect("init");
+        std::fs::create_dir(dir.path().join("Dev")).expect("create dir");
+        std::fs::write(
+            dir.path()
+                .join("Dev")
+                .join(bbb_vault_core::FOLDER_FILE_NAME),
+            "---\nbbb_id: 1111aaaa\n---\n",
+        )
+        .expect("metadata");
+        std::fs::write(
+            dir.path().join("Dev").join(bbb_vault_core::STATE_FILE_NAME),
+            "{ not json",
+        )
+        .expect("order file");
+
+        let report = examine(dir.path()).expect("examine");
+
+        assert_eq!(report.unorderable.len(), 1, "{:?}", report.unorderable);
+        assert_eq!(report.unorderable[0].path, "Dev");
+        assert_eq!(report.unorderable[0].code, "state_read_only");
+        assert!(
+            report.is_healthy(),
+            "an order file nobody can rewrite is not a reason to fail a script: {:?}",
+            report.errors
+        );
+        assert!(
+            report
+                .warnings
+                .iter()
+                .any(|finding| finding.code == "state_malformed"),
+            "{:?}",
+            report.warnings
+        );
     }
 }

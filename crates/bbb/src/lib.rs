@@ -14,7 +14,13 @@
 //! * **One writer.** An advisory lock on `<vault>/.bbb/lock` means a second
 //!   daemon fails to start instead of racing the first.
 //! * **No silent overwrites.** Every mutation carries the revision the client
-//!   last saw; a mismatch is a `409`, never a write.
+//!   last saw; a mismatch is a `409`, never a write. A change to what a folder
+//!   holds — or to the order it holds it in — additionally carries that
+//!   folder's `stateRevision`.
+//! * **One transaction per change.** A create, a delete, a move and a reorder
+//!   each record what they are about to do in a durable manifest before doing
+//!   it, entries and `.bbb-state.json` writes alike, so an interrupted change is
+//!   completed or undone at the next start rather than left half-applied.
 //! * **No lost bytes.** Updates go through the format core's surgical patching,
 //!   and land through a temporary file in the destination directory that is
 //!   fsynced and renamed into place.

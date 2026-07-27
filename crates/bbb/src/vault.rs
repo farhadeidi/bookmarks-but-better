@@ -58,22 +58,24 @@
 //! two drift apart.
 
 use std::collections::hash_map::DefaultHasher;
+use std::collections::{HashMap, HashSet};
 use std::hash::{Hash as _, Hasher as _};
 use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError, RwLock, RwLockReadGuard};
 
 use bbb_vault_core::{
-    Access, BookmarkFile, BookmarkNode, BookmarkUpdate, FOLDER_FILE_NAME, FolderFile, FolderNode,
-    FolderUpdate, Id, NameAllocator, Revision, UpdateError, VaultScan, assets_directory_name,
-    render_bookmark, render_folder, scan,
+    Access, BookmarkFile, BookmarkNode, BookmarkUpdate, ChildKind, FOLDER_FILE_NAME, FolderFile,
+    FolderNode, FolderState, FolderUpdate, Id, NameAllocator, Revision, STATE_FILE_NAME,
+    StateChild, UpdateError, VaultScan, assets_directory_name, render_bookmark, render_folder,
+    scan,
 };
 use cap_fs_ext::DirExt as _;
 use cap_std::fs::Dir;
 use tokio::sync::broadcast;
 
 use crate::clock;
-use crate::dto::{self, BookmarkDto};
+use crate::dto::{self, BookmarkDto, Placement};
 use crate::entry::EntryRef;
 use crate::fsx;
 use crate::problem::{Problem, ProblemCode};
@@ -270,28 +272,121 @@ impl Vault {
         parent: &EntryRef,
         title: &str,
         url: Option<&str>,
+        placement: &Placement,
     ) -> Result<BookmarkDto, Problem> {
         let _gate = self.gate();
         let scan = self.plan_scan()?;
         let parent_node = writable_folder(&scan, parent)?;
         let title = validated_title(title)?;
-        let parent_dir = self.dir_of(parent_node.relative_path())?;
 
+        let plan = self.plan_order(
+            parent_node,
+            placement.parent_state_revision.as_deref(),
+            placement.index.is_some(),
+        )?;
+        let siblings = addressable_children(parent_node);
+        let position = insertion_index(placement.index, siblings.len())?;
+
+        let parent_dir = self.dir_of(parent_node.relative_path())?;
         let id = fresh_id(&scan)?;
         let mut names = allocator_for(&parent_dir)?;
+        let kind = if url.is_some() {
+            ChildKind::Bookmark
+        } else {
+            ChildKind::Folder
+        };
 
-        if let Some(url) = url {
+        let name = if let Some(url) = url {
             let url = validated_url(url)?;
             let now = clock::now_rfc3339();
             let document =
                 render_bookmark(id, url, title, &now, &now).map_err(|e| update_problem(&e))?;
-            create_bookmark_file(&parent_dir, &mut names, title, id, document.as_bytes())?;
+            create_bookmark_file(&parent_dir, &mut names, title, id, document.as_bytes())?
         } else {
             let document = render_folder(id, Some(title)).map_err(|e| update_problem(&e))?;
-            create_folder_directory(&parent_dir, &mut names, title, document.as_bytes())?;
+            create_folder_directory(&parent_dir, &mut names, title, document.as_bytes())?
+        };
+
+        let mut writes = Vec::new();
+        if let OrderPlan::Write(order) = plan {
+            let mut sequence = siblings;
+            sequence.insert(position, (id, kind));
+            let children = merge_order(&order.recorded, &sequence, &clock::now_rfc3339());
+            writes.push((order, children));
+        }
+
+        // A folder the daemon creates gets its own empty order file in the same
+        // transaction, so its first child can be placed without a migration
+        // step first — and so a folder never exists in a state the next request
+        // has to repair.
+        if kind == ChildKind::Folder {
+            let handle = fsx::open_dir(&parent_dir, &name)
+                .map_err(|error| io_problem("the new folder could not be opened", &error))?;
+            let mut components = component_of(parent_node.relative_path())?;
+            components.push(name.clone());
+            writes.push((
+                OrderFile {
+                    handle,
+                    components,
+                    current: None,
+                    recorded: Vec::new(),
+                },
+                Vec::new(),
+            ));
+        }
+
+        if let Err(problem) = self.commit_orders("create", id.as_str(), writes) {
+            // The entry exists but is not the one the caller asked for. It is
+            // brand new and nothing else has seen it, so removing it is the one
+            // undo that leaves no trace either way.
+            undo_create(&parent_dir, &name, kind);
+            return Err(problem);
         }
 
         self.settle(&EntryRef::Identity(id))
+    }
+
+    /// Replaces a folder's child order with `requested`.
+    ///
+    /// `requested` must name every direct child that has a stable identity,
+    /// exactly once each, with the right kind. It is a complete permutation
+    /// rather than a patch because a partial order has no single correct
+    /// completion, and a client working from a stale tree would silently get a
+    /// different one than it meant.
+    ///
+    /// A request that asks for the order the folder is already in writes
+    /// nothing at all, so it costs no revision and produces no change event.
+    ///
+    /// # Errors
+    ///
+    /// [`ProblemCode::InvalidOrder`] when `requested` is not that permutation,
+    /// [`ProblemCode::StaleStateRevision`] when `state_revision` no longer
+    /// matches, and [`ProblemCode::StateReadOnly`] when the folder's order file
+    /// holds something the daemon must not overwrite.
+    pub fn set_order(
+        &self,
+        folder: &EntryRef,
+        state_revision: Option<&str>,
+        requested: &[(Id, ChildKind)],
+    ) -> Result<BookmarkDto, Problem> {
+        let _gate = self.gate();
+        let scan = self.plan_scan()?;
+        let node = writable_folder(&scan, folder)?;
+
+        let plan = self.plan_order(node, state_revision, true)?;
+        let OrderPlan::Write(order) = plan else {
+            // `plan_order` refuses a positional request against a frozen
+            // folder, so this is unreachable; refusing again is cheaper than
+            // relying on that from a distance.
+            return Err(frozen_problem());
+        };
+
+        let siblings = addressable_children(node);
+        check_permutation(&siblings, requested)?;
+
+        let children = merge_order(&order.recorded, requested, &clock::now_rfc3339());
+        self.commit_orders("set_order", &folder.to_string(), vec![(order, children)])?;
+        self.settle(folder)
     }
 
     /// Updates an entry's title, and a bookmark's URL.
@@ -361,7 +456,12 @@ impl Vault {
     /// [`ProblemCode::NotFound`], [`ProblemCode::StaleRevision`],
     /// [`ProblemCode::ReadOnly`], [`ProblemCode::PartialFailure`] when a
     /// rollback itself failed, or [`ProblemCode::VaultUnavailable`].
-    pub fn delete_bookmark(&self, reference: &EntryRef, revision: &str) -> Result<(), Problem> {
+    pub fn delete_bookmark(
+        &self,
+        reference: &EntryRef,
+        revision: &str,
+        parent_state_revision: Option<&str>,
+    ) -> Result<(), Problem> {
         let _gate = self.gate();
         let expected = parse_revision(revision)?;
         let scan = self.plan_scan()?;
@@ -380,9 +480,18 @@ impl Vault {
         let dir = self.parent_dir_of(node.relative_path())?;
 
         // The bytes and the file's identity come from one handle, so the
-        // revision check and the removal are about the same object.
+        // revision check and the removal are about the same object. The entry's
+        // own revision is checked before the parent's order revision, so a
+        // request that is stale about both is told about the entry — which is
+        // what it was actually asking to change.
         let validated = read_validated(&dir, node.file_name())?;
         check_revision(expected, validated.revision())?;
+        let removal = self.plan_removal(
+            &scan,
+            node.relative_path(),
+            Some(node.id()),
+            parent_state_revision,
+        )?;
 
         let assets = assets_directory_name(node.file_name());
         let assets_identity = fsx::open_dir(&dir, &assets)
@@ -407,6 +516,13 @@ impl Vault {
             && let Err(error) = staged.take(&dir, &parent_components, &assets, true, identity)
         {
             return Err(take_problem(staged, "the bookmark's assets", error));
+        }
+
+        if let Some((order, children)) = removal
+            && let Err(problem) = write_orders(&mut staged, vec![(order, children)])
+        {
+            let _ = staged.rollback();
+            return Err(problem);
         }
 
         staged
@@ -434,6 +550,7 @@ impl Vault {
         &self,
         reference: &EntryRef,
         revision: &str,
+        parent_state_revision: Option<&str>,
         recursive: bool,
     ) -> Result<(), Problem> {
         let _gate = self.gate();
@@ -459,6 +576,12 @@ impl Vault {
 
         let handle = self.dir_of(node.relative_path())?;
         check_revision(expected, revision_of(&handle, FOLDER_FILE_NAME)?)?;
+        let removal = self.plan_removal(
+            &scan,
+            node.relative_path(),
+            node.id(),
+            parent_state_revision,
+        )?;
 
         // The identity of the directory that is about to be verified. The
         // staging rename below names a directory *entry*, and an entry can be
@@ -510,6 +633,13 @@ impl Vault {
             });
         }
 
+        if let Some((order, children)) = removal
+            && let Err(problem) = write_orders(&mut staged, vec![(order, children)])
+        {
+            let _ = staged.rollback();
+            return Err(problem);
+        }
+
         staged
             .commit()
             .map_err(|error| io_problem("the staged folder could not be destroyed", &error))?;
@@ -531,44 +661,245 @@ impl Vault {
     pub fn move_entry(
         &self,
         reference: &EntryRef,
-        revision: &str,
-        parent: &EntryRef,
+        request: &MovePlan,
     ) -> Result<BookmarkDto, Problem> {
         let _gate = self.gate();
-        let expected = parse_revision(revision)?;
+        let expected = parse_revision(&request.revision)?;
         let scan = self.plan_scan()?;
-        let destination_node = writable_folder(&scan, parent)?;
-        let destination = self.dir_of(destination_node.relative_path())?;
+        let destination_node = writable_folder(&scan, &request.parent)?;
 
-        match locate(&scan, reference)? {
-            Located::Bookmark(node) => {
-                require_writable(node.access(), "the bookmark")?;
-                let source = self.parent_dir_of(node.relative_path())?;
-                check_revision(expected, revision_of(&source, node.file_name())?)?;
-                if parent_path(node.relative_path()) != destination_node.relative_path() {
-                    move_bookmark(&source, node, &destination)?;
-                }
+        let Movable {
+            id,
+            kind,
+            origin,
+            file_name,
+        } = movable(&scan, reference, destination_node)?;
+
+        let source_path = parent_path(&origin).to_owned();
+        let same_parent = source_path == destination_node.relative_path();
+        let source_node = folder_at(scan.folder(), &source_path).ok_or_else(|| {
+            Problem::new(
+                ProblemCode::VaultUnavailable,
+                "the folder the entry is in could not be resolved",
+            )
+        })?;
+
+        // The entry's own revision is checked against the file the move will
+        // actually rename, exactly as before ordering existed.
+        match kind {
+            ChildKind::Bookmark => {
+                let source = self.dir_of(&source_path)?;
+                check_revision(expected, revision_of(&source, &file_name)?)?;
             }
-            Located::Folder(node) => {
-                if node.relative_path().is_empty() {
-                    return Err(Problem::new(
-                        ProblemCode::InvalidValue,
-                        "the vault root cannot be moved",
-                    ));
-                }
-                require_writable(node.access(), "the folder")?;
-                let handle = self.dir_of(node.relative_path())?;
+            ChildKind::Folder => {
+                let handle = self.dir_of(&origin)?;
                 check_revision(expected, revision_of(&handle, FOLDER_FILE_NAME)?)?;
-                drop(handle);
-                guard_move_into_self(node, destination_node)?;
-                if parent_path(node.relative_path()) != destination_node.relative_path() {
-                    let source = self.parent_dir_of(node.relative_path())?;
-                    move_folder(&source, node, &destination)?;
-                }
             }
         }
 
+        let (source_revision, destination_revision) = request.revisions(same_parent)?;
+        let positional = request.index.is_some();
+        let destination_plan =
+            self.plan_order(destination_node, destination_revision, positional)?;
+        let source_plan = if same_parent {
+            OrderPlan::Frozen
+        } else {
+            self.plan_order(source_node, source_revision, false)?
+        };
+
+        let destination_siblings = addressable_children(destination_node);
+        let mut sequence: Vec<(Id, ChildKind)> = destination_siblings
+            .iter()
+            .copied()
+            .filter(|(other, _)| !same_parent || *other != id)
+            .collect();
+        let position = insertion_index(request.index, sequence.len())?;
+
+        // The name the entry ended up with at the destination, which is the one
+        // an undo has to name. It is usually the name it already had.
+        let landed = if same_parent {
+            file_name.clone()
+        } else {
+            let source = self.dir_of(&source_path)?;
+            let destination = self.dir_of(destination_node.relative_path())?;
+            match locate(&scan, reference)? {
+                Located::Bookmark(node) => move_bookmark(&source, node, &destination)?,
+                Located::Folder(node) => move_folder(&source, node, &destination)?,
+            }
+        };
+
+        sequence.insert(position, (id, kind));
+        let now = clock::now_rfc3339();
+        let mut writes = Vec::new();
+        if let OrderPlan::Write(order) = destination_plan {
+            let children = merge_order(&order.recorded, &sequence, &now);
+            writes.push((order, children));
+        }
+        if let OrderPlan::Write(order) = source_plan {
+            let recorded = without(&order.recorded, id);
+            let remaining: Vec<(Id, ChildKind)> = addressable_children(source_node)
+                .into_iter()
+                .filter(|(other, _)| *other != id)
+                .collect();
+            let children = merge_order(&recorded, &remaining, &now);
+            writes.push((order, children));
+        }
+
+        if let Err(problem) = self.commit_orders("move", id.as_str(), writes) {
+            if same_parent {
+                return Err(problem);
+            }
+            // Put the entry back, so a refused move leaves the vault exactly as
+            // it found it rather than half-applied.
+            let source = self.dir_of(&source_path)?;
+            let destination = self.dir_of(destination_node.relative_path())?;
+            let undone = match kind {
+                ChildKind::Bookmark => {
+                    undo_bookmark_move(&destination, &landed, &source, &file_name)
+                }
+                ChildKind::Folder => {
+                    fsx::move_dir(&destination, &landed, &source, &file_name).is_ok()
+                }
+            };
+            if undone {
+                return Err(problem);
+            }
+            return Err(Problem::new(
+                ProblemCode::PartialFailure,
+                format!(
+                    "{}, and the entry could not be moved back; run `bbb doctor` to see the \
+                     current state of the vault",
+                    problem.detail()
+                ),
+            ));
+        }
+
         self.settle(reference)
+    }
+
+    // -- child order ------------------------------------------------------
+
+    /// Decides how one folder's recorded order should be treated.
+    ///
+    /// `positional` says whether the request actually depends on placement. A
+    /// folder whose order file the daemon must not overwrite can still gain and
+    /// lose entries — the file simply stops describing them, and the scan
+    /// appends them — but it cannot be told *where* they go, so a request that
+    /// says where is refused rather than quietly ignored.
+    fn plan_order(
+        &self,
+        node: &FolderNode,
+        supplied: Option<&str>,
+        positional: bool,
+    ) -> Result<OrderPlan, Problem> {
+        check_state_revision(node, supplied)?;
+        if !node.state_access().is_writable() {
+            if positional {
+                return Err(frozen_problem());
+            }
+            return Ok(OrderPlan::Frozen);
+        }
+        Ok(OrderPlan::Write(self.open_order(node)?))
+    }
+
+    /// Opens a folder's order file for writing, reading what it currently says.
+    ///
+    /// The bytes and the file's identity come from one handle, so the write is
+    /// bound to the exact file that was read — the same rule every other
+    /// mutation in this module follows.
+    fn open_order(&self, node: &FolderNode) -> Result<OrderFile, Problem> {
+        let handle = self.dir_of(node.relative_path())?;
+        let components = component_of(node.relative_path())?;
+
+        if node.state_revision().is_none() {
+            return Ok(OrderFile {
+                handle,
+                components,
+                current: None,
+                recorded: Vec::new(),
+            });
+        }
+
+        let current = read_validated(&handle, STATE_FILE_NAME)?;
+        let (state, freeze) = FolderState::parse(&current.bytes).map_err(|error| {
+            // The scan read it a moment ago and found it usable, so this is a
+            // change since then rather than a permanent condition.
+            Problem::new(
+                ProblemCode::StaleStateRevision,
+                format!("{error}; rescan and retry"),
+            )
+        })?;
+        if freeze.is_some() {
+            return Err(frozen_problem());
+        }
+        Ok(OrderFile {
+            handle,
+            components,
+            current: Some(current),
+            recorded: state.children().to_vec(),
+        })
+    }
+
+    /// Plans the parent's order change for an entry that is about to go away.
+    fn plan_removal(
+        &self,
+        scan: &VaultScan,
+        relative_path: &str,
+        id: Option<Id>,
+        supplied: Option<&str>,
+    ) -> Result<Option<(OrderFile, Vec<StateChild>)>, Problem> {
+        let parent = folder_at(scan.folder(), parent_path(relative_path)).ok_or_else(|| {
+            Problem::new(
+                ProblemCode::VaultUnavailable,
+                "the folder the entry is in could not be resolved",
+            )
+        })?;
+        // Removing an entry is not a positional request: it never says where
+        // anything goes, so a frozen order file does not block it.
+        let OrderPlan::Write(order) = self.plan_order(parent, supplied, false)? else {
+            return Ok(None);
+        };
+
+        let Some(id) = id else {
+            return Ok(None);
+        };
+        let recorded = without(&order.recorded, id);
+        let remaining: Vec<(Id, ChildKind)> = addressable_children(parent)
+            .into_iter()
+            .filter(|(other, _)| *other != id)
+            .collect();
+        let children = merge_order(&recorded, &remaining, &clock::now_rfc3339());
+        Ok(Some((order, children)))
+    }
+
+    /// Applies a set of order writes in one durable transaction.
+    ///
+    /// A write that would produce the bytes already on disk is dropped, and a
+    /// call with nothing left to do opens no staging area at all. That is what
+    /// makes reordering a folder into the order it is already in cost nothing:
+    /// no write, no revision change, no event.
+    fn commit_orders(
+        &self,
+        operation: &str,
+        id: &str,
+        writes: Vec<(OrderFile, Vec<StateChild>)>,
+    ) -> Result<(), Problem> {
+        let writes: Vec<(OrderFile, Vec<StateChild>)> = writes
+            .into_iter()
+            .filter(|(order, children)| !order.is_noop(children))
+            .collect();
+        if writes.is_empty() {
+            return Ok(());
+        }
+
+        let mut staged = self.staging(operation, id)?;
+        if let Err(problem) = write_orders(&mut staged, writes) {
+            let _ = staged.rollback();
+            return Err(problem);
+        }
+        staged
+            .commit()
+            .map_err(|error| io_problem("the change could not be completed", &error))
     }
 
     // -- internals --------------------------------------------------------
@@ -666,18 +997,374 @@ impl Vault {
     }
 }
 
+/// What a move needs to know about the entry it is about.
+struct Movable {
+    /// Its stable identity.
+    id: Id,
+    /// Whether it is a bookmark or a folder.
+    kind: ChildKind,
+    /// Its vault-relative path before the move.
+    origin: String,
+    /// Its on-disk name, which the move tries to keep.
+    file_name: String,
+}
+
+/// Resolves the entry a move is about, refusing the ones that cannot move.
+fn movable(
+    scan: &VaultScan,
+    reference: &EntryRef,
+    destination: &FolderNode,
+) -> Result<Movable, Problem> {
+    match locate(scan, reference)? {
+        Located::Bookmark(node) => {
+            require_writable(node.access(), "the bookmark")?;
+            Ok(Movable {
+                id: node.id(),
+                kind: ChildKind::Bookmark,
+                origin: node.relative_path().to_owned(),
+                file_name: node.file_name().to_owned(),
+            })
+        }
+        Located::Folder(node) => {
+            if node.relative_path().is_empty() {
+                return Err(Problem::new(
+                    ProblemCode::InvalidValue,
+                    "the vault root cannot be moved",
+                ));
+            }
+            require_writable(node.access(), "the folder")?;
+            guard_move_into_self(node, destination)?;
+            let id = node.id().ok_or_else(|| {
+                Problem::new(
+                    ProblemCode::ReadOnly,
+                    format!(
+                        "the directory has no `{FOLDER_FILE_NAME}`, so it has no stable identity \
+                         and cannot be moved"
+                    ),
+                )
+            })?;
+            Ok(Movable {
+                id,
+                kind: ChildKind::Folder,
+                origin: node.relative_path().to_owned(),
+                file_name: node.directory_name().to_owned(),
+            })
+        }
+    }
+}
+
+/// Everything a move needs to know beyond which entry it is about.
+#[derive(Debug, Clone)]
+pub struct MovePlan {
+    /// The revision of the entry itself.
+    pub revision: String,
+    /// The folder it should end up in.
+    pub parent: EntryRef,
+    /// Where among that folder's children; the end when absent.
+    pub index: Option<usize>,
+    /// The revision of the order file of the folder it is leaving.
+    pub source_state_revision: Option<String>,
+    /// The revision of the order file of the folder it is joining.
+    pub destination_state_revision: Option<String>,
+}
+
+impl MovePlan {
+    /// The source and destination order revisions this request carries.
+    ///
+    /// A move within one folder touches one order file, so it carries one
+    /// revision — under either name, since both name the same file. Sending two
+    /// different values for it is a request that cannot be satisfied, and is
+    /// refused rather than resolved by preferring one.
+    fn revisions(&self, same_parent: bool) -> Result<(Option<&str>, Option<&str>), Problem> {
+        let source = self.source_state_revision.as_deref();
+        let destination = self.destination_state_revision.as_deref();
+        if !same_parent {
+            return Ok((source, destination));
+        }
+        match (source, destination) {
+            (Some(source), Some(destination)) if source != destination => Err(Problem::new(
+                ProblemCode::InvalidRequest,
+                "this move stays in one folder, so sourceStateRevision and \
+                 destinationStateRevision name the same file and must match",
+            )),
+            (one, other) => {
+                let single = one.or(other);
+                Ok((single, single))
+            }
+        }
+    }
+}
+
+/// How a mutation should treat one folder's recorded child order.
+#[derive(Debug)]
+enum OrderPlan {
+    /// Rewrite the folder's order file as part of the change.
+    Write(OrderFile),
+    /// Leave the order file alone; the scan will place the entry itself.
+    Frozen,
+}
+
+/// One folder's order file, opened for a change.
+#[derive(Debug)]
+struct OrderFile {
+    /// The folder's own directory handle.
+    handle: Dir,
+    /// The folder's vault-relative path, as validated components.
+    components: Vec<String>,
+    /// The order file as it is right now, absent when there is none yet.
+    current: Option<fsx::Validated>,
+    /// What it currently records.
+    recorded: Vec<StateChild>,
+}
+
+impl OrderFile {
+    /// Whether writing `children` would change a single byte.
+    fn is_noop(&self, children: &[StateChild]) -> bool {
+        self.current
+            .as_ref()
+            .is_some_and(|current| current.bytes == FolderState::new(children.to_vec()).render())
+    }
+}
+
+/// Writes every planned order change into one transaction.
+fn write_orders(
+    staged: &mut Staged,
+    writes: Vec<(OrderFile, Vec<StateChild>)>,
+) -> Result<(), Problem> {
+    for (order, children) in writes {
+        let bytes = FolderState::new(children).render();
+        staged
+            .write_state(
+                &order.handle,
+                &order.components,
+                &bytes,
+                order.current.as_ref(),
+            )
+            .map_err(|error| match error.kind() {
+                io::ErrorKind::AlreadyExists => Problem::new(
+                    ProblemCode::StaleStateRevision,
+                    "the folder's child order changed while this change was being written; \
+                     reload it and retry",
+                ),
+                _ => io_problem("the folder's child order could not be written", &error),
+            })?;
+    }
+    Ok(())
+}
+
+/// The folder's children that an order file is able to name, in display order.
+///
+/// A directory with no `.bbb-folder.md` has no stable identity, so nothing can
+/// record where it goes; it is left out here and the scan appends it. Two
+/// entries claiming one identity are equally unnameable, so only the first is
+/// kept — the duplicate is already reported as an error and is read-only.
+fn addressable_children(node: &FolderNode) -> Vec<(Id, ChildKind)> {
+    let mut seen = HashSet::new();
+    node.children()
+        .iter()
+        .filter_map(|child| child.id().map(|id| (id, child.kind())))
+        .filter(|(id, _)| seen.insert(*id))
+        .collect()
+}
+
+/// Rewrites a recorded order so that the children in `sequence` appear in that
+/// order, and everything else the file remembers is kept where it was.
+///
+/// The second half is the part that matters. A file the order names but the
+/// folder does not currently hold is very often one a sync client has not
+/// delivered yet, so it is never pruned — but simply appending it would move it
+/// to the end of a list the user arranged. Instead each such reference is
+/// anchored to the child it followed, and reappears in the same place. A
+/// reference the caller means to drop is removed from `recorded` before this is
+/// called; nothing is dropped here.
+fn merge_order(
+    recorded: &[StateChild],
+    sequence: &[(Id, ChildKind)],
+    now: &str,
+) -> Vec<StateChild> {
+    let present: HashSet<Id> = sequence.iter().map(|(id, _)| *id).collect();
+    let known: HashMap<Id, &StateChild> =
+        recorded.iter().map(|child| (child.id(), child)).collect();
+
+    let mut leading: Vec<StateChild> = Vec::new();
+    let mut trailing: HashMap<Id, Vec<StateChild>> = HashMap::new();
+    let mut anchor: Option<Id> = None;
+    for child in recorded {
+        if present.contains(&child.id()) {
+            anchor = Some(child.id());
+        } else {
+            match anchor {
+                None => leading.push(child.clone()),
+                Some(id) => trailing.entry(id).or_default().push(child.clone()),
+            }
+        }
+    }
+
+    let mut out = leading;
+    for (id, kind) in sequence {
+        // The recorded `addedAt` is kept: it is when the entry joined this
+        // folder, and reordering is not joining it again.
+        let child = known
+            .get(id)
+            .filter(|child| child.kind() == *kind)
+            .map_or_else(
+                || StateChild::new(*id, *kind, now),
+                |child| (*child).clone(),
+            );
+        out.push(child);
+        out.extend(trailing.remove(id).unwrap_or_default());
+    }
+    out
+}
+
+/// The recorded order with `id` taken out of it.
+fn without(recorded: &[StateChild], id: Id) -> Vec<StateChild> {
+    recorded
+        .iter()
+        .filter(|child| child.id() != id)
+        .cloned()
+        .collect()
+}
+
+/// Checks a requested order names every addressable child exactly once.
+fn check_permutation(
+    siblings: &[(Id, ChildKind)],
+    requested: &[(Id, ChildKind)],
+) -> Result<(), Problem> {
+    let mut expected: HashMap<Id, ChildKind> =
+        siblings.iter().map(|(id, kind)| (*id, *kind)).collect();
+
+    for (id, kind) in requested {
+        match expected.remove(id) {
+            Some(actual) if actual == *kind => {}
+            Some(actual) => {
+                return Err(Problem::new(
+                    ProblemCode::InvalidOrder,
+                    format!("`{id}` is a {actual} in this folder, not a {kind}"),
+                ));
+            }
+            None => {
+                return Err(Problem::new(
+                    ProblemCode::InvalidOrder,
+                    format!(
+                        "`{id}` is not a child of this folder, or is named more than once; a \
+                         child order must list every child exactly once"
+                    ),
+                ));
+            }
+        }
+    }
+
+    if let Some(id) = expected.keys().min() {
+        return Err(Problem::new(
+            ProblemCode::InvalidOrder,
+            format!(
+                "the child order leaves out `{id}`; it must list every child of this folder \
+                 exactly once"
+            ),
+        ));
+    }
+    Ok(())
+}
+
+/// Resolves a requested insertion point against a list of `length` children.
+fn insertion_index(index: Option<usize>, length: usize) -> Result<usize, Problem> {
+    match index {
+        None => Ok(length),
+        // `length` is the end, which is a legitimate place to insert.
+        Some(index) if index <= length => Ok(index),
+        Some(index) => Err(Problem::new(
+            ProblemCode::InvalidOrder,
+            format!("index {index} is past the end of a folder with {length} orderable children"),
+        )),
+    }
+}
+
+/// Checks that a request was looking at the folder's current order.
+fn check_state_revision(node: &FolderNode, supplied: Option<&str>) -> Result<(), Problem> {
+    match (node.state_revision(), supplied) {
+        (None, None) => Ok(()),
+        (Some(expected), Some(supplied)) => {
+            let supplied = Revision::from_hex(supplied).ok_or_else(|| {
+                Problem::new(
+                    ProblemCode::InvalidRequest,
+                    "a state revision is 64 lowercase hexadecimal characters",
+                )
+            })?;
+            if supplied == expected {
+                Ok(())
+            } else {
+                Err(Problem::new(
+                    ProblemCode::StaleStateRevision,
+                    format!(
+                        "the folder's child order changed: expected {expected}, was sent \
+                         {supplied}. Reload the folder and retry"
+                    ),
+                ))
+            }
+        }
+        (Some(_), None) => Err(Problem::new(
+            ProblemCode::StaleStateRevision,
+            "this folder has a child order file, so its current stateRevision must be sent with \
+             any change to what it holds",
+        )),
+        (None, Some(_)) => Err(Problem::new(
+            ProblemCode::StaleStateRevision,
+            "this folder has no child order file, so no stateRevision may be sent; reload the \
+             folder and retry",
+        )),
+    }
+}
+
+fn frozen_problem() -> Problem {
+    Problem::new(
+        ProblemCode::StateReadOnly,
+        "this folder's child order file holds something this build must not overwrite, so its \
+         order cannot be changed. The folder's diagnostics say what, and entries can still be \
+         created, renamed, moved and deleted meanwhile",
+    )
+}
+
+/// Removes an entry this request created moments ago.
+fn undo_create(parent: &Dir, name: &str, kind: ChildKind) {
+    let removed = match kind {
+        ChildKind::Bookmark => fsx::remove_file(parent, name),
+        ChildKind::Folder => fsx::remove_dir_all(parent, name),
+    };
+    if let Err(error) = removed {
+        tracing::warn!(
+            error = %error.kind(),
+            "a new entry could not be removed after its placement failed"
+        );
+    }
+}
+
+/// Moves a bookmark back where it came from, assets and all.
+fn undo_bookmark_move(from: &Dir, from_name: &str, to: &Dir, to_name: &str) -> bool {
+    if fsx::move_file(from, from_name, to, to_name).is_err() {
+        return false;
+    }
+    let assets = assets_directory_name(from_name);
+    if !is_directory(from, &assets) {
+        return true;
+    }
+    fsx::move_dir(from, &assets, to, &assets_directory_name(to_name)).is_ok()
+}
+
 /// Creates a bookmark file, retrying if a name is claimed underneath us.
+///
+/// Returns the name it settled on, which is what an undo has to remove.
 fn create_bookmark_file(
     parent: &Dir,
     names: &mut NameAllocator,
     title: &str,
     id: Id,
     document: &[u8],
-) -> Result<(), Problem> {
+) -> Result<String, Problem> {
     for _ in 0..NAME_ATTEMPTS {
         let name = names.allocate_bookmark(title, id);
         match fsx::create_new(parent, &name, document) {
-            Ok(()) => return Ok(()),
+            Ok(()) => return Ok(name),
             // Something claimed the name between listing the directory and
             // creating the file. `create_new` caught it, so take the next name
             // the allocator offers rather than overwriting anything.
@@ -691,12 +1378,14 @@ fn create_bookmark_file(
 }
 
 /// Creates a folder directory and its metadata, undoing the first on failure.
+///
+/// Returns the directory name it settled on.
 fn create_folder_directory(
     parent: &Dir,
     names: &mut NameAllocator,
     title: &str,
     document: &[u8],
-) -> Result<(), Problem> {
+) -> Result<String, Problem> {
     for _ in 0..NAME_ATTEMPTS {
         let name = names.allocate_folder(title);
         match parent.create_dir(&name) {
@@ -705,7 +1394,7 @@ fn create_folder_directory(
                     .open_dir_nofollow(&name)
                     .map_err(|error| io_problem("the new folder could not be opened", &error))?;
                 return match fsx::create_new(&child, FOLDER_FILE_NAME, document) {
-                    Ok(()) => Ok(()),
+                    Ok(()) => Ok(name),
                     Err(error) => {
                         // A directory with no identity is worse than no
                         // directory, so undo it and leave the vault as it was.
@@ -834,7 +1523,9 @@ fn update_folder(
 }
 
 /// Renames a bookmark into `destination`, taking its assets with it.
-fn move_bookmark(source: &Dir, node: &BookmarkNode, destination: &Dir) -> Result<(), Problem> {
+///
+/// Returns the name it has at the destination.
+fn move_bookmark(source: &Dir, node: &BookmarkNode, destination: &Dir) -> Result<String, Problem> {
     let mut names = allocator_for(destination)?;
     let assets = assets_directory_name(node.file_name());
     let has_assets = is_directory(source, &assets);
@@ -851,11 +1542,11 @@ fn move_bookmark(source: &Dir, node: &BookmarkNode, destination: &Dir) -> Result
         match fsx::move_file(source, node.file_name(), destination, &candidate) {
             Ok(()) => {
                 if !has_assets {
-                    return Ok(());
+                    return Ok(candidate);
                 }
                 let target = assets_directory_name(&candidate);
                 return match fsx::move_dir(source, &assets, destination, &target) {
-                    Ok(()) => Ok(()),
+                    Ok(()) => Ok(candidate),
                     Err(error) => {
                         // The bookmark has already moved. Put it back, so the
                         // pair is never split across two folders.
@@ -884,8 +1575,8 @@ fn move_bookmark(source: &Dir, node: &BookmarkNode, destination: &Dir) -> Result
     Err(name_exhausted())
 }
 
-/// Renames a directory into `destination`.
-fn move_folder(source: &Dir, node: &FolderNode, destination: &Dir) -> Result<(), Problem> {
+/// Renames a directory into `destination`, returning the name it has there.
+fn move_folder(source: &Dir, node: &FolderNode, destination: &Dir) -> Result<String, Problem> {
     let mut names = allocator_for(destination)?;
     let mut candidate = if names.reserve(node.directory_name()) {
         node.directory_name().to_owned()
@@ -895,7 +1586,7 @@ fn move_folder(source: &Dir, node: &FolderNode, destination: &Dir) -> Result<(),
 
     for attempt in 0..NAME_ATTEMPTS {
         match fsx::move_dir(source, node.directory_name(), destination, &candidate) {
-            Ok(()) => return Ok(()),
+            Ok(()) => return Ok(candidate),
             Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {
                 if attempt + 1 == NAME_ATTEMPTS {
                     break;
@@ -989,7 +1680,6 @@ fn folder_at<'a>(folder: &'a FolderNode, relative_path: &str) -> Option<&'a Fold
     }
     folder
         .folders()
-        .iter()
         .find_map(|child| folder_at(child, relative_path))
 }
 
@@ -1073,7 +1763,10 @@ fn occupant_count(dir: &Dir) -> Result<usize, Problem> {
     let mut count = 0;
     for entry in entries {
         let entry = entry.map_err(|error| io_problem("the folder could not be listed", &error))?;
-        if entry.file_name() != FOLDER_FILE_NAME {
+        // The two machine-managed files are the folder's own bookkeeping, not
+        // things it contains, so an otherwise empty folder still deletes
+        // without `recursive`.
+        if entry.file_name() != FOLDER_FILE_NAME && entry.file_name() != STATE_FILE_NAME {
             count += 1;
         }
     }
@@ -1143,7 +1836,12 @@ fn read_entry(dir: &Dir, name: &str) -> Result<Vec<u8>, Problem> {
 
 /// The vault-relative parent of `relative`, as validated components.
 fn component_path(relative: &str) -> Result<Vec<String>, Problem> {
-    fsx::component::split(parent_path(relative)).map_err(|(part, error)| {
+    component_of(parent_path(relative))
+}
+
+/// `relative` itself, as validated components.
+fn component_of(relative: &str) -> Result<Vec<String>, Problem> {
+    fsx::component::split(relative).map_err(|(part, error)| {
         Problem::new(
             ProblemCode::VaultUnavailable,
             format!("`{part}` is not a usable path component: {error}"),
@@ -1336,22 +2034,34 @@ fn hash_folder(folder: &FolderNode, hasher: &mut DefaultHasher) {
         .map(|revision| *revision.as_bytes())
         .hash(hasher);
     folder.access().as_str().hash(hasher);
+    // The order file is part of what the API exposes, so it is part of what
+    // "the vault changed" means. Hashing the revision catches an external edit
+    // to the file itself, and hashing the children in order below catches the
+    // reordering that edit produced — including one that only moved entries
+    // around, which every other field would report as identical.
+    folder
+        .state_revision()
+        .map(|revision| *revision.as_bytes())
+        .hash(hasher);
+    folder.state_access().as_str().hash(hasher);
     hash_diagnostics(folder.diagnostics(), hasher);
 
-    for child in folder.folders() {
-        hash_folder(child, hasher);
-    }
-    for bookmark in folder.bookmarks() {
-        bookmark.relative_path().hash(hasher);
-        bookmark.id().as_str().hash(hasher);
-        bookmark.title().hash(hasher);
-        bookmark.url().hash(hasher);
-        bookmark.created().hash(hasher);
-        bookmark.updated().hash(hasher);
-        bookmark.logo().hash(hasher);
-        bookmark.revision().as_bytes().hash(hasher);
-        bookmark.access().as_str().hash(hasher);
-        hash_diagnostics(bookmark.diagnostics(), hasher);
+    for child in folder.children() {
+        match child {
+            bbb_vault_core::ChildNode::Folder(folder) => hash_folder(folder, hasher),
+            bbb_vault_core::ChildNode::Bookmark(bookmark) => {
+                bookmark.relative_path().hash(hasher);
+                bookmark.id().as_str().hash(hasher);
+                bookmark.title().hash(hasher);
+                bookmark.url().hash(hasher);
+                bookmark.created().hash(hasher);
+                bookmark.updated().hash(hasher);
+                bookmark.logo().hash(hasher);
+                bookmark.revision().as_bytes().hash(hasher);
+                bookmark.access().as_str().hash(hasher);
+                hash_diagnostics(bookmark.diagnostics(), hasher);
+            }
+        }
     }
 }
 
