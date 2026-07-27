@@ -31,3 +31,6 @@ dist-firefox
 # Marketing automation — videos and tmp dirs (large binary files)
 marketing/output/videos/
 test-results/
+
+# Rust
+/target
