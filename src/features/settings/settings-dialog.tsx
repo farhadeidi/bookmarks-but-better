@@ -20,6 +20,7 @@ import { useBookmarkStore } from "@/stores/bookmark-store"
 import { RootFolderSelect } from "@/features/root-folder-select"
 import { serializeNetscapeBookmarks } from "@/browser/import-export/netscape-serializer"
 import { parseNetscapeBookmarks } from "@/browser/import-export/netscape-parser"
+import { resolveImportRootId } from "./import-target"
 import type { BookmarkNode } from "@/browser"
 
 export function SettingsDialog() {
@@ -57,6 +58,14 @@ export function SettingsDialog() {
     input.onchange = async (e) => {
       const file = (e.target as HTMLInputElement).files?.[0]
       if (!file || !adapter) return
+
+      let targetRootId: string
+      try {
+        targetRootId = resolveImportRootId(rootFolderId)
+      } catch (error) {
+        window.alert(error instanceof Error ? error.message : "Import failed.")
+        return
+      }
 
       const text = await file.text()
       const imported = parseNetscapeBookmarks(text)
@@ -103,10 +112,9 @@ export function SettingsDialog() {
         )
       }
 
-      const rootId = rootFolderId ?? "0"
       for (const root of imported) {
         if (root.children) {
-          await writeNodesParallel(root.children, rootId)
+          await writeNodesParallel(root.children, targetRootId)
         }
       }
 

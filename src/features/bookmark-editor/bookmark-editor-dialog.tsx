@@ -45,7 +45,9 @@ export function BookmarkEditorDialog() {
   return (
     <Dialog
       open={editingBookmark !== null}
-      onOpenChange={(o) => { if (!o) closeEditor() }}
+      onOpenChange={(o) => {
+        if (!o) closeEditor()
+      }}
     >
       <DialogContent>
         <DialogHeader>

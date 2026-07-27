@@ -21,7 +21,10 @@ export interface BookmarkAdapter {
   ): Promise<BookmarkNode>
   remove(id: string): Promise<void>
   removeTree(id: string): Promise<void>
-  move(id: string, destination: { parentId?: string; index: number }): Promise<void>
+  move(
+    id: string,
+    destination: { parentId?: string; index: number }
+  ): Promise<void>
   onChanged(callback: () => void): () => void
   onCreated(callback: () => void): () => void
   onRemoved(callback: () => void): () => void

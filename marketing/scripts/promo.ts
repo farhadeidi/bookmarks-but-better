@@ -1,25 +1,28 @@
-import { chromium } from '@playwright/test'
-import fs from 'fs'
-import path from 'path'
-import { fileURLToPath } from 'url'
-import { PROMO_CONFIG } from './promo.config.js'
+import { chromium } from "@playwright/test"
+import fs from "fs"
+import path from "path"
+import { fileURLToPath } from "url"
+import { PROMO_CONFIG } from "./promo.config.js"
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
-const OUT = path.resolve(__dirname, '../output')
-const MANIFEST_PATH = path.resolve(__dirname, '../../public/manifest.json')
-const LOGO_PATH = path.resolve(__dirname, '../../public/logo-dark.svg')
+const OUT = path.resolve(__dirname, "../output")
+const MANIFEST_PATH = path.resolve(__dirname, "../../public/manifest.json")
+const LOGO_PATH = path.resolve(__dirname, "../../public/logo-dark.svg")
 
-interface Manifest { name: string; description: string }
+interface Manifest {
+  name: string
+  description: string
+}
 
 function inlineLogo(svgContent: string, size: number): string {
-  return svgContent.replace('<svg', `<svg width="${size}" height="${size}"`)
+  return svgContent.replace("<svg", `<svg width="${size}" height="${size}"`)
 }
 
 function dotsHTML(): string {
   return PROMO_CONFIG.themeColors
-    .map(c => `<span class="dot" style="background:${c}"></span>`)
-    .join('')
+    .map((c) => `<span class="dot" style="background:${c}"></span>`)
+    .join("")
 }
 
 function buildSmallHTML(logoSvg: string): string {
@@ -70,8 +73,8 @@ function buildSmallHTML(logoSvg: string): string {
 
 function buildMarqueeHTML(logoSvg: string, appBase64: string): string {
   const badges = PROMO_CONFIG.features
-    .map(f => `<span class="badge">${f}</span>`)
-    .join('')
+    .map((f) => `<span class="badge">${f}</span>`)
+    .join("")
 
   return `<!DOCTYPE html>
 <html>
@@ -133,7 +136,7 @@ function buildMarqueeHTML(logoSvg: string, appBase64: string): string {
       <span class="label-text">${PROMO_CONFIG.tagline}</span>
     </div>
     <h1>${PROMO_CONFIG.headlineMain}<br><em>${PROMO_CONFIG.headlineSub}</em></h1>
-    <p class="desc">${PROMO_CONFIG.subtitleMarquee.replace('\n', '<br>')}</p>
+    <p class="desc">${PROMO_CONFIG.subtitleMarquee.replace("\n", "<br>")}</p>
     <div class="badges">${badges}</div>
     <div class="dots-row">
       ${dotsHTML()}
@@ -150,9 +153,9 @@ function buildMarqueeHTML(logoSvg: string, appBase64: string): string {
 }
 
 async function run() {
-  const manifest: Manifest = JSON.parse(fs.readFileSync(MANIFEST_PATH, 'utf-8'))
+  const manifest: Manifest = JSON.parse(fs.readFileSync(MANIFEST_PATH, "utf-8"))
   void manifest // read for future use (e.g. dynamic copy overrides)
-  const logoSvg = fs.readFileSync(LOGO_PATH, 'utf-8')
+  const logoSvg = fs.readFileSync(LOGO_PATH, "utf-8")
 
   const browser = await chromium.launch()
   const context = await browser.newContext()
@@ -160,19 +163,21 @@ async function run() {
   try {
     // Capture live app screenshot for the marquee right-side panel
     const appPage = await context.newPage()
-    await appPage.addInitScript(() => localStorage.setItem('theme', 'dark'))
+    await appPage.addInitScript(() => localStorage.setItem("theme", "dark"))
     await appPage.setViewportSize({ width: 1180, height: 504 })
-    await appPage.goto('http://localhost:5173/?screenshot=true')
-    await appPage.waitForLoadState('networkidle')
+    await appPage.goto("http://localhost:5173/?screenshot=true")
+    await appPage.waitForLoadState("networkidle")
     await appPage.waitForTimeout(500)
-    const appBuffer = await appPage.screenshot({ type: 'png' })
-    const appBase64 = appBuffer.toString('base64')
+    const appBuffer = await appPage.screenshot({ type: "png" })
+    const appBase64 = appBuffer.toString("base64")
     await appPage.close()
 
     // Small promo tile (440×280)
     const smallPage = await context.newPage()
     await smallPage.setViewportSize({ width: 440, height: 280 })
-    await smallPage.setContent(buildSmallHTML(logoSvg), { waitUntil: 'networkidle' })
+    await smallPage.setContent(buildSmallHTML(logoSvg), {
+      waitUntil: "networkidle",
+    })
     await smallPage.evaluate(() => document.fonts.ready)
     await smallPage.screenshot({ path: `${OUT}/promo-small.png` })
     await smallPage.close()
@@ -180,7 +185,9 @@ async function run() {
     // Marquee promo tile (1400×560)
     const marqueePage = await context.newPage()
     await marqueePage.setViewportSize({ width: 1400, height: 560 })
-    await marqueePage.setContent(buildMarqueeHTML(logoSvg, appBase64), { waitUntil: 'networkidle' })
+    await marqueePage.setContent(buildMarqueeHTML(logoSvg, appBase64), {
+      waitUntil: "networkidle",
+    })
     await marqueePage.evaluate(() => document.fonts.ready)
     await marqueePage.screenshot({ path: `${OUT}/promo-marquee.png` })
     await marqueePage.close()
@@ -189,7 +196,12 @@ async function run() {
     await browser.close().catch(() => {})
   }
 
-  console.log('✓ promo-small.png and promo-marquee.png written to marketing/output/')
+  console.log(
+    "✓ promo-small.png and promo-marquee.png written to marketing/output/"
+  )
 }
 
-run().catch(err => { console.error(err); process.exit(1) })
+run().catch((err) => {
+  console.error(err)
+  process.exit(1)
+})

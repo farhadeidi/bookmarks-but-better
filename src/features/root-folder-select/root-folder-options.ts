@@ -32,7 +32,9 @@ function collectFolderPaths(
   return result
 }
 
-export function buildRootFolderOptions(tree: BookmarkNode[]): RootFolderOption[] {
+export function buildRootFolderOptions(
+  tree: BookmarkNode[]
+): RootFolderOption[] {
   const all: RootFolderOption[] = []
 
   for (const root of tree) {

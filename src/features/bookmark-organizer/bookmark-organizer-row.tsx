@@ -99,9 +99,20 @@ export const BookmarkOrganizerRow = React.memo(function BookmarkOrganizerRow({
         <HugeiconsIcon
           icon={isFolder ? Folder01Icon : Bookmark02Icon}
           size={12}
-          className={cn("shrink-0", isFolder ? "text-primary" : "text-muted-foreground")}
+          className={cn(
+            "shrink-0",
+            isFolder ? "text-primary" : "text-muted-foreground"
+          )}
         />
-        <span className={cn("truncate text-[13px] font-medium leading-5", !isFolder && "text-muted-foreground group-hover:text-foreground transition-colors")}>{title}</span>
+        <span
+          className={cn(
+            "truncate text-[13px] leading-5 font-medium",
+            !isFolder &&
+              "text-muted-foreground transition-colors group-hover:text-foreground"
+          )}
+        >
+          {title}
+        </span>
       </div>
 
       <div className="flex items-center gap-1">
@@ -110,7 +121,11 @@ export const BookmarkOrganizerRow = React.memo(function BookmarkOrganizerRow({
             <DropdownMenuTrigger
               aria-label="Add item"
               title="Add item"
-              className={buttonVariants({ variant: "secondary", size: "icon-xs", className: "bg-transparent group-hover/row:bg-secondary" })}
+              className={buttonVariants({
+                variant: "secondary",
+                size: "icon-xs",
+                className: "bg-transparent group-hover/row:bg-secondary",
+              })}
               onClick={(event) => {
                 event.preventDefault()
                 event.stopPropagation()
@@ -125,7 +140,11 @@ export const BookmarkOrganizerRow = React.memo(function BookmarkOrganizerRow({
                   onCreateItem("folder")
                 }}
               >
-                <HugeiconsIcon icon={Folder01Icon} size={14} className="text-primary" />
+                <HugeiconsIcon
+                  icon={Folder01Icon}
+                  size={14}
+                  className="text-primary"
+                />
                 New Folder
               </DropdownMenuItem>
               <DropdownMenuItem
@@ -134,7 +153,11 @@ export const BookmarkOrganizerRow = React.memo(function BookmarkOrganizerRow({
                   onCreateItem("bookmark")
                 }}
               >
-                <HugeiconsIcon icon={Bookmark02Icon} size={14} className="text-muted-foreground" />
+                <HugeiconsIcon
+                  icon={Bookmark02Icon}
+                  size={14}
+                  className="text-muted-foreground"
+                />
                 New Bookmark
               </DropdownMenuItem>
             </DropdownMenuContent>

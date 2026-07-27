@@ -30,7 +30,9 @@ export function DeleteConfirmDialog() {
   return (
     <Dialog
       open={deletingItem !== null}
-      onOpenChange={(o) => { if (!o) closeDeleteConfirm() }}
+      onOpenChange={(o) => {
+        if (!o) closeDeleteConfirm()
+      }}
     >
       <DialogContent>
         <DialogHeader>
@@ -41,8 +43,8 @@ export function DeleteConfirmDialog() {
             {deletingItem?.type === "folder" ? (
               <>
                 Are you sure you want to delete the folder{" "}
-                <strong>{deletingItem.title}</strong> and all its contents?
-                This action cannot be undone.
+                <strong>{deletingItem.title}</strong> and all its contents? This
+                action cannot be undone.
               </>
             ) : (
               <>

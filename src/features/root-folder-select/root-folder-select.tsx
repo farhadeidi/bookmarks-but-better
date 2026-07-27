@@ -28,7 +28,7 @@ export function RootFolderSelect({
   const folders = React.useMemo(() => buildRootFolderOptions(tree), [tree])
 
   const displayLabel = value
-    ? folders.find((folder) => folder.id === value)?.label ?? value
+    ? (folders.find((folder) => folder.id === value)?.label ?? value)
     : "Browser Root (all bookmarks)"
 
   return (

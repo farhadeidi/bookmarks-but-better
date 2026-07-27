@@ -33,7 +33,9 @@ describe("BookmarkOrganizerCreateDialog", () => {
 
     render(<BookmarkOrganizerCreateDialog />)
 
-    expect(await screen.findByRole("dialog", { name: "New Folder" })).toBeTruthy()
+    expect(
+      await screen.findByRole("dialog", { name: "New Folder" })
+    ).toBeTruthy()
     expect(screen.getByLabelText("Title")).toBeTruthy()
     expect(screen.queryByLabelText("URL")).toBeNull()
 
@@ -62,7 +64,9 @@ describe("BookmarkOrganizerCreateDialog", () => {
 
     render(<BookmarkOrganizerCreateDialog />)
 
-    expect(await screen.findByRole("dialog", { name: "New Bookmark" })).toBeTruthy()
+    expect(
+      await screen.findByRole("dialog", { name: "New Bookmark" })
+    ).toBeTruthy()
     expect(screen.getByLabelText("Title")).toBeTruthy()
     expect(screen.getByLabelText("URL")).toBeTruthy()
 

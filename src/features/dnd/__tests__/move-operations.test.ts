@@ -35,7 +35,12 @@ describe("sortFoldersByOrder", () => {
   })
 
   it("puts unordered folders after ordered ones", () => {
-    const folders = [makeFolder("c"), makeFolder("a"), makeFolder("b"), makeFolder("d")]
+    const folders = [
+      makeFolder("c"),
+      makeFolder("a"),
+      makeFolder("b"),
+      makeFolder("d"),
+    ]
     const result = sortFoldersByOrder(folders, ["b", "a"])
     expect(result.map((f) => f.id)).toEqual(["b", "a", "c", "d"])
   })

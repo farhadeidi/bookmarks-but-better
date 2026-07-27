@@ -9,8 +9,14 @@ import {
 import type { BookmarkAdapter, BookmarkNode } from "@/browser"
 import { useBookmarkStore } from "@/stores/bookmark-store"
 import { useUIStore } from "@/stores/ui-store"
-import { loadOrganizerChildren, loadOrganizerItem } from "./bookmark-organizer-data"
-import { BOOKMARK_ORGANIZER_ROOT_ID, type OrganizerItemData } from "./bookmark-organizer-types"
+import {
+  loadOrganizerChildren,
+  loadOrganizerItem,
+} from "./bookmark-organizer-data"
+import {
+  BOOKMARK_ORGANIZER_ROOT_ID,
+  type OrganizerItemData,
+} from "./bookmark-organizer-types"
 import { buildSequentialMoves } from "./bookmark-organizer-reorder"
 import { BookmarkOrganizerRow } from "./bookmark-organizer-row"
 
@@ -97,7 +103,11 @@ const BookmarkOrganizerTreeImpl = React.forwardRef<
     canReorder: true,
     indent: 16,
     seperateDragHandle: true,
-    features: [asyncDataLoaderFeature, dragAndDropFeature, propMemoizationFeature],
+    features: [
+      asyncDataLoaderFeature,
+      dragAndDropFeature,
+      propMemoizationFeature,
+    ],
     dataLoader: {
       getItem: async (id) => {
         if (id === BOOKMARK_ORGANIZER_ROOT_ID) {
@@ -115,11 +125,12 @@ const BookmarkOrganizerTreeImpl = React.forwardRef<
             return []
           }
 
-          return loadOrganizerChildren(bookmarks, effectiveRootId).then((items) =>
-            items.map((item) => ({
-              id: item.id,
-              data: item,
-            }))
+          return loadOrganizerChildren(bookmarks, effectiveRootId).then(
+            (items) =>
+              items.map((item) => ({
+                id: item.id,
+                data: item,
+              }))
           )
         }
 
@@ -183,14 +194,17 @@ const BookmarkOrganizerTreeImpl = React.forwardRef<
       })
     },
     invalidate: (parentId: string) => {
-      const id = parentId === effectiveRootId ? BOOKMARK_ORGANIZER_ROOT_ID : parentId
+      const id =
+        parentId === effectiveRootId ? BOOKMARK_ORGANIZER_ROOT_ID : parentId
       void tree.getItemInstance(id).invalidateChildrenIds(true)
     },
   }))
 
   React.useEffect(() => {
     hasAutoExpanded.current = false
-    void tree.getItemInstance(BOOKMARK_ORGANIZER_ROOT_ID).invalidateChildrenIds(true)
+    void tree
+      .getItemInstance(BOOKMARK_ORGANIZER_ROOT_ID)
+      .invalidateChildrenIds(true)
   }, [effectiveRootId, tree])
 
   const items = tree.getItems()
@@ -269,7 +283,8 @@ const BookmarkOrganizerTreeImpl = React.forwardRef<
                 id: itemData.id,
                 title: itemData.title,
                 type: itemData.kind,
-                childCount: itemData.kind === "folder" ? itemData.childCount : undefined,
+                childCount:
+                  itemData.kind === "folder" ? itemData.childCount : undefined,
               })
             }}
           />

@@ -130,7 +130,9 @@ export const BookmarkItem = React.memo(function BookmarkItem({
               onEdit={handleEdit}
               onCopyUrl={handleCopyUrl}
               onDelete={handleDelete}
-              onOpenInManager={canOpenInManager ? handleOpenInManager : undefined}
+              onOpenInManager={
+                canOpenInManager ? handleOpenInManager : undefined
+              }
             />
           </HoverCardContent>
         </HoverCard>

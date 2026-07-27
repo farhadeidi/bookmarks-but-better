@@ -83,7 +83,11 @@ export function BookmarkOrganizerCreateDialog() {
       }}
     >
       <DialogContent className="sm:max-w-md">
-        <form className="flex flex-col gap-4" noValidate onSubmit={handleSubmit}>
+        <form
+          className="flex flex-col gap-4"
+          noValidate
+          onSubmit={handleSubmit}
+        >
           <DialogHeader>
             <DialogTitle>{dialogTitle}</DialogTitle>
           </DialogHeader>
@@ -113,11 +117,7 @@ export function BookmarkOrganizerCreateDialog() {
           </div>
 
           <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={closeCreateItem}
-            >
+            <Button type="button" variant="outline" onClick={closeCreateItem}>
               Cancel
             </Button>
             <Button type="button" onClick={() => void handleCreate()}>

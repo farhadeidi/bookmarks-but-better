@@ -68,24 +68,26 @@ describe("bookmark organizer data helpers", () => {
       ]),
     })
 
-    await expect(loadOrganizerChildren(bookmarks, "parent-1")).resolves.toEqual([
-      {
-        id: "folder-1",
-        title: "Untitled Folder",
-        kind: "folder",
-        parentId: "parent-1",
-        index: 0,
-        childCount: 2,
-      },
-      {
-        id: "bookmark-2",
-        title: "Untitled Bookmark",
-        kind: "bookmark",
-        parentId: "parent-1",
-        index: 1,
-        childCount: 0,
-      },
-    ])
+    await expect(loadOrganizerChildren(bookmarks, "parent-1")).resolves.toEqual(
+      [
+        {
+          id: "folder-1",
+          title: "Untitled Folder",
+          kind: "folder",
+          parentId: "parent-1",
+          index: 0,
+          childCount: 2,
+        },
+        {
+          id: "bookmark-2",
+          title: "Untitled Bookmark",
+          kind: "bookmark",
+          parentId: "parent-1",
+          index: 1,
+          childCount: 0,
+        },
+      ]
+    )
     expect(bookmarks.getSubTree).toHaveBeenCalledTimes(1)
     expect(bookmarks.getSubTree).toHaveBeenCalledWith("parent-1")
   })
