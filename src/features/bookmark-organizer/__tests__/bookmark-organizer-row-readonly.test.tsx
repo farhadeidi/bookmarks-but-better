@@ -102,6 +102,78 @@ describe("BookmarkOrganizerRow read-only affordances", () => {
     expect(screen.getByRole("button", { name: "Drag item" })).toBeTruthy()
   })
 
+  /**
+   * `orderReadOnly` is deliberately not `readOnly`: the daemon refuses only
+   * *positional* requests against such a folder, so everything else about the
+   * row has to keep working.
+   */
+  it("marks a frozen-order folder without disabling anything else about it", () => {
+    const onRename = vi.fn()
+    const onDelete = vi.fn()
+
+    const frozenFolder = fakeItem({
+      id: "f1",
+      title: "Frozen",
+      kind: "folder",
+      parentId: "root",
+      index: 0,
+      childCount: 2,
+      orderReadOnly: true,
+      diagnostics: [
+        {
+          code: "state_unknown_keys",
+          severity: "warning",
+          detail: "The order file was written by a newer version.",
+        },
+      ],
+    })
+
+    render(
+      <BookmarkOrganizerRow
+        item={frozenFolder}
+        isDragging={false}
+        dragEnabled={true}
+        onRename={onRename}
+        onDelete={onDelete}
+        onCreateItem={() => {}}
+      />
+    )
+
+    expect(screen.getByLabelText("Fixed order")).toBeTruthy()
+
+    // The folder itself can still move, be renamed and be deleted.
+    expect(screen.getByRole("button", { name: "Drag item" })).toBeTruthy()
+    fireEvent.click(screen.getByRole("button", { name: "Rename item" }))
+    expect(onRename).toHaveBeenCalledTimes(1)
+    fireEvent.click(screen.getByRole("button", { name: "Delete item" }))
+    expect(onDelete).toHaveBeenCalledTimes(1)
+    expect(screen.getByRole("button", { name: "Add item" })).toBeTruthy()
+  })
+
+  it("shows no frozen-order marker on an ordinary folder", () => {
+    const folder = fakeItem({
+      id: "f2",
+      title: "Normal",
+      kind: "folder",
+      parentId: "root",
+      index: 0,
+      childCount: 0,
+    })
+
+    render(
+      <BookmarkOrganizerRow
+        item={folder}
+        isDragging={false}
+        dragEnabled={true}
+        onRename={() => {}}
+        onDelete={() => {}}
+        onCreateItem={() => {}}
+      />
+    )
+
+    expect(screen.queryByLabelText("Fixed order")).toBeNull()
+  })
+
   it("hides the drag handle for an editable item when reorder is disabled adapter-wide", () => {
     const editableItem = fakeItem({
       id: "b3",

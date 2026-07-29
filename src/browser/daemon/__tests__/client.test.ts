@@ -1,5 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
-import { DaemonApiError, fetchHealth, fetchTree, createNode } from "../client"
+import {
+  DaemonApiError,
+  fetchHealth,
+  fetchTree,
+  createNode,
+  setOrder,
+} from "../client"
 
 function jsonResponse(body: unknown, init: { status?: number } = {}) {
   const status = init.status ?? 200
@@ -119,6 +125,70 @@ describe("daemon client", () => {
 
     await vi.runAllTimersAsync()
     await assertion
+  })
+})
+
+describe("daemon client ordering problem codes", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  /**
+   * Status alone can't tell these apart from the codes that already existed —
+   * `stale_state_revision` shares 409 with `stale_revision`, and
+   * `invalid_order`/`state_read_only` share 422 with `read_only` — so the
+   * store switches on `code`, and it has to survive the client.
+   */
+  const cases = [
+    { code: "stale_state_revision", status: 409, detail: "expected abc." },
+    { code: "state_read_only", status: 422, detail: "unknown keys present." },
+    { code: "invalid_order", status: 422, detail: "`x` is not a child." },
+  ] as const
+
+  for (const { code, status, detail } of cases) {
+    it(`surfaces ${code} (${status}) as DaemonApiError.code`, async () => {
+      vi.stubGlobal(
+        "fetch",
+        vi
+          .fn()
+          .mockResolvedValue(
+            jsonResponse({ title: "Refused", detail, code, status }, { status })
+          )
+      )
+
+      await expect(
+        setOrder("folder-1", { children: [{ id: "a", kind: "bookmark" }] })
+      ).rejects.toMatchObject({
+        name: "DaemonApiError",
+        code,
+        status,
+        message: detail,
+      })
+    })
+  }
+
+  it("PUTs the order body verbatim to /api/v1/folders/:id/order", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ id: "f1" }))
+    vi.stubGlobal("fetch", fetchMock)
+
+    await setOrder("f 1/nested", {
+      stateRevision: "state-1",
+      children: [
+        { id: "a", kind: "bookmark" },
+        { id: "b", kind: "folder" },
+      ],
+    })
+
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(url).toBe("/api/v1/folders/f%201%2Fnested/order")
+    expect(init.method).toBe("PUT")
+    expect(JSON.parse(init.body)).toEqual({
+      stateRevision: "state-1",
+      children: [
+        { id: "a", kind: "bookmark" },
+        { id: "b", kind: "folder" },
+      ],
+    })
   })
 })
 

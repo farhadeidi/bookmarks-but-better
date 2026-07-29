@@ -16,6 +16,11 @@ const TREE_FIXTURE: DaemonTreeResponse = {
       id: "root",
       title: "Vault",
       revision: "rev-root",
+      // Folder-only fields. Typed against `BookmarkNode`, so dropping or
+      // renaming either one server-side fails this file's typecheck rather
+      // than silently disabling ordering at runtime.
+      stateRevision: "state-root",
+      orderReadOnly: false,
       children: [
         {
           id: "bookmark-1",
@@ -165,6 +170,83 @@ describe("daemon wire contract", () => {
     expect(url).toContain("/api/v1/folders/root")
     expect(url).toContain("recursive=true")
     expect(init.method).toBe("DELETE")
+  })
+
+  it("setChildOrder PUTs /api/v1/folders/:id/order with the literal {stateRevision, children:[{id,kind}]} body", async () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal("fetch", fetchMock)
+    fetchMock.mockResolvedValueOnce(jsonResponse(TREE_FIXTURE))
+
+    const adapter = new DaemonBookmarkAdapter()
+    await adapter.getTree()
+
+    const folder: BookmarkNode = {
+      id: "root",
+      title: "Vault",
+      revision: "rev-root",
+      stateRevision: "state-root",
+      children: [
+        {
+          id: "bookmark-1",
+          title: "Example",
+          url: "https://example.com",
+          parentId: "root",
+        },
+        { id: "folder-a", title: "Folder A", parentId: "root", children: [] },
+      ],
+    }
+    // The read-before-write, then the write.
+    fetchMock.mockResolvedValueOnce(jsonResponse(folder))
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ ...folder, stateRevision: "state-root-2" })
+    )
+
+    await adapter.setChildOrder?.("root", ["folder-a", "bookmark-1"])
+
+    expect(fetchMock.mock.calls[1][0]).toBe("/api/v1/bookmarks/root")
+    const [url, init] = fetchMock.mock.calls[2]
+    expect(url).toBe("/api/v1/folders/root/order")
+    expect(init.method).toBe("PUT")
+    expect(JSON.parse(init.body)).toEqual({
+      stateRevision: "state-root",
+      children: [
+        { id: "folder-a", kind: "folder" },
+        { id: "bookmark-1", kind: "bookmark" },
+      ],
+    })
+  })
+
+  it("serializes no stateRevision key at all when the folder has no order file", async () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal("fetch", fetchMock)
+    fetchMock.mockResolvedValueOnce(jsonResponse(TREE_FIXTURE))
+
+    const adapter = new DaemonBookmarkAdapter()
+    await adapter.getTree()
+
+    const folder: BookmarkNode = {
+      id: "root",
+      title: "Vault",
+      revision: "rev-root",
+      children: [
+        {
+          id: "bookmark-1",
+          title: "Example",
+          url: "https://example.com",
+          parentId: "root",
+        },
+        { id: "folder-a", title: "Folder A", parentId: "root", children: [] },
+      ],
+    }
+    fetchMock.mockResolvedValueOnce(jsonResponse(folder))
+    fetchMock.mockResolvedValueOnce(jsonResponse(folder))
+
+    await adapter.setChildOrder?.("root", ["folder-a", "bookmark-1"])
+
+    // `deny_unknown_fields` plus "absence is a claim" means a serialized
+    // `"stateRevision": null` is a 400 and an invented one is a 409.
+    const body = JSON.parse(fetchMock.mock.calls[2][1].body)
+    expect(Object.keys(body)).toEqual(["children"])
   })
 
   it("ProblemDetails carries a stable code that DaemonApiError exposes", async () => {

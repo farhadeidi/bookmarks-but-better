@@ -35,7 +35,9 @@ export class DaemonApiError extends Error {
  * `not_found`, `route_not_found`, `invalid_request`, `stale_revision`,
  * `read_only`, `invalid_value`, `folder_not_empty`, `ambiguous_id`,
  * `subtree_has_unknown_files`, `subtree_changed`, `partial_failure`,
- * `move_into_self`, `host_not_allowed`, `vault_unavailable`.
+ * `unsupported_operation`, `move_into_self`, `invalid_order`,
+ * `state_read_only`, `stale_state_revision`, `host_not_allowed`,
+ * `vault_unavailable`.
  */
 interface ProblemJson {
   type?: string
@@ -189,6 +191,42 @@ export function moveNode(
       body: JSON.stringify(body),
     }
   )
+}
+
+/** One entry of a requested child order. `kind` is checked server-side. */
+export interface OrderChild {
+  id: string
+  kind: DaemonNodeKind
+}
+
+export interface OrderRequestBody {
+  /**
+   * The folder's current order-file revision, or the key left out entirely
+   * when it has none. Absence is a claim the daemon verifies — sending
+   * `undefined` is correct only because `JSON.stringify` drops the key; never
+   * send an empty string.
+   */
+  stateRevision?: string
+  /** Every addressable child of the folder, in the order it should be in. */
+  children: OrderChild[]
+}
+
+/**
+ * Replaces a folder's whole child order.
+ *
+ * PUT rather than PATCH because the body is the entire order, not a change to
+ * it: sending the same order twice is the same request twice and the second
+ * writes nothing. Responds with the folder's own DTO, including its refreshed
+ * `revision` and `stateRevision` and its full subtree.
+ */
+export function setOrder(
+  id: string,
+  body: OrderRequestBody
+): Promise<BookmarkNode> {
+  return request<BookmarkNode>(`/folders/${encodeURIComponent(id)}/order`, {
+    method: "PUT",
+    body: JSON.stringify(body),
+  })
 }
 
 export const DAEMON_EVENTS_PATH = `${API_BASE}/events`

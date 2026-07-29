@@ -13,7 +13,11 @@ export function createDaemonAdapter(): BrowserAdapter {
     capabilities: {
       openInManager: false,
       move: true,
+      // Stays false: `move(id, {index})` is the only path the grid, the
+      // folder cards and the DndMonitor have, and the daemon's move endpoint
+      // ignores the index. Ordering is a separate capability below.
       reorder: false,
+      setChildOrder: true,
     },
   }
 }

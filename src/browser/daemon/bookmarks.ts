@@ -6,14 +6,34 @@ import {
   fetchNode,
   fetchTree,
   moveNode,
+  setOrder,
   updateNode,
   type DaemonNodeKind,
+  type OrderChild,
 } from "./client"
 import { connectDaemonEvents } from "./sse"
 
+/**
+ * Deliberately holds no `stateRevision`: a folder's order revision is
+ * invalidated by changes to *other* nodes — `move()` rewrites the destination
+ * parent's order file — so a cached copy would go stale without anything here
+ * knowing. `setChildOrder` reads it from a fresh DTO instead (read-before-write),
+ * which is the only way to get one that is safe to send.
+ */
 interface NodeMeta {
   kind: DaemonNodeKind
   revision?: string
+}
+
+/**
+ * A directory the vault can see but cannot name: no `.bbb-folder.md`, so the
+ * daemon serves it under a synthetic `!path` id. It has no identity an order
+ * file could record, so it is excluded from every child order — the daemon
+ * refuses a payload that mentions one (400) just as firmly as one that counts
+ * it (422). Such directories always trail the folder and never move.
+ */
+function isAddressable(node: BookmarkNode): boolean {
+  return !node.id.startsWith("!")
 }
 
 function kindOf(node: BookmarkNode): DaemonNodeKind {
@@ -143,9 +163,13 @@ export class DaemonBookmarkAdapter implements BookmarkAdapter {
     id: string,
     destination: { parentId?: string; index: number }
   ): Promise<void> {
-    // The daemon accepts cross-folder moves but has no notion of a
-    // within-folder index (capabilities.reorder is false), so a same-parent
-    // "reorder" with no parentId change is nothing to send.
+    // `move()` is the *shared* adapter contract, so it stays index-less here:
+    // the daemon's move endpoint can take a position, but honouring it would
+    // change what a cross-folder grid drag does in daemon mode and would make
+    // every caller responsible for order-file revisions it has no way to
+    // obtain. Positional changes travel on `setChildOrder()` instead, and
+    // `capabilities.reorder` stays false so nothing routes ordering through
+    // here. A same-parent "reorder" is therefore still nothing to send.
     if (!destination.parentId) return
 
     const meta = this.meta(id)
@@ -157,6 +181,75 @@ export class DaemonBookmarkAdapter implements BookmarkAdapter {
       this.nodeMeta.set(id, { kind: meta.kind, revision: node.revision })
     }
     this.notify("moved")
+  }
+
+  /**
+   * Replaces a folder's whole child order in one atomic request.
+   *
+   * Read-before-write, deliberately: kinds, addressability, duplicate ids and
+   * the order file's revision are all server truth, and the caller's list can
+   * be an arbitrarily stale UI snapshot. Re-reading the folder is what makes
+   * the PUT a valid permutation instead of a guess.
+   *
+   * `orderReadOnly` is *not* pre-checked here. The daemon is the authority on
+   * a frozen order; the flag exists to disable the affordance, not to
+   * simulate the refusal.
+   */
+  async setChildOrder(
+    folderId: string,
+    orderedChildIds: string[]
+  ): Promise<void> {
+    // `getSubTree` either throws (a daemon problem response) or yields the
+    // folder, so there is no third "read succeeded but produced nothing" case
+    // to defend against here.
+    const [folder] = await this.getSubTree(folderId)
+
+    // A damaged vault can serve one id twice (the daemon dedupes it for
+    // ordering purposes but still lists both), and the order contract wants
+    // every child exactly once — so the first occurrence wins on both sides.
+    const addressable = new Map<string, BookmarkNode>()
+    for (const child of folder.children ?? []) {
+      if (!isAddressable(child)) continue
+      if (!addressable.has(child.id)) addressable.set(child.id, child)
+    }
+
+    const serverOrder = [...addressable.keys()]
+    const requested: string[] = []
+    const placed = new Set<string>()
+    for (const id of orderedChildIds) {
+      if (!addressable.has(id) || placed.has(id)) continue
+      placed.add(id)
+      requested.push(id)
+    }
+    // Anything the caller didn't name keeps its server-side relative order at
+    // the end; a permutation that omits a child is refused, not completed.
+    for (const id of serverOrder) {
+      if (placed.has(id)) continue
+      placed.add(id)
+      requested.push(id)
+    }
+
+    if (requested.every((id, index) => serverOrder[index] === id)) {
+      // Already in this order. The daemon would write zero bytes; skipping
+      // also avoids a pointless notify/refresh cycle.
+      return
+    }
+
+    const children: OrderChild[] = requested.map((id) => ({
+      id,
+      kind: kindOf(addressable.get(id)!),
+    }))
+    const updated = await setOrder(folderId, {
+      // Omitted entirely — not sent as null — when the folder has no order
+      // file: absence is the claim the daemon checks against.
+      ...(folder.stateRevision !== undefined
+        ? { stateRevision: folder.stateRevision }
+        : {}),
+      children,
+    })
+
+    this.indexNodes([updated])
+    this.notify("changed")
   }
 
   onChanged(callback: () => void): () => void {

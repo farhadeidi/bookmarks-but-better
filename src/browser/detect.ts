@@ -58,6 +58,9 @@ function createChromeAdapter(): BrowserAdapter {
       openInManager: true,
       move: true,
       reorder: true,
+      // Ordering here travels on `move(id, {index})`; there is no
+      // whole-folder ordering endpoint to replace it.
+      setChildOrder: false,
     },
   }
 }
@@ -71,6 +74,9 @@ function createFirefoxAdapter(): BrowserAdapter {
       openInManager: false,
       move: true,
       reorder: true,
+      // Ordering here travels on `move(id, {index})`; there is no
+      // whole-folder ordering endpoint to replace it.
+      setChildOrder: false,
     },
   }
 }
@@ -84,6 +90,9 @@ function createStandaloneAdapter(): BrowserAdapter {
       openInManager: false,
       move: true,
       reorder: true,
+      // Ordering here travels on `move(id, {index})`; there is no
+      // whole-folder ordering endpoint to replace it.
+      setChildOrder: false,
     },
   }
 }

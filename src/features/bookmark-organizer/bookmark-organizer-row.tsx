@@ -8,6 +8,7 @@ import {
   DragDropHorizontalIcon,
   Folder01Icon,
   PencilEdit01Icon,
+  SquareLock01Icon,
 } from "@hugeicons/core-free-icons"
 import { Button } from "@/components/ui/button"
 import { buttonVariants } from "@/components/ui/button-variants"
@@ -23,7 +24,7 @@ import {
   TooltipContent,
 } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
-import { describeReadOnly } from "@/lib/bookmark-utils"
+import { describeOrderReadOnly, describeReadOnly } from "@/lib/bookmark-utils"
 import type { ItemInstance } from "@headless-tree/core"
 import type { OrganizerItemData } from "./bookmark-organizer-types"
 
@@ -58,6 +59,9 @@ export const BookmarkOrganizerRow = React.memo(function BookmarkOrganizerRow({
   const itemProps = item.getProps()
   const isReadOnly = itemData?.readOnly ?? false
   const canDrag = dragEnabled && !isReadOnly
+  // The folder itself stays draggable, renameable and deletable — only the
+  // positions of the things inside it are fixed.
+  const isOrderReadOnly = itemData?.orderReadOnly ?? false
 
   return (
     <div
@@ -132,6 +136,23 @@ export const BookmarkOrganizerRow = React.memo(function BookmarkOrganizerRow({
         >
           {title}
         </span>
+        {isOrderReadOnly && (
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <span
+                  aria-label="Fixed order"
+                  className="flex shrink-0 items-center text-muted-foreground/70"
+                />
+              }
+            >
+              <HugeiconsIcon icon={SquareLock01Icon} size={12} />
+            </TooltipTrigger>
+            <TooltipContent>
+              {describeOrderReadOnly(itemData ?? {})}
+            </TooltipContent>
+          </Tooltip>
+        )}
       </div>
 
       <div className="flex items-center gap-1">

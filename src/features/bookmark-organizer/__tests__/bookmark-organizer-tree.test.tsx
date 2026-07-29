@@ -79,6 +79,7 @@ describe("BookmarkOrganizerTree", () => {
           openInManager: true,
           move: true,
           reorder: true,
+          setChildOrder: false,
         },
       },
       rootFolder: {

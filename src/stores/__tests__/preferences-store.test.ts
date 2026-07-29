@@ -49,7 +49,12 @@ function createChromeLikeAdapter(): BrowserAdapter {
       }),
     },
     favicon: { getUrl: vi.fn(), isAvailable: vi.fn().mockReturnValue(true) },
-    capabilities: { openInManager: true, move: true, reorder: true },
+    capabilities: {
+      openInManager: true,
+      move: true,
+      reorder: true,
+      setChildOrder: false,
+    },
   }
 }
 

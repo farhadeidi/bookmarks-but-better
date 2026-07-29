@@ -63,6 +63,21 @@ function toErrorMessage(error: unknown): string {
         "This item is read-only and can't be edited.",
         shape.detail
       )
+    case "stale_state_revision":
+      return withDetail(
+        "This folder's order changed elsewhere. Refresh and try again.",
+        shape.detail
+      )
+    case "state_read_only":
+      return withDetail(
+        "This folder's order can't be changed, but its items can still be renamed, moved and deleted.",
+        shape.detail
+      )
+    case "invalid_order":
+      return withDetail(
+        "This folder's contents changed. Refresh and try again.",
+        shape.detail
+      )
     case "partial_failure":
       return withDetail("The change was only partly applied.", shape.detail)
     default:
@@ -114,10 +129,20 @@ interface BookmarkState {
   deleteBookmark(id: string): Promise<void>
   deleteFolder(id: string): Promise<void>
   createFolder(parentId: string, title: string): Promise<void>
+  /**
+   * Resolves `true` when the move was applied. Callers that only open a
+   * dialog can keep ignoring the result and read `mutationError` afterwards;
+   * the organizer needs to know inline whether to keep going.
+   */
   moveBookmark(
     id: string,
     destination: { parentId?: string; index: number }
-  ): Promise<void>
+  ): Promise<boolean>
+  /**
+   * Replaces a folder's whole child order. Resolves `false` (and sets
+   * `mutationError`) when the adapter can't order, or the daemon refused.
+   */
+  setChildOrder(folderId: string, orderedChildIds: string[]): Promise<boolean>
 }
 
 function findNode(nodes: BookmarkNode[], id: string): BookmarkNode | null {
@@ -277,12 +302,27 @@ export const useBookmarkStore = create<BookmarkState>((set, get) => ({
     destination: { parentId?: string; index: number }
   ) {
     const { adapter } = get()
-    if (!adapter) return
+    if (!adapter) return false
     try {
       await adapter.bookmarks.move(id, destination)
       set({ mutationError: null })
+      return true
     } catch (error) {
       set({ mutationError: toErrorMessage(error) })
+      return false
+    }
+  },
+
+  async setChildOrder(folderId: string, orderedChildIds: string[]) {
+    const { adapter } = get()
+    if (!adapter?.bookmarks.setChildOrder) return false
+    try {
+      await adapter.bookmarks.setChildOrder(folderId, orderedChildIds)
+      set({ mutationError: null })
+      return true
+    } catch (error) {
+      set({ mutationError: toErrorMessage(error) })
+      return false
     }
   },
 }))

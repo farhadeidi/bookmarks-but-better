@@ -27,6 +27,7 @@ export function toOrganizerItem(
     index,
     childCount: kind === "folder" ? (node.children?.length ?? 0) : 0,
     readOnly: node.readOnly,
+    orderReadOnly: node.orderReadOnly,
     diagnostics: node.diagnostics,
   }
 }

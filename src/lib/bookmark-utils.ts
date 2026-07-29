@@ -31,6 +31,22 @@ export function describeReadOnly(node: {
   return "Read-only: this item can't be safely edited right now."
 }
 
+/**
+ * Why a folder's child order is frozen. Deliberately separate from
+ * `describeReadOnly`: the folder itself is perfectly editable — only the
+ * positions of the things inside it are fixed.
+ */
+export function describeOrderReadOnly(node: {
+  diagnostics?: { detail: string }[]
+}): string {
+  const details = node.diagnostics?.map((d) => d.detail).filter(Boolean)
+  const lead = "Fixed order: items here can't be reordered."
+  if (details && details.length > 0) {
+    return `${lead} ${details.join(" ")}`
+  }
+  return `${lead} They can still be renamed, moved and deleted.`
+}
+
 export function debounce<T extends (...args: unknown[]) => void>(
   fn: T,
   ms: number

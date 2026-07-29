@@ -59,7 +59,12 @@ function createMockAdapter(): BrowserAdapter {
       remove: vi.fn().mockResolvedValue(undefined),
     },
     favicon: { getUrl: vi.fn(() => ""), isAvailable: vi.fn(() => false) },
-    capabilities: { openInManager: false, move: true, reorder: false },
+    capabilities: {
+      openInManager: false,
+      move: true,
+      reorder: false,
+      setChildOrder: false,
+    },
   }
 }
 
