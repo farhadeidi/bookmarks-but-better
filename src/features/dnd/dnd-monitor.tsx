@@ -9,11 +9,20 @@ import {
   type BookmarkDragData,
   type FolderCardDragData,
 } from "./types"
-import { reorderArray, sortFoldersByOrder } from "./move-operations"
-import { collectAllFolders, getDisplayRoot } from "@/lib/bookmark-utils"
+import {
+  buildChildOrderForBookmarkReorder,
+  reorderArray,
+  sortFoldersByOrder,
+} from "./move-operations"
+import {
+  collectAllFolders,
+  findNodeById,
+  getDisplayRoot,
+} from "@/lib/bookmark-utils"
 
 export function DndMonitor() {
   const moveBookmark = useBookmarkStore((s) => s.moveBookmark)
+  const setChildOrder = useBookmarkStore((s) => s.setChildOrder)
   const rootFolder = useBookmarkStore((s) => s.rootFolder)
   const tree = useBookmarkStore((s) => s.tree)
   const moveEnabled = useBookmarkStore(
@@ -22,12 +31,19 @@ export function DndMonitor() {
   const reorderEnabled = useBookmarkStore(
     (s) => s.adapter?.capabilities.reorder ?? true
   )
+  // Mirrors the organizer's check: the capability flag and the optional method
+  // must agree before anything routes ordering through `setChildOrder`.
+  const setChildOrderEnabled = useBookmarkStore(
+    (s) =>
+      (s.adapter?.capabilities.setChildOrder ?? false) &&
+      s.adapter?.bookmarks.setChildOrder !== undefined
+  )
   const nestedFolders = usePreferencesStore((s) => s.nestedFolders)
   const folderOrder = usePreferencesStore((s) => s.folderOrder)
   const setFolderOrder = usePreferencesStore((s) => s.setFolderOrder)
 
   useEffect(() => {
-    if (!moveEnabled && !reorderEnabled) return
+    if (!moveEnabled && !reorderEnabled && !setChildOrderEnabled) return
 
     return monitorForElements({
       onDrop({ source, location }) {
@@ -73,23 +89,50 @@ export function DndMonitor() {
       const closestEdge = extractClosestEdge(targetData)
 
       if (sourceData.folderId === targetBookmark.folderId) {
-        // Same folder: reorder — the daemon has no persisted within-folder
-        // index, so this is exactly the capability `reorder` gates.
-        if (!reorderEnabled) return
+        // Same folder: a pure reorder. Two paths, chosen by capability and
+        // never mixed — `reorder` means the adapter persists a position
+        // through `move(id, {index})` (Chrome, Firefox, Standalone), while
+        // `setChildOrder` means whole-folder ordering is the only way to say
+        // it (daemon, whose `move()` has no notion of an index).
+        if (!reorderEnabled && !setChildOrderEnabled) return
 
-        const destinationIndex = getReorderDestinationIndex({
-          startIndex: sourceData.index,
-          closestEdgeOfTarget: closestEdge,
-          indexOfTarget: targetBookmark.index,
-          axis: "vertical",
+        if (reorderEnabled) {
+          const destinationIndex = getReorderDestinationIndex({
+            startIndex: sourceData.index,
+            closestEdgeOfTarget: closestEdge,
+            indexOfTarget: targetBookmark.index,
+            axis: "vertical",
+          })
+
+          if (destinationIndex === sourceData.index) return
+
+          void moveBookmark(sourceData.id, {
+            parentId: sourceData.folderId,
+            index: destinationIndex,
+          })
+          return
+        }
+
+        // A card's drag positions count bookmarks only, so the folder's real
+        // children are needed to turn them into the complete permutation
+        // `setChildOrder` takes. Ids rather than the drag's indices: the
+        // folder may have changed since the gesture began, and the whole
+        // permutation is written in one request, so addressing the wrong row
+        // would reorder a bookmark the user never touched. Resolving the two
+        // positions against the live children — and refusing when either id
+        // is gone — is what keeps the write bound to what was dragged.
+        const folder = findNodeById(tree, sourceData.folderId)
+        if (!folder) return
+
+        const orderedChildIds = buildChildOrderForBookmarkReorder({
+          children: folder.children ?? [],
+          sourceId: sourceData.id,
+          targetId: targetBookmark.id,
+          closestEdge,
         })
+        if (!orderedChildIds) return
 
-        if (destinationIndex === sourceData.index) return
-
-        void moveBookmark(sourceData.id, {
-          parentId: sourceData.folderId,
-          index: destinationIndex,
-        })
+        void setChildOrder(sourceData.folderId, orderedChildIds)
       } else {
         // Different folder: a cross-folder move. The destination index is
         // best-effort UI positioning only — adapters without `reorder`
@@ -113,8 +156,12 @@ export function DndMonitor() {
       target: { data: Record<string, unknown> }
     ) {
       // Folder cards only ever reorder among siblings — there's no
-      // cross-folder move for them, so this is gated by `reorder` alone.
-      if (!reorderEnabled) return
+      // cross-folder move for them. Their order is a client-local preference
+      // that never reaches an adapter (the flattened, non-nested view mixes
+      // folders from different parents, so no vault could express it), but the
+      // affordance still has to be gated on the adapter being able to order at
+      // all — by either capability.
+      if (!reorderEnabled && !setChildOrderEnabled) return
 
       const targetData = target.data as unknown as FolderCardDragData
       if (targetData.type !== DND_TYPE.FOLDER_CARD) return
@@ -151,10 +198,12 @@ export function DndMonitor() {
     }
   }, [
     moveBookmark,
+    setChildOrder,
     rootFolder,
     tree,
     moveEnabled,
     reorderEnabled,
+    setChildOrderEnabled,
     nestedFolders,
     folderOrder,
     setFolderOrder,

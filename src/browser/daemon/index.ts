@@ -23,5 +23,5 @@ export function createDaemonAdapter(): BrowserAdapter {
 }
 
 export { DaemonBookmarkAdapter } from "./bookmarks"
-export { DaemonFaviconAdapter, localFaviconDataUri } from "./favicon"
+export { DaemonFaviconAdapter } from "./favicon"
 export { connectDaemonEvents } from "./sse"

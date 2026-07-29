@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- Daemon mode now shows real site favicons instead of a generated letter placeholder for every bookmark
+
+### Changed
+
+- Daemon mode fetches favicons from Google's public favicon services. The primary
+  provider (`t1.gstatic.com/faviconV2`) is the one every build already uses; the
+  fallback is standalone's (`www.google.com/s2/favicons`), not the extension
+  builds' — Chrome falls back to its own on-device `_favicon` API and Firefox has
+  no fallback at all. This is a deliberate privacy trade-off: rendering a bookmark
+  sends its origin (never its path) to Google, where daemon mode previously
+  disclosed nothing. The daemon process itself is unchanged — it still binds
+  loopback only and makes no outbound request; the requests come from the browser
+  showing the UI. See `crates/bbb/README.md` for the full note.
+
 ## [3.2.0] - 2026-06-05
 
 ### Added

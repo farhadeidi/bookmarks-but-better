@@ -45,6 +45,7 @@ export const BookmarkItem = React.memo(function BookmarkItem({
   const adapter = useBookmarkStore((s) => s.adapter)
   const moveEnabled = adapter?.capabilities.move ?? true
   const reorderEnabled = adapter?.capabilities.reorder ?? true
+  const setChildOrderEnabled = adapter?.capabilities.setChildOrder ?? false
   const isReadOnly = bookmark.readOnly ?? false
 
   const {
@@ -59,7 +60,9 @@ export const BookmarkItem = React.memo(function BookmarkItem({
     // Draggable whenever a cross-folder move or a same-folder reorder is
     // possible at all — dnd-monitor decides at drop time which of the two
     // this particular drop is, and whether the adapter actually allows it.
-    disabled: (!moveEnabled && !reorderEnabled) || isReadOnly,
+    // A same-folder reorder can travel on either ordering capability.
+    disabled:
+      (!moveEnabled && !reorderEnabled && !setChildOrderEnabled) || isReadOnly,
   })
 
   const openEditor = useUIStore((s) => s.openEditor)

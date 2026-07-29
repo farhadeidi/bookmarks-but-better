@@ -206,6 +206,40 @@ you can see what you are losing, and then retry.
   `--ui-dir`.
 - **Logs carry no bookmark content** — counts, identities, codes and paths only.
 
+### One thing that does leave the machine: favicons
+
+Every guarantee above is about `bbb` itself, and each one still holds: the
+daemon binds loopback, checks `Host`, and makes no outbound request of any kind.
+
+The **web UI it serves** is a different matter. Bookmark icons are fetched from
+Google's public favicon service (`t1.gstatic.com/faviconV2`). That *primary*
+provider is shared by every build; only the fallback differs, and daemon mode
+takes standalone's rather than either extension's:
+
+| Build      | Primary                    | Fallback, when the primary returns no icon               |
+| ---------- | -------------------------- | -------------------------------------------------------- |
+| Daemon     | `t1.gstatic.com/faviconV2` | `www.google.com/s2/favicons`                             |
+| Standalone | `t1.gstatic.com/faviconV2` | `www.google.com/s2/favicons`                             |
+| Chrome     | `t1.gstatic.com/faviconV2` | the extension's own `_favicon` API — stays on the device |
+| Firefox    | `t1.gstatic.com/faviconV2` | none; Firefox has no `_favicon` equivalent               |
+
+So daemon mode matches **standalone**, not the extension builds. The distinction
+matters for exactly the reason this section exists: Chrome's second attempt never
+leaves the machine and Firefox makes no second attempt at all, whereas daemon
+mode's goes to Google too.
+
+Rendering a bookmark therefore sends its *origin* to Google, and the set of
+origins one client asks for is, in aggregate, that user's bookmark host list.
+Paths are never sent — only the scheme and host.
+
+This is a deliberate trade-off, not an oversight. Daemon mode previously drew a
+generated letter-avatar instead and disclosed nothing, at the cost of showing a
+placeholder for every bookmark. Restoring that property properly means a
+daemon-side proxy that fetches each site's own icon and caches it, which would
+make `bbb` talk to non-loopback hosts for the first time and needs the SSRF
+hardening that implies. Until then, `--ui-dir` is the switch: a daemon serving
+no UI makes and causes no such request.
+
 ## Platform behaviour
 
 Everything above holds on every platform except where this table says otherwise.

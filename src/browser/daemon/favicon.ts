@@ -1,43 +1,34 @@
 import type { FaviconProvider } from "../types"
+import { GoogleFaviconV2Provider } from "../favicon/google-favicon-v2"
+import { GoogleFaviconProvider } from "../favicon/google-favicon"
 
-function hashString(input: string): number {
-  let hash = 0
-  for (let i = 0; i < input.length; i++) {
-    hash = (hash << 5) - hash + input.charCodeAt(i)
-    hash |= 0
-  }
-  return Math.abs(hash)
-}
-
-function hostnameOf(pageUrl: string): string {
-  try {
-    return new URL(pageUrl).hostname
-  } catch {
-    return pageUrl
-  }
-}
+const googleV2 = new GoogleFaviconV2Provider()
+const googleFavicon = new GoogleFaviconProvider()
 
 /**
- * Generates a deterministic local favicon as a data: URI — no network
- * request is ever made, which is required in daemon mode since fetching
- * favicons from a third-party service would leak the user's bookmarked
- * hosts off the loopback-only vault.
+ * Daemon-mode favicons come from Google's public favicon services — the same
+ * two providers, in the same order, as the standalone adapter uses.
+ *
+ * PRIVACY TRADE-OFF, ACCEPTED DELIBERATELY. This adapter previously returned a
+ * generated letter-avatar `data:` URI and made no network request at all, so
+ * that a loopback-only vault never told a third party which hosts the user had
+ * bookmarked. That is no longer true: rendering a bookmark sends its *origin*
+ * to Google, and the set of origins one client asks for is, in aggregate, that
+ * user's bookmark host list.
+ *
+ * What did *not* change is the daemon itself. It still binds loopback only and
+ * still makes no outbound request of its own — the disclosure is made by the
+ * browser rendering the UI, not by `bbb`. Restoring the old no-disclosure
+ * behaviour means a daemon-side proxy that fetches each site's own icon, not a
+ * different third-party service.
  */
-export function localFaviconDataUri(pageUrl: string): string {
-  const hostname = hostnameOf(pageUrl)
-  const letter = (hostname.charAt(0) || "?").toUpperCase()
-  const hue = hashString(hostname) % 360
-  const svg =
-    `<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">` +
-    `<rect width="64" height="64" rx="12" fill="hsl(${hue}, 45%, 55%)"/>` +
-    `<text x="32" y="43" font-family="sans-serif" font-size="30" text-anchor="middle" fill="white">${letter}</text>` +
-    `</svg>`
-  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`
-}
-
 export class DaemonFaviconAdapter implements FaviconProvider {
   getUrl(pageUrl: string): string {
-    return localFaviconDataUri(pageUrl)
+    return googleV2.getUrl(pageUrl)
+  }
+
+  getFallbackUrl(pageUrl: string): string {
+    return googleFavicon.getUrl(pageUrl)
   }
 
   isAvailable(): boolean {

@@ -13,6 +13,21 @@ export function collectAllFolders(node: BookmarkNode): BookmarkNode[] {
   return folders
 }
 
+/** Depth-first lookup of a node anywhere in a forest of trees. */
+export function findNodeById(
+  nodes: BookmarkNode[],
+  id: string
+): BookmarkNode | null {
+  for (const node of nodes) {
+    if (node.id === id) return node
+    if (node.children) {
+      const found = findNodeById(node.children, id)
+      if (found) return found
+    }
+  }
+  return null
+}
+
 export function getDisplayRoot(
   rootFolder: BookmarkNode | null,
   tree: BookmarkNode[]

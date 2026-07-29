@@ -121,8 +121,13 @@ export function BookmarkGrid() {
   const rootFolder = useBookmarkStore((s) => s.rootFolder)
   const tree = useBookmarkStore((s) => s.tree)
   const isLoading = useBookmarkStore((s) => s.isLoading)
-  const reorderEnabled = useBookmarkStore(
-    (s) => s.adapter?.capabilities.reorder ?? true
+  // Either capability means the adapter can express an order, which is all a
+  // folder-card drag needs — the card order itself is a client-local
+  // preference, never written through an adapter.
+  const canOrder = useBookmarkStore(
+    (s) =>
+      (s.adapter?.capabilities.reorder ?? true) ||
+      (s.adapter?.capabilities.setChildOrder ?? false)
   )
   const nestedFolders = usePreferencesStore((s) => s.nestedFolders)
   const maxColumns = usePreferencesStore((s) => s.maxColumns)
@@ -130,7 +135,7 @@ export function BookmarkGrid() {
   const cardLayouts = usePreferencesStore((s) => s.cardLayouts)
   const folderOrder = usePreferencesStore((s) => s.folderOrder)
   const experimentalCardDrag =
-    usePreferencesStore((s) => s.experimentalCardDrag) && reorderEnabled
+    usePreferencesStore((s) => s.experimentalCardDrag) && canOrder
 
   const columnCount = useColumnCount(maxColumns)
   const displayRoot = rootFolder ?? (tree.length > 0 ? tree[0] : null)
