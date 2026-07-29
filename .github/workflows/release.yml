@@ -813,17 +813,21 @@ jobs:
       #
       # What this proves: the environment was configured deliberately.
       #
-      # What it CANNOT prove, and must never be read as proving: that the six
-      # store credentials are environment-scoped. Repository secrets stay
-      # readable inside an environment job — environment secrets merely shadow
-      # same-named repository ones — so a half-migrated setup resolves its
-      # credentials from the repository and no guard here can see it. Deleting
-      # the repository-scoped copies is a human step; docs/RELEASING.md states
-      # it as a rule and says why it still matters.
+      # What it says nothing about, by design: where the six store credentials
+      # live. They are **repository** secrets, deliberately — GitHub cannot
+      # reveal a stored secret's value, so moving them would mean regenerating
+      # each one at its source, and regenerating the AMO key revokes the live
+      # one. That cost is not worth paying for a release, and it does not weaken
+      # the gate: approval is enforced by the environment on this job, not by
+      # where the secrets are stored. Repository scope does mean broader
+      # exposure to *other* workflows, so moving them later is recommended
+      # defence in depth — not a prerequisite. See docs/RELEASING.md.
       #
       # The marker is only as good as one invariant: it must NEVER be created
       # at repository scope. If it ever is, this guard passes forever and the
-      # protection is gone with nothing to show for it.
+      # protection is gone with nothing to show for it. That is why the canary
+      # is a separate name from the six, and the one secret that must stay
+      # environment-only.
       - name: Refuse to publish unless this environment was really configured
         env:
           CANARY: ${{ secrets.PRODUCTION_STORES_CONFIGURED }}

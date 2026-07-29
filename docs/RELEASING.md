@@ -80,10 +80,11 @@ anyone doing anything. Then the run **stops and waits**: `publish-stores` is
 attached to the `production-stores` environment, and GitHub will not start it
 until a required reviewer approves the deployment from the run page.
 
-That pause depends entirely on the environment having **required reviewers**. An
-environment without them holds nothing. See [One-time repository
-setup](#one-time-repository-setup) — and note the job now refuses to run at all
-unless that setup was done.
+That pause depends entirely on the environment having **required reviewers**. It
+does, and the job refuses to run at all unless the environment is configured —
+see [One-time repository setup](#one-time-repository-setup). The pause is
+enforced by the environment attached to the job, so it holds regardless of
+whether the store credentials are repository- or environment-scoped.
 
 Approve it and the two submissions run. Decline it and you have a finished
 GitHub Release with no store submission — a perfectly good place to stop.
@@ -223,8 +224,15 @@ Four independent conditions, so that no single mistake is enough:
    lookup, before the canary and before either credential guard, so a non-stable
    version is refused before any credential is resolved at all.
 4. **The canary.** The job refuses to run unless the `production-stores`
-   environment carries `PRODUCTION_STORES_CONFIGURED` — see below for why that
-   is necessary and, just as importantly, what it does *not* prove.
+   environment carries `PRODUCTION_STORES_CONFIGURED` — see below for why that is
+   necessary, and why it deliberately says nothing about where the six store
+   credentials live.
+
+On top of those, the human approval: `publish-stores` names an environment with a
+required reviewer, so GitHub holds every step of the job until someone approves
+it. That is enforced by the environment on the job, not by the scope of the
+secrets, and the six store credentials are repository-scoped on purpose
+([step 2](#2-the-six-store-credentials-stay-at-repository-scope)).
 
 Store submission is additionally limited to the **first attempt of a run** — a
 tag push *or* a manual dispatch — and so is creating the GitHub release. A re-run
@@ -301,8 +309,21 @@ certificate, and adding signing keys to the release pipeline. Until then the
 
 ## One-time repository setup
 
-This is the part that cannot live in git, and **it must be done before the first
-`v4.0.0` tag is pushed.** Until it is, the release pipeline refuses to publish.
+This is the part that cannot live in git. **It is done** — recorded here so the
+state is auditable and so it can be rebuilt if the repository is ever recreated.
+
+Current state:
+
+| Item | Status |
+| --- | --- |
+| `production-stores` environment | exists |
+| Required reviewer | set |
+| Deployment rule: `v*` tags | set |
+| `PRODUCTION_STORES_CONFIGURED` (environment scope) | set |
+| Six store credentials | repository scope, **by decision** — see step 2 |
+| `v*` tag ruleset | optional, see step 4 |
+
+Nothing on this page blocks a release.
 
 > **Why it fails closed.** GitHub *auto-creates* an environment the first time a
 > workflow names one, with no protection rules — no reviewers, no secrets. A
@@ -326,72 +347,78 @@ This is the part that cannot live in git, and **it must be done before the first
   option; the three choices are *All branches*, *Protected branches only*, and
   *Selected branches and tags*.
 
-### 2. Add the six store credentials as **environment** secrets
+### 2. The six store credentials stay at **repository** scope
 
-On `production-stores`, *not* at repository scope. Names are unchanged from the
-previous workflow:
+These already exist as **repository** secrets and are deliberately left there.
+Names are unchanged from the previous workflow:
 
-| Secret                  | Used for                     |
-| ----------------------- | ---------------------------- |
-| `CHROME_EXTENSION_ID`   | Chrome Web Store             |
-| `CHROME_CLIENT_ID`      | Chrome Web Store             |
-| `CHROME_CLIENT_SECRET`  | Chrome Web Store             |
-| `CHROME_REFRESH_TOKEN`  | Chrome Web Store             |
-| `AMO_JWT_ISSUER`        | Firefox AMO                  |
-| `AMO_JWT_SECRET`        | Firefox AMO                  |
+| Secret                  | Used for                     | Scope      |
+| ----------------------- | ---------------------------- | ---------- |
+| `CHROME_EXTENSION_ID`   | Chrome Web Store             | repository |
+| `CHROME_CLIENT_ID`      | Chrome Web Store             | repository |
+| `CHROME_CLIENT_SECRET`  | Chrome Web Store             | repository |
+| `CHROME_REFRESH_TOKEN`  | Chrome Web Store             | repository |
+| `AMO_JWT_ISSUER`        | Firefox AMO                  | repository |
+| `AMO_JWT_SECRET`        | Firefox AMO                  | repository |
 
-**There is no way to move a secret.** GitHub never returns a secret's value —
-not through the UI, not through the API — so these cannot be copied from
-repository scope to environment scope programmatically or by anyone who does not
-already hold the values. Each one has to be **re-entered from its original
-source**:
+Nothing needs doing here before a release. An environment job reads repository
+secrets perfectly well — environment secrets merely *shadow* same-named
+repository ones — so the pipeline works as it stands.
 
-- Chrome — the Google Cloud OAuth client and refresh token used for the Web
-  Store API.
-- AMO — the JWT issuer and secret from
-  <https://addons.mozilla.org/developers/addon/api/key/>. Generating a new AMO
-  key **revokes the previous one**, so do this once and paste it straight in.
+**Why they were not moved.** GitHub never returns a stored secret's value, not
+through the UI and not through the API, so a secret cannot be copied from one
+scope to another. Moving these would mean regenerating each one at its source —
+and generating a new AMO API key **revokes the live one**. That is a real risk to
+a working release path in exchange for no change to the approval gate.
 
-Then **delete the repository-scoped copies.**
+**This does not weaken the gate.** Approval is enforced by the *environment
+attached to the job*, not by where the secrets are stored. `publish-stores` names
+`production-stores`, so GitHub holds the whole job — every step, before any of
+them runs — until a required reviewer approves it. That is true regardless of
+which scope the credentials come from.
 
-Be clear about why, because the usual reason given is wrong. With the
-environment created and reviewers required, the approval gate holds *even if the
-repository copies are left in place* — approval is enforced by the environment,
-not by where the secrets live. The reason to delete them is defence in depth:
-a repository secret is readable by **any job in this workflow**, including jobs
-that reference no environment at all and jobs added later by someone who never
-read this page. The gate protects the job that opts into it; repository secrets
-are exposed to every job that does not.
+**What repository scope does cost** is exposure: a repository secret is readable
+by **any job in this workflow**, including jobs that name no environment and jobs
+added later by someone who never read this page. The environment gate protects
+the job that opts into it; it does not protect the others.
 
-### 3. Add the canary — do this last
+That is a defence-in-depth argument, not a release blocker — see
+[Optional hardening](#5-optional-hardening-move-the-store-credentials) if you
+decide to take it on later.
 
-Add one more **environment** secret on `production-stores`:
+### 3. The canary — the one secret that must be environment-only
 
-| Secret                          | Value                          |
-| ------------------------------- | ------------------------------ |
-| `PRODUCTION_STORES_CONFIGURED`  | any non-empty value, e.g. `yes` |
+One **environment** secret on `production-stores`:
+
+| Secret                          | Value                           | Scope                |
+| ------------------------------- | ------------------------------- | -------------------- |
+| `PRODUCTION_STORES_CONFIGURED`  | any non-empty value, e.g. `yes` | **environment only** |
 
 The value is never read, logged, or compared — only its existence is. It is the
-signal that this page was filled in by a person rather than conjured by GitHub.
+signal that this page was filled in by a person rather than conjured by GitHub,
+which is why it is a *different name* from the six credentials: those are
+expected at repository scope, and this one must never be.
 
 > **Rule: `PRODUCTION_STORES_CONFIGURED` must never exist at repository scope.**
 > Not as a secret, not as a variable. If it ever does, the guard passes forever
 > and the protection is silently gone with nothing in any log to show for it.
+> This is the fail-closed invariant the whole setup check rests on, and it is
+> unaffected by the six credentials living at repository scope.
 
-**What the canary proves:** the environment was configured deliberately.
+**What the canary proves:** the environment was configured deliberately, rather
+than auto-created empty by GitHub the first time the workflow named it.
 
-**What it cannot prove, and must not be read as proving:** that the six
-credentials are environment-scoped. Repository secrets remain readable inside an
-environment job — environment secrets only *shadow* same-named repository ones —
-so a half-migrated setup resolves its credentials from the repository and no
-check in the workflow can detect it. Step 2's deletion is a human step, and this
-is the reason it stays one.
+**What it says nothing about, by design:** where the six store credentials live.
+They are repository-scoped on purpose (step 2), so there is no scope check to
+make here and nothing for the canary to detect. The canary's job is to tell a
+configured environment from an auto-created one — not to audit credential
+placement.
 
 There is a second guard in the job that checks all six credential names resolve
 to a non-empty value. It is a **partial-publish** guard, not a configuration
 check: Chrome is submitted before Firefox, so a credential missing from *every*
 scope would publish to one store and strand the other. It says nothing about
-which scope supplied a value.
+which scope supplied a value, and does not need to.
 
 ### 4. Recommended: protect the `v*` tags
 
@@ -402,6 +429,33 @@ tag re-triggers the workflow and updates the existing release in place.
 **Settings → Rules → Rulesets → New ruleset**, target **Tag**, pattern `v*`,
 blocking **deletion** and **non-fast-forward**.
 
+### 5. Optional hardening: move the store credentials
+
+**Not required, and not a release prerequisite.** The pipeline is correct as it
+stands and the approval gate is unaffected. This only narrows the blast radius
+described in step 2: repository secrets are readable by every job in this
+workflow, not just the one that opts into the environment.
+
+If you take it on, the order matters, because you cannot copy a secret — each
+value has to be regenerated at its source, and one of them revokes the live
+credential when you do:
+
+1. **Regenerate** the credential at its source.
+   - Chrome — the Google Cloud OAuth client and refresh token for the Web Store
+     API.
+   - AMO — a new key from
+     <https://addons.mozilla.org/developers/addon/api/key/>. **Generating it
+     revokes the current one**, so the release path is broken from this moment
+     until step 3.
+2. **Add** it as an environment secret on `production-stores`, same name.
+3. **Verify** with a real dispatch recovery against an already-published tag —
+   this is the only way to confirm the new value works.
+4. **Delete** the repository-scoped copy, last.
+
+Do not delete first. A deleted repository copy with no working environment
+secret leaves no path to publish, and the AMO regeneration in step 1 means the
+old value is already gone.
+
 ### Nothing else
 
 `GITHUB_TOKEN` is automatic. The workflow is read-only by default and raises
@@ -409,10 +463,15 @@ blocking **deletion** and **non-fast-forward**.
 
 ### Checklist
 
-- [ ] `production-stores` environment exists
-- [ ] Required reviewers added
-- [ ] Deployment rule is *Selected branches and tags* with a `v*` **tag** rule
-- [ ] Six credentials re-entered as environment secrets
-- [ ] Repository-scoped copies of those six deleted
-- [ ] `PRODUCTION_STORES_CONFIGURED` added, environment scope only
-- [ ] (Recommended) `v*` tag ruleset
+Required — all done:
+
+- [x] `production-stores` environment exists
+- [x] Required reviewer added
+- [x] Deployment rule is *Selected branches and tags* with a `v*` **tag** rule
+- [x] `PRODUCTION_STORES_CONFIGURED` added, **environment scope only**
+- [x] Six store credentials present at repository scope (deliberate; step 2)
+
+Optional, any time:
+
+- [ ] `v*` tag ruleset (step 4)
+- [ ] Store credentials moved to environment scope (step 5)
