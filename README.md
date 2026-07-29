@@ -89,6 +89,19 @@ bun run format            # Format code
 bun run test              # Run tests
 ```
 
+## Releasing
+
+A tag ships everything, and nothing else does:
+
+```bash
+git push origin v4.0.0-beta.1   # GitHub prerelease with downloadable artifacts, no store
+git push origin v4.0.0          # GitHub release, then store publishing after an approval
+```
+
+See [docs/RELEASING.md](docs/RELEASING.md) for the version checklist, the
+`production-stores` approval flow, what a green Firefox submission actually
+means, and how to re-run a failed store submission.
+
 ## Feedback and Issues
 
 Found a bug or have a feature request? [Open an issue](../../issues) — all feedback is welcome.

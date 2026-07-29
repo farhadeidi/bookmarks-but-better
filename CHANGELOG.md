@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.0.0] - 2026-07-29
+
+### Added
+
+- **Local-first daemon (`bbb`)** — a Rust daemon, HTTP API and CLI that serves a
+  Markdown vault, and optionally the built web UI, over loopback only. Ships as a
+  downloadable release archive for Linux (x86_64, aarch64), macOS (Intel, Apple
+  Silicon) and Windows (x86_64), each with a SHA-256 checksum and the built UI
+  bundled alongside the binary
+- `bbb init`, `bbb doctor`, `bbb rescan` and `bbb serve` subcommands; every one
+  names its vault explicitly, with no path discovery and no configured default
+- Canonical Markdown vault format (`bbb-vault-core`): parsing, validation,
+  deterministic scanning and byte-preserving updates, with stable identities that
+  survive moves, renames and restarts
+- Daemon-managed manual child ordering, so the organizer's drag-and-drop order
+  persists in the vault
+- A daemon build target for the web UI (`bun run build:daemon`), served by the
+  daemon from `--ui-dir`
+- Release pipeline: `v4.0.0-beta.N` tags produce a GitHub prerelease with
+  downloadable artifacts and never contact a store; stable `v4.0.0` tags produce a
+  normal release and gate store publishing behind a manually approved
+  `production-stores` environment
+
 ### Fixed
 
 - Daemon mode now shows real site favicons instead of a generated letter placeholder for every bookmark
@@ -118,6 +141,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Rewrote README for end users with screenshots and badges
 
+[4.0.0]: https://github.com/farhadeidi/bookmarks-but-better/compare/v3.2.0...v4.0.0
 [3.2.0]: https://github.com/farhadeidi/bookmarks-but-better/compare/v3.1.0...v3.2.0
 [3.1.0]: https://github.com/farhadeidi/bookmarks-but-better/compare/v3.0.0...v3.1.0
 [3.0.0]: https://github.com/farhadeidi/bookmarks-but-better/compare/v2.1.0...v3.0.0

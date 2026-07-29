@@ -3,7 +3,11 @@ resolver = "3"
 members = ["crates/bbb", "crates/bbb-vault-core"]
 
 [workspace.package]
-version = "0.1.0"
+# The Rust crates carry the product version, the same one `package.json` and
+# both extension manifests carry, so a release tag names one number rather than
+# one per language. `GET /api/v1/health` and `bbb --version` report it straight
+# from `CARGO_PKG_VERSION`.
+version = "4.0.0"
 edition = "2024"
 rust-version = "1.97.1"
 license = "MIT"

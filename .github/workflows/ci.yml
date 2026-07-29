@@ -3,28 +3,36 @@ name: CI
 # Runs the frontend quality gates (formatting, lint, types, tests, extension
 # builds) and the Rust gates (format, clippy, tests, build, docs) on every push
 # and pull request so regressions are caught before they reach main or a
-# release. The two jobs are independent and run in parallel.
+# release. The jobs are independent and run in parallel.
+#
+# Merging to main runs this and only this. `workflow_call` is what `release.yml`
+# uses on a tag, so a release runs the very same gates rather than a second,
+# drifting copy of them.
 on:
   push:
     branches: [main]
   pull_request:
+  workflow_call:
 
 permissions:
   contents: read
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  # Superseding a branch or pull-request run is what this is for. A tag is
+  # immutable and its run is part of shipping, so it is never cancelled.
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
 
 jobs:
   check:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
       - name: Set up Bun
-        uses: oven-sh/setup-bun@v2
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           # Reads the pinned version from package.json's "packageManager"
           # field, so there is one place to bump it.
@@ -38,9 +46,10 @@ jobs:
 
   rust:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
       - name: Set up Rust
         # rustup installs whatever rust-toolchain.toml pins, components and
@@ -49,7 +58,7 @@ jobs:
         run: rustup show active-toolchain || rustup toolchain install
 
       - name: Cache cargo artifacts
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
 
       - name: Format
         run: cargo fmt --all --check
@@ -79,15 +88,16 @@ jobs:
 
   rust-macos:
     runs-on: macos-latest
+    timeout-minutes: 45
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
       - name: Set up Rust
         run: rustup show active-toolchain || rustup toolchain install
 
       - name: Cache cargo artifacts
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
 
       - name: Clippy
         run: cargo clippy --workspace --all-targets --all-features -- -D warnings
@@ -103,15 +113,16 @@ jobs:
 
   rust-windows:
     runs-on: windows-latest
+    timeout-minutes: 45
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
       - name: Set up Rust
         run: rustup show active-toolchain || rustup toolchain install
 
       - name: Cache cargo artifacts
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
 
       - name: Clippy
         run: cargo clippy --workspace --all-targets --all-features -- -D warnings
