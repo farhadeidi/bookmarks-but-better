@@ -1553,10 +1553,20 @@ fn create_folder_directory(
                 let child = parent
                     .open_dir_nofollow(&name)
                     .map_err(|error| io_problem("the new folder could not be opened", &error))?;
-                // The metadata file lives inside the directory the manifest
-                // already names, so undoing the directory takes it with it and
-                // it needs no record of its own.
-                return match fsx::create_new(&child, FOLDER_FILE_NAME, document) {
+                // Recorded in its own right, rather than left for the undo of
+                // the directory to sweep up. An undo will not delete a directory
+                // that still holds anything — a filename is not evidence of who
+                // wrote it, so "it only contains our metadata" is not a claim it
+                // can make — and the way to leave a directory that really is ours
+                // empty is for everything inside it to be undone first.
+                let mut child_components = parent_components.to_vec();
+                child_components.push(name.clone());
+                return match staged.create_file(
+                    &child,
+                    &child_components,
+                    FOLDER_FILE_NAME,
+                    document,
+                ) {
                     Ok(()) => Ok(name),
                     Err(error) => Err(io_problem(
                         "the folder metadata could not be written",

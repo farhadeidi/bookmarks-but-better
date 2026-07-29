@@ -110,7 +110,7 @@ pub use crate::naming::{
     MAX_STEM_BYTES, NameAllocator, assets_directory_name, bookmark_file_name, fold_key,
     folder_directory_name, is_reserved_stem, parse_bookmark_file_name, sanitize_title,
 };
-pub use crate::revision::Revision;
+pub use crate::revision::{MAX_DOCUMENT_BYTES, Revision};
 pub use crate::scan::{
     BookmarkNode, ChildNode, FOLDER_FILE_NAME, FolderNode, ScanOptions, StateAccess, VaultScan,
     scan, scan_with,

@@ -504,9 +504,22 @@ async fn an_interrupted_delete_past_its_commit_point_is_finished_at_startup() {
         !harness.root().join("Notes--11112222.md").exists(),
         "a committed delete is completed, not resurrected"
     );
-    assert!(!harness.root().join(".bbb/staging/op-0").exists());
+    // The bytes are *kept*, not swept. This manifest predates the field that
+    // records what was staged, so nothing here can prove the staged file is the
+    // one the user asked to delete — and automated cleanup does not delete what
+    // it cannot identify. It stays where it is and is reported for `bbb doctor`.
+    assert!(
+        harness
+            .root()
+            .join(".bbb/staging/op-0/0-Notes--11112222.md")
+            .exists(),
+        "a record that cannot say what it staged has its entry retained, not removed"
+    );
     let tree = harness.tree().await;
-    assert!(find_node(&tree, "11112222").is_none());
+    assert!(
+        find_node(&tree, "11112222").is_none(),
+        "and the retained residue is not part of the vault"
+    );
 }
 
 #[tokio::test]

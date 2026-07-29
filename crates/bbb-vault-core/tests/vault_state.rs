@@ -552,18 +552,51 @@ fn a_directory_wearing_the_order_files_name_freezes_the_order() {
 
 /// On macOS and Windows these two names are one file, so an order file written
 /// here would not survive the vault being copied there.
+///
+/// Which means the situation can only be *built* on a case-sensitive
+/// filesystem. On a case-folding one the second write lands on the first file
+/// and truncates it, so there is one entry holding `{}`. Both worlds are
+/// asserted, and the filesystem is asked rather than guessed from the target
+/// OS: a case-sensitive APFS volume and a case-folding ext4 mount both exist.
+///
+/// What has to hold either way is the same, and it is the point of the test:
+/// the order is frozen and nothing is read from it. Only the diagnostic
+/// differs — two entries that fold together are unreadable, one truncated
+/// entry is malformed. Asserting both is what keeps this test from becoming a
+/// silent no-op on the two platforms most users run.
 #[test]
 fn a_sibling_that_differs_only_by_case_freezes_the_order() {
     let dir = vault();
     dir.write(STATE_FILE_NAME, state(&[("bbbbbbbb", ChildKind::Bookmark)]));
     dir.write(".BBB-State.JSON", "{}");
 
+    let folded_entries = std::fs::read_dir(dir.path())
+        .expect("read dir")
+        .filter_map(Result::ok)
+        .filter(|entry| {
+            entry
+                .file_name()
+                .to_string_lossy()
+                .eq_ignore_ascii_case(STATE_FILE_NAME)
+        })
+        .count();
+    assert!(
+        (1..=2).contains(&folded_entries),
+        "expected one entry (case-folding) or two (case-sensitive), got {folded_entries}"
+    );
+    let case_sensitive = folded_entries == 2;
+
     let scanned = scan(dir.path()).expect("scan");
     assert_eq!(scanned.folder().state_access(), StateAccess::ReadOnly);
     let codes = diagnostic_codes(&scanned);
+    let expected = if case_sensitive {
+        DiagnosticCode::StateUnreadable
+    } else {
+        DiagnosticCode::StateMalformed
+    };
     assert!(
-        codes.contains(&DiagnosticCode::StateUnreadable),
-        "{codes:?}"
+        codes.contains(&expected),
+        "case_sensitive={case_sensitive} expected {expected:?} in {codes:?}"
     );
     assert_eq!(
         child_ids(&scanned),

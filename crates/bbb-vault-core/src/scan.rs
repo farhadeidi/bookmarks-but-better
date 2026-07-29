@@ -72,7 +72,7 @@ impl Default for ScanOptions {
     fn default() -> Self {
         Self {
             max_depth: 64,
-            max_file_bytes: 4 * 1024 * 1024,
+            max_file_bytes: crate::revision::MAX_DOCUMENT_BYTES,
         }
     }
 }

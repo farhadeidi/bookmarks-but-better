@@ -13,6 +13,26 @@ use sha2::{Digest, Sha256};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Revision([u8; 32]);
 
+/// The largest document this crate will read whole.
+///
+/// A vault document is front matter and a little prose; four mebibytes is far
+/// above anything the daemon writes and far below anything that threatens a
+/// process.
+///
+/// It lives here rather than as a literal inside `ScanOptions` because the
+/// scanner is no longer its only reader. Crash recovery reads a folder's order
+/// file, the order backup kept beside a manifest, and the state file it is about
+/// to put back — none of which it necessarily wrote last, all of which are sized
+/// by whoever did. Those reads and the scanner's have to agree on what is too
+/// large to look at, and two copies of a limit drift apart.
+///
+/// It is deliberately *not* a statement about ownership. An earlier version of
+/// recovery hashed a created file's bytes to decide whether it was still the one
+/// it wrote; that comparison is gone, because a byte-identical replacement
+/// satisfies it and so proves nothing. What survives is the size bound alone:
+/// a limit on what will be read, not evidence about who wrote it.
+pub const MAX_DOCUMENT_BYTES: u64 = 4 * 1024 * 1024;
+
 impl Revision {
     /// Computes the revision of a byte slice.
     #[must_use]
