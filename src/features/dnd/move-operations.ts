@@ -81,6 +81,10 @@ export function buildChildOrderForBookmarkReorder(params: {
     .filter((child) => child.url !== undefined)
     .map((child) => child.id)
 
+  // A damaged vault can list one id twice. `indexOf` takes the first
+  // occurrence, and the daemon adapter's own dedupe keeps the first occurrence
+  // too, so the two agree — but by coincidence, not by contract. Neither reads
+  // the other's rule, so a change to either must re-check this.
   const startIndex = bookmarkIds.indexOf(sourceId)
   const indexOfTarget = bookmarkIds.indexOf(targetId)
   if (startIndex === -1 || indexOfTarget === -1) return null

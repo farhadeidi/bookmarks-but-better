@@ -97,6 +97,14 @@ export function DndMonitor() {
         if (!reorderEnabled && !setChildOrderEnabled) return
 
         if (reorderEnabled) {
+          // The raw drag indices are deliberate here, and must stay. This path
+          // ends in `move(id, {index})`, which addresses the node by id and
+          // only positions it — so a stale index misplaces the bookmark the
+          // user dragged. The daemon path below writes a whole permutation and
+          // would instead move a *different* bookmark, which is why it alone
+          // re-derives its positions. Misplacement and mistaken identity are
+          // not the same bug, and hardening this branch would change extension
+          // behaviour the brief requires kept exactly.
           const destinationIndex = getReorderDestinationIndex({
             startIndex: sourceData.index,
             closestEdgeOfTarget: closestEdge,

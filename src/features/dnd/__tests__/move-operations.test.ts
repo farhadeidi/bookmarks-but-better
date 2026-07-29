@@ -195,6 +195,46 @@ describe("buildChildOrderForBookmarkReorder", () => {
     ).toEqual(["new", "b", "c", "a"])
   })
 
+  it("moves the id the drag names when its claimed index addresses another row", () => {
+    // The reviewer's case: live order is [b2, b1, b3] while the drag payload
+    // still claims b1 sits at position 0 — where b2 is now. b1 must move and
+    // b2 must not.
+    const children = [
+      makeBookmark("b2"),
+      makeBookmark("b1"),
+      makeBookmark("b3"),
+    ]
+    expect(
+      buildChildOrderForBookmarkReorder({
+        children,
+        sourceId: "b1",
+        targetId: "b3",
+        closestEdge: "bottom",
+      })
+    ).toEqual(["b2", "b3", "b1"])
+  })
+
+  it("passes a synthetic `!path` directory through in place", () => {
+    // Such a directory has no identity an order file can record, so the daemon
+    // adapter strips it read-before-write (see the daemon adapter's own tests:
+    // "excludes a `!path` directory from the payload"). This function's job is
+    // only to not *move* it — the grid never bypasses the adapter, so naming
+    // it here is safe.
+    const children = [
+      makeBookmark("a"),
+      { id: "!loose/dir", title: "loose", children: [] },
+      makeBookmark("b"),
+    ]
+    expect(
+      buildChildOrderForBookmarkReorder({
+        children,
+        sourceId: "a",
+        targetId: "b",
+        closestEdge: "bottom",
+      })
+    ).toEqual(["b", "!loose/dir", "a"])
+  })
+
   it("does not mutate the children array", () => {
     const children = abc()
     buildChildOrderForBookmarkReorder({
