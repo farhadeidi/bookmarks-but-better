@@ -60,6 +60,40 @@ Or load manually:
 3. Open `about:debugging#/runtime/this-firefox`
 4. Click **Load Temporary Add-on** and select any file inside `dist-firefox/`
 
+### Daemon (optional)
+
+The extension can also point at a local `bbb` daemon — a small background
+process that serves your bookmarks from a folder of Markdown files instead of
+the browser's own bookmark store, over `127.0.0.1`/`localhost` only. This is
+entirely optional; browser and standalone modes need nothing described here.
+
+Install it with:
+
+```bash
+# macOS / Linux
+curl -fsSL https://raw.githubusercontent.com/farhadeidi/bookmarks-but-better/main/install.sh | sh
+
+# Windows (PowerShell)
+irm https://raw.githubusercontent.com/farhadeidi/bookmarks-but-better/main/install.ps1 | iex
+```
+
+Both scripts install to a user-local directory (no administrator/`sudo`
+prompt), verify the downloaded release against its published SHA-256
+checksum before installing anything, and finish by running `bbb setup` to
+create a vault. Pass `--beta` (`-Beta` on Windows) to install the latest
+prerelease instead of the latest stable release, or `--version vX.Y.Z` to pin
+an exact one. See [crates/bbb/README.md](crates/bbb/README.md) for the daemon
+itself — the HTTP API, the background-service integration for each OS, and
+what `bbb service install` does.
+
+Once it's running, open the extension's Settings → **Bookmark Source** →
+**Daemon**, enter the daemon's address (`127.0.0.1:52222` by default) and
+click **Connect**. The extension only requests permission to reach loopback
+addresses at that point — never at install time — and only switches to the
+daemon if a real health check against it succeeds; a daemon that can't be
+reached is reported as an error, never a silent fall back to your browser
+bookmarks.
+
 ## Screenshots
 
 <p align="center">

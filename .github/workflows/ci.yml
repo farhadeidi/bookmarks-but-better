@@ -44,6 +44,39 @@ jobs:
       - name: Quality gates
         run: bun run check
 
+  install-scripts:
+    name: Install script checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      # Preinstalled on the ubuntu-latest runner image.
+      - name: Shellcheck install.sh
+        run: shellcheck install.sh tests/install/smoke-test.sh
+
+      # pwsh is preinstalled on every GitHub-hosted runner image, including
+      # ubuntu-latest, so this parses install.ps1 without needing Windows.
+      - name: Syntax-check install.ps1
+        shell: pwsh
+        run: |
+          $errors = $null
+          $tokens = $null
+          [void][System.Management.Automation.Language.Parser]::ParseFile(
+            "install.ps1", [ref]$tokens, [ref]$errors)
+          if ($errors.Count -gt 0) {
+            $errors | ForEach-Object { Write-Error $_.ToString() }
+            exit 1
+          }
+
+      # Runs install.sh against a fake, locally served release rather than
+      # the real GitHub API — real download, real checksum verification, real
+      # symlink swap — so this catches a regression in the script itself
+      # without depending on network access or an actual release existing.
+      - name: Install script smoke test
+        run: bash tests/install/smoke-test.sh
+
   rust:
     runs-on: ubuntu-latest
     timeout-minutes: 45
