@@ -2,6 +2,20 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 import type { BookmarkNode } from "../../types"
 import type { DaemonHealth, DaemonTreeResponse } from "../client"
 import { DaemonBookmarkAdapter } from "../bookmarks"
+import { createSameOriginDaemonClient } from "../client"
+
+/**
+ * The real client against a stubbed global fetch: these tests exist to pin the
+ * wire shape, so nothing between the adapter and `fetch` is doubled. The
+ * change stream is the one exception -- it is a `fetch` too now, and an open
+ * stream would occupy `mock.calls[0]` and hide the request under test.
+ */
+function servedAdapter() {
+  return new DaemonBookmarkAdapter({
+    client: createSameOriginDaemonClient(),
+    connectEvents: () => () => {},
+  })
+}
 
 /**
  * Fixtures are typed against the exact response interfaces the client
@@ -67,7 +81,7 @@ describe("daemon wire contract", () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse(TREE_FIXTURE))
     vi.stubGlobal("fetch", fetchMock)
 
-    const adapter = new DaemonBookmarkAdapter()
+    const adapter = servedAdapter()
     const tree = await adapter.getTree()
 
     expect(fetchMock.mock.calls[0][0]).toBe("/api/v1/tree")
@@ -87,7 +101,7 @@ describe("daemon wire contract", () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse(bareDto))
     vi.stubGlobal("fetch", fetchMock)
 
-    const adapter = new DaemonBookmarkAdapter()
+    const adapter = servedAdapter()
     const [node] = await adapter.getSubTree("folder-a")
 
     expect(fetchMock.mock.calls[0][0]).toBe("/api/v1/bookmarks/folder-a")
@@ -99,7 +113,7 @@ describe("daemon wire contract", () => {
     vi.stubGlobal("fetch", fetchMock)
     fetchMock.mockResolvedValueOnce(jsonResponse(TREE_FIXTURE))
 
-    const adapter = new DaemonBookmarkAdapter()
+    const adapter = servedAdapter()
     await adapter.getTree() // root is a folder (no url)
 
     fetchMock.mockResolvedValueOnce(
@@ -119,7 +133,7 @@ describe("daemon wire contract", () => {
     vi.stubGlobal("fetch", fetchMock)
     fetchMock.mockResolvedValueOnce(jsonResponse(TREE_FIXTURE))
 
-    const adapter = new DaemonBookmarkAdapter()
+    const adapter = servedAdapter()
     await adapter.getTree() // root is a folder, cached with revision "rev-root"
 
     // The daemon's move handler returns the moved entry's own BookmarkDto
@@ -160,7 +174,7 @@ describe("daemon wire contract", () => {
     vi.stubGlobal("fetch", fetchMock)
     fetchMock.mockResolvedValueOnce(jsonResponse(TREE_FIXTURE))
 
-    const adapter = new DaemonBookmarkAdapter()
+    const adapter = servedAdapter()
     await adapter.getTree() // root is a folder
 
     fetchMock.mockResolvedValueOnce(new Response(null, { status: 204 }))
@@ -177,7 +191,7 @@ describe("daemon wire contract", () => {
     vi.stubGlobal("fetch", fetchMock)
     fetchMock.mockResolvedValueOnce(jsonResponse(TREE_FIXTURE))
 
-    const adapter = new DaemonBookmarkAdapter()
+    const adapter = servedAdapter()
     await adapter.getTree()
 
     const folder: BookmarkNode = {
@@ -221,7 +235,7 @@ describe("daemon wire contract", () => {
     vi.stubGlobal("fetch", fetchMock)
     fetchMock.mockResolvedValueOnce(jsonResponse(TREE_FIXTURE))
 
-    const adapter = new DaemonBookmarkAdapter()
+    const adapter = servedAdapter()
     await adapter.getTree()
 
     const folder: BookmarkNode = {
@@ -265,8 +279,8 @@ describe("daemon wire contract", () => {
       )
     )
 
-    const { fetchHealth } = await import("../client")
-    await expect(fetchHealth()).rejects.toMatchObject({
+    const client = createSameOriginDaemonClient()
+    await expect(client.fetchHealth()).rejects.toMatchObject({
       name: "DaemonApiError",
       code: "stale_revision",
       status: 409,
@@ -280,10 +294,10 @@ describe("daemon wire contract", () => {
       vi.fn().mockImplementation(() => jsonResponse(HEALTH_FIXTURE))
     )
 
-    const { fetchHealth } = await import("../client")
-    await expect(fetchHealth()).resolves.toEqual(HEALTH_FIXTURE)
+    const client = createSameOriginDaemonClient()
+    await expect(client.fetchHealth()).resolves.toEqual(HEALTH_FIXTURE)
 
-    const adapter = new DaemonBookmarkAdapter()
+    const adapter = servedAdapter()
     await expect(adapter.checkHealth?.()).resolves.toEqual({
       ready: true,
       warnings: [],

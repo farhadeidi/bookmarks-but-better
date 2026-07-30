@@ -1,16 +1,5 @@
 import type { AdapterHealth, BookmarkAdapter, BookmarkNode } from "../types"
-import {
-  createNode,
-  deleteNode,
-  fetchHealth,
-  fetchNode,
-  fetchTree,
-  moveNode,
-  setOrder,
-  updateNode,
-  type DaemonNodeKind,
-  type OrderChild,
-} from "./client"
+import type { DaemonClient, DaemonNodeKind, OrderChild } from "./client"
 import { connectDaemonEvents } from "./sse"
 
 /**
@@ -40,6 +29,13 @@ function kindOf(node: BookmarkNode): DaemonNodeKind {
   return node.url !== undefined ? "bookmark" : "folder"
 }
 
+export interface DaemonBookmarkAdapterOptions {
+  /** The configured connection. Same-origin for the served UI, absolute loopback for an extension. */
+  client: DaemonClient
+  /** Test-only seam: replaces how the change stream is opened. */
+  connectEvents?: typeof connectDaemonEvents
+}
+
 /**
  * Talks to the daemon's /api/v1 HTTP contract and mirrors the same
  * local-listener pattern the standalone (IndexedDB) adapter uses: every
@@ -66,10 +62,18 @@ export class DaemonBookmarkAdapter implements BookmarkAdapter {
     removed: new Set<() => void>(),
     moved: new Set<() => void>(),
   }
+  private readonly client: DaemonClient
   private readonly disconnectEvents: () => void
 
-  constructor() {
-    this.disconnectEvents = connectDaemonEvents({
+  constructor(options: DaemonBookmarkAdapterOptions) {
+    this.client = options.client
+    const connect = options.connectEvents ?? connectDaemonEvents
+    // The stream is opened against the *same* client the requests use, so an
+    // extension pointed at a custom port streams from that port and sends the
+    // same credentials — there is no second place to configure.
+    this.disconnectEvents = connect({
+      url: this.client.eventsUrl,
+      headers: this.client.authHeaders(),
       onChanged: () => this.notify("changed"),
     })
   }
@@ -101,19 +105,19 @@ export class DaemonBookmarkAdapter implements BookmarkAdapter {
   }
 
   async checkHealth(): Promise<AdapterHealth> {
-    const health = await fetchHealth()
+    const health = await this.client.fetchHealth()
     return { ready: health.status === "ok", warnings: health.warnings }
   }
 
   async getTree(): Promise<BookmarkNode[]> {
-    const { tree } = await fetchTree()
+    const { tree } = await this.client.fetchTree()
     this.nodeMeta.clear()
     this.indexNodes(tree)
     return tree
   }
 
   async getSubTree(id: string): Promise<BookmarkNode[]> {
-    const node = await fetchNode(id)
+    const node = await this.client.fetchNode(id)
     this.indexNodes([node])
     return [node]
   }
@@ -125,7 +129,7 @@ export class DaemonBookmarkAdapter implements BookmarkAdapter {
   }): Promise<BookmarkNode> {
     const kind: DaemonNodeKind =
       bookmark.url !== undefined ? "bookmark" : "folder"
-    const node = await createNode(kind, bookmark)
+    const node = await this.client.createNode(kind, bookmark)
     this.nodeMeta.set(node.id, { kind, revision: node.revision })
     this.notify("created")
     return node
@@ -136,7 +140,7 @@ export class DaemonBookmarkAdapter implements BookmarkAdapter {
     changes: { title?: string; url?: string }
   ): Promise<BookmarkNode> {
     const meta = this.meta(id)
-    const node = await updateNode(id, {
+    const node = await this.client.updateNode(id, {
       revision: meta.revision!,
       ...changes,
     })
@@ -147,14 +151,16 @@ export class DaemonBookmarkAdapter implements BookmarkAdapter {
 
   async remove(id: string): Promise<void> {
     const meta = this.meta(id)
-    await deleteNode(meta.kind, id, meta.revision!)
+    await this.client.deleteNode(meta.kind, id, meta.revision!)
     this.nodeMeta.delete(id)
     this.notify("removed")
   }
 
   async removeTree(id: string): Promise<void> {
     const meta = this.meta(id)
-    await deleteNode(meta.kind, id, meta.revision!, { recursive: true })
+    await this.client.deleteNode(meta.kind, id, meta.revision!, {
+      recursive: true,
+    })
     this.nodeMeta.delete(id)
     this.notify("removed")
   }
@@ -173,7 +179,7 @@ export class DaemonBookmarkAdapter implements BookmarkAdapter {
     if (!destination.parentId) return
 
     const meta = this.meta(id)
-    const node = await moveNode(id, {
+    const node = await this.client.moveNode(id, {
       revision: meta.revision!,
       parentId: destination.parentId,
     })
@@ -239,7 +245,7 @@ export class DaemonBookmarkAdapter implements BookmarkAdapter {
       id,
       kind: kindOf(addressable.get(id)!),
     }))
-    const updated = await setOrder(folderId, {
+    const updated = await this.client.setOrder(folderId, {
       // Omitted entirely — not sent as null — when the folder has no order
       // file: absence is the claim the daemon checks against.
       ...(folder.stateRevision !== undefined
