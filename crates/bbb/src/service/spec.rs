@@ -234,7 +234,15 @@ mod tests {
     use std::net::Ipv4Addr;
 
     fn spec() -> ServiceSpec {
-        ServiceSpec::new("/usr/local/bin/bbb", "/home/user/My Bookmarks").expect("absolute paths")
+        ServiceSpec::unchecked("/usr/local/bin/bbb", "/home/user/My Bookmarks")
+    }
+
+    fn absolute(unix: &str, windows: &str) -> PathBuf {
+        if cfg!(windows) {
+            PathBuf::from(windows)
+        } else {
+            PathBuf::from(unix)
+        }
     }
 
     #[test]
@@ -257,14 +265,17 @@ mod tests {
     #[test]
     fn a_relative_path_is_refused_for_the_vault_and_the_executable() {
         assert!(matches!(
-            ServiceSpec::new("bbb", "/home/user/Vault"),
+            ServiceSpec::new("bbb", absolute("/home/user/Vault", r"C:\Users\user\Vault")),
             Err(SpecError::RelativePath {
                 what: "executable",
                 ..
             })
         ));
         assert!(matches!(
-            ServiceSpec::new("/usr/local/bin/bbb", "Vault"),
+            ServiceSpec::new(
+                absolute("/usr/local/bin/bbb", r"C:\Program Files\bbb\bbb.exe"),
+                "Vault"
+            ),
             Err(SpecError::RelativePath { what: "vault", .. })
         ));
     }
@@ -285,9 +296,14 @@ mod tests {
     #[test]
     fn a_ui_directory_is_appended_only_when_set() {
         assert!(!spec().command_line().contains(&"--ui-dir".to_owned()));
-        let served = spec().with_ui_dir("/opt/bbb/ui").expect("absolute");
+        let ui_dir = absolute("/opt/bbb/ui", r"C:\Program Files\bbb\ui");
+        let served = spec().with_ui_dir(&ui_dir).expect("absolute");
         assert!(served.command_line().contains(&"--ui-dir".to_owned()));
-        assert!(served.command_line().contains(&"/opt/bbb/ui".to_owned()));
+        assert!(
+            served
+                .command_line()
+                .contains(&ui_dir.to_string_lossy().into_owned())
+        );
     }
 
     #[test]

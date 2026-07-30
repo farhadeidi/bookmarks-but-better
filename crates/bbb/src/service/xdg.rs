@@ -125,8 +125,7 @@ mod tests {
     #[test]
     fn a_generated_entry_round_trips_every_awkward_path() {
         for vault in AWKWARD {
-            let spec = ServiceSpec::new("/usr/local/bin/bbb", vault)
-                .expect("absolute")
+            let spec = ServiceSpec::unchecked("/usr/local/bin/bbb", vault)
                 .with_port(47321)
                 .expect("valid port");
             let text = desktop_entry(&spec);
@@ -140,7 +139,7 @@ mod tests {
 
     #[test]
     fn the_entry_is_hidden_and_binds_loopback() {
-        let spec = ServiceSpec::new("/usr/local/bin/bbb", "/home/user/Vault").expect("absolute");
+        let spec = ServiceSpec::unchecked("/usr/local/bin/bbb", "/home/user/Vault");
         let text = desktop_entry(&spec);
 
         assert!(text.contains("NoDisplay=true"), "{text}");
@@ -151,8 +150,7 @@ mod tests {
 
     #[test]
     fn a_dollar_sign_cannot_become_an_expansion() {
-        let spec =
-            ServiceSpec::new("/usr/local/bin/bbb", "/home/user/$HOME literal").expect("absolute");
+        let spec = ServiceSpec::unchecked("/usr/local/bin/bbb", "/home/user/$HOME literal");
         let text = desktop_entry(&spec);
         // Escaped in the file...
         assert!(text.contains("\\\\$HOME"), "{text}");

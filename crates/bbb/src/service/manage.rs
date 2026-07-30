@@ -471,8 +471,7 @@ mod tests {
     fn an_installed_autostart_entry_is_reported_as_unsupervised() {
         let home = tempfile::tempdir().expect("temp dir");
         let layout = ServiceLayout::rooted_at(home.path());
-        let spec = super::super::ServiceSpec::new("/usr/local/bin/bbb", "/home/user/Vault")
-            .expect("absolute");
+        let spec = super::super::ServiceSpec::unchecked("/usr/local/bin/bbb", "/home/user/Vault");
         super::super::install(&layout, ServiceKind::XdgAutostart, &spec).expect("install");
 
         assert_eq!(

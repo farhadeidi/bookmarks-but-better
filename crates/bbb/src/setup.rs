@@ -2,8 +2,8 @@
 //!
 //! Setup is the one place `bbb` asks questions, and it is deliberately split in
 //! two. [`plan`] does all the *asking* and produces a [`SetupPlan`]; nothing in
-//! it writes, creates or starts anything. [`SetupPlan::confirmed_new_vault`]
-//! and its siblings are then what the caller acts on. That split is what makes
+//! it writes, creates or starts anything. The returned [`SetupPlan`] and its
+//! fields are then what the caller acts on. That split is what makes
 //! "never initialize a directory without confirmation" a property a test can
 //! assert rather than a claim about control flow.
 //!

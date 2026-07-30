@@ -223,9 +223,29 @@ fn bbb_in_home(home: &Path, args: &[&str]) -> Output {
         .expect("run bbb")
 }
 
-/// Where the autostart fallback puts its definition.
-fn autostart_entry(home: &Path) -> std::path::PathBuf {
-    home.join(".config").join("autostart").join("bbb.desktop")
+/// Where the selected platform service kind puts its definition.
+fn definition_path(home: &Path) -> std::path::PathBuf {
+    if cfg!(target_os = "macos") {
+        home.join("Library")
+            .join("LaunchAgents")
+            .join("com.bookmarksbutbetter.bbb.plist")
+    } else if cfg!(windows) {
+        home.join(".config").join("bbb").join("bbb-task.xml")
+    } else {
+        home.join(".config").join("autostart").join("bbb.desktop")
+    }
+}
+
+fn definition_text(path: &Path) -> String {
+    let bytes = std::fs::read(path).expect("read definition");
+    if cfg!(windows) {
+        let units = bytes[2..]
+            .chunks_exact(2)
+            .map(|pair| u16::from_le_bytes([pair[0], pair[1]]));
+        String::from_utf16(&units.collect::<Vec<_>>()).expect("UTF-16 definition")
+    } else {
+        String::from_utf8(bytes).expect("UTF-8 definition")
+    }
 }
 
 #[test]
@@ -241,9 +261,9 @@ fn service_install_writes_a_definition_naming_the_vault_and_is_idempotent() {
     );
     assert!(first.status.success(), "{}", stderr(&first));
 
-    let entry = autostart_entry(home.path());
+    let entry = definition_path(home.path());
     assert!(entry.is_file(), "{}", stdout(&first));
-    let text = std::fs::read_to_string(&entry).expect("read entry");
+    let text = definition_text(&entry);
     assert!(text.contains("127.0.0.1"), "{text}");
     assert!(text.contains("52222"), "{text}");
 
@@ -292,7 +312,7 @@ fn service_install_preserves_an_explicit_port_across_an_upgrade() {
         stdout(&upgraded)
     );
 
-    let text = std::fs::read_to_string(autostart_entry(home.path())).expect("read entry");
+    let text = definition_text(&definition_path(home.path()));
     assert!(text.contains("47321"), "{text}");
     assert!(!text.contains("52222"), "{text}");
 
@@ -310,7 +330,7 @@ fn service_install_preserves_an_explicit_port_across_an_upgrade() {
         ],
     );
     assert!(moved.status.success(), "{}", stderr(&moved));
-    let text = std::fs::read_to_string(autostart_entry(home.path())).expect("read entry");
+    let text = definition_text(&definition_path(home.path()));
     assert!(text.contains("40404"), "{text}");
 }
 
@@ -346,7 +366,7 @@ fn service_status_reports_what_is_installed_and_uninstall_never_touches_the_vaul
 
     let removed = bbb_in_home(home.path(), &["service", "uninstall"]);
     assert!(removed.status.success(), "{}", stderr(&removed));
-    assert!(!autostart_entry(home.path()).exists());
+    assert!(!definition_path(home.path()).exists());
     assert!(
         vault_dir.path().join(".bbb-folder.md").is_file(),
         "uninstall must never delete the vault"

@@ -101,8 +101,7 @@ mod tests {
     #[test]
     fn a_generated_agent_round_trips_every_awkward_path() {
         for vault in AWKWARD {
-            let spec = ServiceSpec::new("/usr/local/bin/bbb", vault)
-                .expect("absolute")
+            let spec = ServiceSpec::unchecked("/usr/local/bin/bbb", vault)
                 .with_port(47321)
                 .expect("valid port");
             let text = plist(&spec);
@@ -116,8 +115,7 @@ mod tests {
 
     #[test]
     fn markup_in_a_path_cannot_break_out_of_its_element() {
-        let spec = ServiceSpec::new("/usr/local/bin/bbb", "/Users/user/</string><key>evil")
-            .expect("absolute");
+        let spec = ServiceSpec::unchecked("/usr/local/bin/bbb", "/Users/user/</string><key>evil");
         let text = plist(&spec);
 
         // The escaped form is what is written...
@@ -129,7 +127,7 @@ mod tests {
 
     #[test]
     fn the_agent_restarts_only_after_a_failure_and_runs_in_the_background() {
-        let spec = ServiceSpec::new("/usr/local/bin/bbb", "/Users/user/Vault").expect("absolute");
+        let spec = ServiceSpec::unchecked("/usr/local/bin/bbb", "/Users/user/Vault");
         let text = plist(&spec);
 
         assert!(text.contains("<key>SuccessfulExit</key>"), "{text}");

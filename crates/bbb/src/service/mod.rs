@@ -473,8 +473,7 @@ mod tests {
     use std::net::{IpAddr, Ipv4Addr};
 
     fn spec(vault: &str, port: u16) -> ServiceSpec {
-        ServiceSpec::new("/usr/local/bin/bbb", vault)
-            .expect("absolute")
+        ServiceSpec::unchecked("/usr/local/bin/bbb", vault)
             .with_port(port)
             .expect("valid port")
     }
@@ -582,7 +581,7 @@ mod tests {
             let bookmark = vault.join("Example--a1b2c3d4.md");
             std::fs::write(&bookmark, "---\nbbb_id: a1b2c3d4\n---\n").expect("write");
 
-            let spec = ServiceSpec::new("/usr/local/bin/bbb", &vault).expect("absolute");
+            let spec = ServiceSpec::unchecked("/usr/local/bin/bbb", &vault.to_string_lossy());
             install(&layout, kind, &spec).expect("install");
 
             assert!(uninstall(&layout, kind).expect("uninstall"), "{kind:?}");
@@ -609,29 +608,30 @@ mod tests {
 
     #[test]
     fn definitions_land_in_the_conventional_place_for_each_platform() {
-        let layout = ServiceLayout::rooted_at("/home/user");
+        let home = PathBuf::from("test-home");
+        let layout = ServiceLayout::rooted_at(&home);
 
-        assert!(
-            layout
-                .definition_path(ServiceKind::Systemd)
-                .ends_with(".config/systemd/user/bbb.service")
+        assert_eq!(
+            layout.definition_path(ServiceKind::Systemd),
+            home.join(".config/systemd/user/bbb.service")
         );
-        assert!(
-            layout
-                .definition_path(ServiceKind::XdgAutostart)
-                .ends_with(".config/autostart/bbb.desktop")
+        assert_eq!(
+            layout.definition_path(ServiceKind::XdgAutostart),
+            home.join(".config/autostart/bbb.desktop")
         );
-        assert!(
-            layout
-                .definition_path(ServiceKind::LaunchAgent)
-                .ends_with("Library/LaunchAgents/com.bookmarksbutbetter.bbb.plist")
+        assert_eq!(
+            layout.definition_path(ServiceKind::LaunchAgent),
+            home.join("Library/LaunchAgents/com.bookmarksbutbetter.bbb.plist")
+        );
+        assert_eq!(
+            layout.definition_path(ServiceKind::ScheduledTask),
+            home.join(".config/bbb/bbb-task.xml")
         );
     }
 
     #[test]
     fn no_definition_can_be_generated_for_a_non_loopback_bind() {
-        let error = ServiceSpec::new("/usr/local/bin/bbb", "/home/user/Vault")
-            .expect("absolute")
+        let error = spec("/home/user/Vault", 52222)
             .with_bind(IpAddr::V4(Ipv4Addr::UNSPECIFIED))
             .expect_err("0.0.0.0 is refused before any generator sees it");
         assert!(matches!(error, SpecError::NotLoopback { .. }));

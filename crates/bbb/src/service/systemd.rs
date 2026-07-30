@@ -114,7 +114,7 @@ mod tests {
     use std::path::PathBuf;
 
     fn spec_for(vault: &str) -> ServiceSpec {
-        ServiceSpec::new("/usr/local/bin/bbb", vault).expect("absolute paths")
+        ServiceSpec::unchecked("/usr/local/bin/bbb", vault)
     }
 
     #[test]
