@@ -8,7 +8,10 @@ import { FirefoxFaviconAdapter } from "./firefox/favicon"
 import { StandaloneBookmarkAdapter } from "./standalone/bookmarks"
 import { StandaloneStorageAdapter } from "./standalone/storage"
 import { StandaloneFaviconAdapter } from "./standalone/favicon"
-import { getAdapterModePreference } from "./adapter-preference"
+import {
+  getAdapterModePreference,
+  getDaemonConnectionConfig,
+} from "./adapter-preference"
 
 const SYNC_MIGRATION_FLAG = "__syncToLocalMigrated"
 
@@ -120,14 +123,27 @@ export async function detectAdapter(
   // API, so there is nothing to detect or configure: skip the adapter-mode
   // preference and browser-extension checks entirely.
   if (buildTarget === "daemon") {
-    const { createDaemonAdapter } = await import("./daemon")
-    return createDaemonAdapter()
+    const { createServedDaemonAdapter } = await import("./daemon")
+    return createServedDaemonAdapter()
   }
 
   const preference = await getAdapterModePreference()
 
   if (preference === "standalone") {
     return createStandaloneAdapter()
+  }
+
+  // An extension pointed at a local daemon. Reachability is deliberately not
+  // probed here: an unreachable daemon must surface as an error the user can
+  // act on, never as a silent fall back to browser bookmarks — which are a
+  // *different set of bookmarks*, so falling back would look like data loss.
+  if (preference === "daemon") {
+    const { createExtensionDaemonAdapter, DEFAULT_DAEMON_ORIGIN } =
+      await import("./daemon")
+    const config = await getDaemonConnectionConfig()
+    return createExtensionDaemonAdapter(
+      config ?? { origin: DEFAULT_DAEMON_ORIGIN }
+    )
   }
 
   if (buildTarget === "firefox" && isBrowserExtension()) {
