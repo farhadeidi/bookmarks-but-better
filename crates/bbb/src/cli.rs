@@ -465,14 +465,14 @@ fn run_service_install(
     println!("  vault  {}", spec.vault.display());
     println!("  serving http://{}:{}", spec.bind, spec.port);
 
-    if let Err(error) = service::reload(kind) {
+    if let Err(error) = service::reload(layout, kind) {
         return fail(format_args!("{error}"));
     }
     if no_start {
         return ExitCode::SUCCESS;
     }
 
-    match service::enable_and_start(kind) {
+    match service::enable_and_start(layout, kind) {
         Ok(()) => {
             println!("started, and enabled at login");
             ExitCode::SUCCESS
@@ -535,7 +535,7 @@ fn run_service(command: ServiceCommand) -> ExitCode {
 
         ServiceCommand::Status => run_service_status(&layout, kind),
 
-        ServiceCommand::Start => match service::start(kind) {
+        ServiceCommand::Start => match service::start(&layout, kind) {
             Ok(()) => {
                 println!("started");
                 ExitCode::SUCCESS
@@ -543,7 +543,7 @@ fn run_service(command: ServiceCommand) -> ExitCode {
             Err(error) => fail(format_args!("{error}")),
         },
 
-        ServiceCommand::Stop => match service::stop(kind) {
+        ServiceCommand::Stop => match service::stop(&layout, kind) {
             Ok(()) => {
                 println!("stopped");
                 ExitCode::SUCCESS
@@ -554,7 +554,7 @@ fn run_service(command: ServiceCommand) -> ExitCode {
         ServiceCommand::Uninstall => {
             // Best-effort, and deliberately before the file goes: a service
             // manager cannot be asked to stop a unit whose definition is gone.
-            service::disable_and_stop(kind);
+            service::disable_and_stop(&layout, kind);
             match service::uninstall(&layout, kind) {
                 Ok(true) => {
                     println!("removed {}", layout.definition_path(kind).display());

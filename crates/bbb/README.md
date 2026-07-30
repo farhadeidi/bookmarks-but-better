@@ -62,10 +62,17 @@ Properties that hold on every platform:
 
 Writing the definition is implemented and tested for all four formats on every
 platform. *Driving* the platform's service manager — start, stop, status — is
-currently wired for systemd only. On macOS and Windows, `bbb service install`
-writes the definition and then says plainly that it did not start it, with the
-`launchctl` / `schtasks` command to run by hand. It does not report a success
-that did not happen.
+wired for systemd (`systemctl --user`), macOS (`launchctl bootstrap`/`bootout`
+against the `gui/$UID` domain) and Windows (`schtasks /Create`, `/Run`, `/End`,
+`/Delete`, `/Query`). Every operation is idempotent and user-level: no `sudo`,
+no administrator prompt, no privilege beyond the account already running
+`bbb`.
+
+Only the Linux XDG-autostart fallback stays unwired, and by design rather than
+by omission: an autostart entry is started once at login by the desktop
+session, with no supervisor to ask about it afterward, so there is nothing for
+`bbb service start`/`stop`/`status` to drive. `bbb service install` says so
+plainly rather than reporting a success that did not happen.
 
 ## HTTP contract
 

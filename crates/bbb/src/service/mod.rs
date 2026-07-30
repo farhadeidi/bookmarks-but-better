@@ -11,10 +11,11 @@
 //!   platform-dependent.
 //! * **Process integration** — telling the platform's service manager to load,
 //!   start, stop or report on what was installed. This half is wired for
-//!   systemd only. On every other platform the operations return
-//!   [`ServiceError::Unwired`] rather than reporting a success that did not
-//!   happen: a `bbb service start` that prints "started" without starting
-//!   anything is worse than one that says it cannot.
+//!   systemd, `launchctl` and `schtasks`. Only the Linux XDG-autostart
+//!   fallback still returns [`ServiceError::Unwired`], and that is by design:
+//!   an autostart entry has no supervisor to drive at all, so a
+//!   `bbb service start` that printed "started" for one would be reporting a
+//!   success that did not happen.
 //!
 //! # Safety properties
 //!
@@ -90,9 +91,16 @@ impl ServiceKind {
 
     /// Whether this crate can actually drive the platform's service manager
     /// for this kind, as opposed to only writing its definition file.
+    ///
+    /// Every kind but [`Self::XdgAutostart`] is wired: systemd through
+    /// `systemctl --user`, [`Self::LaunchAgent`] through `launchctl`, and
+    /// [`Self::ScheduledTask`] through `schtasks`. An autostart entry has
+    /// nothing to drive — it is started once at login by the desktop
+    /// session, with no supervisor to ask about it — so it stays unwired by
+    /// design, not because the integration is missing.
     #[must_use]
     pub const fn is_wired(self) -> bool {
-        matches!(self, Self::Systemd)
+        !matches!(self, Self::XdgAutostart)
     }
 
     /// A human name for messages.
@@ -644,18 +652,18 @@ mod tests {
     }
 
     #[test]
-    fn only_systemd_claims_to_be_wired() {
-        assert!(ServiceKind::Systemd.is_wired());
+    fn every_kind_but_autostart_claims_to_be_wired() {
         for &kind in &[
-            ServiceKind::XdgAutostart,
+            ServiceKind::Systemd,
             ServiceKind::LaunchAgent,
             ServiceKind::ScheduledTask,
         ] {
-            assert!(
-                !kind.is_wired(),
-                "{kind:?} must not claim an integration it does not have"
-            );
+            assert!(kind.is_wired(), "{kind:?} must claim its real integration");
         }
+        assert!(
+            !ServiceKind::XdgAutostart.is_wired(),
+            "an autostart entry has nothing to drive, by design"
+        );
     }
 
     #[test]
