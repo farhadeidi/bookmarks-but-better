@@ -14,15 +14,58 @@ bbb rescan --vault <path>                 # offline rescan and summary
 bbb serve  --vault <path> \
            [--bind 127.0.0.1] [--port 52222] \
            [--ui-dir <path>] [--init]
+bbb setup                                 # guided first run: vault, port, next steps
+bbb service install --vault <path> [--port 52222] [--ui-dir <path>] [--no-start]
+bbb service start | stop | status | uninstall
 ```
 
 Every command names its vault explicitly. There is no discovery and no default
 path: the only directory `bbb` reads, writes or watches is the one on the
-command line.
+command line. That includes `service install`, whose definition embeds the exact
+path it was given — which is why `serve` still has no vault discovery to fall
+back on.
 
 `serve` refuses a directory that is not already a vault and prints the two ways
 to fix it. `--init` is the opt-in that lets `serve` write the root metadata file
 itself — convenient for tests and first runs, never implicit.
+
+## The background service
+
+`bbb service install` writes a **user-level** definition — no administrator, no
+`sudo`, nothing outside your own home directory:
+
+| Platform | What is written                                   | Where                                       |
+| -------- | ------------------------------------------------- | ------------------------------------------- |
+| Linux    | systemd **user** unit (`systemctl --user`)         | `$XDG_CONFIG_HOME/systemd/user/bbb.service` |
+| Linux¹   | XDG autostart entry, the fallback                  | `$XDG_CONFIG_HOME/autostart/bbb.desktop`    |
+| macOS    | `LaunchAgent`                                      | `~/Library/LaunchAgents/com.bookmarksbutbetter.bbb.plist` |
+| Windows  | Scheduled Task, triggered at logon                 | registered from `$XDG_CONFIG_HOME/bbb/bbb-task.xml` |
+
+¹ Used only when there is no usable `systemctl --user`. An autostart entry is
+started once at login and nothing supervises it, so there is no restart on
+failure — `bbb service status` says so rather than implying otherwise.
+
+Properties that hold on every platform:
+
+- **Loopback only.** The definition cannot be built with a non-loopback bind.
+- **Restart on failure**, where the platform supports it — never on a clean
+  exit, so `bbb service stop` is a command rather than a fight.
+- **Idempotent.** Installing what is already installed writes nothing.
+- **An explicit port survives an upgrade.** `install` with no `--port` reads the
+  installed definition's own command line and keeps its port, so an
+  installation configured on the previous default (47321) is not moved.
+- **Uninstall never deletes your vault.** It removes one generated file.
+- **No bookmark content in logs.** A definition is a command line and a log
+  level; the daemon logs counts, identities, codes and paths only.
+
+### Status of the platform integration
+
+Writing the definition is implemented and tested for all four formats on every
+platform. *Driving* the platform's service manager — start, stop, status — is
+currently wired for systemd only. On macOS and Windows, `bbb service install`
+writes the definition and then says plainly that it did not start it, with the
+`launchctl` / `schtasks` command to run by hand. It does not report a success
+that did not happen.
 
 ## HTTP contract
 
