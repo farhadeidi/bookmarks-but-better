@@ -339,7 +339,10 @@ jobs:
             # The only target needing anything extra, and it needs exactly one
             # thing: a cross-linker. Kept as matrix data rather than an `if`
             # ladder so a sixth target is a row, not a new branch.
-            apt_packages: gcc-aarch64-linux-gnu
+            # libc6-dev-arm64-cross ships Scrt1.o/crti.o/crtn.o. It's only a
+            # Recommends of gcc-aarch64-linux-gnu, so --no-install-recommends
+            # below needs it listed explicitly or the final link step fails.
+            apt_packages: gcc-aarch64-linux-gnu libc6-dev-arm64-cross
             linker: aarch64-linux-gnu-gcc
           - target: x86_64-apple-darwin
             runner: macos-latest
