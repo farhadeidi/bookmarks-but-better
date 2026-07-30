@@ -24,7 +24,10 @@ import { canonicalizeDaemonOrigin } from "./daemon/endpoint"
 const DB_NAME = "bookmarks-but-better-prefs"
 const DB_VERSION = 1
 const STORE_NAME = "preferences"
-const ADAPTER_PREF_KEY = "adapterMode"
+/** Exported so `DaemonStorageAdapter`'s legacy-key migration can recognize
+ * (and skip) this one — it is mode-routing state, not a UI preference, and
+ * must never be copied into the daemon's namespace alongside them. */
+export const ADAPTER_PREF_KEY = "adapterMode"
 
 /** Every key this module owns beyond the original `adapterMode` starts here. */
 const DAEMON_NAMESPACE = "bbb.daemon."

@@ -1,8 +1,8 @@
 import type { BrowserAdapter, DaemonConnectionConfig } from "../types"
-import { StandaloneStorageAdapter } from "../standalone/storage"
 import { DaemonBookmarkAdapter } from "./bookmarks"
 import { DaemonClient, createSameOriginDaemonClient } from "./client"
 import { DaemonFaviconAdapter } from "./favicon"
+import { DaemonStorageAdapter } from "./storage"
 
 /**
  * The capabilities are a property of the *daemon*, not of how it was reached,
@@ -12,9 +12,11 @@ import { DaemonFaviconAdapter } from "./favicon"
 function daemonAdapterFor(client: DaemonClient): BrowserAdapter {
   return {
     bookmarks: new DaemonBookmarkAdapter({ client }),
-    // UI preferences stay client-local in IndexedDB regardless of adapter;
-    // the daemon config only holds operational settings.
-    storage: new StandaloneStorageAdapter(),
+    // UI preferences stay client-local in IndexedDB regardless of adapter,
+    // but namespaced away from Standalone's — see `./storage` for why a
+    // shared, unprefixed store would be a real collision, not a theoretical
+    // one, for the extension switching between the two modes.
+    storage: new DaemonStorageAdapter(),
     favicon: new DaemonFaviconAdapter(),
     capabilities: {
       openInManager: false,
@@ -69,6 +71,7 @@ export function createDaemonAdapter(): BrowserAdapter {
 
 export { DaemonBookmarkAdapter } from "./bookmarks"
 export { DaemonFaviconAdapter } from "./favicon"
+export { DaemonStorageAdapter } from "./storage"
 export { connectDaemonEvents, createSseParser } from "./sse"
 export {
   DaemonApiError,
@@ -82,3 +85,17 @@ export {
   canonicalizeDaemonOrigin,
   tryCanonicalizeDaemonOrigin,
 } from "./endpoint"
+export {
+  connectToDaemon,
+  disconnectDaemon,
+  forgetDaemon,
+  type DaemonConnectOptions,
+  type DaemonConnectResult,
+  type DaemonConnectStage,
+} from "./connect"
+export {
+  hasDaemonHostPermission,
+  removeDaemonHostPermission,
+  requestDaemonHostPermission,
+} from "./permissions"
+export { isDaemonModeSupported } from "./platform"
