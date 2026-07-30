@@ -981,7 +981,7 @@ impl Staged {
         // it leaves stays for recovery and `bbb doctor` to describe — the change
         // itself has committed, so residue is not a failure.
         if let Err(leftovers) =
-            discard_operation_directory(&self.root, &self.name, &self.directory, &self.manifest)
+            discard_operation_directory(&self.root, &self.name, self.directory, &self.manifest)
         {
             tracing::info!(
                 operation = %self.manifest.operation,
@@ -1007,12 +1007,8 @@ impl Staged {
             // Same teardown as recovery: proved empty, then non-recursive. A
             // rollback that quarantined something leaves the directory holding
             // it, so `is_empty` is false and nothing here runs.
-            let _ = discard_operation_directory(
-                &self.root,
-                &self.name,
-                &self.directory,
-                &self.manifest,
-            );
+            let _ =
+                discard_operation_directory(&self.root, &self.name, self.directory, &self.manifest);
         }
         outcome
     }
@@ -1268,7 +1264,15 @@ fn recover_one(root: &Dir, vault: &Dir, name: &str) -> Option<Retained> {
                 // removing it non-recursively — is what stops a teardown from
                 // taking an entry that a record could not describe, or one that
                 // arrived while this was deciding.
-                match discard_operation_directory(root, name, &directory, &manifest) {
+                // The flag has to reach disk before the teardown, because the
+                // teardown takes the handle: a refusal before the removal leaves
+                // the manifest as it was found, and a failure after it writes
+                // back this same record. Same end state as setting the flag
+                // afterwards used to give — the cost is one durable write on the
+                // path that then deletes the file it just wrote.
+                manifest.retained = true;
+                let _ = write_manifest(&directory, &manifest);
+                match discard_operation_directory(root, name, directory, &manifest) {
                     Ok(()) => {
                         tracing::info!(
                             operation = %manifest.operation,
@@ -1277,8 +1281,6 @@ fn recover_one(root: &Dir, vault: &Dir, name: &str) -> Option<Retained> {
                         return None;
                     }
                     Err(leftovers) => {
-                        manifest.retained = true;
-                        let _ = write_manifest(&directory, &manifest);
                         return Some(Retained {
                             directory: staged_path(name),
                             operation: manifest.operation.clone(),
@@ -1307,7 +1309,11 @@ fn recover_one(root: &Dir, vault: &Dir, name: &str) -> Option<Retained> {
         }
         Phase::Committed => {
             destroy(&directory, &manifest);
-            let leftovers = match discard_operation_directory(root, name, &directory, &manifest) {
+            // As above: the flag reaches disk while the handle is still here,
+            // because the teardown takes it.
+            manifest.retained = true;
+            let _ = write_manifest(&directory, &manifest);
+            let leftovers = match discard_operation_directory(root, name, directory, &manifest) {
                 Ok(()) => {
                     tracing::info!(
                         operation = %manifest.operation,
@@ -1317,8 +1323,6 @@ fn recover_one(root: &Dir, vault: &Dir, name: &str) -> Option<Retained> {
                 }
                 Err(leftovers) => leftovers,
             };
-            manifest.retained = true;
-            let _ = write_manifest(&directory, &manifest);
             Some(Retained {
                 directory: staged_path(name),
                 operation: manifest.operation,
@@ -1898,14 +1902,21 @@ fn staged_entry_names(directory: &Dir) -> io::Result<Vec<String>> {
 /// anything that arrives in the window between the two makes the kernel refuse
 /// rather than lets the removal take it. Every error retains.
 ///
+/// Takes the handle by value, so its drop lands at the one point it must — after
+/// the enumeration, before the removal. Windows treats a handle still open on a
+/// directory as a reason to hold its removal up rather than let it complete, so
+/// a teardown keeping its own would be competing with itself; owning it settles
+/// that here instead of leaving each caller to remember. The reopen that costs
+/// is paid only where the removal has already failed.
+///
 /// `Err` carries what is still in there, for the report.
 fn discard_operation_directory(
     root: &Dir,
     name: &str,
-    directory: &Dir,
+    directory: Dir,
     manifest: &Manifest,
 ) -> Result<(), Vec<String>> {
-    let leftovers = staged_entry_names(directory).map_err(|error| {
+    let leftovers = staged_entry_names(&directory).map_err(|error| {
         vec![format!(
             "its contents could not be listed: {}",
             error.kind()
@@ -1914,7 +1925,7 @@ fn discard_operation_directory(
     if !leftovers.is_empty() {
         return Err(leftovers);
     }
-    if let Err(error) = fsx::remove_file(directory, MANIFEST_NAME)
+    if let Err(error) = fsx::remove_file(&directory, MANIFEST_NAME)
         && error.kind() != io::ErrorKind::NotFound
     {
         return Err(vec![format!(
@@ -1923,6 +1934,10 @@ fn discard_operation_directory(
         )]);
     }
 
+    // Everything that needs the handle has happened. It goes now, so the removal
+    // below is not competing with its own caller for the directory.
+    drop(directory);
+
     // Refuses if anything arrived after the listing above.
     let removed = rmdir_failure().map_or_else(|| fsx::remove_dir(root, name), Err);
     if let Err(error) = removed {
@@ -1930,8 +1945,12 @@ fn discard_operation_directory(
         // this the directory would survive with nothing describing what is in it
         // or what change put it there. The manifest is the only record of that,
         // so it goes back before the failure is reported — every caller gets this
-        // rather than each having to remember it.
-        let restored = write_manifest(directory, manifest);
+        // rather than each having to remember it. The reopen is `nofollow`, so
+        // no symlink is followed; a directory swapped in at the same name is out
+        // of scope, because the vault lock keeps this tree to one process.
+        let restored = root
+            .open_dir_nofollow(name)
+            .and_then(|reopened| write_manifest(&reopened, manifest));
         let mut reasons = vec![format!(
             "it could not be removed once empty: {}",
             error.kind()
@@ -2039,6 +2058,44 @@ mod tests {
         let handle = fsx::open_dir(dir, name).expect("open for identity");
         fsx::directory_identity(&handle).expect("identity")
     }
+
+    /// Holds `name`'s inode open, so its replacement cannot be handed the very
+    /// number the test just recorded.
+    ///
+    /// The tests that replace an entry and expect a refusal are asserting about
+    /// identity, and ext4 gives the next create the inode an unlink just freed —
+    /// which is why they failed on Linux CI alone. The guard must outlive the
+    /// create that follows. Test setup only; production identity is untouched.
+    #[cfg(unix)]
+    #[must_use]
+    fn hold_identity(dir: &Dir, name: &str, kind: Kind) -> HeldIdentity {
+        match kind {
+            Kind::File => HeldIdentity::File {
+                _handle: dir.open(name).expect("open the file being replaced"),
+            },
+            Kind::Directory => HeldIdentity::Directory {
+                _handle: dir.open_dir_nofollow(name).expect("open the directory"),
+            },
+        }
+    }
+
+    /// The handle [`hold_identity`] keeps; being open is all it does.
+    #[cfg(unix)]
+    enum HeldIdentity {
+        File { _handle: cap_std::fs::File },
+        Directory { _handle: Dir },
+    }
+
+    /// Elsewhere an open handle would block the removal rather than outlive it,
+    /// so there is nothing to hold and the call sites read the same.
+    #[cfg(not(unix))]
+    #[must_use]
+    const fn hold_identity(_dir: &Dir, _name: &str, _kind: Kind) -> HeldIdentity {
+        HeldIdentity
+    }
+
+    #[cfg(not(unix))]
+    struct HeldIdentity;
 
     struct Fixture {
         _temp: tempfile::TempDir,
@@ -2371,6 +2428,7 @@ mod tests {
                 FaultPoint::BeforeClaim,
                 move || {
                     let dev = fsx::open_dir(&vault, "Dev").expect("open Dev");
+                    let _held = hold_identity(&dev, "React--a1.md", Kind::File);
                     fsx::remove_file(&dev, "React--a1.md").expect("remove");
                     fsx::create_new(&dev, "React--a1.md", b"THEIRS").expect("replace");
                 },
@@ -2414,6 +2472,7 @@ mod tests {
                 FaultPoint::BeforeClaim,
                 move || {
                     let dev = fsx::open_dir(&vault, "Dev").expect("open Dev");
+                    let _held = hold_identity(&dev, "React--a1.assets", Kind::Directory);
                     fsx::remove_dir_all(&dev, "React--a1.assets").expect("remove");
                     fsx::create_dir(&dev, "React--a1.assets").expect("recreate");
                     let replacement =
@@ -2459,6 +2518,7 @@ mod tests {
             FaultPoint::BeforeClaim,
             move || {
                 let dev = fsx::open_dir(&vault, "Dev").expect("open Dev");
+                let _held = hold_identity(&dev, "React--a1.md", Kind::File);
                 fsx::remove_file(&dev, "React--a1.md").expect("remove");
                 fsx::create_new(&dev, "React--a1.md", b"THEIRS").expect("replace");
             },
@@ -2494,6 +2554,7 @@ mod tests {
             FaultPoint::BeforeClaim,
             move || {
                 let dev = fsx::open_dir(&vault, "Dev").expect("open Dev");
+                let _held = hold_identity(&dev, "React--a1.md", Kind::File);
                 fsx::remove_file(&dev, "React--a1.md").expect("remove");
                 fsx::create_new(&dev, "React--a1.md", b"THEIRS").expect("replace");
                 fsx::fail_next_undo();
@@ -2514,7 +2575,11 @@ mod tests {
             "an entry stuck in staging must stay in the record, or nothing can find it"
         );
         let operation = staged.name.clone();
-        core::mem::forget(staged);
+        // Dropped, not committed or rolled back: `Staged` has no `Drop`, so this
+        // undoes nothing and leaves exactly what a crash would — except that the
+        // handles close, which a leaked `Staged` would not do. The teardown this
+        // test then requires to succeed must not be blocked by this process.
+        drop(staged);
 
         // It is still there — never deleted — and recovery deals with it.
         let root = fsx::open_or_create_dir(&fixture.state, STAGING_DIRECTORY).expect("root");
@@ -2523,6 +2588,7 @@ mod tests {
             fsx::exists(&directory, "0-React--a1.md"),
             "the claimed entry must not be discarded"
         );
+        drop(directory);
 
         // The failed undo strands the placeholder on the origin name; because
         // it is provably ours it is cleared, which leaves the name free for
@@ -2536,7 +2602,7 @@ mod tests {
             "the entry taken by mistake is returned, byte for byte"
         );
         assert!(
-            !fsx::exists(&directory, "0-React--a1.md"),
+            fixture.staging_is_clear(),
             "and nothing is left behind in staging once it has been returned"
         );
     }
@@ -2555,6 +2621,7 @@ mod tests {
             FaultPoint::BeforeClaim,
             move || {
                 let dev = fsx::open_dir(&vault, "Dev").expect("open Dev");
+                let _held = hold_identity(&dev, "React--a1.md", Kind::File);
                 fsx::remove_file(&dev, "React--a1.md").expect("remove");
                 fsx::create_new(&dev, "React--a1.md", b"THEIRS").expect("replace");
                 fsx::fail_next_undo();
@@ -3081,6 +3148,7 @@ mod tests {
         // Same bytes, different file: removed and recreated, as a sync client
         // that replaces rather than patches would do.
         let dev = fixture.dev();
+        let _held = hold_identity(&dev, STATE_FILE_NAME, Kind::File);
         fsx::remove_file(&dev, STATE_FILE_NAME).expect("remove");
         fsx::create_new(&dev, STATE_FILE_NAME, SECOND).expect("recreate");
 
@@ -3283,6 +3351,7 @@ mod tests {
         });
 
         let dev = fixture.dev();
+        let _held = hold_identity(&dev, "New--n1.md", Kind::File);
         fsx::remove_file(&dev, "New--n1.md").expect("remove");
         fsx::create_new(&dev, "New--n1.md", b"THEIRS").expect("replace");
 
@@ -3304,11 +3373,11 @@ mod tests {
     /// The same invariant as above, but for the case the filesystem creates
     /// rather than the user: a recycled inode number.
     ///
-    /// `recovery_never_removes_an_entry_it_did_not_create` only exercises this
-    /// where the kernel happens to hand the replacement a *different* number.
-    /// tmpfs, btrfs, APFS and NTFS all do, so on those it proves nothing about
-    /// recycling; ext4 hands the freed number straight back, which is why that
-    /// test failed on Linux CI alone and passed everywhere else.
+    /// `recovery_never_removes_an_entry_it_did_not_create` now pins the replaced
+    /// file's inode, so the replacement cannot be handed the freed number — ext4
+    /// hands it straight back, which is why that test failed on Linux CI alone.
+    /// That makes it deterministic, but only for the case where the two numbers
+    /// differ; it still proves nothing about a number that really was reused.
     ///
     /// This one removes the filesystem from the question. It rewrites the
     /// recorded number to the replacement's, which is exactly the state ext4
@@ -3428,6 +3497,7 @@ mod tests {
             let operation = only_staging_directory(&root);
             let directory = root.open_dir_nofollow(&operation).expect("operation");
             let claim = only_claim_name(&directory);
+            let _held = hold_identity(&directory, &claim, Kind::File);
             fsx::remove_file(&directory, &claim).expect("take the claim away");
             fsx::create_new(&directory, &claim, b"new").expect("substitute");
         });
@@ -3460,6 +3530,7 @@ mod tests {
             let operation = only_staging_directory(&root);
             let directory = root.open_dir_nofollow(&operation).expect("operation");
             let claim = only_claim_name(&directory);
+            let _held = hold_identity(&directory, &claim, Kind::Directory);
             fsx::remove_dir(&directory, &claim).expect("take the claim away");
             fsx::create_dir(&directory, &claim).expect("substitute");
             let substitute = fsx::open_dir(&directory, &claim).expect("open substitute");
@@ -3657,6 +3728,36 @@ mod tests {
         assert!(matches!(manifest.phase, Phase::Staging));
     }
 
+    /// The teardown takes the handle and restores the manifest through a
+    /// reopened one, so recovery's retained flag has to be on the record it
+    /// hands over. Set after the fact there would be no handle left to write it
+    /// through, and the kept directory would carry no mark for `bbb doctor`.
+    #[test]
+    fn a_recovery_whose_teardown_fails_keeps_the_retained_flag() {
+        let fixture = fixture();
+        let staged =
+            Staged::open(&fixture.state, &fixture.vault, "delete_bookmark", "a1").expect("staging");
+        let operation = staged.name.clone();
+        // Dropped rather than leaked, so the directory that survives below is
+        // attributable to the injected `rmdir` failure and nothing else.
+        drop(staged);
+
+        fail_next_rmdir();
+        let retained = recover(&fixture.state, &fixture.vault);
+
+        assert_eq!(retained.len(), 1, "{retained:?}");
+        let root = fsx::open_or_create_dir(&fixture.state, STAGING_DIRECTORY).expect("root");
+        let directory = root
+            .open_dir_nofollow(&operation)
+            .expect("the directory survived, as the failure intended");
+        assert!(
+            read_manifest(&directory)
+                .expect("its manifest must have been put back")
+                .retained,
+            "and it must carry the flag, or nothing says it was kept"
+        );
+    }
+
     /// Finding (3): a commit never takes what `destroy` declined to touch.
     ///
     /// `destroy` refuses a staged entry it cannot identify. An unconditional
@@ -3709,7 +3810,7 @@ mod tests {
         let listed = staged_entry_names(&directory);
         assert!(listed.is_ok(), "the happy path still lists");
         let manifest = read_manifest(&directory).expect("manifest");
-        let refused = discard_operation_directory(&root, &operation, &directory, &manifest);
+        let refused = discard_operation_directory(&root, &operation, directory, &manifest);
         assert!(
             refused.is_err(),
             "a directory still holding staged entries is never torn down"
@@ -3751,6 +3852,13 @@ mod tests {
             fsx::read(&directory, "orphan.md").expect("read"),
             b"IRREPLACEABLE",
             "an unaccounted entry is never deleted with the directory around it"
+        );
+        // This teardown refuses before it removes anything, so nothing rewrites
+        // the manifest afterwards. The flag has to be on disk already, or
+        // `bbb doctor` never mentions the directory it just kept.
+        assert!(
+            read_manifest(&directory).expect("manifest").retained,
+            "a directory kept for a person must say so where doctor reads it"
         );
     }
 
