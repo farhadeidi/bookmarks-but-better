@@ -3026,6 +3026,11 @@ mod tests {
         )
         .expect("manifest");
         fsx::create_new(&directory, "0-x", b"older bytes").expect("staged entry");
+        // Recovery finishes this operation and then removes the directory it was
+        // recorded in. cap-std opens directories without `FILE_SHARE_DELETE`, so
+        // a handle this test still holds is one Windows refuses that removal for
+        // — a failure of the fixture, reported as a retention of the operation.
+        drop(directory);
 
         let retained = recover(&fixture.state, &fixture.vault);
         assert!(retained.is_empty(), "{retained:?}");
@@ -3627,8 +3632,17 @@ mod tests {
     /// staging and the manifest record is the only thing pointing at it. Calling
     /// that an ordinary I/O failure is how the record gets forgotten and the
     /// user's entry becomes unreachable to every later recovery pass.
+    ///
+    /// Only the exchange path can strand a claim, so only a platform that has one
+    /// can be asked about it. Where there is no atomic exchange the claim is a
+    /// plain move and there is no placeholder left on the origin to fail to clear
+    /// — a different shape with its own tests, not this outcome going missing.
     #[test]
     fn a_claim_stranded_by_its_own_cleanup_keeps_its_record() {
+        if !fsx::platform::exchange_is_supported() {
+            return;
+        }
+
         let fixture = fixture();
         let mut staged =
             Staged::open(&fixture.state, &fixture.vault, "delete_bookmark", "a1").expect("staging");
@@ -3956,11 +3970,18 @@ mod tests {
         fsx::create_dir(&theirs_dir, "deeper").expect("their subdirectory");
         let theirs = identity_of(&dev, "New", Kind::Directory).expect("their identity");
         assert!(theirs.is_known(), "no directory identity on this platform");
+        // What recovery does with this directory is move it whole into
+        // quarantine, and a directory cannot be renamed on Windows while anything
+        // holds it open — cap-std withholds `FILE_SHARE_DELETE` from directory
+        // handles precisely so that cannot happen underneath it. Both handles go
+        // before the pass, or the test asserts the fixture rather than the rule.
+        drop(theirs_dir);
 
         let root = fsx::open_or_create_dir(&fixture.state, STAGING_DIRECTORY).expect("root");
         let operation = only_staging_directory(&root);
         let directory = root.open_dir_nofollow(&operation).expect("operation");
         forge_created_identity(&directory, theirs);
+        drop(directory);
 
         let retained = recover(&fixture.state, &fixture.vault);
 

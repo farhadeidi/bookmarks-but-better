@@ -1183,6 +1183,30 @@ mod tests {
         );
     }
 
+    /// Frees `name` for a replacement while keeping the entry that held it alive.
+    ///
+    /// "Remove it, then create something else under the same name" is the obvious
+    /// way to stage a replacement and the wrong one: an inode number belongs to
+    /// the filesystem only while something references it, and ext4 hands the very
+    /// next create the number it has just freed. The replacement then *inherits*
+    /// the identity a test is asserting a difference against, so the refusal
+    /// under test never happens — passing locally and failing in CI on the same
+    /// code.
+    ///
+    /// Renaming the entry aside pins its identity instead: the original object is
+    /// still referenced, so no replacement can be allocated its number, on any
+    /// filesystem. Holding the old handle open would pin it too, but only on
+    /// Unix — Windows `DeleteFile` marks a file for deletion on close and refuses
+    /// to open the name until the last handle goes, so the create that follows
+    /// would fail there rather than race.
+    fn pin_aside(root: &Dir, name: &str, aside: &str, is_directory: bool) {
+        if is_directory {
+            move_dir(root, name, root, aside).expect("pin the directory aside");
+        } else {
+            move_file(root, name, root, aside).expect("pin the file aside");
+        }
+    }
+
     /// The placeholder race, and the reason a checked removal exists.
     ///
     /// A claim's placeholder sits at a name for a moment with nothing in it.
@@ -1195,7 +1219,7 @@ mod tests {
 
         create_new(&root, "placeholder.md", b"").expect("create placeholder");
         let placeholder = file_identity(&root, "placeholder.md").expect("identity");
-        remove_file(&root, "placeholder.md").expect("remove");
+        pin_aside(&root, "placeholder.md", "pinned.md", false);
         create_new(&root, "placeholder.md", b"SOMEBODY ELSE").expect("replace");
 
         let refused = remove_verified(&root, "placeholder.md", false, placeholder)
@@ -1210,7 +1234,7 @@ mod tests {
         // The directory form is the one that used to recurse.
         create_dir(&root, "slot").expect("create slot");
         let slot = directory_identity(&open_dir(&root, "slot").expect("open")).expect("identity");
-        remove_dir(&root, "slot").expect("remove slot");
+        pin_aside(&root, "slot", "pinned", true);
         create_dir(&root, "slot").expect("replace slot");
         let replacement = open_dir(&root, "slot").expect("open replacement");
         create_new(&replacement, "theirs.md", b"THEIRS").expect("their file");
