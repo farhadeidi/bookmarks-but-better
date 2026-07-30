@@ -1,3 +1,4 @@
+import * as React from "react"
 import {
   Dialog,
   DialogContent,
@@ -20,7 +21,9 @@ import { useBookmarkStore } from "@/stores/bookmark-store"
 import { RootFolderSelect } from "@/features/root-folder-select"
 import { serializeNetscapeBookmarks } from "@/browser/import-export/netscape-serializer"
 import { parseNetscapeBookmarks } from "@/browser/import-export/netscape-parser"
+import { isDaemonModeSupported } from "@/browser/daemon"
 import { resolveImportRootId } from "./import-target"
+import { DaemonConnectionPanel } from "./daemon-connection-panel"
 import type { BookmarkNode } from "@/browser"
 
 export function SettingsDialog() {
@@ -35,6 +38,13 @@ export function SettingsDialog() {
   const refresh = useBookmarkStore((s) => s.refresh)
   const adapterMode = usePreferencesStore((s) => s.adapterMode)
   const setAdapterMode = usePreferencesStore((s) => s.setAdapterMode)
+  // Selecting "Daemon" only reveals the connection panel below — persisting
+  // the mode happens exclusively through its own Connect flow, which
+  // validates, asks for permission and health-checks first. Browser and
+  // Standalone keep switching immediately, as they always have.
+  const [daemonSelected, setDaemonSelected] = React.useState(false)
+  const showDaemonPanel = adapterMode === "daemon" || daemonSelected
+  const daemonModeSupported = React.useMemo(() => isDaemonModeSupported(), [])
   const maxColumns = usePreferencesStore((s) => s.maxColumns)
   const setMaxColumns = usePreferencesStore((s) => s.setMaxColumns)
   const containerMode = usePreferencesStore((s) => s.containerMode)
@@ -233,19 +243,39 @@ export function SettingsDialog() {
                     {(["browser", "standalone"] as const).map((mode) => (
                       <Button
                         key={mode}
-                        variant={adapterMode === mode ? "default" : "outline"}
+                        variant={
+                          adapterMode === mode && !daemonSelected
+                            ? "default"
+                            : "outline"
+                        }
                         size="sm"
-                        onClick={() => setAdapterMode(mode)}
+                        onClick={() => {
+                          setDaemonSelected(false)
+                          setAdapterMode(mode)
+                        }}
                         className="capitalize"
                       >
                         {mode === "browser" ? "Browser" : "Standalone"}
                       </Button>
                     ))}
+                    {/* Hidden rather than shown-and-broken on a mobile
+                        browser: there is no local daemon to reach there. */}
+                    {daemonModeSupported && (
+                      <Button
+                        variant={showDaemonPanel ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setDaemonSelected(true)}
+                      >
+                        Daemon
+                      </Button>
+                    )}
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    Use browser bookmarks or manage an independent collection.
-                    Requires a page reload to take effect.
+                    Use browser bookmarks, manage an independent collection, or
+                    connect to a local <code>bbb</code> daemon. Browser and
+                    Standalone require a page reload to take effect.
                   </p>
+                  {showDaemonPanel && <DaemonConnectionPanel />}
                 </div>
               )}
 
