@@ -1,5 +1,9 @@
 import { create } from "zustand"
 import type { BrowserAdapter } from "@/browser"
+import {
+  getAdapterModePreference,
+  setAdapterModePreference,
+} from "@/browser/adapter-preference"
 
 type CardLayout = "list" | "grid"
 export type ColorTheme =
@@ -80,7 +84,7 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
     ] = await Promise.all([
       adapter.storage.get<Record<string, CardLayout>>("cardLayouts"),
       adapter.storage.get<boolean>("nestedFolders"),
-      adapter.storage.get<"browser" | "standalone">("adapterMode"),
+      getAdapterModePreference(),
       adapter.storage.get<ColorTheme>("colorTheme"),
       adapter.storage.get<number>("maxColumns"),
       adapter.storage.get<"fluid" | "contained">("containerMode"),
@@ -155,7 +159,9 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
         false,
       isFoldersOnlyEnabledInTreeEditor:
         isFoldersOnlyEnabledInTreeEditor ??
-        (seedPrefDefaults?.isFoldersOnlyEnabledInTreeEditor as boolean | undefined) ??
+        (seedPrefDefaults?.isFoldersOnlyEnabledInTreeEditor as
+          | boolean
+          | undefined) ??
         true,
     })
 
@@ -177,7 +183,7 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
 
   setAdapterMode(mode: "browser" | "standalone") {
     set({ adapterMode: mode })
-    get().adapter?.storage.set("adapterMode", mode)
+    setAdapterModePreference(mode)
   },
 
   setColorTheme(theme: ColorTheme) {

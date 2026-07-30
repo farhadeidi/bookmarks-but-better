@@ -13,7 +13,10 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { RootFolderSelect } from "@/features/root-folder-select"
 import { BookmarkOrganizerCreateDialog } from "./bookmark-organizer-create-dialog"
-import { BookmarkOrganizerTree, type BookmarkOrganizerTreeHandle } from "./bookmark-organizer-tree"
+import {
+  BookmarkOrganizerTree,
+  type BookmarkOrganizerTreeHandle,
+} from "./bookmark-organizer-tree"
 import { useBookmarkStore } from "@/stores/bookmark-store"
 import { useUIStore } from "@/stores/ui-store"
 import { usePreferencesStore } from "@/stores/preferences-store"
@@ -23,11 +26,17 @@ export function BookmarkOrganizerSheet() {
   const closeBookmarkOrganizer = useUIStore((s) => s.closeBookmarkOrganizer)
   const rootFolderId = useBookmarkStore((s) => s.rootFolderId)
   const setRootFolderId = useBookmarkStore((s) => s.setRootFolderId)
+  const mutationError = useBookmarkStore((s) => s.mutationError)
+  const clearMutationError = useBookmarkStore((s) => s.clearMutationError)
 
   const creatingItem = useUIStore((s) => s.creatingItem)
 
-  const foldersOnly = usePreferencesStore((s) => s.isFoldersOnlyEnabledInTreeEditor)
-  const setFoldersOnly = usePreferencesStore((s) => s.setIsFoldersOnlyEnabledInTreeEditor)
+  const foldersOnly = usePreferencesStore(
+    (s) => s.isFoldersOnlyEnabledInTreeEditor
+  )
+  const setFoldersOnly = usePreferencesStore(
+    (s) => s.setIsFoldersOnlyEnabledInTreeEditor
+  )
 
   const treeRef = React.useRef<BookmarkOrganizerTreeHandle>(null)
   const lastCreatingItemRef = React.useRef<{ parentId: string } | null>(null)
@@ -41,6 +50,13 @@ export function BookmarkOrganizerSheet() {
     }
   }, [creatingItem])
 
+  // A drag has no dialog to report into, so a refused reorder would otherwise
+  // be silent — the row would just spring back with no explanation. Clearing
+  // on every open/close keeps a stale message from greeting the next visit.
+  React.useEffect(() => {
+    clearMutationError()
+  }, [bookmarkOrganizerOpen, clearMutationError])
+
   return (
     <>
       <Sheet
@@ -53,7 +69,7 @@ export function BookmarkOrganizerSheet() {
       >
         <SheetContent
           side="right"
-          className="data-[side=right]:w-full data-[side=right]:sm:w-[40rem] data-[side=right]:lg:w-[44rem] data-[side=right]:sm:max-w-none"
+          className="data-[side=right]:w-full data-[side=right]:sm:w-[40rem] data-[side=right]:sm:max-w-none data-[side=right]:lg:w-[44rem]"
         >
           <div className="flex h-full min-h-0 flex-col">
             <SheetHeader className="border-b border-border/70 px-6 pb-4">
@@ -80,7 +96,10 @@ export function BookmarkOrganizerSheet() {
                     checked={foldersOnly}
                     onCheckedChange={setFoldersOnly}
                   />
-                  <Label htmlFor="folders-only" className="text-xs text-muted-foreground">
+                  <Label
+                    htmlFor="folders-only"
+                    className="text-xs text-muted-foreground"
+                  >
                     Folders Only
                   </Label>
                 </div>
@@ -103,6 +122,15 @@ export function BookmarkOrganizerSheet() {
                   </Button>
                 </div>
               </div>
+
+              {mutationError && (
+                <p
+                  role="alert"
+                  className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive"
+                >
+                  {mutationError}
+                </p>
+              )}
             </div>
 
             <ScrollArea className="min-h-0 flex-1 px-6 py-4">

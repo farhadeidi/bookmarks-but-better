@@ -1,5 +1,4 @@
 import * as React from "react"
-import { detectAdapter } from "@/browser"
 import { useBookmarkStore } from "@/stores/bookmark-store"
 import { usePreferencesStore } from "@/stores/preferences-store"
 import { useUIStore } from "@/stores/ui-store"
@@ -40,7 +39,7 @@ import {
 } from "@hugeicons/core-free-icons"
 import { useTheme } from "@/components/theme-provider"
 import { COLOR_THEMES, type ColorTheme } from "@/stores/preferences-store"
-import { getScreenshotMode } from "@/hooks/use-screenshot-mode"
+import { useAppBootstrap } from "@/hooks/use-app-bootstrap"
 
 const SettingsDialog = React.lazy(() =>
   import("@/features/settings").then((m) => ({ default: m.SettingsDialog }))
@@ -67,17 +66,21 @@ const OnboardingWizard = React.lazy(() =>
 )
 
 export function App() {
-  const initBookmarks = useBookmarkStore((s) => s.init)
-  const initPreferences = usePreferencesStore((s) => s.init)
-  const [showOnboarding, setShowOnboarding] = React.useState(false)
-  const [onboardingChecked, setOnboardingChecked] = React.useState(false)
+  const {
+    showOnboarding,
+    setShowOnboarding,
+    onboardingChecked,
+    screenshotMode,
+  } = useAppBootstrap()
   const openSettings = useUIStore((s) => s.openSettings)
   const isLoading = useBookmarkStore((s) => s.isLoading)
+  const status = useBookmarkStore((s) => s.status)
+  const loadError = useBookmarkStore((s) => s.loadError)
+  const retry = useBookmarkStore((s) => s.retry)
   const openBookmarkOrganizer = useUIStore((s) => s.openBookmarkOrganizer)
   const colorTheme = usePreferencesStore((s) => s.colorTheme)
   const setColorTheme = usePreferencesStore((s) => s.setColorTheme)
   const { theme, setTheme } = useTheme()
-  const screenshotMode = React.useMemo(() => getScreenshotMode(), [])
 
   const themeOrder = ["light", "dark", "system"] as const
   const themeIcon = {
@@ -91,31 +94,26 @@ export function App() {
     setTheme(themeOrder[(idx + 1) % themeOrder.length])
   }
 
-  React.useEffect(() => {
-    async function bootstrap() {
-      const adapter = await detectAdapter()
-      await Promise.all([initBookmarks(adapter), initPreferences(adapter)])
-      if (screenshotMode === 'onboarding') {
-        setShowOnboarding(true)
-      } else if (!screenshotMode) {
-        const onboardingCompleted = await adapter.storage.get<boolean>(
-          "onboardingCompleted"
-        )
-        if (!onboardingCompleted) {
-          setShowOnboarding(true)
-        }
-      }
-      // screenshotMode === 'default': showOnboarding stays false (suppressed)
-      setOnboardingChecked(true)
-    }
-    bootstrap()
-  }, [initBookmarks, initPreferences, screenshotMode])
-
   return (
     <ScrollArea className="h-svh bg-background text-foreground">
       {/* Main content */}
       <main className="px-4 pt-8 pb-24">
-        {isLoading ? (
+        {status === "unavailable" ? (
+          <div
+            role="alert"
+            className="flex flex-col items-center gap-3 p-12 text-center text-muted-foreground"
+          >
+            <p className="font-medium text-foreground">
+              Bookmarks are unavailable.
+            </p>
+            <p className="text-sm">
+              {loadError ?? "Could not reach the bookmark source."}
+            </p>
+            <Button variant="outline" size="sm" onClick={() => void retry()}>
+              Retry
+            </Button>
+          </div>
+        ) : isLoading || status === "loading" ? (
           <div className="flex items-center justify-center p-12 text-muted-foreground">
             Loading bookmarks...
           </div>

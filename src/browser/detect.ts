@@ -8,8 +8,8 @@ import { FirefoxFaviconAdapter } from "./firefox/favicon"
 import { StandaloneBookmarkAdapter } from "./standalone/bookmarks"
 import { StandaloneStorageAdapter } from "./standalone/storage"
 import { StandaloneFaviconAdapter } from "./standalone/favicon"
+import { getAdapterModePreference } from "./adapter-preference"
 
-const ADAPTER_PREF_KEY = "adapterMode"
 const SYNC_MIGRATION_FLAG = "__syncToLocalMigrated"
 
 /**
@@ -49,44 +49,6 @@ function isBrowserExtension(): boolean {
   }
 }
 
-function isFirefoxBuild(): boolean {
-  return import.meta.env.VITE_BUILD_TARGET === "firefox"
-}
-
-async function getUserAdapterPreference(): Promise<
-  "browser" | "standalone" | null
-> {
-  return new Promise((resolve) => {
-    const request = indexedDB.open("bookmarks-but-better-prefs", 1)
-    request.onupgradeneeded = () => {
-      const db = request.result
-      if (!db.objectStoreNames.contains("preferences")) {
-        db.createObjectStore("preferences")
-      }
-    }
-    request.onsuccess = () => {
-      const db = request.result
-      try {
-        const tx = db.transaction("preferences", "readonly")
-        const store = tx.objectStore("preferences")
-        const getReq = store.get(ADAPTER_PREF_KEY)
-        getReq.onsuccess = () => {
-          const value = getReq.result
-          if (value === "browser" || value === "standalone") {
-            resolve(value)
-          } else {
-            resolve(null)
-          }
-        }
-        getReq.onerror = () => resolve(null)
-      } catch {
-        resolve(null)
-      }
-    }
-    request.onerror = () => resolve(null)
-  })
-}
-
 function createChromeAdapter(): BrowserAdapter {
   return {
     bookmarks: new ChromeBookmarkAdapter(),
@@ -94,6 +56,11 @@ function createChromeAdapter(): BrowserAdapter {
     favicon: new ChromeFaviconAdapter(),
     capabilities: {
       openInManager: true,
+      move: true,
+      reorder: true,
+      // Ordering here travels on `move(id, {index})`; there is no
+      // whole-folder ordering endpoint to replace it.
+      setChildOrder: false,
     },
   }
 }
@@ -105,6 +72,11 @@ function createFirefoxAdapter(): BrowserAdapter {
     favicon: new FirefoxFaviconAdapter(),
     capabilities: {
       openInManager: false,
+      move: true,
+      reorder: true,
+      // Ordering here travels on `move(id, {index})`; there is no
+      // whole-folder ordering endpoint to replace it.
+      setChildOrder: false,
     },
   }
 }
@@ -116,18 +88,49 @@ function createStandaloneAdapter(): BrowserAdapter {
     favicon: new StandaloneFaviconAdapter(),
     capabilities: {
       openInManager: false,
+      move: true,
+      reorder: true,
+      // Ordering here travels on `move(id, {index})`; there is no
+      // whole-folder ordering endpoint to replace it.
+      setChildOrder: false,
     },
   }
 }
 
-export async function detectAdapter(): Promise<BrowserAdapter> {
-  const preference = await getUserAdapterPreference()
+interface DetectAdapterOptions {
+  /**
+   * Overrides the build target normally read from `import.meta.env.VITE_BUILD_TARGET`.
+   * Test-only seam — production callers never pass this.
+   */
+  buildTarget?: string
+}
+
+function resolveBuildTarget(
+  options?: DetectAdapterOptions
+): string | undefined {
+  return options?.buildTarget ?? import.meta.env.VITE_BUILD_TARGET
+}
+
+export async function detectAdapter(
+  options?: DetectAdapterOptions
+): Promise<BrowserAdapter> {
+  const buildTarget = resolveBuildTarget(options)
+
+  // The daemon build is served by the daemon itself on a fixed same-origin
+  // API, so there is nothing to detect or configure: skip the adapter-mode
+  // preference and browser-extension checks entirely.
+  if (buildTarget === "daemon") {
+    const { createDaemonAdapter } = await import("./daemon")
+    return createDaemonAdapter()
+  }
+
+  const preference = await getAdapterModePreference()
 
   if (preference === "standalone") {
     return createStandaloneAdapter()
   }
 
-  if (isFirefoxBuild() && isBrowserExtension()) {
+  if (buildTarget === "firefox" && isBrowserExtension()) {
     await migrateSyncToLocal()
     return createFirefoxAdapter()
   }

@@ -25,7 +25,10 @@ export function toOrganizerItem(
     kind,
     parentId: node.parentId ?? null,
     index,
-    childCount: kind === "folder" ? node.children?.length ?? 0 : 0,
+    childCount: kind === "folder" ? (node.children?.length ?? 0) : 0,
+    readOnly: node.readOnly,
+    orderReadOnly: node.orderReadOnly,
+    diagnostics: node.diagnostics,
   }
 }
 
@@ -38,7 +41,9 @@ export async function loadOrganizerChildren(
   }
 
   const [parent] = await bookmarks.getSubTree(parentId)
-  return (parent?.children ?? []).map((node, index) => toOrganizerItem(node, index))
+  return (parent?.children ?? []).map((node, index) =>
+    toOrganizerItem(node, index)
+  )
 }
 
 export async function loadOrganizerItem(

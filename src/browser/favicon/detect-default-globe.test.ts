@@ -6,9 +6,9 @@ const V2_URL =
 
 describe("isGoogleDefaultGlobe", () => {
   it("returns false for non-Google URLs even at 16x16", () => {
-    expect(isGoogleDefaultGlobe("https://example.com/favicon.ico", 16, 16)).toBe(
-      false
-    )
+    expect(
+      isGoogleDefaultGlobe("https://example.com/favicon.ico", 16, 16)
+    ).toBe(false)
   })
 
   it("returns false for empty URL", () => {

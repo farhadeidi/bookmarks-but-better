@@ -19,10 +19,7 @@ export function parseNetscapeBookmarks(html: string): BookmarkNode[] {
     return String(idCounter++)
   }
 
-  function parseDL(
-    dl: Element,
-    parentId?: string
-  ): BookmarkNode[] {
+  function parseDL(dl: Element, parentId?: string): BookmarkNode[] {
     const nodes: BookmarkNode[] = []
     const children = Array.from(dl.children)
 

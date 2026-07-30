@@ -1,82 +1,1109 @@
 name: Release
 
-# Builds both extensions and submits them to the Chrome Web Store and
-# Firefox AMO whenever a GitHub Release is published. You can also run it
-# manually from the Actions tab (workflow_dispatch) — useful for re-running
-# a submission without cutting a new release.
-on:
-  release:
-    types: [published]
-  workflow_dispatch:
-    inputs:
-      chrome:
-        description: "Publish to Chrome Web Store"
-        type: boolean
-        default: true
-      firefox:
-        description: "Publish to Firefox AMO"
-        type: boolean
-        default: true
+# What a tag does — and nothing else does it.
+#
+#   git push origin v4.0.0-beta.1
+#       Builds and tests every deliverable, then publishes a GitHub
+#       *prerelease* carrying the Chrome zip, the Firefox zip and a daemon
+#       archive for each supported platform. No store is contacted. There is no
+#       approval to give, because there is no job to approve.
+#
+#   git push origin v4.0.0
+#       The same build and the same tests, published as a normal GitHub
+#       Release. Only then does `publish-stores` become available, and it waits
+#       on the `production-stores` environment — a human has to approve the
+#       deployment before that job starts.
+#
+# Merging to main runs `ci.yml` and nothing here.
+#
+# Four independent things have to hold before a store is ever contacted, so
+# that no single mistake is enough:
+#
+#   1. the tag matched the stable pattern in `on.push.tags`;
+#   2. `validate` parsed it as a stable version and every version file agreed;
+#   3. `publish-stores` re-checked the version itself, immediately before use;
+#   4. the `production-stores` environment proved it was really configured, by
+#      carrying a secret that exists nowhere else.
+#
+# That fourth one exists because GitHub *auto-creates* an environment the first
+# time a workflow names one, with no protection rules at all. Without it, a
+# repository where the documented setup was skipped would publish on the first
+# stable tag and look exactly like one where it was done. See the canary guard
+# in `publish-stores` and `docs/RELEASING.md`.
+#
+# Every action is pinned to a commit SHA. A tag is a moving pointer and these
+# jobs are the ones holding publishing credentials, so the version that runs is
+# fixed to the byte. The trailing comment is the human-readable version.
 
+on:
+  push:
+    tags:
+      # Filter patterns, not regular expressions: `+` means "one or more of the
+      # preceding character". Deliberately two patterns rather than one loose
+      # one, so an unintended tag shape starts no run at all. `validate` still
+      # re-checks with a real anchored expression.
+      - "v[0-9]+.[0-9]+.[0-9]+"
+      - "v[0-9]+.[0-9]+.[0-9]+-beta.[0-9]+"
+  workflow_dispatch:
+    # Recovery: re-run a release for a tag whose store submission failed after
+    # the GitHub Release was already made. Select the tag itself under "Use
+    # workflow from" — `validate` refuses to run against a branch, so a
+    # dispatch cannot publish something that was never tagged.
+    #
+    # Both stores default to *off*. Recovery is normally one store, and a
+    # default of "publish to both" is how a re-run to fix Firefox silently
+    # ships an unintended Chrome update.
+    inputs:
+      publish_chrome:
+        description: "Re-submit to the Chrome Web Store"
+        type: boolean
+        default: false
+      publish_firefox:
+        description: "Re-submit to Firefox AMO"
+        type: boolean
+        default: false
+
+# Read-only by default. Exactly one job widens this, and only to what it needs.
 permissions:
   contents: read
 
+concurrency:
+  group: release-${{ github.ref }}
+  # Never cancel a release in flight: the second half of this pipeline uploads
+  # assets and talks to stores, and interrupting that leaves a half-published
+  # version behind.
+  cancel-in-progress: false
+
 jobs:
-  publish:
+  # --------------------------------------------------------------------------
+  # 1. Is this a release, and does the tree agree with the tag?
+  # --------------------------------------------------------------------------
+  validate:
+    name: Validate the tag and versions
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      tag: ${{ steps.check.outputs.tag }}
+      version: ${{ steps.check.outputs.version }}
+      prerelease: ${{ steps.check.outputs.prerelease }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Parse the tag and cross-check every version file
+        id: check
+        env:
+          # Via `env`, never interpolated into the script body: `${{ }}` inside
+          # `run:` is substituted before bash sees it, so a ref containing shell
+          # metacharacters would execute here.
+          REF_NAME: ${{ github.ref_name }}
+          REF_TYPE: ${{ github.ref_type }}
+        run: |
+          set -euo pipefail
+
+          if [ "$REF_TYPE" != "tag" ]; then
+            echo "::error::this workflow runs from a tag; '$REF_NAME' is a $REF_TYPE." \
+                 "Re-run it with the release tag selected under 'Use workflow from'."
+            exit 1
+          fi
+
+          # The authoritative check. The `on.push.tags` filters are a coarse
+          # first gate; this is anchored and is what the rest of the pipeline
+          # trusts.
+          if [[ ! "$REF_NAME" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)(-beta\.([0-9]+))?$ ]]; then
+            echo "::error::'$REF_NAME' is not a release tag." \
+                 "Expected vMAJOR.MINOR.PATCH (stable) or vMAJOR.MINOR.PATCH-beta.N (prerelease)."
+            exit 1
+          fi
+
+          version="${REF_NAME#v}"     # 4.0.0        or 4.0.0-beta.1
+          base="${version%%-*}"       # 4.0.0        either way
+          if [ "$version" = "$base" ]; then prerelease=false; else prerelease=true; fi
+
+          # Every version file carries the *base* version. A browser manifest
+          # cannot express a semver prerelease — Chrome allows one to four
+          # dot-separated integers and nothing else, and AMO rejects `-beta.1`
+          # — so the beta-ness of a build lives in the tag and in the GitHub
+          # release, never in a manifest. Betas therefore reuse the base
+          # version on purpose, and the check below is an equality against
+          # `base` rather than against `version`.
+          pkg=$(jq -r '.version' package.json)
+          chrome=$(jq -r '.version' manifests/manifest.chrome.json)
+          firefox=$(jq -r '.version' manifests/manifest.firefox.json)
+          cargo=$(awk '
+            /^\[workspace\.package\]/ { in_section = 1; next }
+            /^\[/                     { in_section = 0 }
+            in_section && /^version[[:space:]]*=/ {
+              gsub(/[",]/, "", $3); print $3; exit
+            }' Cargo.toml)
+
+          failed=0
+          note() { echo "::error::$*"; failed=1; }
+
+          for pair in "package.json:$pkg" "manifest.chrome.json:$chrome" \
+                      "manifest.firefox.json:$firefox" "Cargo.toml:$cargo"; do
+            file="${pair%%:*}"; value="${pair#*:}"
+            if [ "$value" != "$base" ]; then
+              note "$file says '$value' but tag $REF_NAME means '$base'."
+            fi
+          done
+
+          # A manifest that ever grew a prerelease suffix would be rejected by
+          # the store at upload time, which is far too late to find out.
+          for pair in "manifest.chrome.json:$chrome" "manifest.firefox.json:$firefox"; do
+            file="${pair%%:*}"; value="${pair#*:}"
+            if [[ ! "$value" =~ ^[0-9]+(\.[0-9]+){0,3}$ ]]; then
+              note "$file version '$value' is not a valid browser extension version" \
+                   "(one to four dot-separated integers)."
+            fi
+          done
+
+          # The internal constraint and the lockfile are the two places a Cargo
+          # version bump is normally forgotten.
+          if ! grep -qF "bbb-vault-core = { path = \"../bbb-vault-core\", version = \"$base\" }" \
+                 crates/bbb/Cargo.toml; then
+            note "crates/bbb/Cargo.toml does not constrain bbb-vault-core to '$base'."
+          fi
+          for crate in bbb bbb-vault-core; do
+            locked=$(awk -v c="$crate" '
+              $0 == "name = \"" c "\"" { getline; gsub(/[",]/, "", $3); print $3; exit }
+            ' Cargo.lock)
+            if [ "$locked" != "$base" ]; then
+              note "Cargo.lock has $crate at '$locked', not '$base'. Run 'cargo update --workspace'."
+            fi
+          done
+
+          if ! grep -q "^## \[$base\]" CHANGELOG.md; then
+            note "CHANGELOG.md has no '## [$base]' section."
+          fi
+
+          [ "$failed" -eq 0 ] || exit 1
+
+          {
+            echo "tag=$REF_NAME"
+            echo "version=$version"
+            echo "prerelease=$prerelease"
+          } >> "$GITHUB_OUTPUT"
+
+          {
+            echo "### ${REF_NAME}"
+            echo
+            if [ "$prerelease" = "true" ]; then
+              echo "Prerelease. Artifacts will be attached to a GitHub prerelease."
+              echo "**No store will be contacted.**"
+            else
+              echo "Stable release. Store publishing waits on the"
+              # Single-quoted on purpose: the backticks are Markdown, not a
+              # command substitution.
+              # shellcheck disable=SC2016
+              echo '`production-stores` environment and a manual approval.'
+            fi
+            echo
+            echo "Product version in every manifest: \`$base\`."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # --------------------------------------------------------------------------
+  # 2. The same gates main gets, against the tagged tree.
+  # --------------------------------------------------------------------------
+  checks:
+    name: Quality gates
+    needs: validate
+    uses: ./.github/workflows/ci.yml
+    permissions:
+      contents: read
+
+  # --------------------------------------------------------------------------
+  # 3. The web deliverables: both extensions, and the UI the daemon serves.
+  # --------------------------------------------------------------------------
+  web:
+    name: Build the extensions and the daemon UI
+    needs: [validate, checks]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
       - name: Set up Bun
-        uses: oven-sh/setup-bun@v2
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
-          bun-version: latest
+          # Reads the pinned version from package.json's "packageManager"
+          # field, so there is one place to bump it.
+          bun-version-file: package.json
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Build Chrome and Firefox
+      # The three `build:*` scripts, unchanged and called by their own names.
+      # Nothing here patches a manifest or rewrites a version: what ships is
+      # what `bun run build:chrome` produces on a developer's machine.
+      - name: Build the extensions
         run: bun run build
 
-      - name: Package zips
+      - name: Build the daemon UI
+        run: bun run build:daemon
+
+      - name: Confirm the built manifests carry the released version
+        env:
+          VERSION: ${{ needs.validate.outputs.version }}
         run: |
-          (cd dist-chrome && zip -r -q ../chrome.zip .)
-          (cd dist-firefox && zip -r -q ../firefox.zip .)
+          set -euo pipefail
+          base="${VERSION%%-*}"
+          for dist in dist-chrome dist-firefox; do
+            built=$(jq -r '.version' "$dist/manifest.json")
+            if [ "$built" != "$base" ]; then
+              echo "::error::$dist/manifest.json says '$built', expected '$base'."
+              exit 1
+            fi
+          done
+
+      # Byte-for-byte the packaging the previous workflow did — same `zip -r -q`
+      # from inside the dist directory — so an uploaded add-on differs from the
+      # last release only by its version. Only the file *name* is new, and it
+      # carries the full tag version (including `-beta.N`) so a downloaded
+      # artifact is identifiable even though the manifest inside cannot say it.
+      - name: Package the extensions
+        env:
+          VERSION: ${{ needs.validate.outputs.version }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          (cd dist-chrome && zip -r -q "../artifacts/bookmarks-but-better-chrome-$VERSION.zip" .)
+          (cd dist-firefox && zip -r -q "../artifacts/bookmarks-but-better-firefox-$VERSION.zip" .)
+          cd artifacts
+          for file in *.zip; do
+            sha256sum "$file" > "$file.sha256"
+          done
+          sha256sum --check ./*.sha256
+
+      # Every artifact that belongs in the release is named `release-*`, and the
+      # release job downloads exactly that glob. The daemon UI below is an
+      # intermediate, so it is deliberately named outside the glob and never
+      # reaches the release.
+      - name: Upload the extension packages
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: release-extensions
+          path: artifacts/
+          if-no-files-found: error
+          retention-days: 7
+
+      # Uploaded separately because every daemon archive embeds a copy: building
+      # it once here is what makes all five archives serve the identical UI.
+      - name: Upload the daemon UI
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: daemon-ui
+          path: dist-daemon/
+          if-no-files-found: error
+          retention-days: 7
+
+  # --------------------------------------------------------------------------
+  # 4. The daemon, once per supported platform.
+  # --------------------------------------------------------------------------
+  #
+  # The daemon does not compile the UI into the binary: `crates/bbb/src/ui.rs`
+  # serves it from a sandboxed `--ui-dir` handle chosen at run time, which is
+  # what lets the UI be replaced without a rebuild and what keeps the symlink
+  # refusal enforceable. "Embedding" it therefore means shipping it *in the
+  # archive*, next to the binary, so the downloaded artifact is self-contained:
+  #
+  #     bbb-<version>-<target>/
+  #       bbb[.exe]      the daemon, HTTP API and CLI
+  #       ui/            the built web UI — pass it as --ui-dir
+  #       README.md      crates/bbb/README.md
+  #       LICENSE
+  #
+  #     ./bbb serve --vault <path> --ui-dir ./ui
+  #
+  # Correctness is not established here: `checks` already ran the full Rust
+  # suite natively on Linux, macOS and Windows. These jobs only produce release
+  # binaries, which is why the cross-compiled aarch64 targets are build-only —
+  # an x86_64 runner cannot execute them.
+  daemon:
+    name: Build bbb for ${{ matrix.target }}
+    needs: [validate, checks, web]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    strategy:
+      # One platform failing should not hide whether the others are fine.
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            runner: ubuntu-latest
+            archive: tar.gz
+          - target: aarch64-unknown-linux-gnu
+            runner: ubuntu-latest
+            archive: tar.gz
+            # The only target needing anything extra, and it needs exactly one
+            # thing: a cross-linker. Kept as matrix data rather than an `if`
+            # ladder so a sixth target is a row, not a new branch.
+            apt_packages: gcc-aarch64-linux-gnu
+            linker: aarch64-linux-gnu-gcc
+          - target: x86_64-apple-darwin
+            runner: macos-latest
+            archive: tar.gz
+          - target: aarch64-apple-darwin
+            runner: macos-latest
+            archive: tar.gz
+          - target: x86_64-pc-windows-msvc
+            runner: windows-latest
+            archive: zip
+    defaults:
+      run:
+        # Git Bash on the Windows runner, so the packaging steps below are one
+        # script rather than one per platform.
+        shell: bash
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Set up Rust
+        # rustup installs whatever rust-toolchain.toml pins, so the version
+        # lives in exactly one file rather than being repeated here.
+        run: |
+          set -euo pipefail
+          rustup show active-toolchain || rustup toolchain install
+          rustup target add "${{ matrix.target }}"
+
+      - name: Install the cross-linker
+        if: matrix.apt_packages != ''
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends --yes ${{ matrix.apt_packages }}
+          # Cargo reads the linker from CARGO_TARGET_<TARGET>_LINKER, with the
+          # target upper-cased and its hyphens turned into underscores. Derived
+          # rather than written out, so it cannot disagree with matrix.target.
+          variable="CARGO_TARGET_$(echo '${{ matrix.target }}' | tr '[:lower:]-' '[:upper:]_')_LINKER"
+          echo "$variable=${{ matrix.linker }}" >> "$GITHUB_ENV"
+          echo "using $variable=${{ matrix.linker }}"
+
+      - name: Cache cargo artifacts
+        uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+        with:
+          key: ${{ matrix.target }}
+
+      - name: Build the daemon
+        run: cargo build --release --locked --package bbb --bin bbb --target "${{ matrix.target }}"
+
+      - name: Download the daemon UI
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: daemon-ui
+          path: daemon-ui
+
+      - name: Assemble the archive contents
+        id: stage
+        env:
+          VERSION: ${{ needs.validate.outputs.version }}
+          TARGET: ${{ matrix.target }}
+        run: |
+          set -euo pipefail
+          name="bbb-$VERSION-$TARGET"
+          binary="bbb"
+          if [ "$TARGET" = "x86_64-pc-windows-msvc" ]; then binary="bbb.exe"; fi
+
+          mkdir -p "staging/$name"
+          cp "target/$TARGET/release/$binary" "staging/$name/$binary"
+          cp -R daemon-ui "staging/$name/ui"
+          cp crates/bbb/README.md "staging/$name/README.md"
+          cp LICENSE "staging/$name/LICENSE"
+
+          # A daemon with no index.html to serve starts and then refuses the UI
+          # at run time; catching it here is the difference between a failed
+          # build and a broken download.
+          test -f "staging/$name/ui/index.html"
+
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+
+      - name: Create the archive
+        env:
+          NAME: ${{ steps.stage.outputs.name }}
+          ARCHIVE: ${{ matrix.archive }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          cd staging
+          if [ "$ARCHIVE" = "zip" ]; then
+            # 7z is present on the Windows runner; `zip` is not.
+            7z a -tzip -bso0 "../artifacts/$NAME.zip" "$NAME" >/dev/null
+          else
+            tar -czf "../artifacts/$NAME.tar.gz" "$NAME"
+          fi
+          cd ../artifacts
+          # sha256sum on Linux and Git Bash, shasum on macOS; both write the
+          # same `<hash>  <name>` line that `--check` reads back.
+          if command -v sha256sum >/dev/null 2>&1; then
+            sha256sum "$NAME.$ARCHIVE" > "$NAME.$ARCHIVE.sha256"
+            sha256sum --check "$NAME.$ARCHIVE.sha256"
+          else
+            shasum -a 256 "$NAME.$ARCHIVE" > "$NAME.$ARCHIVE.sha256"
+            shasum -a 256 --check "$NAME.$ARCHIVE.sha256"
+          fi
+          cat "$NAME.$ARCHIVE.sha256"
+
+      - name: Upload the archive
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: release-daemon-${{ matrix.target }}
+          path: artifacts/
+          if-no-files-found: error
+          retention-days: 7
+
+  # --------------------------------------------------------------------------
+  # 5. The GitHub release. Prerelease for a beta tag, normal for a stable one.
+  # --------------------------------------------------------------------------
+  github-release:
+    name: Publish the GitHub release
+    needs: [validate, web, daemon]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      # The one job that writes anything, and the only one raised above the
+      # read-only default.
+      contents: write
+    steps:
+      - name: Collect every artifact
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          # `release-*` only: the `daemon-ui` intermediate must not end up as a
+          # loose pile of .html and .js files attached to the release.
+          pattern: release-*
+          path: artifacts
+          merge-multiple: true
+
+      - name: Verify every checksum
+        run: |
+          set -euo pipefail
+          cd artifacts
+          sha256sum --check ./*.sha256
+          ls -1
+
+      - name: Write the release notes
+        id: notes
+        env:
+          TAG: ${{ needs.validate.outputs.tag }}
+          VERSION: ${{ needs.validate.outputs.version }}
+          PRERELEASE: ${{ needs.validate.outputs.prerelease }}
+        run: |
+          set -euo pipefail
+          base="${VERSION%%-*}"
+          {
+            if [ "$PRERELEASE" = "true" ]; then
+              cat <<NOTE
+          **Prerelease $TAG.** Nothing here has been submitted to the Chrome Web
+          Store or to Firefox AMO, and nothing in this pipeline can submit it —
+          the store job does not run for a prerelease tag at all.
+
+          The extension manifests inside these packages read \`$base\`, because a
+          browser manifest cannot express a \`-beta.N\` suffix. Identify the build
+          by this tag, not by the manifest version.
+
+          Install the extensions unpacked (Chrome: *Load unpacked*; Firefox:
+          *Load Temporary Add-on*).
+          NOTE
+            else
+              cat <<NOTE
+          **$TAG.** See [CHANGELOG.md](https://github.com/${GITHUB_REPOSITORY}/blob/${TAG}/CHANGELOG.md)
+          for what changed.
+
+          Store submission runs after a maintainer approves the
+          \`production-stores\` deployment on this workflow run.
+          NOTE
+            fi
+
+            cat <<'NOTE'
+
+          ### The daemon
+
+          Download the archive for your platform, verify it against its
+          `.sha256`, unpack it, and run:
+
+          ```sh
+          ./bbb serve --vault <path-to-your-vault> --ui-dir ./ui
+          ```
+
+          The `ui/` directory in the archive is the built web UI; `--ui-dir` is
+          what makes the daemon serve it. Without it, only the API is served.
+
+          #### macOS and Windows: the binaries are not signed
+
+          There is no Apple Developer ID signature or notarization, and no
+          Authenticode signature, so Gatekeeper and SmartScreen will both object.
+          Verify the `.sha256` first, then:
+
+          - **macOS** — `xattr -d com.apple.quarantine ./bbb`
+          - **Windows** — *More info* → *Run anyway* on the SmartScreen prompt
+
+          Linux is unaffected.
+          NOTE
+          } > release-notes.md
+          cat release-notes.md
+
+      # Runs on the FIRST attempt of a tag push, and nowhere else.
+      #
+      # Skipped on workflow_dispatch: a recovery run re-submits to a store, and
+      # the release it is recovering already exists.
+      #
+      # Skipped on a re-run because `action-gh-release` is an upsert, not an
+      # insert: pointed at a tag that already has a release it updates that
+      # release in place, rewriting the notes and overwriting same-named assets.
+      # On a re-run that would silently replace the artifacts people have
+      # already been downloading — and the checksums published alongside them —
+      # with a fresh build. Limiting creation to attempt 1 makes a re-run
+      # incapable of touching a published release at all.
+      #
+      # The consequence is deliberate and has to be understood: if attempt 1
+      # failed *before* this job, no release was created, and re-running will
+      # not create one either. The step below detects exactly that and spells
+      # out the recovery. See docs/RELEASING.md.
+      - name: Create the GitHub release
+        if: github.event_name == 'push' && github.run_attempt == '1'
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
+        with:
+          tag_name: ${{ needs.validate.outputs.tag }}
+          name: ${{ needs.validate.outputs.tag }}
+          body_path: release-notes.md
+          draft: false
+          prerelease: ${{ needs.validate.outputs.prerelease == 'true' }}
+          # A beta must never become the release the repository advertises.
+          make_latest: ${{ needs.validate.outputs.prerelease != 'true' }}
+          fail_on_unmatched_files: true
+          files: artifacts/*
+
+      # A re-run creates nothing and publishes nothing, so the operator is told
+      # what actually exists rather than being left to infer it from jobs that
+      # did nothing. This only reads; it never creates, updates or uploads.
+      #
+      # Fires on a re-run of EITHER event. `publish-stores` does not exist on
+      # any re-run — it requires the first attempt at the job level, because
+      # GitHub preserves dispatch inputs across a re-run — so without this the
+      # operator would re-run a failed recovery, watch the store job vanish, and
+      # be given no reason for it.
+      - name: Report what a re-run did and did not do
+        if: github.run_attempt != '1'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.validate.outputs.tag }}
+          ATTEMPT: ${{ github.run_attempt }}
+          PRERELEASE: ${{ needs.validate.outputs.prerelease }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+
+          # A 404 means "no release"; anything else means the question was not
+          # answered, and reporting "missing" on a network blip would send the
+          # operator to recreate a release that already exists.
+          if body=$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${TAG}" 2>stderr.log); then
+            found=true
+          elif grep -q "HTTP 404" stderr.log; then
+            found=false
+          else
+            echo "::error::could not determine whether a release exists for $TAG:"
+            cat stderr.log
+            exit 1
+          fi
+
+          # Expected asset count comes from what this run actually built, so it
+          # cannot drift as targets are added or removed.
+          expected=$(find artifacts -maxdepth 1 -type f | wc -l)
+
+          {
+            echo "### Nothing was published on this re-run"
+            echo
+            echo "This is attempt #$ATTEMPT. **No store was contacted and the"
+            echo "GitHub release was not modified.** Both are limited to the"
+            echo "first attempt of a run."
+            echo
+            echo "The release action updates in place, so on a re-run it would"
+            echo "rewrite the notes and overwrite the assets of a release people"
+            echo "may already be downloading. And GitHub keeps a dispatch's"
+            echo "inputs across a re-run, so re-running a manual recovery would"
+            echo "silently re-submit to whichever store was ticked."
+            echo
+            if [ "$EVENT" = "workflow_dispatch" ]; then
+              echo "> **Re-running a recovery does nothing.** To submit again,"
+              echo "> start a fresh **Actions → Release → Run workflow** against"
+              echo "> the tag \`$TAG\` and tick the stores you want. A re-run is"
+              echo "> never a second submission."
+              echo
+            fi
+            if [ "$found" = "true" ]; then
+              draft=$(jq -r '.draft' <<<"$body")
+              pre=$(jq -r '.prerelease' <<<"$body")
+              assets=$(jq -r '.assets | length' <<<"$body")
+              echo "A release for \`$TAG\` **exists** (draft: \`$draft\`,"
+              echo "prerelease: \`$pre\`) and carries **$assets of the $expected**"
+              echo "assets this run produced."
+              if [ "$assets" -ne "$expected" ]; then
+                echo
+                echo "> **The asset list is incomplete.** An earlier attempt"
+                echo "> probably died part-way through uploading. This workflow"
+                echo "> will not overwrite a published release to repair it —"
+                echo "> upload the missing files by hand from the run's artifacts,"
+                echo "> or delete the release and re-push the tag."
+                echo "::warning::release $TAG has $assets of $expected assets"
+              fi
+            else
+              echo "**No release exists for \`$TAG\`.** An earlier attempt failed"
+              echo "before it got this far, and a re-run will not create one."
+              echo
+              echo "To finish this release, do one of:"
+              echo
+              echo "1. Delete the tag and push it again, which starts a clean"
+              echo "   first attempt — simplest when nothing was published yet."
+              echo "2. Create the release by hand from this run's artifacts"
+              echo "   (\`gh release create $TAG artifacts/*\`), then use"
+              echo "   **Run workflow** for the stores."
+              echo
+              echo "Store submission cannot proceed until the release exists:"
+              echo "the dispatch path verifies it first, on purpose."
+              echo "::warning::no release exists for $TAG; see the job summary"
+            fi
+            if [ "$PRERELEASE" = "true" ]; then
+              echo
+              echo "This is a prerelease tag, so no store was involved either way."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # --------------------------------------------------------------------------
+  # 6. The stores. Stable only, and only after a human approves.
+  # --------------------------------------------------------------------------
+  publish-stores:
+    name: Publish to the extension stores
+    needs: [validate, web, github-release]
+    # The job simply does not exist for a prerelease, which is a stronger
+    # guarantee than a step that decides not to run: with no job, there is no
+    # environment to approve and no secret to read.
+    #
+    # `github.run_attempt == '1'` is load-bearing and applies to BOTH events.
+    # GitHub preserves `workflow_dispatch` inputs across a re-run, so a re-run
+    # of a manual recovery sees the same `publish_chrome`/`publish_firefox` it
+    # was started with — "Re-run failed jobs" on a dispatch would silently
+    # re-submit to the store that was ticked. Requiring the first attempt at the
+    # job level means neither a tag-push re-run nor a dispatch re-run has a job
+    # at all, so there is nothing to approve and no credential to resolve.
+    #
+    # A fresh manual recovery is attempt 1 and runs normally. Another submission
+    # after that needs another **Run workflow**, never a re-run.
+    if: >-
+      needs.validate.outputs.prerelease != 'true'
+      && github.run_attempt == '1'
+      && (github.event_name == 'push'
+          || inputs.publish_chrome
+          || inputs.publish_firefox)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # Naming an environment here is what makes GitHub hold the job for a
+    # reviewer — but only if the environment actually has required reviewers.
+    # An environment GitHub auto-created because this line referenced one has
+    # none, and holds nothing. The canary guard below is what tells those two
+    # states apart. See docs/RELEASING.md.
+    environment:
+      name: production-stores
+      url: https://github.com/${{ github.repository }}/releases/tag/${{ needs.validate.outputs.tag }}
+    permissions:
+      contents: read
+    steps:
+      # ---------------------------------------------------------------------
+      # Cheapest refusal first, and the one that needs nothing to make it.
+      # ---------------------------------------------------------------------
+      #
+      # Deliberately the FIRST step in the job. It reads only `validate`'s
+      # output — no secret, no token, no network — so putting it ahead of the
+      # release lookup, the canary and both credential guards means a non-stable
+      # version is refused before any credential is resolved into the runner's
+      # environment at all. Everything below it can then assume a stable tag.
+      - name: Refuse anything that is not a stable version
+        env:
+          VERSION: ${{ needs.validate.outputs.version }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::refusing to publish '$VERSION' to a store: not a stable version."
+            exit 1
+          fi
+          echo "publishing $VERSION"
+
+      # ---------------------------------------------------------------------
+      # Does the release this recovery claims to be finishing actually exist?
+      # ---------------------------------------------------------------------
+      #
+      # A manual dispatch exists to finish a release whose store submission
+      # failed. That premise was never checked, so a dispatch against a tag
+      # whose release was never created — because the first attempt died
+      # upstream, which is exactly when the release step is skipped — would
+      # publish an extension to a store with no corresponding GitHub release
+      # behind it. The store would then be ahead of the repository, which is
+      # not a state anything downstream can undo.
+      #
+      # So: a published, non-draft, non-prerelease release for the exact
+      # validated tag, or this job stops here. `contents: read` is all it takes
+      # and all the job has. Only the tag and three booleans are ever printed.
+      #
+      # Push runs skip this: `needs: github-release` already guarantees the
+      # release, and store steps there are limited to the first attempt anyway.
+      - name: Refuse a recovery for a release that does not exist
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.validate.outputs.tag }}
+        run: |
+          set -euo pipefail
+
+          # A 404 is "no release" and is a refusal. Any other failure means the
+          # question was not answered at all, which is also a refusal — failing
+          # closed means never treating an unanswered query as a pass.
+          if body=$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${TAG}" 2>stderr.log); then
+            :
+          elif grep -q "HTTP 404" stderr.log; then
+            echo "::error::no GitHub release exists for $TAG."
+            echo "::error::A dispatch recovery finishes an existing release; it does not"
+            echo "::error::start one. Create the release first — see docs/RELEASING.md."
+            exit 1
+          else
+            echo "::error::could not verify the release for $TAG:"
+            cat stderr.log
+            exit 1
+          fi
+
+          draft=$(jq -r '.draft' <<<"$body")
+          prerelease=$(jq -r '.prerelease' <<<"$body")
+          tag_name=$(jq -r '.tag_name' <<<"$body")
+
+          failed=0
+          # Exact match. The lookup is by tag already, but confirming what came
+          # back is what makes this a check rather than a request.
+          if [ "$tag_name" != "$TAG" ]; then
+            echo "::error::asked for $TAG but the release reports tag '$tag_name'."
+            failed=1
+          fi
+          if [ "$draft" != "false" ]; then
+            echo "::error::the release for $TAG is a draft. A draft is not published,"
+            echo "::error::so publishing to a store would put the extension ahead of"
+            echo "::error::the repository. Publish the release first."
+            failed=1
+          fi
+          if [ "$prerelease" != "false" ]; then
+            echo "::error::the release for $TAG is marked as a prerelease. Prereleases"
+            echo "::error::are never submitted to a store."
+            failed=1
+          fi
+          [ "$failed" -eq 0 ] || exit 1
+
+          echo "release $TAG is published (draft=$draft, prerelease=$prerelease)"
+          {
+            echo "### Recovery target"
+            echo
+            echo "Finishing the store submission for the published release"
+            echo "[\`$TAG\`](https://github.com/${GITHUB_REPOSITORY}/releases/tag/${TAG})."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # ---------------------------------------------------------------------
+      # Is this environment real, or did GitHub invent it a moment ago?
+      # ---------------------------------------------------------------------
+      #
+      # `PRODUCTION_STORES_CONFIGURED` is a marker with no value of its own: it
+      # exists only as a secret *on this environment*, created by hand as the
+      # last step of the documented setup. An auto-created environment does not
+      # have it, so a repository where the setup was skipped stops here instead
+      # of publishing.
+      #
+      # What this proves: the environment was configured deliberately.
+      #
+      # What it says nothing about, by design: where the six store credentials
+      # live. They are **repository** secrets, deliberately — GitHub cannot
+      # reveal a stored secret's value, so moving them would mean regenerating
+      # each one at its source, and regenerating the AMO key revokes the live
+      # one. That cost is not worth paying for a release, and it does not weaken
+      # the gate: approval is enforced by the environment on this job, not by
+      # where the secrets are stored. Repository scope does mean broader
+      # exposure to *other* workflows, so moving them later is recommended
+      # defence in depth — not a prerequisite. See docs/RELEASING.md.
+      #
+      # The marker is only as good as one invariant: it must NEVER be created
+      # at repository scope. If it ever is, this guard passes forever and the
+      # protection is gone with nothing to show for it. That is why the canary
+      # is a separate name from the six, and the one secret that must stay
+      # environment-only.
+      - name: Refuse to publish unless this environment was really configured
+        env:
+          CANARY: ${{ secrets.PRODUCTION_STORES_CONFIGURED }}
+        run: |
+          set -euo pipefail
+          # Tested through the environment and with -z only. The value is never
+          # echoed, interpolated into a command line, or written to the summary.
+          if [ -z "${CANARY:-}" ]; then
+            echo "::error::the 'production-stores' environment is not configured."
+            echo "::error::PRODUCTION_STORES_CONFIGURED is missing, which means this"
+            echo "::error::environment was most likely auto-created by GitHub with no"
+            echo "::error::required reviewers and no secrets of its own."
+            echo "::error::Refusing to publish. See docs/RELEASING.md, 'One-time setup'."
+            exit 1
+          fi
+          echo "the production-stores environment is configured"
+
+      # ---------------------------------------------------------------------
+      # Partial-publish guard — NOT a configuration check.
+      # ---------------------------------------------------------------------
+      #
+      # This asks one question and answers only that one: does every credential
+      # name resolve to a non-empty value from *somewhere*? It says nothing
+      # about which scope supplied it, and it is deliberately not named as if
+      # it did.
+      #
+      # The failure it prevents is concrete. Chrome is submitted before Firefox,
+      # so a credential missing from every scope means Chrome publishes, AMO
+      # then fails on an empty key, and the release is half-shipped — the one
+      # state that cannot be undone by re-running anything.
+      #
+      # There is one guard per store rather than one for all six, because the
+      # job does not always run both. A Firefox-only recovery dispatch must not
+      # be blocked by a Chrome credential it will never use.
+      #
+      # Each guard carries the SAME `if` as the publish step it protects, and
+      # they have to stay that way. Editing one condition without the other
+      # would silently over-check on one path and under-check on the other, so
+      # the pairing is named in a comment on both.
+
+      # MIRRORS the `if` of "Publish to the Chrome Web Store" below.
+      # Change one, change both.
+      - name: Refuse to start a Chrome publish that cannot finish
+        if: github.run_attempt == '1' && (github.event_name == 'push' || inputs.publish_chrome)
+        env:
+          CHROME_EXTENSION_ID: ${{ secrets.CHROME_EXTENSION_ID }}
+          CHROME_CLIENT_ID: ${{ secrets.CHROME_CLIENT_ID }}
+          CHROME_CLIENT_SECRET: ${{ secrets.CHROME_CLIENT_SECRET }}
+          CHROME_REFRESH_TOKEN: ${{ secrets.CHROME_REFRESH_TOKEN }}
+        run: |
+          set -euo pipefail
+          missing=0
+          # Indirect expansion, so only the *name* is ever printed. No value is
+          # echoed even when the check fails.
+          for name in CHROME_EXTENSION_ID CHROME_CLIENT_ID CHROME_CLIENT_SECRET \
+                      CHROME_REFRESH_TOKEN; do
+            if [ -z "${!name:-}" ]; then
+              echo "::error::$name is empty in every scope this job can read."
+              missing=1
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then
+            echo "::error::Refusing to start: Chrome is submitted before Firefox, so"
+            echo "::error::continuing would publish to one store and strand the other."
+            exit 1
+          fi
+          echo "the four Chrome credential names resolve to a non-empty value"
+
+      # MIRRORS the `if` of "Submit to Firefox AMO" below.
+      # Change one, change both.
+      - name: Refuse to start a Firefox publish that cannot finish
+        if: github.run_attempt == '1' && (github.event_name == 'push' || inputs.publish_firefox)
+        env:
+          AMO_JWT_ISSUER: ${{ secrets.AMO_JWT_ISSUER }}
+          AMO_JWT_SECRET: ${{ secrets.AMO_JWT_SECRET }}
+        run: |
+          set -euo pipefail
+          missing=0
+          for name in AMO_JWT_ISSUER AMO_JWT_SECRET; do
+            if [ -z "${!name:-}" ]; then
+              echo "::error::$name is empty in every scope this job can read."
+              missing=1
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then
+            echo "::error::Refusing to start: Chrome is submitted before Firefox, so"
+            echo "::error::continuing would publish to one store and strand the other."
+            exit 1
+          fi
+          echo "the two AMO credential names resolve to a non-empty value"
+
+      - name: Collect the extension packages
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: release-extensions
+          path: artifacts
+
+      - name: Verify the packages and name them
+        id: packages
+        env:
+          VERSION: ${{ needs.validate.outputs.version }}
+        run: |
+          set -euo pipefail
+          cd artifacts
+          # This proves the artifact download was intact — nothing more. The
+          # .sha256 files were produced in this same run from these same zips,
+          # so it cannot say anything about the assets attached to the release.
+          #
+          # On a tag push it does not need to: `github-release` published these
+          # very bytes. On a workflow_dispatch recovery run it is a different
+          # build entirely — `web` rebuilt the extensions from the tag — so what
+          # goes to the store is byte-identical to the published asset only if
+          # the build was reproducible. The summary below says so plainly rather
+          # than letting a green check imply otherwise.
+          sha256sum --check ./*.sha256
+          {
+            echo "chrome=$PWD/bookmarks-but-better-chrome-$VERSION.zip"
+            echo "firefox=$PWD/bookmarks-but-better-firefox-$VERSION.zip"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Say where these packages came from
+        env:
+          EVENT: ${{ github.event_name }}
+          TAG: ${{ needs.validate.outputs.tag }}
+        run: |
+          set -euo pipefail
+          {
+            echo "### Packages being submitted"
+            echo
+            if [ "$EVENT" = "workflow_dispatch" ]; then
+              echo "**Rebuilt from \`$TAG\` in this run.** These are *not* the exact"
+              echo "files attached to the GitHub release — they were built again from"
+              echo "the same source. They match the published assets only insofar as"
+              echo "the build is reproducible."
+            else
+              echo "Built once in this run and published to the GitHub release for"
+              echo "\`$TAG\`. The store submission and the release carry the same bytes."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
 
       # --- Chrome Web Store ---------------------------------------------------
-      - name: Publish to Chrome Web Store
-        if: ${{ github.event_name == 'release' || inputs.chrome }}
-        uses: mnao305/chrome-extension-upload@v6.0.0
+      # Its `if` is MIRRORED by "Refuse to start a Chrome publish that cannot
+      # finish" above. Change one, change both.
+      - name: Publish to the Chrome Web Store
+        id: chrome
+        if: github.run_attempt == '1' && (github.event_name == 'push' || inputs.publish_chrome)
+        uses: mnao305/chrome-extension-upload@fdfe79400af990f5145a319e834aee64907ccff4 # v6.0.0
         with:
-          file-path: chrome.zip
+          file-path: ${{ steps.packages.outputs.chrome }}
           extension-id: ${{ secrets.CHROME_EXTENSION_ID }}
           client-id: ${{ secrets.CHROME_CLIENT_ID }}
           client-secret: ${{ secrets.CHROME_CLIENT_SECRET }}
           refresh-token: ${{ secrets.CHROME_REFRESH_TOKEN }}
           publish: true
 
+      # The mirror of the AMO report below. Without it a Chrome failure leaves
+      # nothing but the raw log, while Firefox gets a written explanation.
+      - name: Report the Chrome submission
+        if: always() && github.run_attempt == '1' && (github.event_name == 'push' || inputs.publish_chrome)
+        env:
+          OUTCOME: ${{ steps.chrome.outcome }}
+          VERSION: ${{ needs.validate.outputs.version }}
+          # The ref to pick under *Use workflow from* is the tag, `v4.0.0` —
+          # not the bare version. Naming the wrong one sends the operator to a
+          # dropdown entry that does not exist.
+          TAG: ${{ needs.validate.outputs.tag }}
+        run: |
+          set -euo pipefail
+          {
+            echo "### Chrome Web Store"
+            echo
+            if [ "$OUTCOME" = "success" ]; then
+              echo "Version \`$VERSION\` was uploaded and published."
+              echo
+              echo "Chrome review can still reject it after the fact. Confirm at"
+              echo "<https://chrome.google.com/webstore/devconsole>."
+            elif [ -z "$OUTCOME" ] || [ "$OUTCOME" = "skipped" ]; then
+              echo "The submission **did not run** — an earlier step in this job"
+              echo "failed first. Nothing was sent to the Chrome Web Store."
+            else
+              echo "The submission **failed** (\`$OUTCOME\`). Nothing was published,"
+              echo "and **Firefox was not reached either** — Chrome runs first, so"
+              echo "this failure stopped the job before AMO. Both stores still need"
+              echo "publishing."
+              echo
+              echo "Two failures look identical here and need opposite retries, so"
+              echo "check <https://chrome.google.com/webstore/devconsole> first and"
+              echo "see whether \`$VERSION\` is already there:"
+              echo
+              echo "- **It is already there** — the upload was rejected as a duplicate,"
+              echo "  so Chrome is done. Re-running it would just fail again and stall"
+              echo "  Firefox a second time. Retry with **only Firefox** ticked."
+              echo "- **It is not there** — the upload genuinely failed. Retry with"
+              echo "  **both** ticked; there is no duplicate to fear."
+              echo
+              echo "Either way: **Actions → Release → Run workflow**, select the tag"
+              echo "\`$TAG\` under *Use workflow from*. See \`docs/RELEASING.md\`."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
       # --- Firefox AMO --------------------------------------------------------
-      # Signs and submits the build to the listed channel via the AMO API.
       #
-      # continue-on-error: for the *listed* channel the version is fully
-      # submitted once validation passes ("Waiting for approval..."), but
-      # web-ext then tries to download a signed .xpi that does not exist until
-      # a reviewer approves the listing — so it exits non-zero on a successful
-      # submission. We tolerate that here. ALWAYS confirm the new version on the
-      # AMO dashboard after a release: https://addons.mozilla.org/developers/
+      # This step used to carry a blanket `continue-on-error: true`, for a real
+      # reason: on the *listed* channel a submission is complete once AMO
+      # accepts and validates it, but the signed .xpi does not exist until a
+      # human reviewer approves the listing — days later. Waiting for that file
+      # made a perfectly successful submission exit non-zero.
       #
-      # Note: AMO requires a source-code upload for review of bundled builds;
-      # the first listed submission may need a one-time manual source upload
-      # from the AMO dashboard.
-      - name: Publish to Firefox AMO
-        if: ${{ github.event_name == 'release' || inputs.firefox }}
-        continue-on-error: true
-        uses: kewisch/action-web-ext@v2.0
+      # The cost was that it swallowed everything else too: expired credentials,
+      # a duplicate version, a validation failure — all of them green.
+      #
+      # `approvalTimeout: 0` is the actual fix. It tells the action to return as
+      # soon as upload and validation succeed, without polling for approval or
+      # downloading a signed file, so the benign case exits zero on its own and
+      # the step needs no error suppression at all. A genuine failure now fails
+      # the job, which is the whole point.
+      #
+      # Note also that AMO requires a source-code upload for review of bundled
+      # builds; the first listed submission may need a one-time manual source
+      # upload from the AMO dashboard.
+      # Its `if` is MIRRORED by "Refuse to start a Firefox publish that cannot
+      # finish" above. Change one, change both.
+      - name: Submit to Firefox AMO
+        id: amo
+        if: github.run_attempt == '1' && (github.event_name == 'push' || inputs.publish_firefox)
+        uses: kewisch/action-web-ext@84a13bb9e1b6108c43788ba091c41ca1dba6ad45 # v2.0
         with:
           cmd: sign
-          source: firefox.zip
+          source: ${{ steps.packages.outputs.firefox }}
           channel: listed
           apiKey: ${{ secrets.AMO_JWT_ISSUER }}
           apiSecret: ${{ secrets.AMO_JWT_SECRET }}
+          # How long to wait for upload and validation. A real failure surfaces
+          # within this window.
           timeout: 900000
+          # How long to wait for a *reviewer*. Zero: see above.
+          approvalTimeout: 0
+
+      # A listed submission is accepted, not yet published, and only the AMO
+      # dashboard can say which. `always()` so this is written even when the
+      # submission above failed and the operator most needs to be told.
+      - name: Report the AMO submission
+        if: always() && github.run_attempt == '1' && (github.event_name == 'push' || inputs.publish_firefox)
+        env:
+          OUTCOME: ${{ steps.amo.outcome }}
+          ADDON_ID: ${{ steps.amo.outputs.addon_id }}
+          VERSION: ${{ needs.validate.outputs.version }}
+          # The tag, `v4.0.0` — the ref to select under *Use workflow from*.
+          # `VERSION` is the bare `4.0.0` and matches no dropdown entry.
+          TAG: ${{ needs.validate.outputs.tag }}
+        run: |
+          set -euo pipefail
+          {
+            echo "### Firefox AMO"
+            echo
+            if [ "$OUTCOME" = "success" ]; then
+              echo "Version \`$VERSION\` was uploaded and passed validation" \
+                   "(add-on \`${ADDON_ID:-unknown}\`)."
+              echo
+              echo "It is **submitted, not yet published**: a listed version goes"
+              echo "live only once a Mozilla reviewer approves it. Confirm at"
+              echo "<https://addons.mozilla.org/developers/>."
+            elif [ -z "$OUTCOME" ] || [ "$OUTCOME" = "skipped" ]; then
+              # Reached when an earlier step in this job failed, so the
+              # submission never ran. Saying "failed" here would send the
+              # operator to the wrong log.
+              echo "The submission **did not run** — an earlier step in this job"
+              echo "failed first. Nothing was sent to AMO."
+            else
+              echo "The submission **failed** (\`$OUTCOME\`). Nothing was published"
+              echo "to AMO. Chrome ran before this step — check its section above"
+              echo "to see whether it succeeded."
+              echo
+              echo "Read the step log, then **Actions → Release → Run workflow**,"
+              echo "select the tag \`$TAG\` under *Use workflow from*, and tick"
+              echo "**Re-submit to Firefox AMO** only — leave Chrome off if it"
+              echo "already published, or it will be rejected as a duplicate."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

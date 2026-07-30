@@ -8,6 +8,7 @@ import {
   DragDropHorizontalIcon,
   Folder01Icon,
   PencilEdit01Icon,
+  SquareLock01Icon,
 } from "@hugeicons/core-free-icons"
 import { Button } from "@/components/ui/button"
 import { buttonVariants } from "@/components/ui/button-variants"
@@ -17,13 +18,25 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import {
+  Tooltip,
+  TooltipTrigger,
+  TooltipContent,
+} from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
+import { describeOrderReadOnly, describeReadOnly } from "@/lib/bookmark-utils"
 import type { ItemInstance } from "@headless-tree/core"
 import type { OrganizerItemData } from "./bookmark-organizer-types"
+
+function readOnlyReason(itemData: OrganizerItemData | undefined): string {
+  return describeReadOnly(itemData ?? {})
+}
 
 interface BookmarkOrganizerRowProps {
   item: ItemInstance<OrganizerItemData>
   isDragging: boolean
+  /** Whether this item can be dragged at all (a move, a reorder, or both). */
+  dragEnabled: boolean
   onRename: (item: ItemInstance<OrganizerItemData>) => void | Promise<void>
   onDelete: (item: ItemInstance<OrganizerItemData>) => void | Promise<void>
   onCreateItem: (type: "folder" | "bookmark") => void
@@ -32,6 +45,7 @@ interface BookmarkOrganizerRowProps {
 export const BookmarkOrganizerRow = React.memo(function BookmarkOrganizerRow({
   item,
   isDragging,
+  dragEnabled,
   onRename,
   onDelete,
   onCreateItem,
@@ -43,6 +57,11 @@ export const BookmarkOrganizerRow = React.memo(function BookmarkOrganizerRow({
   const title = itemData?.title ?? item.getItemName()
   const level = item.getItemMeta().level
   const itemProps = item.getProps()
+  const isReadOnly = itemData?.readOnly ?? false
+  const canDrag = dragEnabled && !isReadOnly
+  // The folder itself stays draggable, renameable and deletable — only the
+  // positions of the things inside it are fixed.
+  const isOrderReadOnly = itemData?.orderReadOnly ?? false
 
   return (
     <div
@@ -58,14 +77,18 @@ export const BookmarkOrganizerRow = React.memo(function BookmarkOrganizerRow({
         paddingLeft: `${0.5 + level * 1.25}rem`,
       }}
     >
-      <button
-        type="button"
-        aria-label="Drag item"
-        className="flex size-7 cursor-grab touch-none items-center justify-center rounded-md text-muted-foreground/60 transition-colors hover:bg-muted hover:text-foreground"
-        {...item.getDragHandleProps()}
-      >
-        <HugeiconsIcon icon={DragDropHorizontalIcon} size={16} />
-      </button>
+      {canDrag ? (
+        <button
+          type="button"
+          aria-label="Drag item"
+          className="flex size-7 cursor-grab touch-none items-center justify-center rounded-md text-muted-foreground/60 transition-colors hover:bg-muted hover:text-foreground"
+          {...item.getDragHandleProps()}
+        >
+          <HugeiconsIcon icon={DragDropHorizontalIcon} size={16} />
+        </button>
+      ) : (
+        <span className="size-7" aria-hidden="true" />
+      )}
 
       {isFolder ? (
         <button
@@ -99,9 +122,37 @@ export const BookmarkOrganizerRow = React.memo(function BookmarkOrganizerRow({
         <HugeiconsIcon
           icon={isFolder ? Folder01Icon : Bookmark02Icon}
           size={12}
-          className={cn("shrink-0", isFolder ? "text-primary" : "text-muted-foreground")}
+          className={cn(
+            "shrink-0",
+            isFolder ? "text-primary" : "text-muted-foreground"
+          )}
         />
-        <span className={cn("truncate text-[13px] font-medium leading-5", !isFolder && "text-muted-foreground group-hover:text-foreground transition-colors")}>{title}</span>
+        <span
+          className={cn(
+            "truncate text-[13px] leading-5 font-medium",
+            !isFolder &&
+              "text-muted-foreground transition-colors group-hover:text-foreground"
+          )}
+        >
+          {title}
+        </span>
+        {isOrderReadOnly && (
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <span
+                  aria-label="Fixed order"
+                  className="flex shrink-0 items-center text-muted-foreground/70"
+                />
+              }
+            >
+              <HugeiconsIcon icon={SquareLock01Icon} size={12} />
+            </TooltipTrigger>
+            <TooltipContent>
+              {describeOrderReadOnly(itemData ?? {})}
+            </TooltipContent>
+          </Tooltip>
+        )}
       </div>
 
       <div className="flex items-center gap-1">
@@ -110,7 +161,11 @@ export const BookmarkOrganizerRow = React.memo(function BookmarkOrganizerRow({
             <DropdownMenuTrigger
               aria-label="Add item"
               title="Add item"
-              className={buttonVariants({ variant: "secondary", size: "icon-xs", className: "bg-transparent group-hover/row:bg-secondary" })}
+              className={buttonVariants({
+                variant: "secondary",
+                size: "icon-xs",
+                className: "bg-transparent group-hover/row:bg-secondary",
+              })}
               onClick={(event) => {
                 event.preventDefault()
                 event.stopPropagation()
@@ -125,7 +180,11 @@ export const BookmarkOrganizerRow = React.memo(function BookmarkOrganizerRow({
                   onCreateItem("folder")
                 }}
               >
-                <HugeiconsIcon icon={Folder01Icon} size={14} className="text-primary" />
+                <HugeiconsIcon
+                  icon={Folder01Icon}
+                  size={14}
+                  className="text-primary"
+                />
                 New Folder
               </DropdownMenuItem>
               <DropdownMenuItem
@@ -134,43 +193,95 @@ export const BookmarkOrganizerRow = React.memo(function BookmarkOrganizerRow({
                   onCreateItem("bookmark")
                 }}
               >
-                <HugeiconsIcon icon={Bookmark02Icon} size={14} className="text-muted-foreground" />
+                <HugeiconsIcon
+                  icon={Bookmark02Icon}
+                  size={14}
+                  className="text-muted-foreground"
+                />
                 New Bookmark
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         )}
 
-        <Button
-          type="button"
-          variant="secondary"
-          size="icon-xs"
-          aria-label="Rename item"
-          title="Rename"
-          className="bg-transparent group-hover/row:bg-secondary"
-          onClick={(event) => {
-            event.preventDefault()
-            event.stopPropagation()
-            void onRename(item)
-          }}
-        >
-          <HugeiconsIcon icon={PencilEdit01Icon} />
-        </Button>
-        <Button
-          type="button"
-          variant="secondary"
-          size="icon-xs"
-          aria-label="Delete item"
-          title="Delete"
-          className="bg-transparent group-hover/row:bg-secondary"
-          onClick={(event) => {
-            event.preventDefault()
-            event.stopPropagation()
-            void onDelete(item)
-          }}
-        >
-          <HugeiconsIcon icon={Delete02Icon} />
-        </Button>
+        {isReadOnly ? (
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="icon-xs"
+                  aria-label="Rename item (read-only)"
+                  aria-disabled="true"
+                  className="bg-transparent opacity-50 group-hover/row:bg-secondary"
+                  onClick={(event) => {
+                    event.preventDefault()
+                    event.stopPropagation()
+                  }}
+                />
+              }
+            >
+              <HugeiconsIcon icon={PencilEdit01Icon} />
+            </TooltipTrigger>
+            <TooltipContent>{readOnlyReason(itemData)}</TooltipContent>
+          </Tooltip>
+        ) : (
+          <Button
+            type="button"
+            variant="secondary"
+            size="icon-xs"
+            aria-label="Rename item"
+            title="Rename"
+            className="bg-transparent group-hover/row:bg-secondary"
+            onClick={(event) => {
+              event.preventDefault()
+              event.stopPropagation()
+              void onRename(item)
+            }}
+          >
+            <HugeiconsIcon icon={PencilEdit01Icon} />
+          </Button>
+        )}
+        {isReadOnly ? (
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="icon-xs"
+                  aria-label="Delete item (read-only)"
+                  aria-disabled="true"
+                  className="bg-transparent opacity-50 group-hover/row:bg-secondary"
+                  onClick={(event) => {
+                    event.preventDefault()
+                    event.stopPropagation()
+                  }}
+                />
+              }
+            >
+              <HugeiconsIcon icon={Delete02Icon} />
+            </TooltipTrigger>
+            <TooltipContent>{readOnlyReason(itemData)}</TooltipContent>
+          </Tooltip>
+        ) : (
+          <Button
+            type="button"
+            variant="secondary"
+            size="icon-xs"
+            aria-label="Delete item"
+            title="Delete"
+            className="bg-transparent group-hover/row:bg-secondary"
+            onClick={(event) => {
+              event.preventDefault()
+              event.stopPropagation()
+              void onDelete(item)
+            }}
+          >
+            <HugeiconsIcon icon={Delete02Icon} />
+          </Button>
+        )}
       </div>
     </div>
   )

@@ -6,6 +6,10 @@ export type { ListItemDragData } from "./use-sortable-list-item"
 export { useListDropMonitor } from "./use-list-drop-monitor"
 export { DropIndicator } from "./drop-indicator"
 export { DndMonitor } from "./dnd-monitor"
-export { sortFoldersByOrder, reorderArray } from "./move-operations"
+export {
+  sortFoldersByOrder,
+  reorderArray,
+  buildChildOrderForBookmarkReorder,
+} from "./move-operations"
 export { DND_TYPE } from "./types"
 export type { BookmarkDragData, FolderCardDragData, DragData } from "./types"

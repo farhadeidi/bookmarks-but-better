@@ -148,7 +148,7 @@ export class StandaloneBookmarkAdapter implements BookmarkAdapter {
     const db = await this.getDB()
     const all = await getAllBookmarks(db)
 
-    if (all.length === 0) {
+    if (all.length === 0 && import.meta.env.DEV) {
       await this.seedFromDevData(db)
       const seeded = await getAllBookmarks(db)
       return buildTree(seeded)

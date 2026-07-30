@@ -1,0 +1,137 @@
+name: CI
+
+# Runs the frontend quality gates (formatting, lint, types, tests, extension
+# builds) and the Rust gates (format, clippy, tests, build, docs) on every push
+# and pull request so regressions are caught before they reach main or a
+# release. The jobs are independent and run in parallel.
+#
+# Merging to main runs this and only this. `workflow_call` is what `release.yml`
+# uses on a tag, so a release runs the very same gates rather than a second,
+# drifting copy of them.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  # Superseding a branch or pull-request run is what this is for. A tag is
+  # immutable and its run is part of shipping, so it is never cancelled.
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          # Reads the pinned version from package.json's "packageManager"
+          # field, so there is one place to bump it.
+          bun-version-file: package.json
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Quality gates
+        run: bun run check
+
+  rust:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Set up Rust
+        # rustup installs whatever rust-toolchain.toml pins, components and
+        # all, so the version lives in exactly one file rather than being
+        # repeated here where it could drift.
+        run: rustup show active-toolchain || rustup toolchain install
+
+      - name: Cache cargo artifacts
+        uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+
+      - name: Format
+        run: cargo fmt --all --check
+
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+
+      - name: Test
+        run: cargo test --workspace --all-features
+
+      - name: Build
+        run: cargo build --workspace --all-features
+
+      - name: Docs
+        env:
+          RUSTDOCFLAGS: -D warnings
+        run: cargo doc --workspace --no-deps --all-features
+
+      # The daemon has real `cfg(windows)` code — a durable `MoveFileExW`
+      # replacement, a no-replace rename and a file-identity query. Checking the
+      # target from Linux catches every compile error in it in seconds. It
+      # cannot link or run, which is what the `rust-windows` job below is for.
+      - name: Check the Windows target
+        run: |
+          rustup target add x86_64-pc-windows-msvc
+          cargo check --workspace --all-targets --target x86_64-pc-windows-msvc
+
+  rust-macos:
+    runs-on: macos-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Set up Rust
+        run: rustup show active-toolchain || rustup toolchain install
+
+      - name: Cache cargo artifacts
+        uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+
+      # macOS is the only platform where `renameatx_np` runs, for both
+      # RENAME_EXCL (the no-replace directory move) and RENAME_SWAP (the atomic
+      # exchange the commit and claim protocols are built on).
+      - name: Test
+        run: cargo test --workspace --all-features
+
+      - name: Build
+        run: cargo build --workspace --all-features
+
+  rust-windows:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Set up Rust
+        run: rustup show active-toolchain || rustup toolchain install
+
+      - name: Cache cargo artifacts
+        uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+
+      # This is the job that actually executes the Windows filesystem paths:
+      # the replacement, the no-replace rename, the file identity, and the
+      # staging and recovery protocol built on top of them.
+      - name: Test
+        run: cargo test --workspace --all-features
+
+      - name: Build
+        run: cargo build --workspace --all-features

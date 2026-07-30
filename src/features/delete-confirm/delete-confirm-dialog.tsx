@@ -1,3 +1,4 @@
+import * as React from "react"
 import {
   Dialog,
   DialogContent,
@@ -15,6 +16,12 @@ export function DeleteConfirmDialog() {
   const closeDeleteConfirm = useUIStore((s) => s.closeDeleteConfirm)
   const deleteBookmark = useBookmarkStore((s) => s.deleteBookmark)
   const deleteFolder = useBookmarkStore((s) => s.deleteFolder)
+  const mutationError = useBookmarkStore((s) => s.mutationError)
+  const clearMutationError = useBookmarkStore((s) => s.clearMutationError)
+
+  React.useEffect(() => {
+    if (deletingItem) clearMutationError()
+  }, [deletingItem, clearMutationError])
 
   const handleConfirm = async () => {
     if (!deletingItem) return
@@ -24,13 +31,16 @@ export function DeleteConfirmDialog() {
     } else {
       await deleteBookmark(deletingItem.id)
     }
+    if (useBookmarkStore.getState().mutationError) return
     closeDeleteConfirm()
   }
 
   return (
     <Dialog
       open={deletingItem !== null}
-      onOpenChange={(o) => { if (!o) closeDeleteConfirm() }}
+      onOpenChange={(o) => {
+        if (!o) closeDeleteConfirm()
+      }}
     >
       <DialogContent>
         <DialogHeader>
@@ -41,8 +51,8 @@ export function DeleteConfirmDialog() {
             {deletingItem?.type === "folder" ? (
               <>
                 Are you sure you want to delete the folder{" "}
-                <strong>{deletingItem.title}</strong> and all its contents?
-                This action cannot be undone.
+                <strong>{deletingItem.title}</strong> and all its contents? This
+                action cannot be undone.
               </>
             ) : (
               <>
@@ -53,6 +63,11 @@ export function DeleteConfirmDialog() {
             )}
           </DialogDescription>
         </DialogHeader>
+        {mutationError && (
+          <p role="alert" className="text-sm text-destructive">
+            {mutationError}
+          </p>
+        )}
         <DialogFooter>
           <Button variant="outline" onClick={closeDeleteConfirm}>
             Cancel
