@@ -12,7 +12,7 @@ bbb init   --vault <path>                 # write the root .bbb-folder.md and .b
 bbb doctor --vault <path>                 # read-only report; non-zero if unhealthy
 bbb rescan --vault <path>                 # offline rescan and summary
 bbb serve  --vault <path> \
-           [--bind 127.0.0.1] [--port 47321] \
+           [--bind 127.0.0.1] [--port 52222] \
            [--ui-dir <path>] [--init]
 ```
 

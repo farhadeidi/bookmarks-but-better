@@ -23,7 +23,7 @@ pub const API_PREFIX: &str = "/api/v1";
 /// The default loopback address the daemon binds to.
 pub const DEFAULT_BIND: IpAddr = IpAddr::V4(std::net::Ipv4Addr::LOCALHOST);
 /// The default port.
-pub const DEFAULT_PORT: u16 = 47321;
+pub const DEFAULT_PORT: u16 = 52222;
 
 /// Everything needed to start serving.
 #[derive(Debug, Clone)]

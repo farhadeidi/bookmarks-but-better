@@ -11,7 +11,7 @@ import pkg from "./package.json"
  * part of this build. Proxies /api/v1 (and the SSE /api/v1/events stream)
  * to the daemon's fixed local port so the two can be run side by side.
  */
-const DAEMON_DEV_PROXY_PORT = 47321
+const DAEMON_DEV_PROXY_PORT = 52222
 
 // https://vite.dev/config/
 export default defineConfig({

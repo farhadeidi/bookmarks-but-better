@@ -18,7 +18,7 @@ use tempfile::TempDir;
 use tower::ServiceExt as _;
 
 /// The `Host` every test sends; the daemon refuses requests without one.
-pub(crate) const TEST_HOST: &str = "127.0.0.1:47321";
+pub(crate) const TEST_HOST: &str = "127.0.0.1:52222";
 
 /// A temporary, initialized vault with a daemon in front of it.
 pub(crate) struct Harness {

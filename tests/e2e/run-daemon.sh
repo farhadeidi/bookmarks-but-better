@@ -3,7 +3,7 @@ set -euo pipefail
 
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)
 vault=$(mktemp -d)
-port=${BBB_E2E_PORT:-47321}
+port=${BBB_E2E_PORT:-52222}
 cargo=${CARGO:-"$HOME/.cargo/bin/cargo"}
 
 cleanup() {

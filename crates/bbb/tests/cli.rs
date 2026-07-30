@@ -180,3 +180,29 @@ fn the_help_text_documents_every_subcommand() {
         );
     }
 }
+
+#[test]
+fn serve_documents_the_new_default_port_and_still_accepts_an_explicit_one() {
+    let help = stdout(&bbb(&["serve", "--help"]));
+    assert!(
+        help.contains("52222"),
+        "the default port is documented: {help}"
+    );
+    assert!(
+        !help.contains("47321"),
+        "the previous default is not offered as a second listener: {help}"
+    );
+
+    // The old default is an ordinary port value, so an installation configured
+    // on it keeps starting after an upgrade.
+    let directory = tempfile::tempdir().expect("temp dir");
+    let vault = vault_arg(directory.path());
+    assert!(bbb(&["init", "--vault", &vault]).status.success());
+
+    let output = bbb(&[
+        "serve", "--vault", &vault, "--bind", "0.0.0.0", "--port", "47321",
+    ]);
+    // Refused for the bind, not for the port: the port was accepted and parsed.
+    assert!(!output.status.success());
+    assert!(stderr(&output).contains("loopback"), "{}", stderr(&output));
+}

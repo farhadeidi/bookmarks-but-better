@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **The daemon's default port is now 52222** (was 47321). Several browsers on
+  one machine have to agree on where the daemon is without being told, so the
+  default moved to a port far less likely to collide. There is no compatibility
+  listener — the daemon binds one port — but an installation that was
+  *explicitly* configured on 47321 keeps working unchanged, and an explicit
+  `--port` is never replaced by the new default.
+
 ## [4.0.0] - 2026-07-29
 
 ### Added
