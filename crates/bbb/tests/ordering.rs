@@ -1123,12 +1123,24 @@ async fn losing_the_order_file_falls_back_to_migration_order_and_is_repaired_by_
     harness.post("/api/v1/rescan", &json!({})).await;
 
     // The migration order: folders first, then bookmarks, each group by the
-    // creation timestamp they carry and then by identity. These four were made
-    // within the same second, so identity decides throughout.
+    // creation timestamp they carry and then by identity. A folder carries no
+    // timestamp, so identity alone decides there. A bookmark does, and two
+    // bookmarks created back to back still land either side of a second
+    // boundary often enough to matter on a loaded CI runner — so the expected
+    // order is built from the timestamps the vault actually recorded, not from
+    // an assumption that they match. `dateAdded` is those same timestamps in
+    // epoch milliseconds, which orders identically to the RFC 3339 text the
+    // migration key compares, and a bookmark without one sorts last.
+    let tree = harness.tree().await;
+    let created_at =
+        |id: &str| find_node(&tree, id).expect("the bookmark is in the tree")["dateAdded"].as_i64();
     let mut folders = [dev.clone(), ops.clone()];
     folders.sort();
     let mut bookmarks = [one.clone(), two.clone()];
-    bookmarks.sort();
+    bookmarks.sort_by_key(|id| {
+        let created = created_at(id);
+        (created.is_none(), created, id.clone())
+    });
     let migration: Vec<String> = folders.iter().chain(bookmarks.iter()).cloned().collect();
     assert_eq!(
         harness.child_ids(&root).await,
