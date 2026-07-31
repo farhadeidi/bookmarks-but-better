@@ -16,7 +16,10 @@
 #
 #   1. Resolves which release to install: the latest *stable* release by
 #      default, or the latest (or a named) prerelease with --beta /
-#      --version.
+#      --version. Until the daemon has a stable release, the latest stable
+#      release is an extension-only one carrying no `bbb` archive at all; when
+#      that is what the default resolves to, this falls back to the latest
+#      prerelease that does have a build for this platform, and says so.
 #   2. Downloads that platform's archive and its .sha256 sidecar, and refuses
 #      to install unless the archive's hash matches it.
 #   3. Unpacks into a versioned directory under $BBB_INSTALL_ROOT and only
@@ -135,6 +138,26 @@ api_get() {
   fi
 }
 
+# The archive this platform needs from a given release. Every release names it
+# after its own version, so this can only be computed per release — which is
+# exactly why the fallback below has to look inside each candidate rather than
+# just taking the newest thing it finds.
+archive_name_for() {
+  printf 'bbb-%s-%s.tar.gz' "${1#v}" "$TARGET"
+}
+
+# True when a release actually ships a daemon build for this platform. An
+# extension-only release (every stable release up to and including v3.2.0) does
+# not, and installing from one is not a thing that can succeed.
+release_has_daemon() {
+  local json="$1" release_tag
+  release_tag=$(printf '%s' "$json" | jq -r '.tag_name // ""')
+  [ -n "$release_tag" ] && [ "$release_tag" != "null" ] || return 1
+  printf '%s' "$json" \
+    | jq -e --arg name "$(archive_name_for "$release_tag")" \
+        '[.assets[]?.name] | index($name) != null' >/dev/null
+}
+
 release_json=""
 if [ -n "$EXPLICIT_VERSION" ]; then
   tag="${EXPLICIT_VERSION#v}"
@@ -152,6 +175,28 @@ else
   log "resolving the latest stable release"
   release_json=$(api_get "$API_BASE/repos/$REPO/releases/latest") \
     || die "could not fetch the latest release"
+
+  # The daemon has no stable release yet: the latest stable release is an
+  # extension-only one, and resolving to it is how `curl … | bash` ends in
+  # "release vX has no asset named bbb-…". Fall back to the newest prerelease
+  # that does carry a build for this platform, loudly — a prerelease is
+  # normally something you have to ask for, and this is the one case where the
+  # alternative is not installing at all.
+  if ! release_has_daemon "$release_json"; then
+    stable_tag=$(printf '%s' "$release_json" | jq -r '.tag_name // "unknown"')
+    log "the latest stable release ($stable_tag) ships no bbb daemon build for $TARGET"
+    log "falling back to the latest prerelease — pass --version <tag> to pin a specific release"
+    releases_json=$(api_get "$API_BASE/repos/$REPO/releases?per_page=20") \
+      || die "could not list releases"
+    release_json=$(printf '%s' "$releases_json" | jq -c --arg target "$TARGET" '
+      [ .[]
+        | select(.draft == false and .prerelease == true)
+        | select(. as $release | .assets | any(
+            .name == ("bbb-" + ($release.tag_name | ltrimstr("v")) + "-" + $target + ".tar.gz")))
+      ] | first')
+    [ -n "$release_json" ] && [ "$release_json" != "null" ] \
+      || die "no stable or prerelease release has a bbb build for $TARGET yet"
+  fi
 fi
 
 tag=$(printf '%s' "$release_json" | jq -r '.tag_name')
@@ -161,7 +206,7 @@ fi
 version="${tag#v}"
 log "installing $tag (version $version)"
 
-archive_name="bbb-$version-$TARGET.tar.gz"
+archive_name=$(archive_name_for "$tag")
 archive_url=$(printf '%s' "$release_json" | jq -r --arg name "$archive_name" '.assets[] | select(.name == $name) | .browser_download_url')
 checksum_url=$(printf '%s' "$release_json" | jq -r --arg name "$archive_name.sha256" '.assets[] | select(.name == $name) | .browser_download_url')
 
@@ -262,4 +307,23 @@ if [ "$SKIP_SETUP" -eq 1 ]; then
 fi
 
 log ""
-exec "$BIN_DIR/bbb" setup
+
+# `bbb setup` is a conversation: it reads answers from standard input. Under
+# `curl … | bash` standard input is the pipe curl wrote this script into, which
+# bash has already read to the end, so setup would be handed an immediate EOF
+# and die with "setup needs answers, and standard input ended" the moment it
+# asked its first question. Reconnect it to the terminal instead — and when
+# there is no terminal at all (CI, a container, a `bash < install.sh`), say so
+# and stop rather than starting a conversation nobody can answer. The install
+# itself is finished and correct either way.
+if [ -t 0 ]; then
+  exec "$BIN_DIR/bbb" setup
+elif (exec 3</dev/tty) 2>/dev/null; then
+  # An open, not a `test -r`: in a container /dev/tty exists and looks readable
+  # right up until opening it fails with ENXIO because no terminal is attached.
+  exec "$BIN_DIR/bbb" setup </dev/tty
+else
+  log "No terminal is attached, so setup — which asks questions — was not started."
+  log "Run \"$BIN_DIR/bbb\" setup from a terminal to finish."
+  exit 0
+fi

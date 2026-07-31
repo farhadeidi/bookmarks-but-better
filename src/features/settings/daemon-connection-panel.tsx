@@ -51,6 +51,12 @@ function guessPlatform(): Platform {
  * makes it one) and `/bin/sh` is dash on Debian and Ubuntu, where piping it to
  * `sh` dies on line 1 with `set: Illegal option -o pipefail` — before the
  * script can say anything useful about what went wrong.
+ *
+ * No flag selects the prerelease here even though the daemon only exists as
+ * one: both scripts resolve the latest stable release, notice it carries no
+ * daemon build, and fall back to the newest prerelease that does — so this
+ * plain command keeps working unchanged the day a stable release ships the
+ * daemon. See docs/DAEMON.md.
  */
 const INSTALL_COMMANDS: Record<Platform, string> = {
   macos: "curl -fsSL https://bookmarks-but-better.dev/install.sh | bash",
@@ -93,6 +99,10 @@ function InstallGuide() {
       <code className="overflow-x-auto rounded bg-muted px-2 py-1.5 text-xs whitespace-pre">
         {INSTALL_COMMANDS[platform]}
       </code>
+      <p className="text-xs text-muted-foreground">
+        The daemon is still in beta: there is no stable release of it yet, so
+        this installs the latest prerelease.
+      </p>
       <p className="text-xs text-muted-foreground">
         Then run <code>bbb setup</code> to create a vault and{" "}
         <code>bbb service install --vault &lt;path&gt;</code> to run it in the

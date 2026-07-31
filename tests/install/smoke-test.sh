@@ -84,6 +84,24 @@ EOF
 EOF
 }
 
+# A stable release carrying only browser-extension zips and no daemon archive
+# — the shape of every stable release the project has actually published so
+# far, and the one a default install has to cope with rather than die on.
+build_extension_only_stable() {
+  local version="$1"
+  cat > "$work/releases_latest.json" <<EOF
+{
+  "tag_name": "v$version",
+  "prerelease": false,
+  "draft": false,
+  "assets": [
+    {"name": "bookmarks-but-better-chrome-v$version.zip", "browser_download_url": "http://127.0.0.1:$port/asset/nope.zip"},
+    {"name": "bookmarks-but-better-firefox-v$version.zip", "browser_download_url": "http://127.0.0.1:$port/asset/nope.zip"}
+  ]
+}
+EOF
+}
+
 # A fake prerelease, listed alongside the stable one so --beta has something
 # to pick that a plain stable install would never resolve to.
 build_beta_release() {
@@ -263,7 +281,45 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# Test 6: nothing advertises this script to a shell that cannot run it.
+# Test 6: a stable release that ships no daemon build at all — which is what
+# every stable release up to and including v3.2.0 is, an extension-only one —
+# falls back to the newest prerelease that does have one, instead of dying with
+# "release vX has no asset named bbb-…" and installing nothing.
+# ---------------------------------------------------------------------------
+build_extension_only_stable "3.2.0"
+install_root="$work/root4"
+bin_dir="$work/bin4"
+output="$work/fallback.log"
+if run_install >"$output" 2>&1; then
+  ok "a daemon-less stable release falls back instead of failing"
+else
+  bad "a daemon-less stable release falls back instead of failing (output: $(cat "$output"))"
+fi
+if [ "$("$bin_dir/bbb" --version)" = "bbb 4.1.0-beta.1 (smoke test beta)" ]; then
+  ok "the fallback installs the newest prerelease that has a build"
+else
+  bad "the fallback installs the newest prerelease that has a build"
+fi
+if grep -q "falling back to the latest prerelease" "$output"; then
+  ok "the fallback says so rather than installing a prerelease silently"
+else
+  bad "the fallback says so rather than installing a prerelease silently"
+fi
+
+# The other half of the same rule: when nothing anywhere has a build for this
+# platform, that is an error, not a silent no-op.
+printf '%s\n' "[]" > "$work/releases_list.json"
+install_root="$work/root5"
+bin_dir="$work/bin5"
+if run_install >/dev/null 2>&1; then
+  bad "no daemon build anywhere is an error"
+else
+  ok "no daemon build anywhere is an error"
+fi
+build_beta_release "4.1.0-beta.1"
+
+# ---------------------------------------------------------------------------
+# Test 7: nothing advertises this script to a shell that cannot run it.
 #
 # install.sh is bash — `set -o pipefail` alone makes it so — and /bin/sh is
 # dash on Debian and Ubuntu, where `curl … | sh` dies on the first line with
