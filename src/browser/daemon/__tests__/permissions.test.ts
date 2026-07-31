@@ -80,17 +80,18 @@ describe("requestDaemonHostPermission", () => {
    * — a `contains()` pre-check in particular — turns Connect into a permanent,
    * unexplained denial there.
    */
-  it("calls request synchronously, with nothing awaited in front of it", () => {
+  it("calls request synchronously, with nothing awaited in front of it", async () => {
     const api = stubPermissionsApi({
       contains: vi.fn((_query, callback: (granted: boolean) => void) =>
         callback(true)
       ),
     })
 
-    void requestDaemonHostPermission()
+    const granted = requestDaemonHostPermission()
 
     expect(api.request).toHaveBeenCalledOnce()
     expect(api.contains).not.toHaveBeenCalled()
+    expect(await granted).toBe(true)
   })
 
   it("prompts, and returns what the user decided", async () => {

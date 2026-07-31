@@ -75,7 +75,7 @@ describe("connectToDaemon", () => {
    * single `await` added anywhere in `connectToDaemon` above the request would
    * break it just as effectively.
    */
-  it("reaches permissions.request synchronously, before any await resolves", () => {
+  it("reaches permissions.request synchronously, before any await resolves", async () => {
     const request = vi.fn((_q: unknown, cb: (granted: boolean) => void) =>
       cb(true)
     )
@@ -85,10 +85,18 @@ describe("connectToDaemon", () => {
         request,
       },
     })
-
-    void connectToDaemon("127.0.0.1:52222", { fetchImpl: okHealthFetch() })
+    // Health fails, so this attempt persists nothing of its own — and the
+    // promise is settled below rather than left floating, since a connection
+    // that resolved after the test ended would write into the next one's
+    // storage.
+    const attempt = connectToDaemon("127.0.0.1:52222", {
+      fetchImpl: vi.fn().mockRejectedValue(new TypeError("down")),
+    })
 
     expect(request).toHaveBeenCalledOnce()
+
+    expect(await attempt).toMatchObject({ ok: false, stage: "health" })
+    expect(await getDaemonConnectionConfig()).toBeNull()
   })
 
   it("reports a health-stage failure when the daemon cannot be reached", async () => {
