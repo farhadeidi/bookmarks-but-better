@@ -194,8 +194,9 @@ else
         | select(. as $release | .assets | any(
             .name == ("bbb-" + ($release.tag_name | ltrimstr("v")) + "-" + $target + ".tar.gz")))
       ] | first')
-    [ -n "$release_json" ] && [ "$release_json" != "null" ] \
-      || die "no stable or prerelease release has a bbb build for $TARGET yet"
+    if [ -z "$release_json" ] || [ "$release_json" = "null" ]; then
+      die "no stable or prerelease release has a bbb build for $TARGET yet"
+    fi
   fi
 fi
 
