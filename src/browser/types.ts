@@ -149,6 +149,21 @@ export interface AdapterCapabilities {
    * `BookmarkAdapter.setChildOrder()`. True only in daemon mode.
    */
   setChildOrder: boolean
+  /**
+   * Whether `tree[0].id` — the root the tree returns when no folder has been
+   * pinned as the dashboard root — is itself a real, creatable folder.
+   *
+   * True for daemon and standalone: their `tree[0]` is an addressable vault
+   * root that `create()` accepts as a parent. False for Chrome and Firefox,
+   * whose `tree[0]` is each browser's synthetic invisible root (id `"0"`,
+   * see `src/features/settings/import-target.ts`) — both browsers reject it
+   * as a create parent, so a real child folder must be picked first.
+   *
+   * Optional, not required like the other capabilities: adapters (and test
+   * mocks) that predate this field are treated as `false`, the conservative
+   * default that matches their actual (browser) behavior.
+   */
+  rootIsCreatable?: boolean
 }
 
 export interface BrowserAdapter {

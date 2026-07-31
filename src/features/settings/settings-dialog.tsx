@@ -29,6 +29,7 @@ import type { BookmarkNode } from "@/browser"
 export function SettingsDialog() {
   const open = useUIStore((s) => s.settingsOpen)
   const closeSettings = useUIStore((s) => s.closeSettings)
+  const openOnboarding = useUIStore((s) => s.openOnboarding)
   const nestedFolders = usePreferencesStore((s) => s.nestedFolders)
   const setNestedFolders = usePreferencesStore((s) => s.setNestedFolders)
   const rootFolderId = useBookmarkStore((s) => s.rootFolderId)
@@ -59,6 +60,12 @@ export function SettingsDialog() {
     a.download = "bookmarks.html"
     a.click()
     URL.revokeObjectURL(url)
+  }
+
+  const handleShowOnboarding = async () => {
+    await adapter?.storage.set("onboardingCompleted", false)
+    closeSettings()
+    openOnboarding()
   }
 
   const handleImport = () => {
@@ -297,6 +304,23 @@ export function SettingsDialog() {
                   {import.meta.env.VITE_BUILD_TARGET === "daemon"
                     ? "Export bookmarks as HTML (standard browser format)."
                     : "Import or export bookmarks as HTML (standard browser format)."}
+                </p>
+              </div>
+
+              <div className="flex flex-col gap-2">
+                <Label className="text-sm font-medium">Setup Wizard</Label>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => void handleShowOnboarding()}
+                  >
+                    Show setup wizard
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Walk through the first-run setup again, including choosing a
+                  bookmark source and a root folder.
                 </p>
               </div>
             </div>

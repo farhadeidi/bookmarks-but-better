@@ -6,24 +6,33 @@ import {
 } from "@/stores/preferences-store"
 import { useTheme } from "@/components/theme-provider"
 import { WelcomeStep } from "./steps/welcome-step"
+import { ModeStep } from "./steps/mode-step"
+import { DaemonSetupStep } from "./steps/daemon-setup-step"
 import { RootFolderStep } from "./steps/root-folder-step"
 import { AppearanceStep } from "./steps/appearance-step"
 import { DoneStep } from "./steps/done-step"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
+import type { AdapterMode } from "@/browser/types"
 
 type ThemeMode = "light" | "dark" | "system"
-
-const TOTAL_STEPS = 4
 
 interface OnboardingWizardProps {
   onComplete: () => void
 }
 
+// The mode step (and its conditional daemon-setup follow-up) is skipped in
+// the daemon-served build, since that build always serves its own
+// same-origin daemon adapter — there is no choice to make there.
+const SHOW_MODE_STEP = import.meta.env.VITE_BUILD_TARGET !== "daemon"
+
 export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
   const [currentStep, setCurrentStep] = React.useState(0)
 
   // Local wizard state
+  const [adapterMode, setAdapterModeLocal] = React.useState<AdapterMode>(
+    usePreferencesStore.getState().adapterMode
+  )
   const [rootFolderId, setRootFolderId] = React.useState<string | null>(null)
   const [colorTheme, setColorTheme] = React.useState<ColorTheme>("default")
   const [themeMode, setThemeMode] = React.useState<ThemeMode>("dark")
@@ -31,6 +40,7 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
   // Store actions for persisting on completion
   const setStoreRootFolderId = useBookmarkStore((s) => s.setRootFolderId)
   const setStoreColorTheme = usePreferencesStore((s) => s.setColorTheme)
+  const setStoreAdapterMode = usePreferencesStore((s) => s.setAdapterMode)
   const adapter = usePreferencesStore((s) => s.adapter)
   const { setTheme } = useTheme()
 
@@ -54,6 +64,57 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
     setTheme("dark")
   }, [setTheme])
 
+  const showDaemonSetupStep = SHOW_MODE_STEP && adapterMode === "daemon"
+
+  const steps = React.useMemo(() => {
+    const list: React.ReactNode[] = [<WelcomeStep key="welcome" />]
+    if (SHOW_MODE_STEP) {
+      list.push(
+        <ModeStep
+          key="mode"
+          value={adapterMode}
+          onChange={setAdapterModeLocal}
+        />
+      )
+    }
+    if (showDaemonSetupStep) {
+      list.push(<DaemonSetupStep key="daemon-setup" />)
+    }
+    list.push(
+      <RootFolderStep
+        key="root-folder"
+        value={rootFolderId}
+        onChange={setRootFolderId}
+      />,
+      <AppearanceStep
+        key="appearance"
+        colorTheme={colorTheme}
+        onColorThemeChange={handleColorThemeChange}
+        themeMode={themeMode}
+        onThemeModeChange={handleThemeModeChange}
+      />,
+      <DoneStep key="done" />
+    )
+    return list
+  }, [
+    adapterMode,
+    showDaemonSetupStep,
+    rootFolderId,
+    colorTheme,
+    themeMode,
+    handleColorThemeChange,
+    handleThemeModeChange,
+  ])
+
+  const TOTAL_STEPS = steps.length
+
+  // Toggling the daemon step in or out of the list can leave `currentStep`
+  // pointing past the end (or, if the user is still ahead of it, at the
+  // wrong step) — clamp it back onto the track rather than rendering blank.
+  React.useEffect(() => {
+    setCurrentStep((s) => Math.min(s, TOTAL_STEPS - 1))
+  }, [TOTAL_STEPS])
+
   const goNext = () => {
     if (currentStep < TOTAL_STEPS - 1) {
       setCurrentStep((s) => s + 1)
@@ -66,8 +127,18 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
     }
   }
 
+  const persistAdapterMode = () => {
+    // Daemon mode is only ever persisted through `connectToDaemon`'s own
+    // validate/permission/health-check flow (triggered from the daemon-setup
+    // step's connection panel), never set directly here.
+    if (adapterMode !== "daemon") {
+      setStoreAdapterMode(adapterMode)
+    }
+  }
+
   const handleComplete = async () => {
     // Persist all selections
+    persistAdapterMode()
     setStoreRootFolderId(rootFolderId)
     setStoreColorTheme(colorTheme)
     setTheme(themeMode)
@@ -79,7 +150,9 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
   }
 
   const handleSkip = async () => {
-    // Preserve any root folder selection already made, use defaults for the rest
+    // Preserve any root folder and mode selection already made, use defaults
+    // for the rest
+    persistAdapterMode()
     setStoreRootFolderId(rootFolderId)
     setStoreColorTheme("default")
     setTheme("dark")
@@ -129,22 +202,7 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
             className="flex transition-transform duration-300 ease-in-out"
             style={{ transform: `translateX(-${currentStep * 100}%)` }}
           >
-            {[
-              <WelcomeStep key="welcome" />,
-              <RootFolderStep
-                key="root-folder"
-                value={rootFolderId}
-                onChange={setRootFolderId}
-              />,
-              <AppearanceStep
-                key="appearance"
-                colorTheme={colorTheme}
-                onColorThemeChange={handleColorThemeChange}
-                themeMode={themeMode}
-                onThemeModeChange={handleThemeModeChange}
-              />,
-              <DoneStep key="done" />,
-            ].map((step, i) => (
+            {steps.map((step, i) => (
               <div key={i} className="w-full flex-shrink-0 px-1">
                 {step}
               </div>

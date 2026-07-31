@@ -26,6 +26,9 @@ function daemonAdapterFor(client: DaemonClient): BrowserAdapter {
       // ignores the index. Ordering is a separate capability below.
       reorder: false,
       setChildOrder: true,
+      // The vault root is a real, addressable folder — `create()` accepts
+      // it as a parent with no special-casing on the server.
+      rootIsCreatable: true,
     },
   }
 }
