@@ -1,10 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
 import {
   DaemonApiError,
-  fetchHealth,
-  fetchTree,
-  createNode,
-  setOrder,
+  DaemonClient,
+  createSameOriginDaemonClient,
 } from "../client"
 
 function jsonResponse(body: unknown, init: { status?: number } = {}) {
@@ -13,6 +11,11 @@ function jsonResponse(body: unknown, init: { status?: number } = {}) {
     status,
     headers: { "Content-Type": "application/json" },
   })
+}
+
+/** The served-UI configuration: relative URLs, no credentials. */
+function served() {
+  return createSameOriginDaemonClient()
 }
 
 describe("daemon client", () => {
@@ -27,14 +30,14 @@ describe("daemon client", () => {
       vi.fn().mockResolvedValue(jsonResponse({ status: "ok" }))
     )
 
-    await expect(fetchHealth()).resolves.toEqual({ status: "ok" })
+    await expect(served().fetchHealth()).resolves.toEqual({ status: "ok" })
   })
 
   it("requests the fixed /api/v1 base path", async () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ root: {} }))
     vi.stubGlobal("fetch", fetchMock)
 
-    await fetchTree()
+    await served().fetchTree()
 
     expect(fetchMock.mock.calls[0][0]).toBe("/api/v1/tree")
   })
@@ -47,7 +50,7 @@ describe("daemon client", () => {
       )
     vi.stubGlobal("fetch", fetchMock)
 
-    await createNode("bookmark", {
+    await served().createNode("bookmark", {
       parentId: "root",
       title: "Example",
       url: "https://example.com",
@@ -78,7 +81,7 @@ describe("daemon client", () => {
       )
     )
 
-    await expect(fetchHealth()).rejects.toMatchObject({
+    await expect(served().fetchHealth()).rejects.toMatchObject({
       name: "DaemonApiError",
       status: 409,
       message: "Revision mismatch: the file changed on disk.",
@@ -95,7 +98,7 @@ describe("daemon client", () => {
         )
     )
 
-    await expect(fetchHealth()).rejects.toMatchObject({
+    await expect(served().fetchHealth()).rejects.toMatchObject({
       status: 500,
       message: "500 Server Error",
     })
@@ -117,7 +120,7 @@ describe("daemon client", () => {
       })
     )
 
-    const pending = fetchHealth()
+    const pending = served().fetchHealth()
     const assertion = expect(pending).rejects.toMatchObject({
       name: "DaemonApiError",
       isTimeout: true,
@@ -125,6 +128,138 @@ describe("daemon client", () => {
 
     await vi.runAllTimersAsync()
     await assertion
+  })
+})
+
+describe("DaemonClient configuration", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.useRealTimers()
+  })
+
+  it("keeps URLs relative when the origin is empty, so the served UI never provokes CORS", () => {
+    const client = served()
+    expect(client.origin).toBe("")
+    expect(client.url("/tree")).toBe("/api/v1/tree")
+    expect(client.eventsUrl).toBe("/api/v1/events")
+  })
+
+  it("prefixes an absolute loopback origin, which is what an extension needs", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ tree: [] }))
+    vi.stubGlobal("fetch", fetchMock)
+
+    const client = new DaemonClient({ origin: "http://127.0.0.1:52222" })
+    await client.fetchTree()
+
+    expect(fetchMock.mock.calls[0][0]).toBe(
+      "http://127.0.0.1:52222/api/v1/tree"
+    )
+    expect(client.eventsUrl).toBe("http://127.0.0.1:52222/api/v1/events")
+  })
+
+  it("tolerates a trailing slash on the configured origin without doubling it", () => {
+    const client = new DaemonClient({ origin: "http://127.0.0.1:52222/" })
+    expect(client.url("/tree")).toBe("http://127.0.0.1:52222/api/v1/tree")
+  })
+
+  it("sends no Authorization header when no token is configured", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ status: "ok" }))
+    vi.stubGlobal("fetch", fetchMock)
+
+    const client = new DaemonClient({ origin: "http://127.0.0.1:52222" })
+    await client.fetchHealth()
+
+    expect(client.authHeaders()).toEqual({})
+    expect(fetchMock.mock.calls[0][1].headers).not.toHaveProperty(
+      "Authorization"
+    )
+  })
+
+  it("sends a configured token as a bearer header and never in the URL", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ status: "ok" }))
+    vi.stubGlobal("fetch", fetchMock)
+
+    const client = new DaemonClient({
+      origin: "http://127.0.0.1:52222",
+      bearerToken: "s3cret-token",
+    })
+    await client.fetchHealth()
+
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(init.headers.Authorization).toBe("Bearer s3cret-token")
+    // The token must not be reachable from anything that gets logged, put in
+    // browser history, or written to the daemon's request log.
+    expect(url).not.toContain("s3cret-token")
+    expect(client.url("/tree")).not.toContain("s3cret-token")
+    expect(client.eventsUrl).not.toContain("s3cret-token")
+  })
+
+  it("names only the API path in a timeout message, never the configured origin", async () => {
+    vi.useFakeTimers()
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation((_url: string, init: RequestInit) => {
+        return new Promise((_resolve, reject) => {
+          init.signal?.addEventListener("abort", () =>
+            reject(new Error("Aborted"))
+          )
+        })
+      })
+    )
+
+    const client = new DaemonClient({
+      origin: "http://127.0.0.1:52222",
+      bearerToken: "s3cret-token",
+      timeoutMs: 5_000,
+    })
+    const pending = client.fetchHealth()
+    const assertion = expect(pending).rejects.toMatchObject({
+      isTimeout: true,
+      message: "Request to /health timed out",
+    })
+
+    await vi.runAllTimersAsync()
+    await assertion
+  })
+
+  it("honors a per-client timeout", async () => {
+    vi.useFakeTimers()
+    const fetchMock = vi
+      .fn()
+      .mockImplementation((_url: string, init: RequestInit) => {
+        return new Promise((_resolve, reject) => {
+          init.signal?.addEventListener("abort", () =>
+            reject(new Error("Aborted"))
+          )
+        })
+      })
+    vi.stubGlobal("fetch", fetchMock)
+
+    const client = new DaemonClient({ timeoutMs: 1_000 })
+    const pending = client.fetchHealth()
+    const assertion = expect(pending).rejects.toMatchObject({ isTimeout: true })
+
+    await vi.advanceTimersByTimeAsync(1_000)
+    await assertion
+  })
+
+  it("uses an injected fetch in preference to the global one", async () => {
+    const injected = vi.fn().mockResolvedValue(jsonResponse({ status: "ok" }))
+    const global = vi.fn()
+    vi.stubGlobal("fetch", global)
+
+    await new DaemonClient({ fetchImpl: injected }).fetchHealth()
+
+    expect(injected).toHaveBeenCalledTimes(1)
+    expect(global).not.toHaveBeenCalled()
+  })
+
+  it("keeps two clients independent, so a served UI and an extension can coexist", () => {
+    const a = new DaemonClient({ origin: "http://127.0.0.1:52222" })
+    const b = new DaemonClient({ origin: "http://localhost:47321" })
+
+    expect(a.url("/tree")).toBe("http://127.0.0.1:52222/api/v1/tree")
+    expect(b.url("/tree")).toBe("http://localhost:47321/api/v1/tree")
   })
 })
 
@@ -157,7 +292,9 @@ describe("daemon client ordering problem codes", () => {
       )
 
       await expect(
-        setOrder("folder-1", { children: [{ id: "a", kind: "bookmark" }] })
+        served().setOrder("folder-1", {
+          children: [{ id: "a", kind: "bookmark" }],
+        })
       ).rejects.toMatchObject({
         name: "DaemonApiError",
         code,
@@ -171,7 +308,7 @@ describe("daemon client ordering problem codes", () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ id: "f1" }))
     vi.stubGlobal("fetch", fetchMock)
 
-    await setOrder("f 1/nested", {
+    await served().setOrder("f 1/nested", {
       stateRevision: "state-1",
       children: [
         { id: "a", kind: "bookmark" },

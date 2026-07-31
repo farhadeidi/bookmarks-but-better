@@ -59,7 +59,7 @@ fn is_loopback(host: &str) -> bool {
 /// Splits a `Host` value into its name, keeping IPv6 literals intact.
 fn strip_port(host: &str) -> &str {
     if host.starts_with('[') {
-        // `[::1]:47321` — the port separator is the colon after the bracket.
+        // `[::1]:52222` — the port separator is the colon after the bracket.
         return match host.find(']') {
             Some(end) => &host[..=end],
             None => host,
@@ -80,13 +80,18 @@ mod tests {
     fn loopback_names_are_allowed() {
         for host in [
             "localhost",
-            "localhost:47321",
+            "localhost:52222",
             "LocalHost:8080",
             "127.0.0.1",
+            "127.0.0.1:52222",
+            // The guard has never cared which port a loopback name carries,
+            // and it must not start: an installation explicitly configured on
+            // the previous default stays reachable after an upgrade.
             "127.0.0.1:47321",
+            "localhost:47321",
             "127.0.0.53",
             "[::1]",
-            "[::1]:47321",
+            "[::1]:52222",
             "::1",
         ] {
             assert!(is_loopback(host), "{host} must be allowed");
@@ -97,11 +102,15 @@ mod tests {
     fn everything_else_is_refused() {
         for host in [
             "evil.example",
-            "evil.example:47321",
+            "evil.example:52222",
             "bookmarks.local",
-            "192.168.1.10:47321",
+            "192.168.1.10:52222",
             "10.0.0.1",
-            "[2001:db8::1]:47321",
+            "[2001:db8::1]:52222",
+            // A non-loopback name is refused whichever port it names, so
+            // moving the default cannot have opened one of them up.
+            "evil.example:47321",
+            "192.168.1.10:47321",
             "",
         ] {
             assert!(!is_loopback(host), "{host} must be refused");

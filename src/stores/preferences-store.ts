@@ -4,6 +4,7 @@ import {
   getAdapterModePreference,
   setAdapterModePreference,
 } from "@/browser/adapter-preference"
+import type { AdapterMode } from "@/browser/types"
 
 type CardLayout = "list" | "grid"
 export type ColorTheme =
@@ -34,7 +35,7 @@ export const COLOR_THEMES: ColorTheme[] = [
 interface PreferencesState {
   cardLayouts: Record<string, CardLayout>
   nestedFolders: boolean
-  adapterMode: "browser" | "standalone"
+  adapterMode: AdapterMode
   colorTheme: ColorTheme
   maxColumns: number
   containerMode: "fluid" | "contained"
@@ -47,7 +48,7 @@ interface PreferencesState {
   init(adapter: BrowserAdapter): Promise<void>
   setCardLayout(folderId: string, layout: CardLayout): void
   setNestedFolders(value: boolean): void
-  setAdapterMode(mode: "browser" | "standalone"): void
+  setAdapterMode(mode: AdapterMode): void
   setColorTheme(theme: ColorTheme): void
   setMaxColumns(value: number): void
   setContainerMode(mode: "fluid" | "contained"): void
@@ -127,10 +128,7 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
         false,
       adapterMode:
         adapterMode ??
-        (seedPrefDefaults?.adapterMode as
-          | "browser"
-          | "standalone"
-          | undefined) ??
+        (seedPrefDefaults?.adapterMode as AdapterMode | undefined) ??
         "browser",
       colorTheme: resolvedColorTheme,
       maxColumns: Math.max(
@@ -181,7 +179,7 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
     get().adapter?.storage.set("nestedFolders", value)
   },
 
-  setAdapterMode(mode: "browser" | "standalone") {
+  setAdapterMode(mode: AdapterMode) {
     set({ adapterMode: mode })
     setAdapterModePreference(mode)
   },

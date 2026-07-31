@@ -307,6 +307,25 @@ Changing that means buying an Apple Developer account and a code-signing
 certificate, and adding signing keys to the release pipeline. Until then the
 `.sha256` files are what a cautious user has to go on.
 
+### `install.sh` and `install.ps1` depend on this exact layout
+
+Both scripts (repository root) resolve a release through the GitHub API,
+download `bbb-<version>-<target>.<tar.gz|zip>` and its `.sha256` by that exact
+name, verify the checksum, and unpack expecting the `bbb-<version>-<target>/`
+top-level directory shown above. Changing the archive name, the checksum
+sidecar's naming (`<archive>.sha256`, content `<hash>  <filename>`), or the
+top-level directory inside the archive is a breaking change for both
+scripts and needs to update them alongside `release.yml`.
+
+`.github/workflows/ci.yml`'s `install-scripts` job guards the scripts
+themselves — `shellcheck`, a syntax check of `install.ps1`, and
+`tests/install/smoke-test.sh`, which runs `install.sh` end to end (download,
+checksum verification, unpack, symlink swap, upgrade, rollback-on-tamper)
+against a locally served fake release. It does not call the real GitHub API
+and does not run on a tag, so it does not by itself prove the scripts work
+against a *real* published release — only that they still do exactly what
+they did the last time this suite ran.
+
 ## One-time repository setup
 
 This is the part that cannot live in git. **It is done** — recorded here so the

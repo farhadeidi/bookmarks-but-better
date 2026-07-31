@@ -89,7 +89,13 @@ async fn a_ui_directory_without_an_index_is_refused_at_startup() {
 async fn a_non_loopback_host_header_is_refused() {
     let harness = Harness::new();
 
-    for host in ["evil.example", "bookmarks.local:47321", "192.168.1.10"] {
+    for host in [
+        "evil.example",
+        "bookmarks.local:52222",
+        "192.168.1.10",
+        // Still refused on the port the default moved away from.
+        "bookmarks.local:47321",
+    ] {
         let request = Request::builder()
             .method("GET")
             .uri("/api/v1/health")
@@ -120,7 +126,15 @@ async fn a_request_with_no_host_header_is_refused() {
 async fn loopback_hosts_are_allowed() {
     let harness = Harness::new();
 
-    for host in [TEST_HOST, "localhost:47321", "127.0.0.1", "[::1]:47321"] {
+    for host in [
+        TEST_HOST,
+        "localhost:52222",
+        "127.0.0.1",
+        "[::1]:52222",
+        // An installation explicitly configured on the previous default keeps
+        // working: the guard reads the name, never the port.
+        "127.0.0.1:47321",
+    ] {
         let request = Request::builder()
             .method("GET")
             .uri("/api/v1/health")
@@ -177,4 +191,24 @@ async fn serving_an_uninitialized_directory_is_refused_with_a_usable_hint() {
     // The explicit opt-in is what makes it servable.
     bbb::initialize(directory.path()).expect("initialize");
     Daemon::open(&options).expect("an initialized vault serves");
+}
+
+/// The default port moved from 47321 to 52222 so that several browsers on one
+/// machine agree on where the daemon is without being told.
+///
+/// There is deliberately no compatibility listener: the daemon binds one port.
+/// What must keep working is an installation that was *explicitly* configured
+/// on the old one, which is a matter of the explicit value surviving — never of
+/// the daemon guessing a second port to listen on.
+#[test]
+fn the_default_port_is_52222_and_an_explicit_port_survives() {
+    assert_eq!(bbb::server::DEFAULT_PORT, 52222);
+    assert_eq!(ServeOptions::new("/vault").port, 52222);
+
+    let explicit = ServeOptions::new("/vault").with_address(bbb::server::DEFAULT_BIND, 47321);
+    assert_eq!(
+        explicit.port, 47321,
+        "an explicitly configured port is never replaced by the default"
+    );
+    assert!(explicit.bind.is_loopback());
 }

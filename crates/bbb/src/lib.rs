@@ -81,6 +81,8 @@ pub mod init;
 pub mod lock;
 pub mod problem;
 pub mod server;
+pub mod service;
+pub mod setup;
 pub mod vault;
 pub mod watch;
 

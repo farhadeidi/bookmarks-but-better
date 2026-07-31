@@ -1,3 +1,30 @@
+/**
+ * Which source of bookmarks the app is pointed at.
+ *
+ * `browser` and `standalone` are the two that have always existed. `daemon` is
+ * an *extension* pointing at a local `bbb` daemon over loopback; the
+ * daemon-served build does not use this type at all, since it is not a choice
+ * there. Nothing ever falls back from `daemon` to `browser` on its own — an
+ * unreachable daemon is an error the user sees, not a silent switch to a
+ * different set of bookmarks.
+ */
+export type AdapterMode = "browser" | "standalone" | "daemon"
+
+/**
+ * Where an extension reaches its daemon, and how it authenticates.
+ *
+ * `origin` is always the canonical `http://host:port` form produced by
+ * `canonicalizeDaemonOrigin` — never a raw user string. `bearerToken` is
+ * unused in this milestone (there is no pairing yet) but is carried end to end
+ * so that adding pairing later needs no change to the client, the adapter or
+ * this type. It travels in an `Authorization` header only: never in a URL,
+ * never in a log line.
+ */
+export interface DaemonConnectionConfig {
+  origin: string
+  bearerToken?: string
+}
+
 export interface BookmarkDiagnostic {
   code: string
   severity: string

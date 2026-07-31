@@ -12,17 +12,67 @@ bbb init   --vault <path>                 # write the root .bbb-folder.md and .b
 bbb doctor --vault <path>                 # read-only report; non-zero if unhealthy
 bbb rescan --vault <path>                 # offline rescan and summary
 bbb serve  --vault <path> \
-           [--bind 127.0.0.1] [--port 47321] \
+           [--bind 127.0.0.1] [--port 52222] \
            [--ui-dir <path>] [--init]
+bbb setup                                 # guided first run: vault, port, next steps
+bbb service install --vault <path> [--port 52222] [--ui-dir <path>] [--no-start]
+bbb service start | stop | status | uninstall
 ```
 
 Every command names its vault explicitly. There is no discovery and no default
 path: the only directory `bbb` reads, writes or watches is the one on the
-command line.
+command line. That includes `service install`, whose definition embeds the exact
+path it was given — which is why `serve` still has no vault discovery to fall
+back on.
 
 `serve` refuses a directory that is not already a vault and prints the two ways
 to fix it. `--init` is the opt-in that lets `serve` write the root metadata file
 itself — convenient for tests and first runs, never implicit.
+
+## The background service
+
+`bbb service install` writes a **user-level** definition — no administrator, no
+`sudo`, nothing outside your own home directory:
+
+| Platform | What is written                                   | Where                                       |
+| -------- | ------------------------------------------------- | ------------------------------------------- |
+| Linux    | systemd **user** unit (`systemctl --user`)         | `$XDG_CONFIG_HOME/systemd/user/bbb.service` |
+| Linux¹   | XDG autostart entry, the fallback                  | `$XDG_CONFIG_HOME/autostart/bbb.desktop`    |
+| macOS    | `LaunchAgent`                                      | `~/Library/LaunchAgents/com.bookmarksbutbetter.bbb.plist` |
+| Windows  | Scheduled Task, triggered at logon                 | registered from `$XDG_CONFIG_HOME/bbb/bbb-task.xml` |
+
+¹ Used only when there is no usable `systemctl --user`. An autostart entry is
+started once at login and nothing supervises it, so there is no restart on
+failure — `bbb service status` says so rather than implying otherwise.
+
+Properties that hold on every platform:
+
+- **Loopback only.** The definition cannot be built with a non-loopback bind.
+- **Restart on failure**, where the platform supports it — never on a clean
+  exit, so `bbb service stop` is a command rather than a fight.
+- **Idempotent.** Installing what is already installed writes nothing.
+- **An explicit port survives an upgrade.** `install` with no `--port` reads the
+  installed definition's own command line and keeps its port, so an
+  installation configured on the previous default (47321) is not moved.
+- **Uninstall never deletes your vault.** It removes one generated file.
+- **No bookmark content in logs.** A definition is a command line and a log
+  level; the daemon logs counts, identities, codes and paths only.
+
+### Status of the platform integration
+
+Writing the definition is implemented and tested for all four formats on every
+platform. *Driving* the platform's service manager — start, stop, status — is
+wired for systemd (`systemctl --user`), macOS (`launchctl bootstrap`/`bootout`
+against the `gui/$UID` domain) and Windows (`schtasks /Create`, `/Run`, `/End`,
+`/Delete`, `/Query`). Every operation is idempotent and user-level: no `sudo`,
+no administrator prompt, no privilege beyond the account already running
+`bbb`.
+
+Only the Linux XDG-autostart fallback stays unwired, and by design rather than
+by omission: an autostart entry is started once at login by the desktop
+session, with no supervisor to ask about it afterward, so there is nothing for
+`bbb service start`/`stop`/`status` to drive. `bbb service install` says so
+plainly rather than reporting a success that did not happen.
 
 ## HTTP contract
 

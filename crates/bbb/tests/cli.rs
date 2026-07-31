@@ -180,3 +180,248 @@ fn the_help_text_documents_every_subcommand() {
         );
     }
 }
+
+#[test]
+fn serve_documents_the_new_default_port_and_still_accepts_an_explicit_one() {
+    let help = stdout(&bbb(&["serve", "--help"]));
+    assert!(
+        help.contains("52222"),
+        "the default port is documented: {help}"
+    );
+    assert!(
+        !help.contains("47321"),
+        "the previous default is not offered as a second listener: {help}"
+    );
+
+    // The old default is an ordinary port value, so an installation configured
+    // on it keeps starting after an upgrade.
+    let directory = tempfile::tempdir().expect("temp dir");
+    let vault = vault_arg(directory.path());
+    assert!(bbb(&["init", "--vault", &vault]).status.success());
+
+    let output = bbb(&[
+        "serve", "--vault", &vault, "--bind", "0.0.0.0", "--port", "47321",
+    ]);
+    // Refused for the bind, not for the port: the port was accepted and parsed.
+    assert!(!output.status.success());
+    assert!(stderr(&output).contains("loopback"), "{}", stderr(&output));
+}
+
+/// Runs `bbb` with `HOME` and `XDG_CONFIG_HOME` pointed at a temporary
+/// directory, so a service test installs into it rather than into whatever
+/// machine the suite runs on.
+fn bbb_in_home(home: &Path, args: &[&str]) -> Output {
+    Command::new(env!("CARGO_BIN_EXE_bbb"))
+        .args(args)
+        .env("HOME", home)
+        .env("XDG_CONFIG_HOME", home.join(".config"))
+        .env("USERPROFILE", home)
+        // Without a session bus there is no usable `systemctl --user`, so the
+        // CLI takes the XDG autostart fallback and never shells out.
+        .env_remove("XDG_RUNTIME_DIR")
+        .output()
+        .expect("run bbb")
+}
+
+/// Where the selected platform service kind puts its definition.
+fn definition_path(home: &Path) -> std::path::PathBuf {
+    if cfg!(target_os = "macos") {
+        home.join("Library")
+            .join("LaunchAgents")
+            .join("com.bookmarksbutbetter.bbb.plist")
+    } else if cfg!(windows) {
+        home.join(".config").join("bbb").join("bbb-task.xml")
+    } else {
+        home.join(".config").join("autostart").join("bbb.desktop")
+    }
+}
+
+fn definition_text(path: &Path) -> String {
+    let bytes = std::fs::read(path).expect("read definition");
+    if cfg!(windows) {
+        let units = bytes[2..]
+            .chunks_exact(2)
+            .map(|pair| u16::from_le_bytes([pair[0], pair[1]]));
+        String::from_utf16(&units.collect::<Vec<_>>()).expect("UTF-16 definition")
+    } else {
+        String::from_utf8(bytes).expect("UTF-8 definition")
+    }
+}
+
+#[test]
+fn service_install_writes_a_definition_naming_the_vault_and_is_idempotent() {
+    let home = tempfile::tempdir().expect("temp dir");
+    let vault_dir = tempfile::tempdir().expect("temp dir");
+    let vault = vault_arg(vault_dir.path());
+    assert!(bbb(&["init", "--vault", &vault]).status.success());
+
+    let first = bbb_in_home(
+        home.path(),
+        &["service", "install", "--vault", &vault, "--no-start"],
+    );
+    assert!(first.status.success(), "{}", stderr(&first));
+
+    let entry = definition_path(home.path());
+    assert!(entry.is_file(), "{}", stdout(&first));
+    let text = definition_text(&entry);
+    assert!(text.contains("127.0.0.1"), "{text}");
+    assert!(text.contains("52222"), "{text}");
+
+    // Installing the same thing again writes nothing.
+    let before = std::fs::read(&entry).expect("read");
+    let second = bbb_in_home(
+        home.path(),
+        &["service", "install", "--vault", &vault, "--no-start"],
+    );
+    assert!(second.status.success(), "{}", stderr(&second));
+    assert!(stdout(&second).contains("unchanged"), "{}", stdout(&second));
+    assert_eq!(std::fs::read(&entry).expect("read"), before);
+}
+
+#[test]
+fn service_install_preserves_an_explicit_port_across_an_upgrade() {
+    let home = tempfile::tempdir().expect("temp dir");
+    let vault_dir = tempfile::tempdir().expect("temp dir");
+    let vault = vault_arg(vault_dir.path());
+    assert!(bbb(&["init", "--vault", &vault]).status.success());
+
+    // An installation configured on the previous default.
+    let installed = bbb_in_home(
+        home.path(),
+        &[
+            "service",
+            "install",
+            "--vault",
+            &vault,
+            "--port",
+            "47321",
+            "--no-start",
+        ],
+    );
+    assert!(installed.status.success(), "{}", stderr(&installed));
+
+    // An upgrade that names no port must not move it to the new default.
+    let upgraded = bbb_in_home(
+        home.path(),
+        &["service", "install", "--vault", &vault, "--no-start"],
+    );
+    assert!(upgraded.status.success(), "{}", stderr(&upgraded));
+    assert!(
+        stdout(&upgraded).contains("keeping the installed port 47321"),
+        "{}",
+        stdout(&upgraded)
+    );
+
+    let text = definition_text(&definition_path(home.path()));
+    assert!(text.contains("47321"), "{text}");
+    assert!(!text.contains("52222"), "{text}");
+
+    // And a named port is still obeyed.
+    let moved = bbb_in_home(
+        home.path(),
+        &[
+            "service",
+            "install",
+            "--vault",
+            &vault,
+            "--port",
+            "40404",
+            "--no-start",
+        ],
+    );
+    assert!(moved.status.success(), "{}", stderr(&moved));
+    let text = definition_text(&definition_path(home.path()));
+    assert!(text.contains("40404"), "{text}");
+}
+
+#[test]
+fn service_status_reports_what_is_installed_and_uninstall_never_touches_the_vault() {
+    let home = tempfile::tempdir().expect("temp dir");
+    let vault_dir = tempfile::tempdir().expect("temp dir");
+    let vault = vault_arg(vault_dir.path());
+    assert!(bbb(&["init", "--vault", &vault]).status.success());
+
+    let absent = bbb_in_home(home.path(), &["service", "status"]);
+    assert!(absent.status.success(), "{}", stderr(&absent));
+    assert!(
+        stdout(&absent).contains("not installed"),
+        "{}",
+        stdout(&absent)
+    );
+
+    bbb_in_home(
+        home.path(),
+        &["service", "install", "--vault", &vault, "--no-start"],
+    );
+
+    let present = bbb_in_home(home.path(), &["service", "status"]);
+    let report = stdout(&present);
+    assert!(report.contains(&vault), "the vault is reported: {report}");
+    assert!(report.contains("52222"), "the port is reported: {report}");
+
+    // A marker file proving the vault survives as *content*, not just as a
+    // directory entry.
+    let bookmark = vault_dir.path().join("Notes--11112222.md");
+    std::fs::write(&bookmark, "---\nbbb_id: 11112222\n---\n").expect("write");
+
+    let removed = bbb_in_home(home.path(), &["service", "uninstall"]);
+    assert!(removed.status.success(), "{}", stderr(&removed));
+    assert!(!definition_path(home.path()).exists());
+    assert!(
+        vault_dir.path().join(".bbb-folder.md").is_file(),
+        "uninstall must never delete the vault"
+    );
+    assert!(bookmark.is_file(), "nor anything in it");
+
+    // Uninstalling again is not an error.
+    let again = bbb_in_home(home.path(), &["service", "uninstall"]);
+    assert!(again.status.success(), "{}", stderr(&again));
+    assert!(
+        stdout(&again).contains("nothing to remove"),
+        "{}",
+        stdout(&again)
+    );
+}
+
+#[test]
+fn service_install_quotes_a_vault_path_with_spaces_and_unicode() {
+    let home = tempfile::tempdir().expect("temp dir");
+    let parent = tempfile::tempdir().expect("temp dir");
+    let awkward = parent.path().join("My Bookmarks 书签");
+    std::fs::create_dir_all(&awkward).expect("create vault dir");
+    let vault = vault_arg(&awkward);
+    assert!(bbb(&["init", "--vault", &vault]).status.success());
+
+    let installed = bbb_in_home(
+        home.path(),
+        &["service", "install", "--vault", &vault, "--no-start"],
+    );
+    assert!(installed.status.success(), "{}", stderr(&installed));
+
+    // The path survives the round trip through the definition file, which is
+    // what `status` reads back.
+    let report = stdout(&bbb_in_home(home.path(), &["service", "status"]));
+    assert!(
+        report.contains("My Bookmarks 书签"),
+        "the awkward path round-trips: {report}"
+    );
+}
+
+#[test]
+fn the_help_text_documents_setup_and_service() {
+    let help = stdout(&bbb(&["--help"]));
+    for command in ["setup", "service"] {
+        assert!(
+            help.contains(command),
+            "`{command}` is missing from: {help}"
+        );
+    }
+
+    let service = stdout(&bbb(&["service", "--help"]));
+    for command in ["install", "start", "stop", "status", "uninstall"] {
+        assert!(
+            service.contains(command),
+            "`{command}` is missing from: {service}"
+        );
+    }
+}

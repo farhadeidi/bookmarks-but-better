@@ -2,10 +2,30 @@
 
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { installFakeIndexedDB } from "./fake-indexeddb"
-import { setAdapterModePreference } from "../adapter-preference"
+import {
+  setAdapterModePreference,
+  setDaemonConnectionConfig,
+} from "../adapter-preference"
 import { detectAdapter } from "../detect"
+import type { BrowserAdapter } from "../types"
 
 installFakeIndexedDB()
+
+/**
+ * A daemon adapter opens its change stream as soon as it is constructed, so
+ * every test that builds one stubs `fetch` (nothing here should touch the
+ * network) and disposes the adapter (nothing should outlive its test).
+ */
+function stubDaemonFetch() {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn().mockImplementation(() => new Promise(() => {}))
+  )
+}
+
+function dispose(adapter: BrowserAdapter) {
+  adapter.bookmarks.dispose?.()
+}
 
 afterEach(() => {
   vi.unstubAllGlobals()
@@ -44,6 +64,7 @@ describe("detectAdapter", () => {
   })
 
   it("always selects the daemon adapter in a daemon build, ignoring any stored preference or extension context", async () => {
+    stubDaemonFetch()
     vi.stubGlobal("chrome", {
       bookmarks: {},
       storage: {
@@ -58,6 +79,71 @@ describe("detectAdapter", () => {
     expect(adapter.bookmarks.constructor.name).toBe("DaemonBookmarkAdapter")
     expect(adapter.capabilities.move).toBe(true)
     expect(adapter.capabilities.reorder).toBe(false)
+    dispose(adapter)
+  })
+
+  it("builds an extension daemon adapter from the stored endpoint when the preference is `daemon`", async () => {
+    stubDaemonFetch()
+    vi.stubGlobal("chrome", {
+      bookmarks: {},
+      storage: {
+        local: { get: vi.fn().mockResolvedValue({}), set: vi.fn() },
+        sync: { get: vi.fn().mockResolvedValue({}) },
+      },
+    })
+    await setAdapterModePreference("daemon")
+    await setDaemonConnectionConfig({ origin: "http://127.0.0.1:47321" })
+
+    const adapter = await detectAdapter()
+
+    expect(adapter.bookmarks.constructor.name).toBe("DaemonBookmarkAdapter")
+    // The change stream — the first request an adapter makes — proves which
+    // endpoint the whole client was built against.
+    const [eventsUrl] = vi.mocked(globalThis.fetch).mock.calls[0]
+    expect(eventsUrl).toBe("http://127.0.0.1:47321/api/v1/events")
+    dispose(adapter)
+  })
+
+  it("falls back to the default 52222 endpoint when daemon mode is chosen but nothing is configured", async () => {
+    stubDaemonFetch()
+    await setAdapterModePreference("daemon")
+
+    const adapter = await detectAdapter()
+
+    const [eventsUrl] = vi.mocked(globalThis.fetch).mock.calls[0]
+    expect(eventsUrl).toBe("http://127.0.0.1:52222/api/v1/events")
+    dispose(adapter)
+  })
+
+  it("never falls back to browser bookmarks when daemon mode is chosen, even in an extension context", async () => {
+    stubDaemonFetch()
+    vi.stubGlobal("chrome", {
+      bookmarks: {},
+      storage: {
+        local: { get: vi.fn().mockResolvedValue({}), set: vi.fn() },
+        sync: { get: vi.fn().mockResolvedValue({}) },
+      },
+    })
+    await setAdapterModePreference("daemon")
+
+    // A daemon that is not running must surface as an error the user can act
+    // on. Silently serving browser bookmarks instead would show a *different
+    // set of bookmarks* and read as data loss.
+    const adapter = await detectAdapter()
+
+    expect(adapter.bookmarks.constructor.name).toBe("DaemonBookmarkAdapter")
+    dispose(adapter)
+  })
+
+  it("keeps the served daemon build same-origin, ignoring any stored extension endpoint", async () => {
+    stubDaemonFetch()
+    await setDaemonConnectionConfig({ origin: "http://127.0.0.1:47321" })
+
+    const adapter = await detectAdapter({ buildTarget: "daemon" })
+
+    const [eventsUrl] = vi.mocked(globalThis.fetch).mock.calls[0]
+    expect(eventsUrl).toBe("/api/v1/events")
+    dispose(adapter)
   })
 })
 
@@ -82,11 +168,13 @@ describe("ordering capability isolation", () => {
   }
 
   it("daemon: reorder stays false while setChildOrder is true", async () => {
+    stubDaemonFetch()
     const adapter = await detectAdapter({ buildTarget: "daemon" })
 
     expect(adapter.capabilities.reorder).toBe(false)
     expect(adapter.capabilities.setChildOrder).toBe(true)
     expect(typeof adapter.bookmarks.setChildOrder).toBe("function")
+    dispose(adapter)
   })
 
   it("chrome: setChildOrder is false and the adapter has no such method", async () => {

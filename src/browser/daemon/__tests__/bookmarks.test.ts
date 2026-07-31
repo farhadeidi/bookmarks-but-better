@@ -5,7 +5,15 @@ vi.mock("../sse", () => ({
   connectDaemonEvents: vi.fn(() => vi.fn()),
 }))
 
-vi.mock("../client", () => ({
+import { DaemonBookmarkAdapter } from "../bookmarks"
+import type { DaemonClient } from "../client"
+
+/**
+ * The adapter is handed a client rather than importing one, so the double is
+ * a plain object with the same method names -- no module mock, and nothing
+ * here can accidentally reach a real origin.
+ */
+const client = {
   fetchTree: vi.fn(),
   fetchNode: vi.fn(),
   createNode: vi.fn(),
@@ -14,10 +22,9 @@ vi.mock("../client", () => ({
   moveNode: vi.fn(),
   setOrder: vi.fn(),
   fetchHealth: vi.fn(),
-}))
-
-import { DaemonBookmarkAdapter } from "../bookmarks"
-import * as client from "../client"
+  eventsUrl: "/api/v1/events",
+  authHeaders: () => ({}),
+} as unknown as DaemonClient
 
 const root: BookmarkNode = {
   id: "root",
@@ -49,7 +56,7 @@ afterEach(() => {
 describe("DaemonBookmarkAdapter", () => {
   it("getTree() reads {tree} and returns it directly, indexing revisions", async () => {
     vi.mocked(client.fetchTree).mockResolvedValue({ tree: [root] })
-    const adapter = new DaemonBookmarkAdapter()
+    const adapter = new DaemonBookmarkAdapter({ client })
 
     const tree = await adapter.getTree()
 
@@ -58,7 +65,7 @@ describe("DaemonBookmarkAdapter", () => {
 
   it("routes create() to /folders when no url is given and to /bookmarks otherwise", async () => {
     vi.mocked(client.fetchTree).mockResolvedValue({ tree: [root] })
-    const adapter = new DaemonBookmarkAdapter()
+    const adapter = new DaemonBookmarkAdapter({ client })
     await adapter.getTree()
 
     vi.mocked(client.createNode).mockResolvedValue({
@@ -93,7 +100,7 @@ describe("DaemonBookmarkAdapter", () => {
 
   it("notifies its own listeners on a successful mutation, without needing SSE", async () => {
     vi.mocked(client.fetchTree).mockResolvedValue({ tree: [root] })
-    const adapter = new DaemonBookmarkAdapter()
+    const adapter = new DaemonBookmarkAdapter({ client })
     await adapter.getTree()
 
     const onCreated = vi.fn()
@@ -117,7 +124,7 @@ describe("DaemonBookmarkAdapter", () => {
 
   it("update() targets /bookmarks/:id with no kind argument, even for a folder, and updates the cached revision", async () => {
     vi.mocked(client.fetchTree).mockResolvedValue({ tree: [root] })
-    const adapter = new DaemonBookmarkAdapter()
+    const adapter = new DaemonBookmarkAdapter({ client })
     await adapter.getTree()
 
     // "root" is a folder (no url) — update() must not route it to /folders.
@@ -146,7 +153,7 @@ describe("DaemonBookmarkAdapter", () => {
   })
 
   it("throws instead of guessing when asked to mutate an id it has never seen", async () => {
-    const adapter = new DaemonBookmarkAdapter()
+    const adapter = new DaemonBookmarkAdapter({ client })
     await expect(adapter.update("missing", { title: "x" })).rejects.toThrow(
       /unknown node/i
     )
@@ -154,7 +161,7 @@ describe("DaemonBookmarkAdapter", () => {
 
   it("getSubTree() fetches a bare DTO from /bookmarks/:id and merges into the cache without evicting other branches", async () => {
     vi.mocked(client.fetchTree).mockResolvedValue({ tree: [root] })
-    const adapter = new DaemonBookmarkAdapter()
+    const adapter = new DaemonBookmarkAdapter({ client })
     await adapter.getTree()
 
     // A lazy per-folder load of an unrelated branch must not forget about
@@ -184,7 +191,7 @@ describe("DaemonBookmarkAdapter", () => {
 
   it("move() no-ops when there is no destination parent (nothing to do without reorder support)", async () => {
     vi.mocked(client.fetchTree).mockResolvedValue({ tree: [root] })
-    const adapter = new DaemonBookmarkAdapter()
+    const adapter = new DaemonBookmarkAdapter({ client })
     await adapter.getTree()
 
     await adapter.move("bookmark-1", { index: 0 })
@@ -193,7 +200,7 @@ describe("DaemonBookmarkAdapter", () => {
 
   it("move() targets /bookmarks/:id with no kind argument, sending only revision and parentId, and refreshes the cache from the response", async () => {
     vi.mocked(client.fetchTree).mockResolvedValue({ tree: [root] })
-    const adapter = new DaemonBookmarkAdapter()
+    const adapter = new DaemonBookmarkAdapter({ client })
     await adapter.getTree()
 
     // The daemon's move handler returns the moved entry's BookmarkDto (a
@@ -227,7 +234,7 @@ describe("DaemonBookmarkAdapter", () => {
 
   it("remove() keeps kind routing: deletes with the cached revision and evicts the node from the cache", async () => {
     vi.mocked(client.fetchTree).mockResolvedValue({ tree: [root] })
-    const adapter = new DaemonBookmarkAdapter()
+    const adapter = new DaemonBookmarkAdapter({ client })
     await adapter.getTree()
 
     vi.mocked(client.deleteNode).mockResolvedValue(undefined)
@@ -243,7 +250,7 @@ describe("DaemonBookmarkAdapter", () => {
 
   it("removeTree() deletes a folder with recursive:true", async () => {
     vi.mocked(client.fetchTree).mockResolvedValue({ tree: [root] })
-    const adapter = new DaemonBookmarkAdapter()
+    const adapter = new DaemonBookmarkAdapter({ client })
     await adapter.getTree()
 
     vi.mocked(client.deleteNode).mockResolvedValue(undefined)
@@ -269,7 +276,7 @@ describe("DaemonBookmarkAdapter", () => {
       status: "degraded",
       warnings,
     })
-    const adapter = new DaemonBookmarkAdapter()
+    const adapter = new DaemonBookmarkAdapter({ client })
 
     await expect(adapter.checkHealth?.()).resolves.toEqual({
       ready: false,
@@ -282,7 +289,7 @@ describe("DaemonBookmarkAdapter", () => {
     const disconnect = vi.fn()
     vi.mocked(sse.connectDaemonEvents).mockReturnValue(disconnect)
 
-    const adapter = new DaemonBookmarkAdapter()
+    const adapter = new DaemonBookmarkAdapter({ client })
     adapter.dispose()
 
     expect(disconnect).toHaveBeenCalledTimes(1)
@@ -340,7 +347,7 @@ const unorderedFolder: BookmarkNode = {
 
 async function adapterFor(folder: BookmarkNode) {
   vi.mocked(client.fetchTree).mockResolvedValue({ tree: [folder] })
-  const adapter = new DaemonBookmarkAdapter()
+  const adapter = new DaemonBookmarkAdapter({ client })
   await adapter.getTree()
   vi.mocked(client.fetchNode).mockResolvedValue(folder)
   vi.mocked(client.setOrder).mockResolvedValue(folder)

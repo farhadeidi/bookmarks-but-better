@@ -15,6 +15,8 @@ use clap::{Parser, Subcommand};
 use crate::doctor;
 use crate::init::{self, InitOutcome};
 use crate::server::{self, DEFAULT_BIND, DEFAULT_PORT, Daemon, ServeOptions};
+use crate::service;
+use crate::setup;
 use crate::vault::Vault;
 use crate::watch::WatchOptions;
 
@@ -92,6 +94,62 @@ pub enum Command {
         #[arg(long, value_name = "PATH")]
         vault: PathBuf,
     },
+
+    /// Set up a vault and a background service, answering a few questions.
+    Setup,
+
+    /// Manage the background service that serves a vault at login.
+    Service {
+        /// What to do with the service.
+        #[command(subcommand)]
+        command: ServiceCommand,
+    },
+}
+
+/// `bbb service` subcommands.
+#[derive(Debug, Subcommand)]
+pub enum ServiceCommand {
+    /// Install (or upgrade) the user-level service definition.
+    ///
+    /// User-level throughout: a systemd *user* unit, a macOS `LaunchAgent` or a
+    /// Scheduled Task at logon. None of them needs an administrator, because
+    /// none of them needs to touch anything but one person's own files.
+    Install {
+        /// The vault directory. Mandatory, and embedded verbatim in the
+        /// service definition.
+        #[arg(long, value_name = "PATH")]
+        vault: PathBuf,
+
+        /// The port to serve on.
+        ///
+        /// Left out on an upgrade, the port already installed is kept — so an
+        /// installation configured on an earlier default is not moved by an
+        /// upgrade that never mentioned a port.
+        #[arg(long)]
+        port: Option<u16>,
+
+        /// A directory holding the built web UI to serve.
+        #[arg(long, value_name = "PATH")]
+        ui_dir: Option<PathBuf>,
+
+        /// Install the definition without starting the service.
+        #[arg(long)]
+        no_start: bool,
+    },
+
+    /// Start the installed service.
+    Start,
+
+    /// Stop the running service.
+    Stop,
+
+    /// Report whether the service is installed and running.
+    Status,
+
+    /// Remove the service definition.
+    ///
+    /// The vault is never touched: this removes one generated file.
+    Uninstall,
 }
 
 impl Cli {
@@ -114,6 +172,8 @@ impl Cli {
             Command::Init { vault } => run_init(&vault),
             Command::Doctor { vault } => run_doctor(&vault),
             Command::Rescan { vault } => run_rescan(&vault),
+            Command::Setup => run_setup(),
+            Command::Service { command } => run_service(command),
         }
     }
 
@@ -338,6 +398,205 @@ fn run_rescan(vault: &std::path::Path) -> ExitCode {
     println!("  generation  {}", snapshot.generation);
     println!("  bookmarks   {}", snapshot.scan.bookmarks().count());
     println!("  diagnostics {}", snapshot.scan.diagnostics().len());
+    ExitCode::SUCCESS
+}
+
+/// Builds the spec an install would write, resolving the port.
+///
+/// The executable path is the running binary's own, resolved once: a service
+/// definition outlives the shell that created it, so `bbb` on a `PATH` is not
+/// good enough — the file has to name the exact program.
+fn service_spec(
+    vault: &std::path::Path,
+    port: Option<u16>,
+    ui_dir: Option<PathBuf>,
+    layout: &service::ServiceLayout,
+    kind: service::ServiceKind,
+) -> Result<service::ServiceSpec, String> {
+    let exe = std::env::current_exe()
+        .map_err(|error| format!("this program's own path is unknown: {error}"))?;
+    let vault = server::resolve_vault_path(vault)
+        .map_err(|error| format!("the vault path could not be resolved: {error}"))?;
+
+    let mut spec = service::ServiceSpec::new(exe, vault).map_err(|error| error.to_string())?;
+    spec = spec
+        .with_port(service::resolve_port(layout, kind, port))
+        .map_err(|error| error.to_string())?;
+    if let Some(ui_dir) = ui_dir {
+        let ui_dir = server::resolve_vault_path(&ui_dir)
+            .map_err(|error| format!("the ui directory could not be resolved: {error}"))?;
+        spec = spec
+            .with_ui_dir(ui_dir)
+            .map_err(|error| error.to_string())?;
+    }
+    Ok(spec)
+}
+
+fn run_service_install(
+    layout: &service::ServiceLayout,
+    kind: service::ServiceKind,
+    vault: &std::path::Path,
+    port: Option<u16>,
+    ui_dir: Option<PathBuf>,
+    no_start: bool,
+) -> ExitCode {
+    // Read before the install rewrites it: this is the port the user had.
+    let existing_port = service::resolve_port(layout, kind, None);
+    let was_installed = service::is_installed(layout, kind);
+
+    let spec = match service_spec(vault, port, ui_dir, layout, kind) {
+        Ok(spec) => spec,
+        Err(message) => return fail(format_args!("{message}")),
+    };
+    if port.is_none() && was_installed {
+        println!("keeping the installed port {existing_port}");
+    }
+
+    let outcome = match service::install(layout, kind, &spec) {
+        Ok(outcome) => outcome,
+        Err(error) => return fail(format_args!("{error}")),
+    };
+    let verb = if outcome.wrote() {
+        "wrote"
+    } else {
+        "unchanged"
+    };
+    println!("{verb} {} ({})", outcome.path().display(), kind.describe());
+    println!("  vault  {}", spec.vault.display());
+    println!("  serving http://{}:{}", spec.bind, spec.port);
+
+    if let Err(error) = service::reload(layout, kind) {
+        return fail(format_args!("{error}"));
+    }
+    if no_start {
+        return ExitCode::SUCCESS;
+    }
+
+    match service::enable_and_start(layout, kind) {
+        Ok(()) => {
+            println!("started, and enabled at login");
+            ExitCode::SUCCESS
+        }
+        // Honest about the half that is not wired: the definition really is
+        // installed, and starting it really is not automatic.
+        Err(error @ service::ServiceError::Unwired { .. }) => {
+            println!("the definition is installed but not started: {error}");
+            ExitCode::SUCCESS
+        }
+        Err(error) => fail(format_args!("{error}")),
+    }
+}
+
+fn run_service_status(layout: &service::ServiceLayout, kind: service::ServiceKind) -> ExitCode {
+    let state = match service::state(layout, kind) {
+        Ok(state) => state,
+        Err(error) => return fail(format_args!("{error}")),
+    };
+
+    println!("kind       {}", kind.describe());
+    println!("definition {}", layout.definition_path(kind).display());
+    println!(
+        "state      {}",
+        match state {
+            service::ServiceState::NotInstalled => "not installed",
+            service::ServiceState::Running => "running",
+            service::ServiceState::Stopped => "installed, not running",
+            service::ServiceState::InstalledUnsupervised =>
+                "installed; starts at your next login (nothing supervises it)",
+        }
+    );
+
+    if let Some(vault) = service::installed_vault(layout, kind) {
+        println!("vault      {}", vault.display());
+    }
+    if let Some(port) = service::installed_command_line(layout, kind)
+        .as_deref()
+        .and_then(service::port_in)
+    {
+        println!("port       {port}");
+    }
+    ExitCode::SUCCESS
+}
+
+fn run_service(command: ServiceCommand) -> ExitCode {
+    let layout = match service::ServiceLayout::from_env() {
+        Ok(layout) => layout,
+        Err(error) => return fail(format_args!("{error}")),
+    };
+    let kind = service::preferred_kind();
+
+    match command {
+        ServiceCommand::Install {
+            vault,
+            port,
+            ui_dir,
+            no_start,
+        } => run_service_install(&layout, kind, &vault, port, ui_dir, no_start),
+
+        ServiceCommand::Status => run_service_status(&layout, kind),
+
+        ServiceCommand::Start => match service::start(&layout, kind) {
+            Ok(()) => {
+                println!("started");
+                ExitCode::SUCCESS
+            }
+            Err(error) => fail(format_args!("{error}")),
+        },
+
+        ServiceCommand::Stop => match service::stop(&layout, kind) {
+            Ok(()) => {
+                println!("stopped");
+                ExitCode::SUCCESS
+            }
+            Err(error) => fail(format_args!("{error}")),
+        },
+
+        ServiceCommand::Uninstall => {
+            // Best-effort, and deliberately before the file goes: a service
+            // manager cannot be asked to stop a unit whose definition is gone.
+            service::disable_and_stop(&layout, kind);
+            match service::uninstall(&layout, kind) {
+                Ok(true) => {
+                    println!("removed {}", layout.definition_path(kind).display());
+                    println!("your vault was not touched");
+                    ExitCode::SUCCESS
+                }
+                Ok(false) => {
+                    println!("nothing to remove: no service definition is installed");
+                    ExitCode::SUCCESS
+                }
+                Err(error) => fail(format_args!("{error}")),
+            }
+        }
+    }
+}
+
+fn run_setup() -> ExitCode {
+    let mut prompt = setup::Terminal;
+    let plan = match setup::plan(&mut prompt) {
+        Ok(plan) => plan,
+        Err(error) => return fail(format_args!("{error}")),
+    };
+
+    if plan.initialize {
+        match init::initialize(&plan.vault) {
+            Ok(outcome) => println!(
+                "initialized vault {} (id {})",
+                plan.vault.display(),
+                outcome.id()
+            ),
+            Err(error) => return fail(format_args!("{error}")),
+        }
+    }
+
+    println!();
+    println!("Next: install the background service with");
+    println!(
+        "  bbb service install --vault {} --port {}",
+        plan.vault.display(),
+        plan.port
+    );
+    println!("Then point the extension at http://127.0.0.1:{}", plan.port);
     ExitCode::SUCCESS
 }
 
