@@ -7,9 +7,13 @@ import {
   isOrderedDragTarget,
   propMemoizationFeature,
 } from "@headless-tree/core"
+import { HugeiconsIcon } from "@hugeicons/react"
+import { Bookmark02Icon, Folder01Icon } from "@hugeicons/core-free-icons"
+import { Button } from "@/components/ui/button"
 import type { BookmarkAdapter, BookmarkNode } from "@/browser"
 import { useBookmarkStore } from "@/stores/bookmark-store"
 import { useUIStore } from "@/stores/ui-store"
+import { resolveEffectiveCreateParentId } from "@/features/root-folder-select"
 import {
   loadOrganizerChildren,
   loadOrganizerItem,
@@ -75,6 +79,54 @@ function BookmarkOrganizerUnavailable() {
   )
 }
 
+function BookmarkOrganizerEmpty({
+  createParentId,
+}: {
+  createParentId: string | null
+}) {
+  const openCreateItem = useUIStore((s) => s.openCreateItem)
+
+  return (
+    <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-border/70 px-3 py-8 text-center">
+      <p className="text-sm text-muted-foreground">
+        {createParentId
+          ? "This folder is empty. Create a folder or bookmark to get started."
+          : "Choose a root folder above before creating items here."}
+      </p>
+      {createParentId && (
+        <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() =>
+              openCreateItem({ type: "folder", parentId: createParentId })
+            }
+          >
+            <HugeiconsIcon
+              icon={Folder01Icon}
+              size={14}
+              className="text-primary"
+            />
+            New Folder
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() =>
+              openCreateItem({ type: "bookmark", parentId: createParentId })
+            }
+          >
+            <HugeiconsIcon icon={Bookmark02Icon} size={14} />
+            New Bookmark
+          </Button>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export type BookmarkOrganizerTreeHandle = {
   expandAll: () => void
   collapseAll: () => void
@@ -85,6 +137,8 @@ const BookmarkOrganizerTreeImpl = React.forwardRef<
   BookmarkOrganizerTreeHandle,
   {
     effectiveRootId: string | null
+    /** Where a "New Folder"/"New Bookmark" action should create, or `null` when nothing valid is selected — drives the empty state's copy and actions. */
+    createParentId: string | null
     /** Whether the effective root folder's own child order is frozen. */
     rootOrderReadOnly?: boolean
     bookmarks: Pick<BookmarkAdapter, "getSubTree">
@@ -96,6 +150,7 @@ const BookmarkOrganizerTreeImpl = React.forwardRef<
 >(function BookmarkOrganizerTreeImpl(
   {
     effectiveRootId,
+    createParentId,
     rootOrderReadOnly,
     bookmarks,
     showBookmarks,
@@ -259,6 +314,16 @@ const BookmarkOrganizerTreeImpl = React.forwardRef<
     tree.getState().dnd?.draggedItems?.map((i) => i.getId()) ?? []
   )
 
+  const visibleItems = items.filter((item) => {
+    if (item.getId() === BOOKMARK_ORGANIZER_ROOT_ID) return false
+    if (!showBookmarks && !item.isFolder()) return false
+    return true
+  })
+
+  if (visibleItems.length === 0) {
+    return <BookmarkOrganizerEmpty createParentId={createParentId} />
+  }
+
   return (
     <div
       {...tree.getContainerProps("Bookmark Organizer")}
@@ -268,61 +333,54 @@ const BookmarkOrganizerTreeImpl = React.forwardRef<
         className="h-0.5 rounded-full bg-primary"
         style={tree.getDragLineStyle()}
       />
-      {tree
-        .getItems()
-        .filter((item) => {
-          if (item.getId() === BOOKMARK_ORGANIZER_ROOT_ID) return false
-          if (!showBookmarks && !item.isFolder()) return false
-          return true
-        })
-        .map((item) => (
-          <BookmarkOrganizerRow
-            key={item.getId()}
-            item={item}
-            isDragging={draggedItemIds.has(item.getId())}
-            dragEnabled={dragEnabled}
-            onCreateItem={(type) => {
-              openCreateItem({ type, parentId: item.getId() })
-            }}
-            onRename={async (treeItem) => {
-              const itemData = treeItem.getItemData()
-              if (!itemData) {
-                return
-              }
+      {visibleItems.map((item) => (
+        <BookmarkOrganizerRow
+          key={item.getId()}
+          item={item}
+          isDragging={draggedItemIds.has(item.getId())}
+          dragEnabled={dragEnabled}
+          onCreateItem={(type) => {
+            openCreateItem({ type, parentId: item.getId() })
+          }}
+          onRename={async (treeItem) => {
+            const itemData = treeItem.getItemData()
+            if (!itemData) {
+              return
+            }
 
-              if (itemData.kind === "folder") {
-                openEditor({
-                  id: itemData.id,
-                  title: itemData.title,
-                  parentId: itemData.parentId ?? undefined,
-                  children: [],
-                })
-                return
-              }
-
-              const [bookmark] = await bookmarks.getSubTree(treeItem.getId())
-              if (!bookmark) {
-                return
-              }
-
-              openEditor(toBookmarkNode(bookmark))
-            }}
-            onDelete={(treeItem) => {
-              const itemData = treeItem.getItemData()
-              if (!itemData) {
-                return
-              }
-
-              openDeleteConfirm({
+            if (itemData.kind === "folder") {
+              openEditor({
                 id: itemData.id,
                 title: itemData.title,
-                type: itemData.kind,
-                childCount:
-                  itemData.kind === "folder" ? itemData.childCount : undefined,
+                parentId: itemData.parentId ?? undefined,
+                children: [],
               })
-            }}
-          />
-        ))}
+              return
+            }
+
+            const [bookmark] = await bookmarks.getSubTree(treeItem.getId())
+            if (!bookmark) {
+              return
+            }
+
+            openEditor(toBookmarkNode(bookmark))
+          }}
+          onDelete={(treeItem) => {
+            const itemData = treeItem.getItemData()
+            if (!itemData) {
+              return
+            }
+
+            openDeleteConfirm({
+              id: itemData.id,
+              title: itemData.title,
+              type: itemData.kind,
+              childCount:
+                itemData.kind === "folder" ? itemData.childCount : undefined,
+            })
+          }}
+        />
+      ))}
     </div>
   )
 })
@@ -357,10 +415,18 @@ export function BookmarkOrganizerTree({
     adapter.capabilities.setChildOrder &&
     adapter.bookmarks.setChildOrder !== undefined
 
+  const createParentId =
+    rootFolderId ??
+    resolveEffectiveCreateParentId(
+      tree,
+      adapter.capabilities.rootIsCreatable ?? false
+    )
+
   return (
     <BookmarkOrganizerTreeImpl
       ref={treeRef}
       effectiveRootId={effectiveRootId}
+      createParentId={createParentId}
       // Gated, not just unused: an extension build's synthetic root keeps the
       // exact static item data it always had, rather than relying on
       // `canDropOnTarget` to ignore a flag it should never have been handed.
