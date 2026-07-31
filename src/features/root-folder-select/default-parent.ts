@@ -1,14 +1,32 @@
 import type { BookmarkNode } from "@/browser"
 
 /**
+ * Ids of the browser's permanent "bookmarks bar" folder, most preferred first.
+ *
+ * Both engines guarantee this folder exists in every profile and refuse to let
+ * it be renamed, moved or removed — Chrome documents "You also cannot rename,
+ * move, or remove the special 'Bookmarks Bar' and 'Other Bookmarks' folders",
+ * and Firefox raises "The bookmark root cannot be modified" for the same — so
+ * matching on the id is safe in a way that matching on a (localized) title
+ * would not be.
+ *
+ * `"1"` is Chrome's Bookmarks Bar; `"toolbar_____"` is the Firefox Places GUID
+ * for the Bookmarks Toolbar. Firefox needs naming explicitly because its root
+ * children start with the Bookmarks *Menu* (`menu________`), so "the first
+ * child folder" would silently mean a different folder there than in Chrome.
+ */
+const BOOKMARKS_BAR_IDS = ["1", "toolbar_____"]
+
+/**
  * Picks a parent folder id to create a new folder under when no root folder
  * is selected yet.
  *
- * `tree[0].id` (Chrome's invisible tree root, `"0"`) is rejected as a parent
- * by `chrome.bookmarks.create` — the same constraint documented in
- * `src/features/settings/import-target.ts` — so this returns the first real
- * child folder instead (Chrome's "Bookmarks bar", or the standalone/daemon
- * equivalent). Returns `null` when there is no such folder to create under.
+ * `tree[0].id` (Chrome's invisible tree root, `"0"`, and Firefox's
+ * `root________`) is rejected as a parent by both engines — the same
+ * constraint documented in `src/features/settings/import-target.ts` — so this
+ * returns a real child folder instead: the bookmarks bar when it can be
+ * identified, otherwise the first child folder there is. Returns `null` when
+ * there is no such folder to create under.
  */
 export function resolveDefaultCreateParentId(
   tree: BookmarkNode[]
@@ -16,10 +34,17 @@ export function resolveDefaultCreateParentId(
   const root = tree[0]
   if (!root) return null
 
-  const firstChildFolder = (root.children ?? []).find(
+  const childFolders = (root.children ?? []).filter(
     (child) => child.url === undefined
   )
-  return firstChildFolder?.id ?? null
+
+  const bookmarksBar = childFolders.find((child) =>
+    BOOKMARKS_BAR_IDS.includes(child.id)
+  )
+
+  // The fallback matters for anything that is neither Chrome nor Firefox
+  // shaped — a Chromium fork that renumbers its roots, or a test fixture.
+  return (bookmarksBar ?? childFolders[0])?.id ?? null
 }
 
 /**

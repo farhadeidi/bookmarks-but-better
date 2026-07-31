@@ -13,6 +13,7 @@ import { AppearanceStep } from "./steps/appearance-step"
 import { DoneStep } from "./steps/done-step"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
+import { resolveEffectiveCreateParentId } from "@/features/root-folder-select"
 import type { AdapterMode } from "@/browser/types"
 
 type ThemeMode = "light" | "dark" | "system"
@@ -63,6 +64,28 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
   React.useEffect(() => {
     setTheme("dark")
   }, [setTheme])
+
+  // Start the root-folder step on something meaningful rather than "Browser
+  // Root (all bookmarks)", which shows every bookmark the user owns. Seeded
+  // once, and only until the user touches the select — `null` is a legitimate
+  // choice there, so this cannot re-run and quietly undo it. An already-saved
+  // root wins, since re-opening the wizard from Settings shouldn't silently
+  // repoint an existing dashboard.
+  const hasSeededRootFolder = React.useRef(false)
+  const bookmarkTree = useBookmarkStore((s) => s.tree)
+  const bookmarkAdapter = useBookmarkStore((s) => s.adapter)
+  React.useEffect(() => {
+    if (hasSeededRootFolder.current || bookmarkTree.length === 0) return
+    hasSeededRootFolder.current = true
+
+    setRootFolderId(
+      useBookmarkStore.getState().rootFolderId ??
+        resolveEffectiveCreateParentId(
+          bookmarkTree,
+          bookmarkAdapter?.capabilities.rootIsCreatable ?? false
+        )
+    )
+  }, [bookmarkTree, bookmarkAdapter])
 
   const showDaemonSetupStep = SHOW_MODE_STEP && adapterMode === "daemon"
 

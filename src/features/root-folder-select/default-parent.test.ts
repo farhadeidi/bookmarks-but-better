@@ -6,7 +6,7 @@ import {
 } from "./default-parent"
 
 describe("resolveDefaultCreateParentId", () => {
-  it("returns the first child folder of the Chrome-shaped root", () => {
+  it("picks the Bookmarks Bar out of a Chrome-shaped root", () => {
     const tree: BookmarkNode[] = [
       {
         id: "0",
@@ -19,6 +19,53 @@ describe("resolveDefaultCreateParentId", () => {
     ]
 
     expect(resolveDefaultCreateParentId(tree)).toBe("1")
+  })
+
+  it("picks the Bookmarks Toolbar out of a Firefox-shaped root, not the Bookmarks Menu that comes first", () => {
+    const tree: BookmarkNode[] = [
+      {
+        id: "root________",
+        title: "",
+        children: [
+          { id: "menu________", title: "Bookmarks Menu", children: [] },
+          { id: "toolbar_____", title: "Bookmarks Toolbar", children: [] },
+          { id: "unfiled_____", title: "Other Bookmarks", children: [] },
+          { id: "mobile______", title: "Mobile Bookmarks", children: [] },
+        ],
+      },
+    ]
+
+    expect(resolveDefaultCreateParentId(tree)).toBe("toolbar_____")
+  })
+
+  it("falls back to the first child folder when no known bookmarks bar id is present", () => {
+    const tree: BookmarkNode[] = [
+      {
+        id: "root",
+        title: "",
+        children: [
+          { id: "custom-a", title: "Some Folder", children: [] },
+          { id: "custom-b", title: "Another Folder", children: [] },
+        ],
+      },
+    ]
+
+    expect(resolveDefaultCreateParentId(tree)).toBe("custom-a")
+  })
+
+  it("skips bookmarks sitting directly under the root when falling back", () => {
+    const tree: BookmarkNode[] = [
+      {
+        id: "root",
+        title: "",
+        children: [
+          { id: "b1", title: "A bookmark", url: "https://example.com" },
+          { id: "f1", title: "A folder", children: [] },
+        ],
+      },
+    ]
+
+    expect(resolveDefaultCreateParentId(tree)).toBe("f1")
   })
 
   it("returns null for an empty tree", () => {

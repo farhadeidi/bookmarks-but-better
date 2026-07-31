@@ -207,4 +207,54 @@ describe("OnboardingWizard root folder step", () => {
 
     expect(screen.queryByLabelText("New folder name")).toBeNull()
   })
+
+  it("starts on the Bookmarks Bar rather than Browser Root", async () => {
+    const user = userEvent.setup()
+    useBookmarkStore.setState({
+      tree: [
+        {
+          id: "0",
+          title: "",
+          children: [
+            { id: "1", title: "Bookmarks Bar", children: [] },
+            { id: "2", title: "Other Bookmarks", children: [] },
+          ],
+        },
+      ],
+      rootFolderId: null,
+    })
+
+    renderWizard()
+
+    await user.click(screen.getByRole("button", { name: "Get Started" }))
+    await user.click(screen.getByRole("button", { name: /Browser/ }))
+    await user.click(screen.getByRole("button", { name: "Next" }))
+
+    expect(screen.getByRole("combobox").textContent).toBe("Bookmarks Bar")
+  })
+
+  it("keeps an already-saved root folder when the wizard is re-opened", async () => {
+    const user = userEvent.setup()
+    useBookmarkStore.setState({
+      tree: [
+        {
+          id: "0",
+          title: "",
+          children: [
+            { id: "1", title: "Bookmarks Bar", children: [] },
+            { id: "2", title: "Other Bookmarks", children: [] },
+          ],
+        },
+      ],
+      rootFolderId: "2",
+    })
+
+    renderWizard()
+
+    await user.click(screen.getByRole("button", { name: "Get Started" }))
+    await user.click(screen.getByRole("button", { name: /Browser/ }))
+    await user.click(screen.getByRole("button", { name: "Next" }))
+
+    expect(screen.getByRole("combobox").textContent).toBe("Other Bookmarks")
+  })
 })
