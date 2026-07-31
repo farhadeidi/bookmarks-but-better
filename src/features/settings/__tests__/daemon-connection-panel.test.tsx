@@ -140,6 +140,18 @@ describe("DaemonConnectionPanel", () => {
   })
 
   /**
+   * The daemon ships only as a prerelease, and the install command shown here
+   * has no flag saying so — it relies on the scripts' fallback. Someone
+   * copying it is entitled to know they are getting beta software.
+   */
+  it("says the install guide gets a prerelease, since no stable release ships the daemon", () => {
+    render(<DaemonConnectionPanel />)
+    fireEvent.click(screen.getByRole("button", { name: "Advanced" }))
+
+    expect(screen.getByText(/still in beta/)).toBeTruthy()
+  })
+
+  /**
    * `install.sh` is a bash script — `set -o pipefail` alone makes it one — and
    * `/bin/sh` is dash on Debian and Ubuntu, where `| sh` fails on the first
    * line with `set: Illegal option -o pipefail`. This is a command the user

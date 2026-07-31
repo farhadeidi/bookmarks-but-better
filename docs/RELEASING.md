@@ -317,6 +317,16 @@ sidecar's naming (`<archive>.sha256`, content `<hash>  <filename>`), or the
 top-level directory inside the archive is a breaking change for both
 scripts and needs to update them alongside `release.yml`.
 
+Both also default to the latest *stable* release, which today is an
+extension-only one carrying no daemon archive at all. Rather than fail on that,
+each reports it and falls back to the newest prerelease that does have a build
+for the platform (see [DAEMON.md](DAEMON.md)). The fallback is not a switch
+anyone has to flip off later: the first stable release that ships daemon
+archives is resolved and installed normally, and the fallback stops being
+reached. What it does mean is that until then, the plain copy-and-paste install
+command installs a prerelease — so anything published under it is what users
+get.
+
 `.github/workflows/ci.yml`'s `install-scripts` job guards the scripts
 themselves — `shellcheck`, a syntax check of `install.ps1`, and
 `tests/install/smoke-test.sh`, which runs `install.sh` end to end (download,

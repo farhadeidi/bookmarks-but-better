@@ -11,7 +11,10 @@
 
     1. Resolves which release to install: the latest *stable* release by
        default, the latest prerelease with -Beta, or an exact tag with
-       -Version.
+       -Version. Until the daemon has a stable release, the latest stable
+       release is an extension-only one carrying no `bbb` archive at all;
+       when that is what the default resolves to, this falls back to the
+       latest prerelease that does have a Windows build, and says so.
     2. Downloads that archive and its .sha256 sidecar, and refuses to
        install unless the archive's hash matches it.
     3. Unpacks into a versioned directory under $InstallRoot and only then
@@ -73,6 +76,28 @@ function Invoke-GitHubApi {
   Invoke-RestMethod -Uri $Url -Headers $headers
 }
 
+# The archive this platform needs from a given release. Every release names it
+# after its own version, so this can only be computed per release — which is
+# exactly why the fallback below has to look inside each candidate rather than
+# just taking the newest thing it finds.
+function Get-ArchiveName {
+  param([string]$Tag)
+  "bbb-$($Tag.TrimStart('v'))-$Target.zip"
+}
+
+# True when a release actually ships a daemon build for Windows. An
+# extension-only release (every stable release up to and including v3.2.0)
+# does not, and installing from one is not a thing that can succeed.
+function Test-ReleaseHasDaemon {
+  param($Release)
+  if (-not $Release) { return $false }
+  $names = $Release.PSObject.Properties.Name
+  if (($names -notcontains "tag_name") -or ($names -notcontains "assets")) { return $false }
+  if (-not $Release.tag_name) { return $false }
+  $wanted = Get-ArchiveName $Release.tag_name
+  return [bool]($Release.assets | Where-Object { $_.name -eq $wanted } | Select-Object -First 1)
+}
+
 Write-Host "platform: $Target"
 
 # ---------------------------------------------------------------------------
@@ -100,6 +125,25 @@ if ($Version) {
 } else {
   Write-Host "resolving the latest stable release"
   $release = Invoke-GitHubApi "$ApiBase/repos/$Repo/releases/latest"
+
+  # The daemon has no stable release yet: the latest stable release is an
+  # extension-only one, and resolving to it is how `irm … | iex` ends in
+  # "release vX has no asset named bbb-…". Fall back to the newest prerelease
+  # that does carry a Windows build, loudly — a prerelease is normally
+  # something you have to ask for, and this is the one case where the
+  # alternative is not installing at all.
+  if (-not (Test-ReleaseHasDaemon $release)) {
+    $stableTag = if ($release -and $release.tag_name) { $release.tag_name } else { "unknown" }
+    Write-Host "the latest stable release ($stableTag) ships no bbb daemon build for $Target"
+    Write-Host "falling back to the latest prerelease — pass -Version <tag> to pin a specific release"
+    $releases = Invoke-GitHubApi "$ApiBase/repos/$Repo/releases?per_page=20"
+    $release = $releases |
+      Where-Object { -not $_.draft -and $_.prerelease -and (Test-ReleaseHasDaemon $_) } |
+      Select-Object -First 1
+    if (-not $release) {
+      throw "no stable or prerelease release has a bbb build for $Target yet"
+    }
+  }
 }
 
 $tag = $release.tag_name
@@ -107,7 +151,7 @@ if (-not $tag) { throw "the resolved release had no tag" }
 $version = $tag.TrimStart("v")
 Write-Host "installing $tag (version $version)"
 
-$archiveName = "bbb-$version-$Target.zip"
+$archiveName = Get-ArchiveName $tag
 $checksumName = "$archiveName.sha256"
 
 $archiveAsset = $release.assets | Where-Object { $_.name -eq $archiveName } | Select-Object -First 1

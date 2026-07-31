@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **`install.sh` and `install.ps1` no longer fail out of the box.** Both default
+  to the latest *stable* release, and every stable release so far is an
+  extension-only one carrying no daemon archive — so the documented
+  copy-and-paste command ended in `release v3.2.0 has no asset named bbb-…` and
+  installed nothing. Each now reports that and falls back to the newest
+  prerelease that does have a build for the platform. The fallback needs no
+  undoing later: the first stable release shipping daemon archives is resolved
+  and installed normally
+- **`install.sh` can finish `bbb setup` under `curl … | bash`.** Standard input
+  there is the pipe the script itself arrived on, already read to the end, so
+  setup was handed an immediate EOF and died on its first question. It is now
+  run against the terminal, and where there is no terminal at all the install
+  completes and says to run `bbb setup` by hand
+
 ### Changed
 
 - **The daemon's default port is now 52222** (was 47321). Several browsers on
