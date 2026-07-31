@@ -51,12 +51,20 @@ export async function hasDaemonHostPermission(): Promise<boolean> {
  * network request, a request that then failed as blocked-by-the-browser
  * would be indistinguishable from an unreachable daemon and misreport the
  * cause.
+ *
+ * There is deliberately **no `contains()` pre-check** in front of the request.
+ * Awaiting one resumes in a later task, and Firefox decides "is this a user
+ * input handler?" from the synchronous call stack — so the pre-check would
+ * turn every Connect on Firefox into `permissions.request may only be called
+ * from a user input handler`, which this function would then report as a
+ * denial the user never made. `request` already resolves `true` without
+ * showing anything when the permission is held, so the pre-check bought
+ * nothing and cost the gesture. Everything from the click down to the line
+ * below must stay await-free for the same reason.
  */
 export async function requestDaemonHostPermission(): Promise<boolean> {
   const api = permissionsApi()
   if (!api) return true
-  const already = await hasDaemonHostPermission()
-  if (already) return true
   return new Promise((resolve) => {
     try {
       api.request({ origins: DAEMON_HOST_PATTERNS }, (granted) =>

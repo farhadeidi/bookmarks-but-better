@@ -2,10 +2,13 @@
 # Installs (or upgrades) the `bbb` daemon for the current user — no sudo, no
 # system-wide anything — then runs `bbb setup`.
 #
-# Usage:
-#   curl -fsSL https://raw.githubusercontent.com/farhadeidi/bookmarks-but-better/main/install.sh | sh
-#   curl -fsSL .../install.sh | sh -s -- --beta
-#   curl -fsSL .../install.sh | sh -s -- --version v4.0.0-beta.1
+# Usage — `bash`, not `sh`: `set -o pipefail` below is a bash builtin option,
+# and /bin/sh is dash on Debian and Ubuntu, where piping this into `sh` dies on
+# that line with "set: Illegal option -o pipefail" before it can say why.
+#
+#   curl -fsSL https://raw.githubusercontent.com/farhadeidi/bookmarks-but-better/main/install.sh | bash
+#   curl -fsSL .../install.sh | bash -s -- --beta
+#   curl -fsSL .../install.sh | bash -s -- --version v4.0.0-beta.1
 #
 # Every release is a GitHub Release built by .github/workflows/release.yml,
 # which uploads one archive and one .sha256 checksum per platform (see that

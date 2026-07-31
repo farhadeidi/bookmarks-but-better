@@ -138,4 +138,22 @@ describe("DaemonConnectionPanel", () => {
     expect(screen.getByLabelText("Daemon bearer token")).toBeTruthy()
     expect(screen.getByText(/bbb setup/)).toBeTruthy()
   })
+
+  /**
+   * `install.sh` is a bash script — `set -o pipefail` alone makes it one — and
+   * `/bin/sh` is dash on Debian and Ubuntu, where `| sh` fails on the first
+   * line with `set: Illegal option -o pipefail`. This is a command the user
+   * copies and pastes verbatim, so the shell it names has to be one that can
+   * actually run the script.
+   */
+  it("offers a Unix install command that runs the script with bash, not sh", () => {
+    render(<DaemonConnectionPanel />)
+    fireEvent.click(screen.getByRole("button", { name: "Advanced" }))
+
+    for (const platform of ["macOS", "Linux"]) {
+      fireEvent.click(screen.getByRole("button", { name: platform }))
+      const command = screen.getByText(/install\.sh/).textContent ?? ""
+      expect(command, platform).toMatch(/install\.sh \| bash$/)
+    }
+  })
 })

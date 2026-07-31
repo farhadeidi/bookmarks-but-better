@@ -43,12 +43,22 @@ pub(crate) fn systemd_argument(value: &str) -> String {
 /// stored as a desktop-entry *string*, in which a backslash is itself written
 /// `\\`. Applying only one of the two is the classic way to produce an
 /// autostart entry that works until someone's path contains a space.
+///
+/// A literal `%` becomes `%%` on top of both, and quoting does not substitute
+/// for it. Field codes are expanded *before* the line is split into arguments
+/// and without regard to quotes, so a vault called `100% done` would reach the
+/// daemon as `100done` and one called `%files` as `iles` — the "silently
+/// serves the wrong directory" failure this module exists to prevent, in its
+/// purest form. The same reason `systemd_argument` writes `%%`.
 pub(crate) fn desktop_argument(value: &str) -> String {
     let mut quoted = String::with_capacity(value.len() + 2);
     quoted.push('"');
     for ch in value.chars() {
         if matches!(ch, '"' | '`' | '$' | '\\') {
             quoted.push('\\');
+        }
+        if ch == '%' {
+            quoted.push('%');
         }
         quoted.push(ch);
     }
@@ -180,6 +190,15 @@ mod tests {
         assert_eq!(desktop_argument("back\\slash"), "\"back\\\\\\\\slash\"");
         assert_eq!(desktop_argument("a b"), "\"a b\"");
         assert_eq!(desktop_argument("$HOME"), "\"\\\\$HOME\"");
+    }
+
+    #[test]
+    fn a_desktop_argument_escapes_the_field_code_marker() {
+        // Field codes are expanded before the line is split and regardless of
+        // quoting, so a bare `%` is dropped along with the character after it.
+        assert_eq!(desktop_argument("100% done"), "\"100%% done\"");
+        assert_eq!(desktop_argument("%f"), "\"%%f\"");
+        assert_eq!(desktop_argument("%"), "\"%%\"");
     }
 
     #[test]

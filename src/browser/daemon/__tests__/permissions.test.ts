@@ -60,19 +60,37 @@ describe("requestDaemonHostPermission", () => {
     expect(await requestDaemonHostPermission()).toBe(true)
   })
 
-  it("skips the prompt entirely when already granted", async () => {
-    const request = vi.fn((_query, callback: (granted: boolean) => void) =>
-      callback(true)
-    )
-    stubPermissionsApi({
-      contains: vi.fn((_query, callback: (granted: boolean) => void) =>
+  it("resolves true when the permission is already held", async () => {
+    // The browser answers an already-granted request without showing the user
+    // anything, so asking is not a prompt — which is what makes skipping the
+    // `contains()` pre-check safe as well as necessary.
+    const api = stubPermissionsApi({
+      request: vi.fn((_query, callback: (granted: boolean) => void) =>
         callback(true)
       ),
-      request,
     })
 
     expect(await requestDaemonHostPermission()).toBe(true)
-    expect(request).not.toHaveBeenCalled()
+    expect(api.request).toHaveBeenCalledOnce()
+  })
+
+  /**
+   * Firefox refuses `permissions.request` unless the *synchronous* call stack
+   * is still inside the user-input handler, so anything awaited in front of it
+   * — a `contains()` pre-check in particular — turns Connect into a permanent,
+   * unexplained denial there.
+   */
+  it("calls request synchronously, with nothing awaited in front of it", () => {
+    const api = stubPermissionsApi({
+      contains: vi.fn((_query, callback: (granted: boolean) => void) =>
+        callback(true)
+      ),
+    })
+
+    void requestDaemonHostPermission()
+
+    expect(api.request).toHaveBeenCalledOnce()
+    expect(api.contains).not.toHaveBeenCalled()
   })
 
   it("prompts, and returns what the user decided", async () => {

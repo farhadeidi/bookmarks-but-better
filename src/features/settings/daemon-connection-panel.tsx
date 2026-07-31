@@ -46,9 +46,15 @@ function guessPlatform(): Platform {
   return "linux"
 }
 
+/**
+ * `| bash`, not `| sh`: `install.sh` is a bash script (`set -o pipefail` alone
+ * makes it one) and `/bin/sh` is dash on Debian and Ubuntu, where piping it to
+ * `sh` dies on line 1 with `set: Illegal option -o pipefail` — before the
+ * script can say anything useful about what went wrong.
+ */
 const INSTALL_COMMANDS: Record<Platform, string> = {
-  macos: "curl -fsSL https://bookmarks-but-better.dev/install.sh | sh",
-  linux: "curl -fsSL https://bookmarks-but-better.dev/install.sh | sh",
+  macos: "curl -fsSL https://bookmarks-but-better.dev/install.sh | bash",
+  linux: "curl -fsSL https://bookmarks-but-better.dev/install.sh | bash",
   windows: "irm https://bookmarks-but-better.dev/install.ps1 | iex",
 }
 

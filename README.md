@@ -71,7 +71,7 @@ Install it with:
 
 ```bash
 # macOS / Linux
-curl -fsSL https://raw.githubusercontent.com/farhadeidi/bookmarks-but-better/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/farhadeidi/bookmarks-but-better/main/install.sh | bash
 
 # Windows (PowerShell)
 irm https://raw.githubusercontent.com/farhadeidi/bookmarks-but-better/main/install.ps1 | iex

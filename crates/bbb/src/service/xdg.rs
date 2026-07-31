@@ -67,6 +67,9 @@ fn unescape_desktop_string(value: &str) -> String {
 }
 
 /// Splits the command line, the inner of the two layers.
+///
+/// `%%` is undone last, mirroring `systemd::split`: an escaped percent must
+/// not be mistaken for a field code on the way back in either.
 fn split(line: &str) -> Vec<String> {
     let mut arguments = Vec::new();
     let mut current = String::new();
@@ -101,7 +104,11 @@ fn split(line: &str) -> Vec<String> {
     if started {
         arguments.push(current);
     }
+
     arguments
+        .into_iter()
+        .map(|argument| argument.replace("%%", "%"))
+        .collect()
 }
 
 #[cfg(test)]
@@ -116,11 +123,38 @@ mod tests {
         "/home/user/Zakładki",
         "/home/user/书签 📚",
         "/home/user/100% done",
+        "/home/user/%f files",
         "/home/user/say \"hi\"",
         "/home/user/back\\slash",
         "/home/user/$HOME literal",
         "/home/user/it's mine",
     ];
+
+    /// Expands field codes the way a desktop session does before it splits the
+    /// line into arguments: `%%` is one literal percent, and every other `%X`
+    /// is a code that expands to nothing here (there are no files or URIs to
+    /// substitute, and an autostart entry names none).
+    ///
+    /// This runs over the *unescaped* `Exec` value, ignores quoting entirely,
+    /// and happens before any word splitting — which is exactly why quoting a
+    /// path is not enough to protect a `%` inside it.
+    fn expand_field_codes(value: &str) -> String {
+        let mut out = String::with_capacity(value.len());
+        let mut chars = value.chars().peekable();
+        while let Some(ch) = chars.next() {
+            if ch != '%' {
+                out.push(ch);
+                continue;
+            }
+            match chars.next() {
+                // A trailing `%` has no code to introduce, so it stays put.
+                Some('%') | None => out.push('%'),
+                // Any other code expands to nothing, taking its marker with it.
+                Some(_) => {}
+            }
+        }
+        out
+    }
 
     #[test]
     fn a_generated_entry_round_trips_every_awkward_path() {
@@ -159,6 +193,37 @@ mod tests {
             vault_in(&command_line(&text).expect("Exec")),
             Some(PathBuf::from("/home/user/$HOME literal"))
         );
+    }
+
+    /// The failure this guards against is not a parse error anyone sees: the
+    /// session starts the daemon on a path that is *almost* the one the user
+    /// chose, and the daemon refuses a directory that was never a vault.
+    #[test]
+    fn a_percent_in_a_path_cannot_become_a_field_code() {
+        for vault in ["/home/user/100% done", "/home/user/%f files"] {
+            let spec = ServiceSpec::unchecked("/usr/local/bin/bbb", vault);
+            let text = desktop_entry(&spec);
+
+            // Doubled in the file, exactly as systemd's generator does it:
+            // every `%` in the value appears as an even-length run.
+            let exec = text
+                .lines()
+                .find_map(|line| line.strip_prefix("Exec="))
+                .expect("the entry has an Exec");
+            assert!(
+                exec.contains(&vault.replace('%', "%%")),
+                "a bare percent survived: {exec}"
+            );
+
+            // And the path is intact after the expansion a desktop session
+            // performs before it splits the line into arguments.
+            let expanded = expand_field_codes(&unescape_desktop_string(exec));
+            assert_eq!(
+                vault_in(&split(&expanded)),
+                Some(PathBuf::from(vault)),
+                "field-code expansion mangled {vault}"
+            );
+        }
     }
 
     #[test]

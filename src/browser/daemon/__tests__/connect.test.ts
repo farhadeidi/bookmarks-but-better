@@ -66,6 +66,31 @@ describe("connectToDaemon", () => {
     expect(await getAdapterModePreference()).toBeNull()
   })
 
+  /**
+   * The permission request has to still be inside the Connect button's own
+   * click handler when it runs — Firefox reads "is this a user input handler?"
+   * off the synchronous call stack — so nothing between the click and
+   * `permissions.request` may await. Asserted here rather than only in
+   * `permissions.test.ts` because the property belongs to the whole chain: a
+   * single `await` added anywhere in `connectToDaemon` above the request would
+   * break it just as effectively.
+   */
+  it("reaches permissions.request synchronously, before any await resolves", () => {
+    const request = vi.fn((_q: unknown, cb: (granted: boolean) => void) =>
+      cb(true)
+    )
+    vi.stubGlobal("chrome", {
+      permissions: {
+        contains: (_q: unknown, cb: (granted: boolean) => void) => cb(false),
+        request,
+      },
+    })
+
+    void connectToDaemon("127.0.0.1:52222", { fetchImpl: okHealthFetch() })
+
+    expect(request).toHaveBeenCalledOnce()
+  })
+
   it("reports a health-stage failure when the daemon cannot be reached", async () => {
     const fetchImpl = vi
       .fn()

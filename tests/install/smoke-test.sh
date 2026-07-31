@@ -262,6 +262,25 @@ else
   bad "--version installed exactly the requested release"
 fi
 
+# ---------------------------------------------------------------------------
+# Test 6: nothing advertises this script to a shell that cannot run it.
+#
+# install.sh is bash — `set -o pipefail` alone makes it so — and /bin/sh is
+# dash on Debian and Ubuntu, where `curl … | sh` dies on the first line with
+# "set: Illegal option -o pipefail" before it can explain itself. Every place
+# that prints a copy-and-paste command therefore has to name `bash`.
+# ---------------------------------------------------------------------------
+advertised=$(grep -rn -- 'install\.sh | sh' \
+  "$repo_root/README.md" \
+  "$repo_root/docs" \
+  "$repo_root/src" \
+  "$repo_root/crates" 2>/dev/null || true)
+if [ -z "$advertised" ]; then
+  ok "no documented command pipes install.sh into a non-bash shell"
+else
+  bad "install.sh is advertised as \`| sh\` somewhere it cannot run: $advertised"
+fi
+
 note ""
 note "$pass passed, $fail failed"
 [ "$fail" -eq 0 ]
