@@ -71,6 +71,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   loopback only and makes no outbound request; the requests come from the browser
   showing the UI. See `crates/bbb/README.md` for the full note.
 
+## [3.2.1] - 2026-08-02
+
+### Fixed
+
+- Prevented a brief white flash when opening a new tab in dark mode by applying the selected theme before the first browser paint
+
 ## [3.2.0] - 2026-06-05
 
 ### Added
