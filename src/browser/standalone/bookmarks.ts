@@ -204,7 +204,27 @@ export class StandaloneBookmarkAdapter implements BookmarkAdapter {
     }
 
     const { default: seedData } = await import("@/dev/seed-bookmarks.json")
-    const flat = flattenNodes(seedData as BookmarkNode[])
+
+    // The seed file is a browser export, so it carries its own invisible root
+    // (`"0"`, titleless). Storing that as a row would put it *below* this
+    // adapter's synthetic root and leave the dashboard showing one nameless
+    // folder containing everything. Promote its children to the top level and
+    // cut the parent link that would otherwise orphan them.
+    const seedRoots = seedData as BookmarkNode[]
+    const wrapper =
+      seedRoots.length === 1 &&
+      seedRoots[0].url === undefined &&
+      seedRoots[0].title === ""
+        ? seedRoots[0]
+        : null
+    const topLevel = wrapper
+      ? (wrapper.children ?? []).map((node) => ({
+          ...node,
+          parentId: undefined,
+        }))
+      : seedRoots
+
+    const flat = flattenNodes(topLevel)
     const tx = db.transaction(STORE_NAME, "readwrite")
     const store = tx.objectStore(STORE_NAME)
     for (const bookmark of flat) {

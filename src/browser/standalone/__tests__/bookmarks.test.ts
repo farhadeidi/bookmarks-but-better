@@ -108,4 +108,18 @@ describe("StandaloneBookmarkAdapter.getTree seeding in dev", () => {
     const secondTree = await adapter.getTree()
     expect(secondTree).toEqual(tree)
   })
+
+  it("does not stack the seed's own invisible root under the synthetic one", async () => {
+    const adapter = new StandaloneBookmarkAdapter()
+
+    const [root] = await adapter.getTree()
+
+    expect(root.id).toBe(STANDALONE_ROOT_ID)
+    // The seed is a browser export whose first node is a titleless root. If it
+    // were stored as a row, everything would sit one nameless folder deep.
+    const children = root.children ?? []
+    expect(children.length).toBeGreaterThan(0)
+    expect(children.every((child) => child.title !== "")).toBe(true)
+    expect(children.map((child) => child.title)).toContain("Bookmarks Bar")
+  })
 })

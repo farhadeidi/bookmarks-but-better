@@ -172,4 +172,42 @@ describe("BookmarkOrganizerTree empty state", () => {
     expect(screen.getByRole("button", { name: /New Folder/ })).toBeTruthy()
     expect(screen.getByRole("button", { name: /New Bookmark/ })).toBeTruthy()
   })
+
+  it("falls back to the tree root when the saved root folder has been deleted", async () => {
+    const getSubTree = vi
+      .fn()
+      .mockResolvedValue([{ id: "0", title: "", children: [] }])
+    useBookmarkStore.setState({
+      tree: [{ id: "0", title: "", children: [] }],
+      // The store resolves a saved id that no longer exists to `null`, which
+      // is what tells the organizer to stop asking for that subtree.
+      rootFolderId: "deleted-folder",
+      rootFolder: null,
+      isLoading: false,
+      adapter: adapterWithChildren(getSubTree),
+      init: vi.fn(),
+      setRootFolderId: vi.fn(),
+      refresh: vi.fn(),
+      createBookmark: vi.fn(),
+      updateBookmark: vi.fn(),
+      deleteBookmark: vi.fn(),
+      deleteFolder: vi.fn(),
+      createFolder: vi.fn(),
+      moveBookmark: vi.fn(),
+    })
+
+    render(
+      <BookmarkOrganizerTree
+        rootFolderId="deleted-folder"
+        showBookmarks
+        treeRef={{ current: null }}
+      />
+    )
+
+    // Asking for the deleted folder would render a permanently empty tree.
+    await waitFor(() => {
+      expect(getSubTree).toHaveBeenCalled()
+    })
+    expect(getSubTree).not.toHaveBeenCalledWith("deleted-folder")
+  })
 })

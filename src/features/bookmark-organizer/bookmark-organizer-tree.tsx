@@ -397,15 +397,13 @@ export function BookmarkOrganizerTree({
   const adapter = useBookmarkStore((s) => s.adapter)
   const tree = useBookmarkStore((s) => s.tree)
   const rootFolder = useBookmarkStore((s) => s.rootFolder)
-  const effectiveRootId = rootFolderId ?? tree[0]?.id ?? null
-  // The store already holds this node — `rootFolder` is its own resolution of
-  // `rootFolderId`, and an unpinned root is `tree[0]`. Reading the flag from
-  // here rather than re-fetching matters because the daemon answers
-  // `GET /bookmarks/:id` for a root with the *entire* recursive subtree, so a
-  // refetch would move the whole vault across the wire to learn one boolean.
-  const effectiveRootNode = [rootFolder, tree[0]].find(
-    (node) => node?.id === effectiveRootId
-  )
+  // `rootFolder` is the store's own resolution of `rootFolderId` against the
+  // tree, so going through it means a saved id whose folder has since been
+  // deleted falls back to the tree root instead of asking for a subtree that
+  // no longer exists and rendering an empty organizer — which is what the
+  // create actions and import already do.
+  const effectiveRootNode = rootFolder ?? tree[0]
+  const effectiveRootId = effectiveRootNode?.id ?? null
 
   if (!adapter) {
     return <BookmarkOrganizerUnavailable />
