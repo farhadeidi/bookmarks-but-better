@@ -15,16 +15,58 @@ import {
   SelectItem,
   SelectTrigger,
 } from "@/components/ui/select"
+import { Input } from "@/components/ui/input"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { useUIStore } from "@/stores/ui-store"
 import { usePreferencesStore } from "@/stores/preferences-store"
 import { useBookmarkStore } from "@/stores/bookmark-store"
-import { RootFolderSelect } from "@/features/root-folder-select"
+import {
+  RootFolderSelect,
+  buildRootFolderOptions,
+} from "@/features/root-folder-select"
 import { serializeNetscapeBookmarks } from "@/browser/import-export/netscape-serializer"
 import { parseNetscapeBookmarks } from "@/browser/import-export/netscape-parser"
 import { isDaemonModeSupported } from "@/browser/daemon"
-import { resolveImportRootId } from "./import-target"
+import { resolveDefaultImportParentId } from "./import-target"
+import { importBookmarkNodes, formatImportResult } from "./import-bookmarks"
+import {
+  resolveExportTree,
+  exportFileName,
+  type ExportScope,
+} from "./export-scope"
 import { DaemonConnectionPanel } from "./daemon-connection-panel"
 import type { BookmarkNode } from "@/browser"
+
+/** A parsed file waiting for the user to confirm where it should land. */
+interface PendingImport {
+  nodes: BookmarkNode[]
+  folders: number
+  bookmarks: number
+}
+
+function summarize(nodes: BookmarkNode[]): {
+  folders: number
+  bookmarks: number
+} {
+  let folders = 0
+  let bookmarks = 0
+  for (const node of nodes) {
+    if (node.url) {
+      bookmarks += 1
+    } else {
+      folders += 1
+      const nested = summarize(node.children ?? [])
+      folders += nested.folders
+      bookmarks += nested.bookmarks
+    }
+  }
+  return { folders, bookmarks }
+}
 
 export function SettingsDialog() {
   const open = useUIStore((s) => s.settingsOpen)
@@ -51,13 +93,38 @@ export function SettingsDialog() {
   const containerMode = usePreferencesStore((s) => s.containerMode)
   const setContainerMode = usePreferencesStore((s) => s.setContainerMode)
 
-  const handleExport = () => {
-    const html = serializeNetscapeBookmarks(tree)
+  const [pendingImport, setPendingImport] =
+    React.useState<PendingImport | null>(null)
+  const [importParentId, setImportParentId] = React.useState<string | null>(
+    null
+  )
+  const [importFolderName, setImportFolderName] = React.useState("")
+  const [importStatus, setImportStatus] = React.useState<string | null>(null)
+  const [isImporting, setIsImporting] = React.useState(false)
+
+  const folderOptions = React.useMemo(
+    () => buildRootFolderOptions(tree),
+    [tree]
+  )
+
+  const defaultImportParentId = React.useMemo(
+    () =>
+      resolveDefaultImportParentId(
+        tree,
+        rootFolderId,
+        adapter?.capabilities.rootIsCreatable ?? false
+      ),
+    [tree, rootFolderId, adapter]
+  )
+
+  const handleExport = (scope: ExportScope) => {
+    const exported = resolveExportTree(tree, rootFolderId, scope)
+    const html = serializeNetscapeBookmarks(exported)
     const blob = new Blob([html], { type: "text/html" })
     const url = URL.createObjectURL(blob)
     const a = document.createElement("a")
     a.href = url
-    a.download = "bookmarks.html"
+    a.download = exportFileName(scope, exported[0]?.title ?? null)
     a.click()
     URL.revokeObjectURL(url)
   }
@@ -68,76 +135,82 @@ export function SettingsDialog() {
     openOnboarding()
   }
 
-  const handleImport = () => {
+  const handlePickImportFile = () => {
     const input = document.createElement("input")
     input.type = "file"
     input.accept = ".html,.htm"
     input.onchange = async (e) => {
       const file = (e.target as HTMLInputElement).files?.[0]
-      if (!file || !adapter) return
+      if (!file) return
 
-      let targetRootId: string
+      setImportStatus(null)
+
+      let nodes: BookmarkNode[]
       try {
-        targetRootId = resolveImportRootId(rootFolderId)
+        nodes = parseNetscapeBookmarks(await file.text()).flatMap(
+          (root) => root.children ?? []
+        )
       } catch (error) {
-        window.alert(error instanceof Error ? error.message : "Import failed.")
+        setImportStatus(
+          `Could not read that file: ${error instanceof Error ? error.message : String(error)}`
+        )
         return
       }
 
-      const text = await file.text()
-      const imported = parseNetscapeBookmarks(text)
-
-      async function writeNodesParallel(
-        nodes: BookmarkNode[],
-        parentId: string,
-        concurrency = 8
-      ): Promise<void> {
-        const folders: BookmarkNode[] = []
-        const leaves: BookmarkNode[] = []
-        for (const node of nodes) {
-          if (node.url) leaves.push(node)
-          else if (node.children) folders.push(node)
-        }
-
-        for (let i = 0; i < leaves.length; i += concurrency) {
-          const batch = leaves.slice(i, i + concurrency)
-          await Promise.all(
-            batch.map((node) =>
-              adapter!.bookmarks.create({
-                parentId,
-                title: node.title,
-                url: node.url,
-              })
-            )
-          )
-        }
-
-        const createdFolders = await Promise.all(
-          folders.map((node) =>
-            adapter!.bookmarks.create({ parentId, title: node.title })
-          )
-        )
-
-        await Promise.all(
-          folders.map((node, i) =>
-            writeNodesParallel(
-              node.children ?? [],
-              createdFolders[i].id,
-              concurrency
-            )
-          )
-        )
+      if (nodes.length === 0) {
+        setImportStatus("That file contains no bookmarks.")
+        return
       }
 
-      for (const root of imported) {
-        if (root.children) {
-          await writeNodesParallel(root.children, targetRootId)
-        }
-      }
-
-      await refresh()
+      // Ask where it goes only once a file is in hand, so the counts below
+      // can tell the user what they are about to import.
+      setPendingImport({ nodes, ...summarize(nodes) })
+      setImportParentId(defaultImportParentId)
+      setImportFolderName("")
     }
     input.click()
+  }
+
+  const cancelImport = () => {
+    setPendingImport(null)
+    setImportFolderName("")
+  }
+
+  const handleConfirmImport = async () => {
+    if (!pendingImport || !adapter || !importParentId) return
+
+    setIsImporting(true)
+    setImportStatus(null)
+    try {
+      let target = importParentId
+
+      const subfolder = importFolderName.trim()
+      if (subfolder) {
+        const created = await adapter.bookmarks.create({
+          parentId: target,
+          title: subfolder,
+        })
+        target = created.id
+      }
+
+      const result = await importBookmarkNodes(
+        adapter.bookmarks,
+        pendingImport.nodes,
+        target
+      )
+      await refresh()
+      setImportStatus(formatImportResult(result))
+      setPendingImport(null)
+      setImportFolderName("")
+    } catch (error) {
+      // Only reached when the destination itself could not be created —
+      // per-node failures are counted inside `importBookmarkNodes`.
+      setImportStatus(
+        `Import failed: ${error instanceof Error ? error.message : String(error)}`
+      )
+    } finally {
+      setIsImporting(false)
+    }
   }
 
   return (
@@ -289,22 +362,102 @@ export function SettingsDialog() {
               <div className="flex flex-col gap-2">
                 <Label className="text-sm font-medium">Bookmarks Data</Label>
                 <div className="flex gap-2">
-                  {/* The vault is the source of truth in daemon mode, so
-                      client-side HTML import isn't offered there yet. */}
-                  {import.meta.env.VITE_BUILD_TARGET !== "daemon" && (
-                    <Button variant="outline" size="sm" onClick={handleImport}>
-                      Import
-                    </Button>
-                  )}
-                  <Button variant="outline" size="sm" onClick={handleExport}>
-                    Export
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={!adapter || !defaultImportParentId}
+                    onClick={handlePickImportFile}
+                  >
+                    Import
                   </Button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger
+                      render={
+                        <Button variant="outline" size="sm">
+                          Export
+                        </Button>
+                      }
+                    />
+                    <DropdownMenuContent align="start">
+                      <DropdownMenuItem
+                        onClick={() => handleExport("dashboard")}
+                      >
+                        Dashboard folder
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => handleExport("everything")}
+                      >
+                        Everything
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  {import.meta.env.VITE_BUILD_TARGET === "daemon"
-                    ? "Export bookmarks as HTML (standard browser format)."
-                    : "Import or export bookmarks as HTML (standard browser format)."}
+                  Import or export bookmarks as HTML (standard browser format).
                 </p>
+
+                {pendingImport && (
+                  <div className="flex flex-col gap-2 rounded-lg border border-dashed border-border/70 p-3">
+                    <p className="text-xs text-muted-foreground">
+                      Found {pendingImport.bookmarks} bookmark
+                      {pendingImport.bookmarks === 1 ? "" : "s"} in{" "}
+                      {pendingImport.folders} folder
+                      {pendingImport.folders === 1 ? "" : "s"}. Choose where to
+                      put them.
+                    </p>
+
+                    <Select
+                      value={importParentId ?? ""}
+                      onValueChange={setImportParentId}
+                    >
+                      <SelectTrigger className="w-full">
+                        <span className="truncate">
+                          {folderOptions.find((f) => f.id === importParentId)
+                            ?.label ?? "Select a folder"}
+                        </span>
+                      </SelectTrigger>
+                      <SelectContent>
+                        {folderOptions.map((folder) => (
+                          <SelectItem key={folder.id} value={folder.id}>
+                            {folder.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+
+                    <Input
+                      value={importFolderName}
+                      onChange={(e) => setImportFolderName(e.target.value)}
+                      placeholder="Optional: import into a new subfolder"
+                      aria-label="New subfolder name"
+                      disabled={isImporting}
+                    />
+
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        disabled={isImporting || !importParentId}
+                        onClick={() => void handleConfirmImport()}
+                      >
+                        {isImporting ? "Importing…" : "Import here"}
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        disabled={isImporting}
+                        onClick={cancelImport}
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
+                {importStatus && (
+                  <p role="status" className="text-xs text-muted-foreground">
+                    {importStatus}
+                  </p>
+                )}
               </div>
 
               <div className="flex flex-col gap-2">
