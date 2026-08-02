@@ -4,6 +4,10 @@ import tailwindcss from "@tailwindcss/vite"
 import react from "@vitejs/plugin-react"
 import { defineConfig } from "vite"
 import pkg from "./package.json"
+import {
+  BACKGROUND_OUTPUT_FILE,
+  buildEntryNames,
+} from "./src/extension/build-contract"
 
 /**
  * `bun run dev:daemon-ui` runs the Vite dev server against the frontend
@@ -23,6 +27,29 @@ export default defineConfig({
   },
   define: {
     __APP_VERSION__: JSON.stringify(pkg.version),
+  },
+  build: {
+    rollupOptions: {
+      input: Object.fromEntries(
+        buildEntryNames(process.env.VITE_BUILD_TARGET).map((name) => [
+          name,
+          path.resolve(
+            __dirname,
+            name === "index"
+              ? "index.html"
+              : name === "popup"
+                ? "popup.html"
+                : "src/extension/background.ts"
+          ),
+        ])
+      ),
+      output: {
+        entryFileNames: (chunk) =>
+          chunk.name === "background"
+            ? BACKGROUND_OUTPUT_FILE
+            : "assets/[name]-[hash].js",
+      },
+    },
   },
   server:
     process.env.VITE_BUILD_TARGET === "daemon"

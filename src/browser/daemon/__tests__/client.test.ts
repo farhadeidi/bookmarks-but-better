@@ -42,6 +42,17 @@ describe("daemon client", () => {
     expect(fetchMock.mock.calls[0][0]).toBe("/api/v1/tree")
   })
 
+  it("encodes daemon search query and bounded result count", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ results: [] }))
+    vi.stubGlobal("fetch", fetchMock)
+
+    await served().search("rust & web", 8)
+
+    expect(fetchMock.mock.calls[0][0]).toBe(
+      "/api/v1/search?q=rust+%26+web&limit=8"
+    )
+  })
+
   it("routes bookmark creation to /bookmarks with a JSON body", async () => {
     const fetchMock = vi
       .fn()

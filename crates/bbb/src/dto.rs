@@ -109,6 +109,46 @@ pub struct TreeResponse {
     pub tree: Vec<BookmarkDto>,
 }
 
+/// One bookmark returned by `GET /api/v1/search`.
+///
+/// Search deliberately exposes only the fields an omnibox needs. In
+/// particular, it never serializes folders and does not turn the URL into a
+/// selection token; clients must treat `id` as the opaque identity and fetch
+/// the current node again before navigating.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SearchResultDto {
+    /// The bookmark's stable identity.
+    pub id: String,
+    /// The bookmark's display title.
+    pub title: String,
+    /// The bookmark's current target URL.
+    pub url: String,
+}
+
+/// The body of `GET /api/v1/search`.
+#[derive(Debug, Clone, Serialize)]
+pub struct SearchResponse {
+    /// Ranked bookmark matches, never folders.
+    pub results: Vec<SearchResultDto>,
+}
+
+/// The query string of `GET /api/v1/search`.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SearchQuery {
+    /// Case-insensitive substring matched against title and URL.
+    #[serde(default)]
+    pub q: String,
+    /// Maximum number of results to return.
+    #[serde(default = "default_search_limit")]
+    pub limit: usize,
+}
+
+const fn default_search_limit() -> usize {
+    8
+}
+
 /// The body of `GET /api/v1/health`.
 #[derive(Debug, Clone, Serialize)]
 pub struct HealthResponse {
@@ -340,6 +380,55 @@ pub(crate) fn folder_ref(node: &FolderNode) -> EntryRef {
 pub(crate) fn tree(scan: &VaultScan) -> TreeResponse {
     TreeResponse {
         tree: vec![folder_dto(scan.folder(), None)],
+    }
+}
+
+pub(crate) fn search(scan: &VaultScan, query: &str, limit: usize) -> SearchResponse {
+    let needle = query.to_lowercase();
+    let mut matches = scan
+        .bookmarks()
+        .filter_map(|bookmark| {
+            let url = bookmark.url()?;
+            let title_key = bookmark.title().to_lowercase();
+            let url_key = url.to_lowercase();
+            let rank = if title_key == needle {
+                0
+            } else if title_key.starts_with(&needle) {
+                1
+            } else if title_key.contains(&needle) {
+                2
+            } else if url_key.starts_with(&needle) {
+                3
+            } else if url_key.contains(&needle) {
+                4
+            } else {
+                return None;
+            };
+
+            Some((
+                rank,
+                title_key,
+                url_key,
+                bookmark.id().to_string(),
+                SearchResultDto {
+                    id: bookmark.id().to_string(),
+                    title: bookmark.title().to_owned(),
+                    url: url.to_owned(),
+                },
+            ))
+        })
+        .collect::<Vec<_>>();
+
+    matches.sort_by(|left, right| {
+        (&left.0, &left.1, &left.2, &left.3).cmp(&(&right.0, &right.1, &right.2, &right.3))
+    });
+
+    SearchResponse {
+        results: matches
+            .into_iter()
+            .take(limit)
+            .map(|(_, _, _, _, result)| result)
+            .collect(),
     }
 }
 
