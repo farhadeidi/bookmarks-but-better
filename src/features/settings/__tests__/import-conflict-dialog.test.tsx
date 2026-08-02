@@ -54,9 +54,57 @@ function mount(conflicts: ImportConflict[]) {
   return { onResolve, onCancel }
 }
 
-describe("ImportConflictDialog", () => {
-  it("shows both sides of the conflict and where it is", () => {
+/** Moves from the opening summary into the one-at-a-time view. */
+async function startReview(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(screen.getByRole("button", { name: "Review one by one" }))
+}
+
+describe("ImportConflictDialog summary", () => {
+  it("opens on a summary listing every conflict", () => {
+    mount([conflict(1), conflict(2)])
+
+    expect(screen.getByText("2 bookmarks already exist")).toBeTruthy()
+    expect(screen.getByText("Incoming 1")).toBeTruthy()
+    expect(screen.getByText("Incoming 2")).toBeTruthy()
+  })
+
+  it("applies one bulk answer to everything without asking again", async () => {
+    const user = userEvent.setup()
+    const { onResolve } = mount([conflict(1), conflict(2), conflict(3)])
+
+    await user.click(screen.getByRole("button", { name: "Replace all" }))
+
+    expect(onResolve).toHaveBeenCalledWith({
+      c1: "replace",
+      c2: "replace",
+      c3: "replace",
+    })
+  })
+
+  it("offers skip, replace and keep both in bulk", () => {
     mount([conflict(1)])
+
+    for (const label of ["Skip all", "Replace all", "Keep both for all"]) {
+      expect(screen.getByRole("button", { name: label })).toBeTruthy()
+    }
+  })
+
+  it("cancels without resolving anything", async () => {
+    const user = userEvent.setup()
+    const { onResolve, onCancel } = mount([conflict(1)])
+
+    await user.click(screen.getByRole("button", { name: "Cancel import" }))
+
+    expect(onCancel).toHaveBeenCalled()
+    expect(onResolve).not.toHaveBeenCalled()
+  })
+})
+
+describe("ImportConflictDialog review", () => {
+  it("shows both sides of the conflict and where it is", async () => {
+    const user = userEvent.setup()
+    mount([conflict(1)])
+    await startReview(user)
 
     expect(screen.getByText("Incoming 1")).toBeTruthy()
     expect(screen.getByText("Existing 1")).toBeTruthy()
@@ -67,6 +115,7 @@ describe("ImportConflictDialog", () => {
   it("resolves immediately when there is only one conflict", async () => {
     const user = userEvent.setup()
     const { onResolve } = mount([conflict(1)])
+    await startReview(user)
 
     await user.click(screen.getByRole("button", { name: "Replace" }))
 
@@ -76,6 +125,7 @@ describe("ImportConflictDialog", () => {
   it("walks through conflicts one at a time, keeping each answer", async () => {
     const user = userEvent.setup()
     const { onResolve } = mount([conflict(1), conflict(2)])
+    await startReview(user)
 
     expect(screen.getByText(/Conflict 1 of 2/)).toBeTruthy()
     await user.click(screen.getByRole("button", { name: "Skip" }))
@@ -91,6 +141,7 @@ describe("ImportConflictDialog", () => {
   it("applies one answer to every remaining conflict when asked to", async () => {
     const user = userEvent.setup()
     const { onResolve } = mount([conflict(1), conflict(2), conflict(3)])
+    await startReview(user)
 
     await user.click(screen.getByRole("button", { name: "Replace" }))
     await user.click(screen.getByRole("checkbox"))
@@ -103,13 +154,40 @@ describe("ImportConflictDialog", () => {
     })
   })
 
-  it("cancels without resolving anything", async () => {
+  it("hides the apply-to-the-rest option on the last conflict", async () => {
     const user = userEvent.setup()
-    const { onResolve, onCancel } = mount([conflict(1), conflict(2)])
+    mount([conflict(1), conflict(2)])
+    await startReview(user)
 
-    await user.click(screen.getByRole("button", { name: "Cancel import" }))
+    expect(screen.getByRole("checkbox")).toBeTruthy()
+    await user.click(screen.getByRole("button", { name: "Skip" }))
 
-    expect(onCancel).toHaveBeenCalled()
-    expect(onResolve).not.toHaveBeenCalled()
+    expect(screen.queryByRole("checkbox")).toBeNull()
+  })
+
+  it("goes back to change an earlier answer", async () => {
+    const user = userEvent.setup()
+    const { onResolve } = mount([conflict(1), conflict(2)])
+    await startReview(user)
+
+    await user.click(screen.getByRole("button", { name: "Skip" }))
+    await user.click(screen.getByRole("button", { name: "Back" }))
+
+    expect(screen.getByText(/Conflict 1 of 2/)).toBeTruthy()
+
+    await user.click(screen.getByRole("button", { name: "Replace" }))
+    await user.click(screen.getByRole("button", { name: "Skip" }))
+
+    expect(onResolve).toHaveBeenCalledWith({ c1: "replace", c2: "skip" })
+  })
+
+  it("goes back to the summary from the first conflict", async () => {
+    const user = userEvent.setup()
+    mount([conflict(1), conflict(2)])
+    await startReview(user)
+
+    await user.click(screen.getByRole("button", { name: "Back" }))
+
+    expect(screen.getByText("2 bookmarks already exist")).toBeTruthy()
   })
 })
