@@ -17,6 +17,11 @@ import {
 } from "@/components/ui/select"
 import { Input } from "@/components/ui/input"
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -397,14 +402,27 @@ export function SettingsDialog() {
                 <div className="flex flex-col gap-2">
                   <Label className="text-sm font-medium">Bookmarks Data</Label>
                   <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={!adapter || !defaultImportParentId}
-                      onClick={handlePickImportFile}
-                    >
-                      Import
-                    </Button>
+                    <Tooltip>
+                      <TooltipTrigger
+                        render={
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={!adapter || !defaultImportParentId}
+                            onClick={handlePickImportFile}
+                          >
+                            Import
+                          </Button>
+                        }
+                      />
+                      {!adapter || !defaultImportParentId ? (
+                        <TooltipContent side="bottom">
+                          {adapter
+                            ? "There is no folder to import into yet. Create one first, or choose a root folder above."
+                            : "Bookmarks are still loading."}
+                        </TooltipContent>
+                      ) : null}
+                    </Tooltip>
                     <DropdownMenu>
                       <DropdownMenuTrigger
                         render={
@@ -414,7 +432,16 @@ export function SettingsDialog() {
                         }
                       />
                       <DropdownMenuContent align="start">
+                        {/* With no root folder chosen there is nothing to
+                            narrow to, so this would hand back the same file
+                            as "Everything" — two entries, one outcome. */}
                         <DropdownMenuItem
+                          disabled={!rootFolderId}
+                          title={
+                            rootFolderId
+                              ? undefined
+                              : "Choose a root folder above to export just that folder."
+                          }
                           onClick={() => handleExport("dashboard")}
                         >
                           Dashboard folder
@@ -473,6 +500,11 @@ export function SettingsDialog() {
                         <Button
                           size="sm"
                           disabled={isImporting || !importParentId}
+                          title={
+                            importParentId
+                              ? undefined
+                              : "Pick a destination folder first."
+                          }
                           onClick={() => void handleConfirmImport()}
                         >
                           {isImporting ? "Importing…" : "Import here"}

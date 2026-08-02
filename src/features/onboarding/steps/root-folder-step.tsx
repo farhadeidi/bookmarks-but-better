@@ -84,6 +84,11 @@ export function RootFolderStep({ value, onChange }: RootFolderStepProps) {
               variant="outline"
               size="sm"
               disabled={isCreating || newFolderName.trim() === ""}
+              title={
+                newFolderName.trim() === ""
+                  ? "Name the folder first."
+                  : undefined
+              }
               onClick={() => void handleCreate()}
             >
               {isCreating ? "Creating…" : "Create folder"}

@@ -221,6 +221,11 @@ export function DaemonConnectionPanel() {
               type="button"
               size="sm"
               disabled={phase === "connecting" || origin.trim() === ""}
+              title={
+                origin.trim() === ""
+                  ? "Enter the daemon address first."
+                  : undefined
+              }
               onClick={handleConnect}
             >
               {phase === "connecting"
