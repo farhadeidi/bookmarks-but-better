@@ -28,6 +28,28 @@ interface StoredBookmark {
   index?: number
 }
 
+/**
+ * Id of the synthetic root this adapter wraps its top-level rows in.
+ *
+ * Stored rows have no root: a top-level bookmark is simply one with no
+ * `parentId`. Every other adapter hands the app a single root node, and the
+ * shared helpers assume it — `tree[0]` is "the root". Returning a bare forest
+ * here meant `tree[0]` was whichever row happened to sort first, so creating
+ * "at the root" wrote into that row: inside an arbitrary folder, or worse,
+ * underneath a *bookmark*, where it rendered nowhere at all.
+ *
+ * The root is synthetic, never persisted — `toStoredParentId` maps it back to
+ * "no parent" on the way in — so this needs no migration. The id is a fixed
+ * sentinel rather than `""` because the UI treats a falsy id as "nowhere to
+ * create", and a UUID could in principle collide with a real row.
+ */
+export const STANDALONE_ROOT_ID = "standalone-root"
+
+/** Translates the synthetic root back into how a top-level row is stored. */
+function toStoredParentId(parentId: string | undefined): string | undefined {
+  return parentId === STANDALONE_ROOT_ID ? undefined : parentId
+}
+
 function generateId(): string {
   return crypto.randomUUID()
 }
@@ -76,7 +98,9 @@ function buildTree(bookmarks: StoredBookmark[]): BookmarkNode[] {
   }
   roots.sort((a, b) => (indexMap.get(a.id) ?? 0) - (indexMap.get(b.id) ?? 0))
 
-  return roots
+  // Titleless, like Chrome's `"0"`, so the root-folder picker skips it and
+  // offers only real folders.
+  return [{ id: STANDALONE_ROOT_ID, title: "", children: roots }]
 }
 
 async function putBookmark(
@@ -217,14 +241,13 @@ export class StandaloneBookmarkAdapter implements BookmarkAdapter {
   }): Promise<BookmarkNode> {
     const db = await this.getDB()
     const all = await getAllBookmarks(db)
-    const siblingCount = all.filter(
-      (b) => b.parentId === bookmark.parentId
-    ).length
+    const parentId = toStoredParentId(bookmark.parentId)
+    const siblingCount = all.filter((b) => b.parentId === parentId).length
     const stored: StoredBookmark = {
       id: generateId(),
       title: bookmark.title,
       url: bookmark.url,
-      parentId: bookmark.parentId,
+      parentId,
       dateAdded: Date.now(),
       index: siblingCount,
     }
@@ -289,7 +312,10 @@ export class StandaloneBookmarkAdapter implements BookmarkAdapter {
     if (!bookmark) throw new Error(`Bookmark not found: ${id}`)
 
     const oldParentId = bookmark.parentId
-    const newParentId = destination.parentId ?? oldParentId
+    const newParentId =
+      destination.parentId === undefined
+        ? oldParentId
+        : toStoredParentId(destination.parentId)
     const newIndex = destination.index
 
     // Remove from old parent and re-index siblings

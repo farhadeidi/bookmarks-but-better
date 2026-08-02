@@ -62,7 +62,12 @@ export function resolveEffectiveCreateParentId(
   tree: BookmarkNode[],
   rootIsCreatable: boolean
 ): string | null {
-  if (rootIsCreatable) return tree[0]?.id ?? null
+  // The `url === undefined` guard holds the capability to its word. An adapter
+  // whose `tree[0]` is a bookmark would otherwise have everything created
+  // underneath it, where no folder-shaped view ever renders it again — silent
+  // data loss from a wrong flag rather than a loud failure.
+  const root = tree[0]
+  if (rootIsCreatable && root?.url === undefined) return root?.id ?? null
   return resolveDefaultCreateParentId(tree)
 }
 

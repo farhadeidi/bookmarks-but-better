@@ -117,6 +117,17 @@ describe("resolveEffectiveCreateParentId", () => {
     expect(resolveEffectiveCreateParentId([], true)).toBeNull()
     expect(resolveEffectiveCreateParentId([], false)).toBeNull()
   })
+
+  it("refuses to create under tree[0] when it is a bookmark, whatever the flag claims", () => {
+    const tree: BookmarkNode[] = [
+      { id: "b1", title: "A bookmark", url: "https://example.com" },
+      { id: "f1", title: "A folder", children: [] },
+    ]
+
+    // Creating under a bookmark is accepted by some stores and then renders
+    // nowhere, so this must never be the answer.
+    expect(resolveEffectiveCreateParentId(tree, true)).not.toBe("b1")
+  })
 })
 
 describe("resolveCreateParentId", () => {

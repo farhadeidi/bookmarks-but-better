@@ -101,8 +101,9 @@ function createStandaloneAdapter(): BrowserAdapter {
       // Ordering here travels on `move(id, {index})`; there is no
       // whole-folder ordering endpoint to replace it.
       setChildOrder: false,
-      // The standalone store's top-level rows have no synthetic root — its
-      // "root" is just "no parentId" — so creating there is always valid.
+      // `getTree()` wraps the stored rows in a synthetic root
+      // (`STANDALONE_ROOT_ID`) that `create()` accepts as a parent and maps
+      // back to "no parentId", so `tree[0]` really is a creatable folder here.
       rootIsCreatable: true,
     },
   }
