@@ -84,6 +84,7 @@ stable `code`.
 | -------- | ------------------------ | ------------------------------------------------ |
 | `GET`    | `/health`                | `{status, version, generation, warnings}`        |
 | `GET`    | `/tree`                  | `{tree: [root]}` — one root holding the subtree   |
+| `GET`    | `/search?q=…&limit=…`    | `{results: [{id, title, url}]}` — bookmarks only |
 | `GET`    | `/bookmarks/{id}`        | one entry                                         |
 | `POST`   | `/bookmarks`             | `{parentId, title, url?, index?, parentStateRevision?}`; no `url` ⇒ folder |
 | `PATCH`  | `/bookmarks/{id}`        | `{revision, title?, url?}`                        |
@@ -112,6 +113,20 @@ stable `code`.
   "diagnostics": [ … ]        // present only when there is something to say
 }
 ```
+
+### Search
+
+`GET /search` reads the currently published vault snapshot and never triggers
+a rescan. `q` is trimmed, matched case-insensitively as a substring against
+bookmark titles and URLs, and limited to 256 characters. An omitted or empty
+query safely returns `{"results":[]}`.
+
+`limit` defaults to 8 and must be between 1 and 20. Exact and prefix title
+matches come first, followed by other title matches and then URL matches; ties
+are ordered deterministically by lowercased title, URL, and stable identity.
+Folders are never returned. A client selecting a result should treat `id` as
+opaque and fetch `/bookmarks/{id}` again before navigating, because the
+bookmark may have changed since the search snapshot.
 
 ### Error codes
 

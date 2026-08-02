@@ -70,6 +70,16 @@ export interface DaemonTreeResponse {
   tree: BookmarkNode[]
 }
 
+export interface DaemonSearchResult {
+  id: string
+  title: string
+  url: string
+}
+
+export interface DaemonSearchResponse {
+  results: DaemonSearchResult[]
+}
+
 export type DaemonNodeKind = "bookmark" | "folder"
 
 function segmentFor(kind: DaemonNodeKind): string {
@@ -233,6 +243,12 @@ export class DaemonClient {
 
   fetchTree(): Promise<DaemonTreeResponse> {
     return this.request<DaemonTreeResponse>("/tree")
+  }
+
+  /** Bookmark-only, case-insensitive search over the daemon's current snapshot. */
+  search(query: string, limit = 8): Promise<DaemonSearchResponse> {
+    const params = new URLSearchParams({ q: query, limit: String(limit) })
+    return this.request<DaemonSearchResponse>(`/search?${params.toString()}`)
   }
 
   /** Bare DTO, not wrapped — the daemon exposes a single item under /bookmarks/:id regardless of kind. */

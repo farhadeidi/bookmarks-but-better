@@ -29,7 +29,8 @@ use bbb_vault_core::{ChildKind, Id};
 
 use crate::dto::{
     self, BookmarkDto, CreateBookmarkRequest, CreateFolderRequest, DeleteQuery, HealthResponse,
-    MoveRequest, OrderChild, OrderRequest, Placement, RescanResponse, TreeResponse, UpdateRequest,
+    MoveRequest, OrderChild, OrderRequest, Placement, RescanResponse, SearchQuery, SearchResponse,
+    TreeResponse, UpdateRequest,
 };
 use crate::entry::EntryRef;
 use crate::extract::{ApiJson, ApiQuery};
@@ -38,6 +39,8 @@ use crate::vault::{MovePlan, Vault};
 
 /// How often an idle event stream is nudged so proxies and clients keep it open.
 const SSE_KEEP_ALIVE: Duration = Duration::from_secs(15);
+const MAX_SEARCH_QUERY_CHARS: usize = 256;
+const MAX_SEARCH_LIMIT: usize = 20;
 
 /// What every handler shares.
 #[derive(Debug, Clone)]
@@ -55,6 +58,7 @@ pub fn router(state: ApiState) -> Router {
     Router::new()
         .route("/health", get(health))
         .route("/tree", get(tree))
+        .route("/search", get(search))
         .route("/events", get(events))
         .route("/rescan", post(rescan))
         .route("/bookmarks", post(create_bookmark))
@@ -95,6 +99,34 @@ async fn health(State(state): State<ApiState>) -> Json<HealthResponse> {
 async fn tree(State(state): State<ApiState>) -> Json<TreeResponse> {
     let snapshot = state.vault.snapshot();
     Json(dto::tree(&snapshot.scan))
+}
+
+async fn search(
+    State(state): State<ApiState>,
+    ApiQuery(query): ApiQuery<SearchQuery>,
+) -> Result<Json<SearchResponse>, Problem> {
+    let query_text = query.q.trim();
+    if query_text.chars().count() > MAX_SEARCH_QUERY_CHARS {
+        return Err(Problem::new(
+            ProblemCode::InvalidRequest,
+            format!("`q` must be at most {MAX_SEARCH_QUERY_CHARS} characters"),
+        ));
+    }
+    if !(1..=MAX_SEARCH_LIMIT).contains(&query.limit) {
+        return Err(Problem::new(
+            ProblemCode::InvalidRequest,
+            format!("`limit` must be between 1 and {MAX_SEARCH_LIMIT}"),
+        ));
+    }
+
+    if query_text.is_empty() {
+        return Ok(Json(SearchResponse {
+            results: Vec::new(),
+        }));
+    }
+
+    let snapshot = state.vault.snapshot();
+    Ok(Json(dto::search(&snapshot.scan, query_text, query.limit)))
 }
 
 async fn rescan(State(state): State<ApiState>) -> Result<Json<RescanResponse>, Problem> {

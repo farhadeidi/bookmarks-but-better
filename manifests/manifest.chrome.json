@@ -6,7 +6,24 @@
   "chrome_url_overrides": {
     "newtab": "index.html"
   },
-  "permissions": ["bookmarks", "storage", "favicon", "tabs", "clipboardWrite"],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Save bookmark"
+  },
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "omnibox": {
+    "keyword": "bbb"
+  },
+  "permissions": [
+    "activeTab",
+    "bookmarks",
+    "storage",
+    "favicon",
+    "clipboardWrite"
+  ],
   "host_permissions": ["https://t1.gstatic.com/*", "https://www.google.com/*"],
   "optional_host_permissions": ["http://127.0.0.1/*", "http://localhost/*"],
   "icons": {

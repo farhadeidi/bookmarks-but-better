@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Capture pages directly from Chrome and Firefox into a daemon vault.** The
+  extension action now opens a compact popup that saves the active page into a
+  writable vault folder, without mirroring or importing the browser's native
+  bookmark store
+- **Search daemon bookmarks from the browser address bar.** Type `bbb`, press
+  <kbd>Tab</kbd>, and enter a title or URL fragment to see live suggestions;
+  choosing one opens the current bookmark URL with the browser's requested tab
+  disposition
+- A bounded, case-insensitive `GET /api/v1/search` daemon endpoint for bookmark
+  titles and URLs, with deterministic ranking and opaque bookmark identifiers
+
 ### Fixed
 
 - **`install.sh` and `install.ps1` no longer fail out of the box.** Both default
