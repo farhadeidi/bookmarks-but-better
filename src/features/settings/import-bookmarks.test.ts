@@ -219,6 +219,41 @@ describe("executeImportPlan", () => {
     )
   })
 
+  it("never exceeds the concurrency limit, across folders as well as within one", async () => {
+    let inFlight = 0
+    let peak = 0
+    let n = 0
+    const adapter = makeAdapter({
+      create: async (input) => {
+        inFlight += 1
+        peak = Math.max(peak, inFlight)
+        await new Promise((resolve) => setTimeout(resolve, 1))
+        inFlight -= 1
+        return { id: `created-${++n}`, title: input.title } as BookmarkNode
+      },
+    })
+
+    // 10 sibling folders of 5 bookmarks each. Batching per level would create
+    // all 10 folders at once and then run 10 subtrees in parallel, each with
+    // its own allowance.
+    const plan: ImportPlanNode[] = Array.from({ length: 10 }, (_, f) => ({
+      kind: "folder" as const,
+      title: `f${f}`,
+      existingId: null,
+      children: Array.from({ length: 5 }, (_, b) => ({
+        kind: "bookmark" as const,
+        title: `b${f}-${b}`,
+        url: `https://example.com/${f}/${b}`,
+        conflict: null,
+      })),
+    }))
+
+    const result = await executeImportPlan(adapter, plan, "target", {}, 3)
+
+    expect(result).toMatchObject({ folders: 10, bookmarks: 50, failed: 0 })
+    expect(peak).toBeLessThanOrEqual(3)
+  })
+
   it("never rejects, so a caller cannot end up with an unhandled error", async () => {
     const adapter = makeAdapter({
       create: async () => {

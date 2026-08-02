@@ -36,6 +36,41 @@ function messageOf(error: unknown): string {
 }
 
 /**
+ * Caps how many adapter requests are in flight across the *whole* import.
+ *
+ * Batching per folder is not enough: a file with 100 sibling folders would
+ * create all 100 at once and then run 100 subtrees in parallel, each with its
+ * own allowance — hundreds of simultaneous requests from a limit that reads
+ * like eight. A single shared pool makes the number mean what it says.
+ *
+ * A slot is held only for the duration of one request, never across the
+ * recursion into a folder's children, so nothing can deadlock waiting on work
+ * that is itself queued behind it.
+ */
+function createLimiter(limit: number) {
+  let active = 0
+  const waiting: (() => void)[] = []
+
+  return async function run<T>(task: () => Promise<T>): Promise<T> {
+    if (active >= limit) {
+      await new Promise<void>((resolve) => waiting.push(resolve))
+    } else {
+      active += 1
+    }
+
+    try {
+      return await task()
+    } finally {
+      // Hand the slot straight to the next waiter rather than freeing and
+      // reacquiring it, so the count cannot drift.
+      const next = waiting.shift()
+      if (next) next()
+      else active -= 1
+    }
+  }
+}
+
+/**
  * Carries out a plan from `planImport` under the user's conflict choices.
  *
  * Every write is isolated: a single rejected node (a URL the back-end refuses,
@@ -68,6 +103,8 @@ export async function executeImportPlan(
     result.firstError ??= messageOf(error)
   }
 
+  const limit = createLimiter(concurrency)
+
   async function writeBookmark(
     node: Extract<ImportPlanNode, { kind: "bookmark" }>,
     target: string
@@ -85,16 +122,19 @@ export async function executeImportPlan(
       if (node.conflict && choice === "replace") {
         // The URLs are identical by definition of the conflict, so the only
         // thing left to carry over is the incoming title.
-        await bookmarks.update(node.conflict.existingId, { title: node.title })
+        const existingId = node.conflict.existingId
+        await limit(() => bookmarks.update(existingId, { title: node.title }))
         result.replaced += 1
         return
       }
 
-      await bookmarks.create({
-        parentId: target,
-        title: node.title,
-        url: node.url,
-      })
+      await limit(() =>
+        bookmarks.create({
+          parentId: target,
+          title: node.title,
+          url: node.url,
+        })
+      )
       result.bookmarks += 1
     } catch (error) {
       record(error, 1)
@@ -105,13 +145,7 @@ export async function executeImportPlan(
     const folders = level.filter((n) => n.kind === "folder")
     const leaves = level.filter((n) => n.kind === "bookmark")
 
-    for (let i = 0; i < leaves.length; i += concurrency) {
-      await Promise.all(
-        leaves
-          .slice(i, i + concurrency)
-          .map((node) => writeBookmark(node, target))
-      )
-    }
+    await Promise.all(leaves.map((node) => writeBookmark(node, target)))
 
     // Folders are resolved level by level so their children have a real parent
     // id to attach to; `null` marks the ones whose subtree has to be abandoned.
@@ -122,10 +156,9 @@ export async function executeImportPlan(
           return node.existingId
         }
         try {
-          const created = await bookmarks.create({
-            parentId: target,
-            title: node.title,
-          })
+          const created = await limit(() =>
+            bookmarks.create({ parentId: target, title: node.title })
+          )
           result.folders += 1
           return created.id
         } catch (error) {
