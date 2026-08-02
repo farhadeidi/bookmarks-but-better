@@ -65,3 +65,28 @@ export function resolveEffectiveCreateParentId(
   if (rootIsCreatable) return tree[0]?.id ?? null
   return resolveDefaultCreateParentId(tree)
 }
+
+function containsNode(nodes: BookmarkNode[], id: string): boolean {
+  return nodes.some(
+    (node) => node.id === id || containsNode(node.children ?? [], id)
+  )
+}
+
+/**
+ * Resolves where a create — or an import — should write, honouring the
+ * dashboard root when there is one.
+ *
+ * The saved root id is verified against the tree rather than trusted. It is
+ * persisted separately from the bookmarks themselves, so a folder deleted in
+ * the browser (or in the vault, by another client) leaves the id behind
+ * pointing at nothing; using it would send every write to a parent that does
+ * not exist and fail the lot. Falling back is strictly better than failing.
+ */
+export function resolveCreateParentId(
+  tree: BookmarkNode[],
+  rootFolderId: string | null,
+  rootIsCreatable: boolean
+): string | null {
+  if (rootFolderId && containsNode(tree, rootFolderId)) return rootFolderId
+  return resolveEffectiveCreateParentId(tree, rootIsCreatable)
+}

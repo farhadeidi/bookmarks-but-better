@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button"
 import type { BookmarkAdapter, BookmarkNode } from "@/browser"
 import { useBookmarkStore } from "@/stores/bookmark-store"
 import { useUIStore } from "@/stores/ui-store"
-import { resolveEffectiveCreateParentId } from "@/features/root-folder-select"
+import { resolveCreateParentId } from "@/features/root-folder-select"
 import {
   loadOrganizerChildren,
   loadOrganizerItem,
@@ -415,12 +415,11 @@ export function BookmarkOrganizerTree({
     adapter.capabilities.setChildOrder &&
     adapter.bookmarks.setChildOrder !== undefined
 
-  const createParentId =
-    rootFolderId ??
-    resolveEffectiveCreateParentId(
-      tree,
-      adapter.capabilities.rootIsCreatable ?? false
-    )
+  const createParentId = resolveCreateParentId(
+    tree,
+    rootFolderId,
+    adapter.capabilities.rootIsCreatable ?? false
+  )
 
   return (
     <BookmarkOrganizerTreeImpl

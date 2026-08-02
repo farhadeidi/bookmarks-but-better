@@ -30,7 +30,7 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area"
 import {
   RootFolderSelect,
-  resolveEffectiveCreateParentId,
+  resolveCreateParentId,
 } from "@/features/root-folder-select"
 import { BookmarkOrganizerCreateDialog } from "./bookmark-organizer-create-dialog"
 import {
@@ -51,12 +51,11 @@ export function BookmarkOrganizerSheet() {
   const mutationError = useBookmarkStore((s) => s.mutationError)
   const clearMutationError = useBookmarkStore((s) => s.clearMutationError)
 
-  const createParentId =
-    rootFolderId ??
-    resolveEffectiveCreateParentId(
-      tree,
-      adapter?.capabilities.rootIsCreatable ?? false
-    )
+  const createParentId = resolveCreateParentId(
+    tree,
+    rootFolderId,
+    adapter?.capabilities.rootIsCreatable ?? false
+  )
 
   const creatingItem = useUIStore((s) => s.creatingItem)
   const openCreateItem = useUIStore((s) => s.openCreateItem)

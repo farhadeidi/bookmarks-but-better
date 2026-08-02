@@ -108,11 +108,31 @@ describe("BookmarkOrganizerSheet", () => {
   })
 
   it("enables the header New menu once a root folder is selected", () => {
-    useBookmarkStore.setState({ rootFolderId: "root-1" })
+    useBookmarkStore.setState({
+      // The folder has to actually be in the tree: a saved id that no longer
+      // resolves is treated as absent, so that writes never target a folder
+      // that was deleted elsewhere.
+      tree: [
+        {
+          id: "0",
+          title: "",
+          children: [{ id: "root-1", title: "Root", children: [] }],
+        },
+      ],
+      rootFolderId: "root-1",
+    })
     render(<BookmarkOrganizerSheet />)
 
     const newButton = screen.getByRole("button", { name: "New" })
     expect(newButton.hasAttribute("disabled")).toBe(false)
+  })
+
+  it("disables the header New menu when the saved root folder no longer exists", () => {
+    useBookmarkStore.setState({ tree: [], rootFolderId: "deleted-folder" })
+    render(<BookmarkOrganizerSheet />)
+
+    const newButton = screen.getByRole("button", { name: "New" })
+    expect(newButton.hasAttribute("disabled")).toBe(true)
   })
 
   it("enables the header New menu with no root folder selected when the adapter allows creating at the vault root (daemon, standalone)", () => {

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 import type { BookmarkNode } from "@/browser"
 import {
+  resolveCreateParentId,
   resolveDefaultCreateParentId,
   resolveEffectiveCreateParentId,
 } from "./default-parent"
@@ -115,5 +116,45 @@ describe("resolveEffectiveCreateParentId", () => {
   it("returns null for an empty tree regardless of the capability", () => {
     expect(resolveEffectiveCreateParentId([], true)).toBeNull()
     expect(resolveEffectiveCreateParentId([], false)).toBeNull()
+  })
+})
+
+describe("resolveCreateParentId", () => {
+  const tree: BookmarkNode[] = [
+    {
+      id: "0",
+      title: "",
+      children: [
+        {
+          id: "1",
+          title: "Bookmarks Bar",
+          children: [{ id: "10", title: "Work", children: [] }],
+        },
+      ],
+    },
+  ]
+
+  it("honours a root folder that still exists, at any depth", () => {
+    expect(resolveCreateParentId(tree, "10", false)).toBe("10")
+  })
+
+  it("falls back rather than writing into a root folder that is gone", () => {
+    expect(resolveCreateParentId(tree, "deleted", false)).toBe("1")
+  })
+
+  it("falls back to the vault root for daemon and standalone", () => {
+    const vault: BookmarkNode[] = [
+      { id: "vault", title: "Vault", children: [] },
+    ]
+
+    expect(resolveCreateParentId(vault, "deleted", true)).toBe("vault")
+  })
+
+  it("falls back when no root folder is set at all", () => {
+    expect(resolveCreateParentId(tree, null, false)).toBe("1")
+  })
+
+  it("returns null when there is nowhere to write", () => {
+    expect(resolveCreateParentId([], "anything", false)).toBeNull()
   })
 })

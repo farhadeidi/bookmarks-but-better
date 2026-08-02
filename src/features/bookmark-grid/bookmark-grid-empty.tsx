@@ -4,7 +4,7 @@ import { Bookmark02Icon, Folder01Icon } from "@hugeicons/core-free-icons"
 import { Button } from "@/components/ui/button"
 import { useBookmarkStore } from "@/stores/bookmark-store"
 import { useUIStore } from "@/stores/ui-store"
-import { resolveEffectiveCreateParentId } from "@/features/root-folder-select"
+import { resolveCreateParentId } from "@/features/root-folder-select"
 
 export function BookmarkGridEmpty() {
   const rootFolderId = useBookmarkStore((s) => s.rootFolderId)
@@ -16,9 +16,9 @@ export function BookmarkGridEmpty() {
 
   const createParentId = React.useMemo(
     () =>
-      rootFolderId ??
-      resolveEffectiveCreateParentId(
+      resolveCreateParentId(
         tree,
+        rootFolderId,
         adapter?.capabilities.rootIsCreatable ?? false
       ),
     [rootFolderId, tree, adapter]

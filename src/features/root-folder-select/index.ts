@@ -4,4 +4,5 @@ export type { RootFolderOption } from "./root-folder-options"
 export {
   resolveDefaultCreateParentId,
   resolveEffectiveCreateParentId,
+  resolveCreateParentId,
 } from "./default-parent"
