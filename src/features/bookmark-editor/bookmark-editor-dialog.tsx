@@ -46,6 +46,11 @@ export function BookmarkEditorDialog() {
     closeEditor()
   }
 
+  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    void handleSave()
+  }
+
   return (
     <Dialog
       open={editingBookmark !== null}
@@ -54,48 +59,57 @@ export function BookmarkEditorDialog() {
       }}
     >
       <DialogContent>
-        <DialogHeader>
-          <DialogTitle>
-            {isFolder ? "Edit Folder" : "Edit Bookmark"}
-          </DialogTitle>
-        </DialogHeader>
+        {/* A real form with a submit button, so Enter saves. Browsers only
+            submit implicitly when a form has one field, which left the
+            two-field bookmark case ignoring the key entirely. */}
+        <form
+          className="flex flex-col gap-4"
+          noValidate
+          onSubmit={handleSubmit}
+        >
+          <DialogHeader>
+            <DialogTitle>
+              {isFolder ? "Edit Folder" : "Edit Bookmark"}
+            </DialogTitle>
+          </DialogHeader>
 
-        <div className="flex flex-col gap-4">
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="bookmark-title">Title</Label>
-            <Input
-              id="bookmark-title"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="Bookmark title"
-            />
-          </div>
-
-          {!isFolder && (
+          <div className="flex flex-col gap-4">
             <div className="flex flex-col gap-2">
-              <Label htmlFor="bookmark-url">URL</Label>
+              <Label htmlFor="bookmark-title">Title</Label>
               <Input
-                id="bookmark-url"
-                value={url}
-                onChange={(e) => setUrl(e.target.value)}
-                placeholder="https://..."
+                id="bookmark-title"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="Bookmark title"
               />
             </div>
-          )}
 
-          {mutationError && (
-            <p role="alert" className="text-sm text-destructive">
-              {mutationError}
-            </p>
-          )}
-        </div>
+            {!isFolder && (
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="bookmark-url">URL</Label>
+                <Input
+                  id="bookmark-url"
+                  value={url}
+                  onChange={(e) => setUrl(e.target.value)}
+                  placeholder="https://..."
+                />
+              </div>
+            )}
 
-        <DialogFooter>
-          <Button variant="outline" onClick={closeEditor}>
-            Cancel
-          </Button>
-          <Button onClick={handleSave}>Save</Button>
-        </DialogFooter>
+            {mutationError && (
+              <p role="alert" className="text-sm text-destructive">
+                {mutationError}
+              </p>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={closeEditor}>
+              Cancel
+            </Button>
+            <Button type="submit">Save</Button>
+          </DialogFooter>
+        </form>
       </DialogContent>
     </Dialog>
   )
