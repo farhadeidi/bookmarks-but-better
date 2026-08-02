@@ -2,6 +2,7 @@ import * as React from "react"
 import { detectAdapter } from "@/browser"
 import { useBookmarkStore } from "@/stores/bookmark-store"
 import { usePreferencesStore } from "@/stores/preferences-store"
+import { useUIStore } from "@/stores/ui-store"
 import { getScreenshotMode } from "@/hooks/use-screenshot-mode"
 
 /**
@@ -16,7 +17,7 @@ import { getScreenshotMode } from "@/hooks/use-screenshot-mode"
 export function useAppBootstrap() {
   const initBookmarks = useBookmarkStore((s) => s.init)
   const initPreferences = usePreferencesStore((s) => s.init)
-  const [showOnboarding, setShowOnboarding] = React.useState(false)
+  const openOnboarding = useUIStore((s) => s.openOnboarding)
   const [onboardingChecked, setOnboardingChecked] = React.useState(false)
   const screenshotMode = React.useMemo(() => getScreenshotMode(), [])
 
@@ -38,16 +39,16 @@ export function useAppBootstrap() {
       cleanupBookmarks = bookmarksCleanup ?? undefined
 
       if (screenshotMode === "onboarding") {
-        setShowOnboarding(true)
+        openOnboarding()
       } else if (!screenshotMode) {
         const onboardingCompleted = await adapter.storage.get<boolean>(
           "onboardingCompleted"
         )
         if (!cancelled && !onboardingCompleted) {
-          setShowOnboarding(true)
+          openOnboarding()
         }
       }
-      // screenshotMode === 'default': showOnboarding stays false (suppressed)
+      // screenshotMode === 'default': onboarding stays hidden (suppressed)
 
       if (!cancelled) {
         setOnboardingChecked(true)
@@ -60,11 +61,9 @@ export function useAppBootstrap() {
       cancelled = true
       cleanupBookmarks?.()
     }
-  }, [initBookmarks, initPreferences, screenshotMode])
+  }, [initBookmarks, initPreferences, openOnboarding, screenshotMode])
 
   return {
-    showOnboarding,
-    setShowOnboarding,
     onboardingChecked,
     screenshotMode,
   }

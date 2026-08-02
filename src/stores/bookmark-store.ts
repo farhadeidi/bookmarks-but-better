@@ -128,7 +128,8 @@ interface BookmarkState {
   ): Promise<void>
   deleteBookmark(id: string): Promise<void>
   deleteFolder(id: string): Promise<void>
-  createFolder(parentId: string, title: string): Promise<void>
+  /** Resolves the created folder, or `null` when there was no adapter or the create failed. */
+  createFolder(parentId: string, title: string): Promise<BookmarkNode | null>
   /**
    * Resolves `true` when the move was applied. Callers that only open a
    * dialog can keep ignoring the result and read `mutationError` afterwards;
@@ -288,12 +289,14 @@ export const useBookmarkStore = create<BookmarkState>((set, get) => ({
 
   async createFolder(parentId: string, title: string) {
     const { adapter } = get()
-    if (!adapter) return
+    if (!adapter) return null
     try {
-      await adapter.bookmarks.create({ parentId, title })
+      const created = await adapter.bookmarks.create({ parentId, title })
       set({ mutationError: null })
+      return created
     } catch (error) {
       set({ mutationError: toErrorMessage(error) })
+      return null
     }
   },
 

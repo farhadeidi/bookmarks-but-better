@@ -6,6 +6,7 @@ import { useSortableFolder, DropIndicator } from "@/features/dnd"
 import type { BookmarkNode } from "@/browser"
 import { cn } from "@/lib/utils"
 import { getVisibleFolders } from "./folder-collection"
+import { BookmarkGridEmpty } from "./bookmark-grid-empty"
 
 function getColumnCountForWidth(): number {
   const w = window.innerWidth
@@ -171,11 +172,7 @@ export function BookmarkGrid() {
   }
 
   if (folders.length === 0) {
-    return (
-      <div className="flex items-center justify-center p-12 text-muted-foreground">
-        No bookmark folders found.
-      </div>
-    )
+    return <BookmarkGridEmpty />
   }
 
   return (

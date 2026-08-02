@@ -66,12 +66,9 @@ const OnboardingWizard = React.lazy(() =>
 )
 
 export function App() {
-  const {
-    showOnboarding,
-    setShowOnboarding,
-    onboardingChecked,
-    screenshotMode,
-  } = useAppBootstrap()
+  const { onboardingChecked, screenshotMode } = useAppBootstrap()
+  const onboardingOpen = useUIStore((s) => s.onboardingOpen)
+  const closeOnboarding = useUIStore((s) => s.closeOnboarding)
   const openSettings = useUIStore((s) => s.openSettings)
   const isLoading = useBookmarkStore((s) => s.isLoading)
   const status = useBookmarkStore((s) => s.status)
@@ -292,8 +289,8 @@ export function App() {
         <BookmarkEditorDialog />
         <DeleteConfirmDialog />
         <BookmarkOrganizerSheet />
-        {showOnboarding && onboardingChecked && (
-          <OnboardingWizard onComplete={() => setShowOnboarding(false)} />
+        {onboardingOpen && onboardingChecked && (
+          <OnboardingWizard onComplete={closeOnboarding} />
         )}
       </React.Suspense>
     </ScrollArea>

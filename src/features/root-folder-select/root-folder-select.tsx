@@ -9,6 +9,7 @@ import {
 import { buildRootFolderOptions } from "./root-folder-options"
 
 const ROOT_VALUE = "__root__"
+const ROOT_LABEL = "Browser Root (all bookmarks)"
 
 interface RootFolderSelectProps {
   value: string | null
@@ -27,9 +28,18 @@ export function RootFolderSelect({
 
   const folders = React.useMemo(() => buildRootFolderOptions(tree), [tree])
 
-  const displayLabel = value
-    ? (folders.find((folder) => folder.id === value)?.label ?? value)
-    : "Browser Root (all bookmarks)"
+  // A raw id is never a label. Two ways `value` can miss the options list:
+  // it is the tree root itself — the daemon and standalone adapters have a
+  // real, selectable root, which is deliberately left out of the list because
+  // it is the same thing as selecting nothing — or it names a folder that has
+  // since been deleted, in which case the app is already falling back and the
+  // picker should say so rather than print a UUID.
+  const displayLabel = !value
+    ? ROOT_LABEL
+    : value === tree[0]?.id
+      ? ROOT_LABEL
+      : (folders.find((folder) => folder.id === value)?.label ??
+        "Unavailable folder — using the default")
 
   return (
     <div className="flex flex-col gap-2">

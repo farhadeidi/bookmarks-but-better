@@ -64,6 +64,9 @@ function createChromeAdapter(): BrowserAdapter {
       // Ordering here travels on `move(id, {index})`; there is no
       // whole-folder ordering endpoint to replace it.
       setChildOrder: false,
+      // Chrome rejects parentId "0" ("Can't modify the root bookmark
+      // folders"); a real child folder (e.g. the Bookmarks Bar) is required.
+      rootIsCreatable: false,
     },
   }
 }
@@ -80,6 +83,8 @@ function createFirefoxAdapter(): BrowserAdapter {
       // Ordering here travels on `move(id, {index})`; there is no
       // whole-folder ordering endpoint to replace it.
       setChildOrder: false,
+      // Same WebExtensions bookmarks API as Chrome, same synthetic root.
+      rootIsCreatable: false,
     },
   }
 }
@@ -96,6 +101,10 @@ function createStandaloneAdapter(): BrowserAdapter {
       // Ordering here travels on `move(id, {index})`; there is no
       // whole-folder ordering endpoint to replace it.
       setChildOrder: false,
+      // `getTree()` wraps the stored rows in a synthetic root
+      // (`STANDALONE_ROOT_ID`) that `create()` accepts as a parent and maps
+      // back to "no parentId", so `tree[0]` really is a creatable folder here.
+      rootIsCreatable: true,
     },
   }
 }

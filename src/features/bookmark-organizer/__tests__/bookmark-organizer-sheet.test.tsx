@@ -100,6 +100,55 @@ describe("BookmarkOrganizerSheet", () => {
     expect(screen.queryByRole("alert")).toBeNull()
   })
 
+  it("disables the header New menu when no root folder is selected", () => {
+    render(<BookmarkOrganizerSheet />)
+
+    const newButton = screen.getByRole("button", { name: "New" })
+    expect(newButton.hasAttribute("disabled")).toBe(true)
+  })
+
+  it("enables the header New menu once a root folder is selected", () => {
+    useBookmarkStore.setState({
+      // The folder has to actually be in the tree: a saved id that no longer
+      // resolves is treated as absent, so that writes never target a folder
+      // that was deleted elsewhere.
+      tree: [
+        {
+          id: "0",
+          title: "",
+          children: [{ id: "root-1", title: "Root", children: [] }],
+        },
+      ],
+      rootFolderId: "root-1",
+    })
+    render(<BookmarkOrganizerSheet />)
+
+    const newButton = screen.getByRole("button", { name: "New" })
+    expect(newButton.hasAttribute("disabled")).toBe(false)
+  })
+
+  it("disables the header New menu when the saved root folder no longer exists", () => {
+    useBookmarkStore.setState({ tree: [], rootFolderId: "deleted-folder" })
+    render(<BookmarkOrganizerSheet />)
+
+    const newButton = screen.getByRole("button", { name: "New" })
+    expect(newButton.hasAttribute("disabled")).toBe(true)
+  })
+
+  it("enables the header New menu with no root folder selected when the adapter allows creating at the vault root (daemon, standalone)", () => {
+    useBookmarkStore.setState((state) => ({
+      tree: [{ id: "vault-root", title: "Vault", children: [] }],
+      adapter: state.adapter && {
+        ...state.adapter,
+        capabilities: { ...state.adapter.capabilities, rootIsCreatable: true },
+      },
+    }))
+    render(<BookmarkOrganizerSheet />)
+
+    const newButton = screen.getByRole("button", { name: "New" })
+    expect(newButton.hasAttribute("disabled")).toBe(false)
+  })
+
   it("clears a stale message when the sheet is closed and reopened", () => {
     render(<BookmarkOrganizerSheet />)
 

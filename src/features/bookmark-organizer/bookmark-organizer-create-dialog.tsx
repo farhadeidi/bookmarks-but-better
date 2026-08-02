@@ -22,10 +22,15 @@ export function BookmarkOrganizerCreateDialog() {
 
   const [title, setTitle] = React.useState("")
   const [url, setUrl] = React.useState("")
+  // Empty fields only complain once the user has actually been there and left
+  // them blank — a dialog that opens already shouting is worse than one that
+  // waits to be asked.
+  const [touched, setTouched] = React.useState({ title: false, url: false })
 
   React.useEffect(() => {
     setTitle("")
     setUrl("")
+    setTouched({ title: false, url: false })
     clearMutationError()
   }, [creatingItem, clearMutationError])
 
@@ -36,29 +41,15 @@ export function BookmarkOrganizerCreateDialog() {
   const isBookmark = creatingItem.type === "bookmark"
   const dialogTitle = isBookmark ? "New Bookmark" : "New Folder"
 
+  const normalizedTitle = title.trim()
+  const normalizedUrl = url.trim()
+  const canCreate =
+    normalizedTitle !== "" && (!isBookmark || normalizedUrl !== "")
+
   const handleCreate = async () => {
-    if (!creatingItem) {
-      return
-    }
-
-    const titleInput = document.getElementById(
-      "bookmark-organizer-create-title"
-    ) as HTMLInputElement | null
-    const urlInput = document.getElementById(
-      "bookmark-organizer-create-url"
-    ) as HTMLInputElement | null
-
-    const normalizedTitle = titleInput?.value.trim() ?? ""
-    const normalizedUrl = urlInput?.value.trim() ?? ""
-
-    if (!normalizedTitle) {
-      return
-    }
+    if (!canCreate) return
 
     if (isBookmark) {
-      if (!normalizedUrl) {
-        return
-      }
       await createBookmark(
         creatingItem.parentId,
         normalizedTitle,
@@ -76,6 +67,9 @@ export function BookmarkOrganizerCreateDialog() {
     event.preventDefault()
     void handleCreate()
   }
+
+  const titleError = touched.title && normalizedTitle === ""
+  const urlError = isBookmark && touched.url && normalizedUrl === ""
 
   return (
     <Dialog
@@ -103,8 +97,23 @@ export function BookmarkOrganizerCreateDialog() {
                 id="bookmark-organizer-create-title"
                 autoFocus
                 value={title}
+                aria-invalid={titleError || undefined}
+                aria-describedby={
+                  titleError
+                    ? "bookmark-organizer-create-title-error"
+                    : undefined
+                }
                 onChange={(event) => setTitle(event.target.value)}
+                onBlur={() => setTouched((t) => ({ ...t, title: true }))}
               />
+              {titleError && (
+                <p
+                  id="bookmark-organizer-create-title-error"
+                  className="text-xs text-destructive"
+                >
+                  A title is required.
+                </p>
+              )}
             </div>
 
             {isBookmark && (
@@ -114,8 +123,21 @@ export function BookmarkOrganizerCreateDialog() {
                   id="bookmark-organizer-create-url"
                   type="text"
                   value={url}
+                  aria-invalid={urlError || undefined}
+                  aria-describedby={
+                    urlError ? "bookmark-organizer-create-url-error" : undefined
+                  }
                   onChange={(event) => setUrl(event.target.value)}
+                  onBlur={() => setTouched((t) => ({ ...t, url: true }))}
                 />
+                {urlError && (
+                  <p
+                    id="bookmark-organizer-create-url-error"
+                    className="text-xs text-destructive"
+                  >
+                    A URL is required.
+                  </p>
+                )}
               </div>
             )}
 
@@ -130,7 +152,21 @@ export function BookmarkOrganizerCreateDialog() {
             <Button type="button" variant="outline" onClick={closeCreateItem}>
               Cancel
             </Button>
-            <Button type="button" onClick={() => void handleCreate()}>
+            {/* `type="submit"` is what makes Enter work in the two-field
+                bookmark form; browsers only submit implicitly when a form has
+                a single field, so folders used to accept Enter and bookmarks
+                silently did not. */}
+            <Button
+              type="submit"
+              disabled={!canCreate}
+              title={
+                canCreate
+                  ? undefined
+                  : isBookmark
+                    ? "Enter a title and a URL first."
+                    : "Enter a title first."
+              }
+            >
               Create
             </Button>
           </DialogFooter>

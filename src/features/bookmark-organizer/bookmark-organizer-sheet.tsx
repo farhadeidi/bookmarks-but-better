@@ -1,7 +1,24 @@
 import * as React from "react"
+import { HugeiconsIcon } from "@hugeicons/react"
+import {
+  Add01Icon,
+  Bookmark02Icon,
+  Folder01Icon,
+} from "@hugeicons/core-free-icons"
 import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import {
+  Tooltip,
+  TooltipTrigger,
+  TooltipContent,
+} from "@/components/ui/tooltip"
 
 import {
   Sheet,
@@ -11,7 +28,10 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { RootFolderSelect } from "@/features/root-folder-select"
+import {
+  RootFolderSelect,
+  resolveCreateParentId,
+} from "@/features/root-folder-select"
 import { BookmarkOrganizerCreateDialog } from "./bookmark-organizer-create-dialog"
 import {
   BookmarkOrganizerTree,
@@ -26,10 +46,19 @@ export function BookmarkOrganizerSheet() {
   const closeBookmarkOrganizer = useUIStore((s) => s.closeBookmarkOrganizer)
   const rootFolderId = useBookmarkStore((s) => s.rootFolderId)
   const setRootFolderId = useBookmarkStore((s) => s.setRootFolderId)
+  const tree = useBookmarkStore((s) => s.tree)
+  const adapter = useBookmarkStore((s) => s.adapter)
   const mutationError = useBookmarkStore((s) => s.mutationError)
   const clearMutationError = useBookmarkStore((s) => s.clearMutationError)
 
+  const createParentId = resolveCreateParentId(
+    tree,
+    rootFolderId,
+    adapter?.capabilities.rootIsCreatable ?? false
+  )
+
   const creatingItem = useUIStore((s) => s.creatingItem)
+  const openCreateItem = useUIStore((s) => s.openCreateItem)
 
   const foldersOnly = usePreferencesStore(
     (s) => s.isFoldersOnlyEnabledInTreeEditor
@@ -104,6 +133,70 @@ export function BookmarkOrganizerSheet() {
                   </Label>
                 </div>
                 <div className="ml-auto flex items-center gap-2">
+                  {createParentId ? (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger
+                        render={
+                          <Button type="button" variant="outline" size="xs">
+                            <HugeiconsIcon icon={Add01Icon} size={14} />
+                            New
+                          </Button>
+                        }
+                      />
+                      <DropdownMenuContent side="bottom" align="end">
+                        <DropdownMenuItem
+                          onClick={() =>
+                            openCreateItem({
+                              type: "folder",
+                              parentId: createParentId,
+                            })
+                          }
+                        >
+                          <HugeiconsIcon
+                            icon={Folder01Icon}
+                            size={14}
+                            className="text-primary"
+                          />
+                          New Folder
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() =>
+                            openCreateItem({
+                              type: "bookmark",
+                              parentId: createParentId,
+                            })
+                          }
+                        >
+                          <HugeiconsIcon
+                            icon={Bookmark02Icon}
+                            size={14}
+                            className="text-muted-foreground"
+                          />
+                          New Bookmark
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  ) : (
+                    <Tooltip>
+                      <TooltipTrigger
+                        render={
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="xs"
+                            disabled
+                            aria-disabled="true"
+                          >
+                            <HugeiconsIcon icon={Add01Icon} size={14} />
+                            New
+                          </Button>
+                        }
+                      />
+                      <TooltipContent side="bottom">
+                        Choose a root folder above before creating items here.
+                      </TooltipContent>
+                    </Tooltip>
+                  )}
                   <Button
                     type="button"
                     variant="outline"

@@ -1,8 +1,39 @@
 import type { BookmarkNode } from "../types"
 
+const UNTITLED_BOOKMARK = "Untitled"
+const UNTITLED_FOLDER = "Untitled Folder"
+
+/**
+ * Derives a non-empty title for a bookmark.
+ *
+ * Browsers happily export an untitled bookmark as `<A HREF="..."></A>`, and
+ * some back-ends refuse to store one — the daemon answers `422 a title cannot
+ * be empty`. Rather than dropping the entry (or letting one bad row abort the
+ * whole import), fall back to something the user can recognise: the host, then
+ * the raw URL, then a generic label for URLs with no host at all
+ * (`javascript:`, `data:`, `place:`).
+ */
+export function deriveBookmarkTitle(title: string, url: string): string {
+  const trimmed = title.trim()
+  if (trimmed) return trimmed
+
+  try {
+    const host = new URL(url).hostname
+    if (host) return host
+  } catch {
+    // Not parseable as an absolute URL — fall through to the raw value.
+  }
+
+  return url.trim() || UNTITLED_BOOKMARK
+}
+
 /**
  * Parses the standard Netscape Bookmark HTML format exported by browsers.
  * Structure: nested <DL> lists with <DT> entries for folders and links.
+ *
+ * Entries that cannot become a valid bookmark are dropped here rather than
+ * passed on: an `<A>` with no `HREF` (or an empty one) is not a bookmark any
+ * adapter can store, and `<HR>` separators carry nothing at all.
  */
 export function parseNetscapeBookmarks(html: string): BookmarkNode[] {
   const parser = new DOMParser()
@@ -33,11 +64,14 @@ export function parseNetscapeBookmarks(html: string): BookmarkNode[] {
 
       if (anchor) {
         // It's a bookmark link
+        const url = anchor.getAttribute("HREF")?.trim()
+        if (!url) continue
+
         const id = generateId()
         nodes.push({
           id,
-          title: anchor.textContent?.trim() ?? "",
-          url: anchor.getAttribute("HREF") ?? "",
+          title: deriveBookmarkTitle(anchor.textContent ?? "", url),
+          url,
           parentId,
           dateAdded: parseAddDate(anchor.getAttribute("ADD_DATE")),
           children: undefined,
@@ -55,7 +89,7 @@ export function parseNetscapeBookmarks(html: string): BookmarkNode[] {
 
         nodes.push({
           id,
-          title: heading.textContent?.trim() ?? "",
+          title: heading.textContent?.trim() || UNTITLED_FOLDER,
           parentId,
           dateAdded: parseAddDate(heading.getAttribute("ADD_DATE")),
           children: folderChildren,
