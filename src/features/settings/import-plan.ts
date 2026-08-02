@@ -119,6 +119,13 @@ export function planImport(
           }
         }
 
+        // One existing bookmark can only be skipped or replaced once. Claiming
+        // it here means a second incoming copy of the same URL is planned as
+        // new rather than pointed at the same node — otherwise "replace all"
+        // would fire two concurrent updates at one bookmark and leave whichever
+        // won as its title (or, on a revision-checking adapter, fail one).
+        existingByUrl.delete(normalizeUrl(node.url))
+
         const key = `c${keyCounter++}`
         conflicts.push({
           key,

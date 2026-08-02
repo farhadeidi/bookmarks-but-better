@@ -170,6 +170,26 @@ describe("planImport", () => {
     expect(plan.nodes).toHaveLength(2)
   })
 
+  it("lets only the first incoming copy claim an existing bookmark", () => {
+    const plan = planImport(
+      TREE,
+      "dest",
+      imported([
+        { id: "1", title: "Personal", url: "https://a.com" },
+        { id: "2", title: "Work", url: "https://a.com" },
+      ])
+    )
+
+    // One conflict, not two pointed at the same node — resolving both as
+    // "replace" would otherwise race two updates against one bookmark.
+    expect(plan.conflicts).toHaveLength(1)
+    expect(plan.nodes[0]).toMatchObject({
+      title: "Personal",
+      conflict: { existingId: "old-a" },
+    })
+    expect(plan.nodes[1]).toMatchObject({ title: "Work", conflict: null })
+  })
+
   it("plans everything as new when the destination is not in the tree", () => {
     const plan = planImport(
       TREE,
