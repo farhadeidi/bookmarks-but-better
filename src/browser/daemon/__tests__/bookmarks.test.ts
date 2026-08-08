@@ -299,7 +299,7 @@ describe("DaemonBookmarkAdapter", () => {
 /**
  * A folder whose children exercise every rule the order contract cares about:
  * an ordinary bookmark, a read-only one, a nested folder, and a directory with
- * no `.bbb-folder.md` (a synthetic `!path` id the order file cannot name).
+ * no `.bookmarks-but-better-folder.md` (a synthetic `!path` id the order file cannot name).
  */
 const orderedFolder: BookmarkNode = {
   id: "folder-o",

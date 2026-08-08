@@ -44,6 +44,38 @@ jobs:
       - name: Quality gates
         run: bun run check
 
+  daemon-e2e:
+    name: Daemon end-to-end
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: package.json
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Set up Rust
+        run: rustup show active-toolchain || rustup toolchain install
+
+      - name: Cache cargo artifacts
+        uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+
+      - name: Install Playwright Chromium
+        run: bunx playwright install --with-deps chromium
+
+      # Exercises the shipped binary name, vault initialization, daemon startup,
+      # health endpoint and browser-facing API against a real local process.
+      - name: Run daemon end-to-end test
+        env:
+          BOOKMARKS_BUT_BETTER_E2E_PORT: 52223
+        run: bun run test:e2e:daemon
+
   install-scripts:
     name: Install script checks
     runs-on: ubuntu-latest
@@ -54,7 +86,7 @@ jobs:
 
       # Preinstalled on the ubuntu-latest runner image.
       - name: Shellcheck install.sh
-        run: shellcheck install.sh tests/install/smoke-test.sh
+        run: shellcheck install.sh tests/install/smoke-test.sh tests/e2e/run-daemon.sh
 
       # pwsh is preinstalled on every GitHub-hosted runner image, including
       # ubuntu-latest, so this parses install.ps1 without needing Windows.
@@ -76,6 +108,21 @@ jobs:
       # without depending on network access or an actual release existing.
       - name: Install script smoke test
         run: bash tests/install/smoke-test.sh
+
+      # `npx bookmarks-but-better@latest` is a third entry point into the same
+      # two installers, so it is checked in the same job. Every decision it
+      # makes — which installer this platform needs, which GitHub Release URL
+      # it comes from, how flags reach it — is a pure function, so this runs
+      # without a network and without installing anything.
+      - name: npm launcher tests
+        working-directory: packages/bookmarks-but-better
+        run: node --test
+
+      # Proves the package is publishable and carries no binaries: four files,
+      # no dependencies, no postinstall.
+      - name: npm launcher pack
+        working-directory: packages/bookmarks-but-better
+        run: npm pack --dry-run
 
   rust:
     runs-on: ubuntu-latest

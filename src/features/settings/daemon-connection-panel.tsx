@@ -104,10 +104,10 @@ function InstallGuide() {
         this installs the latest prerelease.
       </p>
       <p className="text-xs text-muted-foreground">
-        Then run <code>bbb setup</code> to create a vault and{" "}
-        <code>bbb service install --vault &lt;path&gt;</code> to run it in the
-        background. The extension connects over loopback only — nothing here
-        ever leaves this machine.
+        Then run <code>bookmarks-but-better setup</code> to create a vault and{" "}
+        <code>bookmarks-but-better service install --vault &lt;path&gt;</code>{" "}
+        to run it in the background. The extension connects over loopback only —
+        nothing here ever leaves this machine.
       </p>
     </div>
   )
@@ -236,11 +236,11 @@ export function DaemonConnectionPanel() {
             </Button>
           </div>
           <p className="text-xs text-muted-foreground">
-            Connects to a local <code>bbb</code> daemon over loopback (127.0.0.1
-            or localhost). Nothing is requested from the daemon, and no browser
-            permission is asked for, until you click Connect. An unreachable
-            daemon is reported as an error here — it never falls back to browser
-            bookmarks.
+            Connects to a local <code>bookmarks-but-better</code> daemon over
+            loopback (127.0.0.1 or localhost). Nothing is requested from the
+            daemon, and no browser permission is asked for, until you click
+            Connect. An unreachable daemon is reported as an error here — it
+            never falls back to browser bookmarks.
           </p>
           {error && (
             <p className="text-xs text-destructive" role="alert">

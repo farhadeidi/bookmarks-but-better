@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test"
 
-const baseUrl = process.env.BBB_E2E_BASE_URL ?? "http://127.0.0.1:52222"
+const baseUrl =
+  process.env.BOOKMARKS_BUT_BETTER_E2E_BASE_URL ?? "http://127.0.0.1:52222"
 
 async function api(path: string, init?: RequestInit) {
   const response = await fetch(`${baseUrl}/api/v1${path}`, init)

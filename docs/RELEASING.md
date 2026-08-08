@@ -1,8 +1,9 @@
 # Releasing
 
-One number ships everything. `package.json`, both extension manifests and the
-Cargo workspace all carry the same product version, and a tag is what turns that
-version into a release.
+One product version covers the app, both extension manifests and the Cargo
+workspace, and a tag is what turns that version into a release. The small `npx`
+launcher has an independent version and is published only when its own code
+changes.
 
 Two commands do the whole job:
 
@@ -11,14 +12,15 @@ git push origin v4.0.0-beta.1   # a prerelease: artifacts to download, no store
 git push origin v4.0.0          # the real thing: stores, after an approval
 ```
 
-Nothing else publishes. Merging to `main` runs [`ci.yml`](../.github/workflows/ci.yml)
-and stops there.
+No product artifact is published another way. Merging to `main` runs
+[`ci.yml`](../.github/workflows/ci.yml) and stops there. The npm launcher remains
+the separately versioned, manual publishing step documented below.
 
 ## What each tag does
 
 | You push          | You get                                                                  | Stores                                       |
 | ----------------- | ------------------------------------------------------------------------ | -------------------------------------------- |
-| `v4.0.0-beta.N`   | A GitHub **prerelease** with both extension zips and five daemon archives | **Never contacted.** The job does not exist.  |
+| `v4.0.0-beta.N`   | A GitHub **prerelease** with both extension zips, five daemon archives and both installers | **Never contacted.** The job does not exist.  |
 | `v4.0.0`          | A normal GitHub **Release** with the same artifacts                      | After a maintainer approves the deployment.   |
 
 Both run the identical build and the identical test suite — the release workflow
@@ -27,14 +29,15 @@ from it. A beta is a real build; the only thing it does not do is publish.
 
 ## Cutting a beta
 
-1. Reconcile the version everywhere. For `4.0.0` that means `4.0.0` — exactly
-   this string — in all six places:
+1. Reconcile the product version everywhere. For `4.0.0` that means `4.0.0` —
+   exactly this string — in these six places:
 
    - `package.json`
    - `manifests/manifest.chrome.json`
    - `manifests/manifest.firefox.json`
    - `Cargo.toml` (`[workspace.package] version`)
-   - `crates/bbb/Cargo.toml` (the `bbb-vault-core` constraint, twice)
+   - `crates/bookmarks-but-better/Cargo.toml` (the
+     `bookmarks-but-better-vault-core` constraint, twice)
    - `Cargo.lock` — run `cargo update --workspace` after the two above
 
 2. Add a `## [4.0.0]` section to `CHANGELOG.md`.
@@ -273,18 +276,19 @@ Each release carries five, one per supported platform, each with a `.sha256`:
 Each unpacks to:
 
 ```
-bbb-<version>-<target>/
-  bbb[.exe]      the daemon, HTTP API and CLI
-  ui/            the built web UI
+bookmarks-but-better-<version>-<target>/
+  bookmarks-but-better[.exe]   the daemon, HTTP API and CLI
+  ui/                          the built web UI
   README.md
   LICENSE
 ```
 
 ```sh
-./bbb serve --vault <path-to-your-vault> --ui-dir ./ui
+./bookmarks-but-better serve --vault <path-to-your-vault> --ui-dir ./ui
 ```
 
-The daemon does not compile the UI into the binary — `crates/bbb/src/ui.rs`
+The daemon does not compile the UI into the binary —
+`crates/bookmarks-but-better/src/ui.rs`
 serves it from a sandboxed directory handle chosen at run time, which is what
 lets the UI be replaced without a rebuild and what keeps the "refuse every
 symlink" rule enforceable. The archive is therefore where the UI is bundled, and
@@ -300,41 +304,91 @@ release job started.
 
 There is no Apple Developer ID signature or notarization, and no Authenticode
 signature. Gatekeeper and SmartScreen will both object, and users will need
-`xattr -d com.apple.quarantine ./bbb` on macOS or *More info → Run anyway* on
-Windows. The release notes say so on every release.
+`xattr -d com.apple.quarantine ./bookmarks-but-better` on macOS or
+*More info → Run anyway* on Windows. The release notes say so on every release.
 
 Changing that means buying an Apple Developer account and a code-signing
 certificate, and adding signing keys to the release pipeline. Until then the
 `.sha256` files are what a cautious user has to go on.
 
+## The installers are release assets too
+
+`install.sh` and `install.ps1` are attached to every release under those exact
+names, each with a `.sha256` sidecar, by the `installers` job. Fixed names,
+because unlike the daemon archives they are resolved before any version is
+known — the documented command is
+`…/releases/latest/download/install.sh`, never a branch URL. What runs is
+therefore the script that was published alongside the archives it installs.
+
 ### `install.sh` and `install.ps1` depend on this exact layout
 
-Both scripts (repository root) resolve a release through the GitHub API,
-download `bbb-<version>-<target>.<tar.gz|zip>` and its `.sha256` by that exact
-name, verify the checksum, and unpack expecting the `bbb-<version>-<target>/`
-top-level directory shown above. Changing the archive name, the checksum
-sidecar's naming (`<archive>.sha256`, content `<hash>  <filename>`), or the
-top-level directory inside the archive is a breaking change for both
-scripts and needs to update them alongside `release.yml`.
+Both scripts (repository root) resolve a release from GitHub Release URLs only
+— the `/releases/latest` redirect, the `/releases.atom` feed, and
+`/releases/download/<tag>/<asset>`. There is no GitHub JSON API call, and
+`install.sh` therefore needs no `jq`: `curl`, `tar` and a SHA-256 tool are the
+whole toolchain.
 
-Both also default to the latest *stable* release, which today is an
-extension-only one carrying no daemon archive at all. Rather than fail on that,
-each reports it and falls back to the newest prerelease that does have a build
-for the platform (see [DAEMON.md](DAEMON.md)). The fallback is not a switch
-anyone has to flip off later: the first stable release that ships daemon
+They download `bookmarks-but-better-<version>-<target>.<tar.gz|zip>` and its
+`.sha256` by that exact name, verify the checksum, and unpack expecting the
+`bookmarks-but-better-<version>-<target>/` top-level directory shown above.
+Changing the archive name, the checksum sidecar's naming (`<archive>.sha256`,
+content `<hash>  <filename>`), or the top-level directory inside the archive is
+a breaking change for both scripts and needs to update them alongside
+`release.yml`.
+
+Both also default to the latest *stable* release. A stable release carrying no
+daemon archive — every one up to and including `v3.2.0` — is reported rather
+than failed on, and each falls back to the newest prerelease that does have a
+build for the platform (see [DAEMON.md](DAEMON.md)). The fallback is not a
+switch anyone has to flip off later: a stable release that ships daemon
 archives is resolved and installed normally, and the fallback stops being
-reached. What it does mean is that until then, the plain copy-and-paste install
-command installs a prerelease — so anything published under it is what users
-get.
+reached.
 
-`.github/workflows/ci.yml`'s `install-scripts` job guards the scripts
-themselves — `shellcheck`, a syntax check of `install.ps1`, and
-`tests/install/smoke-test.sh`, which runs `install.sh` end to end (download,
+Because a tag shape here is either `vX.Y.Z` or `vX.Y.Z-beta.N` and nothing
+else, both scripts read "is this a prerelease" straight off the tag. Adding a
+third tag shape to `on.push.tags` would need both of them updated.
+
+### `npx bookmarks-but-better@latest`
+
+`packages/bookmarks-but-better` is a third entry point into those same two
+scripts, for people who have Node.js and not much else. It has its own semantic
+version, independent of the daemon and extensions: bump it only when the
+launcher itself changes. It ships **no
+binaries**: it downloads the installer for the platform it is running on,
+verifies it against the `.sha256` sidecar published next to it, and runs it,
+forwarding the installer's own flags. `--version <tag>` pins both halves to the
+same release.
+
+Publishing it is a **manual step** — the release pipeline holds no npm
+credential:
+
+```sh
+cd packages/bookmarks-but-better
+npm publish   # after the GitHub release for the tag exists
+```
+
+Publish a new launcher version after the GitHub release that needs it, never
+before: by default the package resolves `/releases/latest/download/install.sh`,
+so publishing ahead of the corresponding release could bootstrap from the
+previous one. A daemon-only release does not require another npm publish.
+
+The root `package.json` stays `"private": true` and is never published; the
+name `bookmarks-but-better` on npm belongs to this launcher.
+
+### What CI proves about them
+
+`.github/workflows/ci.yml`'s `install-scripts` job guards all three —
+`shellcheck`, a syntax check of `install.ps1`, `tests/install/smoke-test.sh`,
+and the launcher's own tests and a `npm pack --dry-run`.
+
+The smoke test runs `install.sh` end to end (release resolution, download,
 checksum verification, unpack, symlink swap, upgrade, rollback-on-tamper)
-against a locally served fake release. It does not call the real GitHub API
-and does not run on a tag, so it does not by itself prove the scripts work
-against a *real* published release — only that they still do exactly what
-they did the last time this suite ran.
+against a locally served fake release that speaks the same three GitHub
+endpoints. The launcher tests cover its platform, argument and URL decisions,
+which are pure functions, so neither touches the network. Neither runs on a
+tag, so together they do not prove the scripts work against a *real* published
+release — only that they still do exactly what they did the last time this
+suite ran.
 
 ## One-time repository setup
 

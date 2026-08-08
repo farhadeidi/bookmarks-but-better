@@ -1,11 +1,11 @@
 [workspace]
 resolver = "3"
-members = ["crates/bbb", "crates/bbb-vault-core"]
+members = ["crates/bookmarks-but-better", "crates/bookmarks-but-better-vault-core"]
 
 [workspace.package]
 # The Rust crates carry the product version, the same one `package.json` and
 # both extension manifests carry, so a release tag names one number rather than
-# one per language. `GET /api/v1/health` and `bbb --version` report it straight
+# one per language. `GET /api/v1/health` and `bookmarks-but-better --version` report it straight
 # from `CARGO_PKG_VERSION`.
 version = "4.0.0"
 edition = "2024"

@@ -107,16 +107,19 @@ describe("daemon connection config", () => {
   it("treats a stored non-loopback origin as absent, since storage is not a trust boundary", async () => {
     // Devtools, a profile sync, or a downgrade could put this here; it must
     // never become a request.
-    await new StandaloneStorageAdapter().set("bbb.daemon.connection", {
-      origin: "http://evil.example:52222",
-    })
+    await new StandaloneStorageAdapter().set(
+      "bookmarks-but-better.daemon.connection",
+      {
+        origin: "http://evil.example:52222",
+      }
+    )
     expect(await getDaemonConnectionConfig()).toBeNull()
   })
 
   it("treats a malformed stored record as absent", async () => {
     const storage = new StandaloneStorageAdapter()
     for (const value of [42, "http://127.0.0.1:52222", {}, { origin: 7 }]) {
-      await storage.set("bbb.daemon.connection", value)
+      await storage.set("bookmarks-but-better.daemon.connection", value)
       expect(await getDaemonConnectionConfig()).toBeNull()
     }
   })
@@ -130,7 +133,9 @@ describe("daemon connection config", () => {
 
     expect(await getDaemonConnectionConfig()).toBeNull()
     expect(
-      await new StandaloneStorageAdapter().get("bbb.daemon.connection")
+      await new StandaloneStorageAdapter().get(
+        "bookmarks-but-better.daemon.connection"
+      )
     ).toBeNull()
   })
 

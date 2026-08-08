@@ -18,7 +18,7 @@ const googleFavicon = new GoogleFaviconProvider()
  *
  * What did *not* change is the daemon itself. It still binds loopback only and
  * still makes no outbound request of its own — the disclosure is made by the
- * browser rendering the UI, not by `bbb`. Restoring the old no-disclosure
+ * browser rendering the UI, not by `bookmarks-but-better`. Restoring the old no-disclosure
  * behaviour means a daemon-side proxy that fetches each site's own icon, not a
  * different third-party service.
  */

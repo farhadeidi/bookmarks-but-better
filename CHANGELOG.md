@@ -13,30 +13,55 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   extension action now opens a compact popup that saves the active page into a
   writable vault folder, without mirroring or importing the browser's native
   bookmark store
-- **Search daemon bookmarks from the browser address bar.** Type `bbb`, press
-  <kbd>Tab</kbd>, and enter a title or URL fragment to see live suggestions;
-  choosing one opens the current bookmark URL with the browser's requested tab
-  disposition
+- **Search daemon bookmarks from the browser address bar.** Type
+  `bookmarks-but-better`, press <kbd>Tab</kbd>, and enter a title or URL
+  fragment to see live suggestions; choosing one opens the current bookmark URL
+  with the browser's requested tab disposition
 - A bounded, case-insensitive `GET /api/v1/search` daemon endpoint for bookmark
   titles and URLs, with deterministic ranking and opaque bookmark identifiers
+- **`npx bookmarks-but-better@latest` installs the daemon.** A published npm
+  package carrying no binaries: it downloads the installer for your platform
+  from the GitHub Release, verifies it against its published SHA-256, and runs
+  it, so the install it performs is as persistent as any other. Every installer
+  flag is forwarded, and `--version <tag>` pins the installer and the daemon to
+  the same release
+- **`install.sh` and `install.ps1` are release assets** under those exact names,
+  each with a `.sha256`. The documented command now fetches
+  `…/releases/latest/download/install.sh`, so what runs is the script published
+  alongside the archives it installs rather than whatever `main` holds
 
 ### Fixed
 
 - **`install.sh` and `install.ps1` no longer fail out of the box.** Both default
-  to the latest *stable* release, and every stable release so far is an
+  to the latest *stable* release, and every stable release before this one is an
   extension-only one carrying no daemon archive — so the documented
-  copy-and-paste command ended in `release v3.2.0 has no asset named bbb-…` and
-  installed nothing. Each now reports that and falls back to the newest
-  prerelease that does have a build for the platform. The fallback needs no
-  undoing later: the first stable release shipping daemon archives is resolved
-  and installed normally
-- **`install.sh` can finish `bbb setup` under `curl … | bash`.** Standard input
-  there is the pipe the script itself arrived on, already read to the end, so
-  setup was handed an immediate EOF and died on its first question. It is now
-  run against the terminal, and where there is no terminal at all the install
-  completes and says to run `bbb setup` by hand
+  copy-and-paste command ended in `release v3.2.0 has no asset named
+  bookmarks-but-better-…` and installed nothing. Each now reports that and falls
+  back to the newest prerelease that does have a build for the platform. The
+  fallback needs no undoing later: a stable release shipping daemon archives is
+  resolved and installed normally
+- **`install.sh` can finish `bookmarks-but-better setup` under `curl … | bash`.**
+  Standard input there is the pipe the script itself arrived on, already read to
+  the end, so setup was handed an immediate EOF and died on its first question.
+  It is now run against the terminal, and where there is no terminal at all the
+  install completes and says to run `bookmarks-but-better setup` by hand
 
 ### Changed
+
+- **Everything the project ships is named `bookmarks-but-better`.** The
+  executable, the crates, the release archives, the install directories and the
+  environment prefix (`BOOKMARKS_BUT_BETTER_*`) all use the full name; the
+  omnibox keyword is now `bookmarks-but-better`. This is a breaking change with
+  no aliases and no migration: an existing pre-release install has to be
+  reinstalled, and any vault created by an earlier beta has to be recreated or
+  updated manually to use the renamed metadata and control files
+- **The npm launcher has its own version lifecycle.** Its initial version is
+  `0.1.0`; future versions track changes to the bootstrapper itself rather than
+  mirroring daemon and extension releases
+- **`install.sh` needs no `jq`.** Both installers resolve a release from GitHub
+  Release URLs only — the `/releases/latest` redirect, the releases Atom feed
+  and `/releases/download/<tag>/<asset>` — instead of the GitHub JSON API, so
+  `curl`, `tar` and a SHA-256 tool are the whole toolchain
 
 - **The daemon's default port is now 52222** (was 47321). Several browsers on
   one machine have to agree on where the daemon is without being told, so the
@@ -49,14 +74,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Local-first daemon (`bbb`)** — a Rust daemon, HTTP API and CLI that serves a
+- **Local-first daemon (`bookmarks-but-better`)** — a Rust daemon, HTTP API and CLI that serves a
   Markdown vault, and optionally the built web UI, over loopback only. Ships as a
   downloadable release archive for Linux (x86_64, aarch64), macOS (Intel, Apple
   Silicon) and Windows (x86_64), each with a SHA-256 checksum and the built UI
   bundled alongside the binary
-- `bbb init`, `bbb doctor`, `bbb rescan` and `bbb serve` subcommands; every one
-  names its vault explicitly, with no path discovery and no configured default
-- Canonical Markdown vault format (`bbb-vault-core`): parsing, validation,
+- `bookmarks-but-better init`, `doctor`, `rescan` and `serve` subcommands; every
+  one names its vault explicitly, with no path discovery and no configured
+  default
+- Canonical Markdown vault format (`bookmarks-but-better-vault-core`): parsing, validation,
   deterministic scanning and byte-preserving updates, with stable identities that
   survive moves, renames and restarts
 - Daemon-managed manual child ordering, so the organizer's drag-and-drop order
@@ -82,7 +108,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   sends its origin (never its path) to Google, where daemon mode previously
   disclosed nothing. The daemon process itself is unchanged — it still binds
   loopback only and makes no outbound request; the requests come from the browser
-  showing the UI. See `crates/bbb/README.md` for the full note.
+  showing the UI. See `crates/bookmarks-but-better/README.md` for the full note.
 
 ## [3.2.1] - 2026-08-02
 

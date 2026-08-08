@@ -40,7 +40,7 @@ describe("BookmarkOrganizerRow read-only affordances", () => {
         {
           code: "invalid_id",
           severity: "error",
-          detail: "bbb_id is missing.",
+          detail: "bookmarks_but_better_id is missing.",
         },
       ],
     })

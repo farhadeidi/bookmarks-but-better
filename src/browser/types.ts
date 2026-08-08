@@ -2,7 +2,7 @@
  * Which source of bookmarks the app is pointed at.
  *
  * `browser` and `standalone` are the two that have always existed. `daemon` is
- * an *extension* pointing at a local `bbb` daemon over loopback; the
+ * an *extension* pointing at a local `bookmarks-but-better` daemon over loopback; the
  * daemon-served build does not use this type at all, since it is not a choice
  * there. Nothing ever falls back from `daemon` to `browser` on its own — an
  * unreachable daemon is an error the user sees, not a silent switch to a
