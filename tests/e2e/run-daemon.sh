@@ -3,7 +3,7 @@ set -euo pipefail
 
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)
 vault=$(mktemp -d)
-port=${BBB_E2E_PORT:-52222}
+port=${BOOKMARKS_BUT_BETTER_E2E_PORT:-52222}
 cargo=${CARGO:-"$HOME/.cargo/bin/cargo"}
 
 cleanup() {
@@ -18,8 +18,8 @@ trap cleanup EXIT
 cd "$repo_root"
 bun run build:daemon
 "$cargo" build --workspace --locked
-./target/debug/bbb init --vault "$vault"
-./target/debug/bbb serve \
+./target/debug/bookmarks-but-better init --vault "$vault"
+./target/debug/bookmarks-but-better serve \
   --vault "$vault" \
   --ui-dir dist-daemon \
   --bind 127.0.0.1 \
@@ -34,5 +34,5 @@ for _ in $(seq 1 100); do
 done
 
 curl --fail --silent "http://127.0.0.1:${port}/api/v1/health" >/dev/null
-BBB_E2E_BASE_URL="http://127.0.0.1:${port}" \
+BOOKMARKS_BUT_BETTER_E2E_BASE_URL="http://127.0.0.1:${port}" \
   bunx playwright test tests/e2e/daemon.spec.ts --reporter=line

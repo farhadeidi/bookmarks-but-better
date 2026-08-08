@@ -12,7 +12,7 @@
  * different ids entirely, so switching modes could silently display the
  * wrong root folder, or overwrite one mode's saved layout with the other's.
  *
- * Every key here therefore lives under `bbb.daemon.ui.`, the same top-level
+ * Every key here therefore lives under `bookmarks-but-better.daemon.ui.`, the same top-level
  * namespace `adapter-preference.ts` already uses for the connection config —
  * so the two modules' keys stay legible as belonging together without ever
  * colliding with each other or with Standalone's.
@@ -25,11 +25,11 @@ const DB_NAME = "bookmarks-but-better-prefs"
 const DB_VERSION = 1
 const STORE_NAME = "preferences"
 
-const NAMESPACE = "bbb.daemon.ui."
+const NAMESPACE = "bookmarks-but-better.daemon.ui."
 const LEGACY_MIGRATION_FLAG = `${NAMESPACE}migratedLegacyKeys`
 /** Nothing under this prefix is a legacy UI preference — it is this module's
  * own namespace, or `adapter-preference.ts`'s. */
-const OWNED_PREFIX = "bbb.daemon."
+const OWNED_PREFIX = "bookmarks-but-better.daemon."
 
 function openDB(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {

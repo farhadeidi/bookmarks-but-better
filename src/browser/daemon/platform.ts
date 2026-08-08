@@ -1,7 +1,7 @@
 /**
  * Whether daemon mode is worth offering in this runtime at all.
  *
- * A `bbb` daemon is a native background process on the *same machine* the
+ * A `bookmarks-but-better` daemon is a native background process on the *same machine* the
  * browser runs on. Firefox for Android — the only mobile browser with any
  * extension support — cannot run one, has no loopback service to reach even
  * if one existed elsewhere, and cannot request a filesystem-facing native

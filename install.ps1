@@ -1,22 +1,23 @@
 #!/usr/bin/env pwsh
 <#
 .SYNOPSIS
-  Installs (or upgrades) the `bbb` daemon for the current Windows user, then
-  runs `bbb setup`. No administrator rights are used or required.
+  Installs (or upgrades) the `bookmarks-but-better` daemon for the current
+  Windows user, then runs `bookmarks-but-better setup`. No administrator rights
+  are used or required.
 
 .DESCRIPTION
   Every release is a GitHub Release built by .github/workflows/release.yml,
   which uploads one .zip archive and one .sha256 checksum for
-  x86_64-pc-windows-msvc. This script:
+  x86_64-pc-windows-msvc, plus this script itself under a fixed name. This
+  script:
 
     1. Resolves which release to install: the latest *stable* release by
        default, the latest prerelease with -Beta, or an exact tag with
-       -Version. Until the daemon has a stable release, the latest stable
-       release is an extension-only one carrying no `bbb` archive at all;
-       when that is what the default resolves to, this falls back to the
-       latest prerelease that does have a Windows build, and says so.
-    2. Downloads that archive and its .sha256 sidecar, and refuses to
-       install unless the archive's hash matches it.
+       -Version. A stable release that carries no daemon build — every stable
+       release up to and including v3.2.0 was extension-only — falls back to
+       the latest prerelease that does have a Windows build, and says so.
+    2. Downloads that archive and its .sha256 sidecar from the GitHub
+       Release, and refuses to install unless the archive's hash matches it.
     3. Unpacks into a versioned directory under $InstallRoot and only then
        repoints a `current` directory junction at it (junctions need no
        elevated privilege, unlike an NTFS symlink) — so a failed download or
@@ -24,11 +25,17 @@
        completely untouched, and this install, once it gets that far, can
        always be rolled back to the version `current` pointed at before.
     4. Adds `current` to the user's PATH (once), and finally runs
-       `bbb.exe setup`.
+       `bookmarks-but-better.exe setup`.
+
+  Everything it fetches is a GitHub Release URL — the release download
+  endpoint and the releases Atom feed — so it never calls the GitHub JSON API.
+  install.sh resolves releases exactly the same way, so both platforms pick
+  the same release for the same flags.
 
   Nothing here touches a vault. Uninstalling is: delete $InstallRoot and
-  remove it from PATH; your vault, wherever `bbb setup` pointed it at, is a
-  directory of Markdown files this script has never heard of.
+  remove it from PATH; your vault, wherever `bookmarks-but-better setup`
+  pointed it at, is a directory of Markdown files this script has never heard
+  of.
 
 .PARAMETER Beta
   Install the latest prerelease instead of the latest stable release.
@@ -38,23 +45,23 @@
   without the leading "v"). Overrides -Beta.
 
 .PARAMETER InstallDir
-  Where versions are unpacked. Default: $env:LOCALAPPDATA\bbb.
+  Where versions are unpacked. Default: $env:LOCALAPPDATA\bookmarks-but-better.
 
 .PARAMETER SkipSetup
-  Install the binary but do not run `bbb setup` afterward.
+  Install the binary but do not run `bookmarks-but-better setup` afterward.
 
 .EXAMPLE
-  irm https://raw.githubusercontent.com/farhadeidi/bookmarks-but-better/main/install.ps1 | iex
+  irm https://github.com/farhadeidi/bookmarks-but-better/releases/latest/download/install.ps1 | iex
 
 .EXAMPLE
-  iwr -useb https://raw.githubusercontent.com/farhadeidi/bookmarks-but-better/main/install.ps1 -OutFile install.ps1
+  iwr -useb https://github.com/farhadeidi/bookmarks-but-better/releases/latest/download/install.ps1 -OutFile install.ps1
   .\install.ps1 -Beta
 #>
 [CmdletBinding()]
 param(
   [switch]$Beta,
   [string]$Version = "",
-  [string]$InstallDir = "$env:LOCALAPPDATA\bbb",
+  [string]$InstallDir = "$env:LOCALAPPDATA\bookmarks-but-better",
   [switch]$SkipSetup
 )
 
@@ -62,40 +69,89 @@ $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
 $Repo = "farhadeidi/bookmarks-but-better"
+$Exe = "bookmarks-but-better"
 $Target = "x86_64-pc-windows-msvc"
 $InstallRoot = $InstallDir
 $CurrentLink = Join-Path $InstallRoot "current"
 # Overridable only for this script's own test suite — there is no supported
-# reason to point it anywhere but the real API in normal use.
-$ApiBase = if ($env:BBB_INSTALL_GITHUB_API) { $env:BBB_INSTALL_GITHUB_API } else { "https://api.github.com" }
-
-function Invoke-GitHubApi {
-  param([string]$Url)
-  $headers = @{ Accept = "application/vnd.github+json" }
-  if ($env:GITHUB_TOKEN) { $headers["Authorization"] = "token $env:GITHUB_TOKEN" }
-  Invoke-RestMethod -Uri $Url -Headers $headers
+# reason to point it anywhere but github.com in normal use.
+$GitHubBase = if ($env:BOOKMARKS_BUT_BETTER_INSTALL_GITHUB_BASE) {
+  $env:BOOKMARKS_BUT_BETTER_INSTALL_GITHUB_BASE
+} else {
+  "https://github.com"
 }
+$ReleasesBase = "$GitHubBase/$Repo/releases"
 
 # The archive this platform needs from a given release. Every release names it
 # after its own version, so this can only be computed per release — which is
-# exactly why the fallback below has to look inside each candidate rather than
-# just taking the newest thing it finds.
+# exactly why the fallback below has to probe each candidate rather than just
+# taking the newest thing it finds.
 function Get-ArchiveName {
   param([string]$Tag)
-  "bbb-$($Tag.TrimStart('v'))-$Target.zip"
+  "$Exe-$($Tag.TrimStart('v'))-$Target.zip"
+}
+
+function Get-AssetUrl {
+  param([string]$Tag, [string]$Name)
+  "$ReleasesBase/download/$Tag/$Name"
+}
+
+# A release tag here is either vX.Y.Z or vX.Y.Z-beta.N — release.yml accepts no
+# other shape — so "is this a prerelease" is a property of the tag and needs no
+# API lookup to answer.
+function Test-PrereleaseTag {
+  param([string]$Tag)
+  return $Tag -like "*-beta.*"
 }
 
 # True when a release actually ships a daemon build for Windows. An
 # extension-only release (every stable release up to and including v3.2.0)
 # does not, and installing from one is not a thing that can succeed.
 function Test-ReleaseHasDaemon {
-  param($Release)
-  if (-not $Release) { return $false }
-  $names = $Release.PSObject.Properties.Name
-  if (($names -notcontains "tag_name") -or ($names -notcontains "assets")) { return $false }
-  if (-not $Release.tag_name) { return $false }
-  $wanted = Get-ArchiveName $Release.tag_name
-  return [bool]($Release.assets | Where-Object { $_.name -eq $wanted } | Select-Object -First 1)
+  param([string]$Tag)
+  if (-not $Tag) { return $false }
+  try {
+    $null = Invoke-WebRequest -Uri (Get-AssetUrl $Tag (Get-ArchiveName $Tag)) `
+      -Method Head -UseBasicParsing
+    return $true
+  } catch {
+    return $false
+  }
+}
+
+# The tag /releases/latest redirects to — GitHub's "latest" is by definition
+# the newest non-draft, non-prerelease release, so this needs no filtering.
+function Get-LatestStableTag {
+  $response = Invoke-WebRequest -Uri "$ReleasesBase/latest" -Method Head -UseBasicParsing
+  $base = $response.BaseResponse
+  # Windows PowerShell 5.1 hands back an HttpWebResponse, whose landing URL is
+  # `ResponseUri`; PowerShell 6+ hands back an HttpResponseMessage, where the
+  # same thing is `RequestMessage.RequestUri`. Both ship on Windows and the
+  # script has to run under either.
+  if ($base.PSObject.Properties.Name -contains "ResponseUri") {
+    $final = $base.ResponseUri.AbsoluteUri
+  } else {
+    $final = $base.RequestMessage.RequestUri.AbsoluteUri
+  }
+  return ($final.TrimEnd('/') -split '/')[-1]
+}
+
+# Every release tag in the Atom feed, newest first. The feed's entry links are
+# .../releases/tag/<tag>, which is the only thing read out of it.
+function Get-ReleaseTags {
+  $feed = Invoke-WebRequest -Uri "$ReleasesBase.atom" -UseBasicParsing
+  $text = [string]$feed.Content
+  return [regex]::Matches($text, '/releases/tag/([^"]+)"') |
+    ForEach-Object { $_.Groups[1].Value }
+}
+
+# The newest prerelease that actually has a build for Windows.
+function Get-LatestBetaTagWithDaemon {
+  foreach ($candidate in Get-ReleaseTags) {
+    if (-not (Test-PrereleaseTag $candidate)) { continue }
+    if (Test-ReleaseHasDaemon $candidate) { return $candidate }
+  }
+  return $null
 }
 
 Write-Host "platform: $Target"
@@ -105,60 +161,45 @@ Write-Host "platform: $Target"
 #    stable release. Stable is the default; a prerelease always has to be
 #    asked for, one way or another.
 # ---------------------------------------------------------------------------
-$release = $null
+$tag = $null
 if ($Version) {
-  $tag = $Version.TrimStart("v")
-  $tag = "v$tag"
+  $tag = "v$($Version.TrimStart('v'))"
   Write-Host "resolving explicit release $tag"
-  try {
-    $release = Invoke-GitHubApi "$ApiBase/repos/$Repo/releases/tags/$tag"
-  } catch {
-    throw "no release found for tag $tag"
-  }
 } elseif ($Beta) {
   Write-Host "resolving the latest prerelease"
-  $releases = Invoke-GitHubApi "$ApiBase/repos/$Repo/releases?per_page=20"
-  $release = $releases | Where-Object { -not $_.draft -and $_.prerelease } | Select-Object -First 1
-  if (-not $release) {
-    throw "no prerelease was found; pass -Version to install a specific one"
+  $tag = Get-LatestBetaTagWithDaemon
+  if (-not $tag) {
+    throw "no prerelease has a $Exe build for $Target; pass -Version to install a specific one"
   }
 } else {
   Write-Host "resolving the latest stable release"
-  $release = Invoke-GitHubApi "$ApiBase/repos/$Repo/releases/latest"
+  $tag = Get-LatestStableTag
+  if (-not $tag) { throw "could not resolve the latest release" }
 
-  # The daemon has no stable release yet: the latest stable release is an
-  # extension-only one, and resolving to it is how `irm … | iex` ends in
-  # "release vX has no asset named bbb-…". Fall back to the newest prerelease
-  # that does carry a Windows build, loudly — a prerelease is normally
-  # something you have to ask for, and this is the one case where the
+  # A stable release that carries no daemon build is how `irm … | iex` ends in
+  # "release vX has no asset named bookmarks-but-better-…" — every stable
+  # release up to and including v3.2.0 was extension-only. Fall back to the
+  # newest prerelease that does carry a Windows build, loudly: a prerelease is
+  # normally something you have to ask for, and this is the one case where the
   # alternative is not installing at all.
-  if (-not (Test-ReleaseHasDaemon $release)) {
-    $stableTag = if ($release -and $release.tag_name) { $release.tag_name } else { "unknown" }
-    Write-Host "the latest stable release ($stableTag) ships no bbb daemon build for $Target"
+  if (-not (Test-ReleaseHasDaemon $tag)) {
+    Write-Host "the latest stable release ($tag) ships no $Exe daemon build for $Target"
     Write-Host "falling back to the latest prerelease — pass -Version <tag> to pin a specific release"
-    $releases = Invoke-GitHubApi "$ApiBase/repos/$Repo/releases?per_page=20"
-    $release = $releases |
-      Where-Object { -not $_.draft -and $_.prerelease -and (Test-ReleaseHasDaemon $_) } |
-      Select-Object -First 1
-    if (-not $release) {
-      throw "no stable or prerelease release has a bbb build for $Target yet"
+    $tag = Get-LatestBetaTagWithDaemon
+    if (-not $tag) {
+      throw "no stable or prerelease release has a $Exe build for $Target yet"
     }
   }
 }
 
-$tag = $release.tag_name
-if (-not $tag) { throw "the resolved release had no tag" }
+if (-not $tag.StartsWith("v")) {
+  throw "the resolved release tag '$tag' is not a vMAJOR.MINOR.PATCH tag"
+}
 $version = $tag.TrimStart("v")
 Write-Host "installing $tag (version $version)"
 
 $archiveName = Get-ArchiveName $tag
 $checksumName = "$archiveName.sha256"
-
-$archiveAsset = $release.assets | Where-Object { $_.name -eq $archiveName } | Select-Object -First 1
-$checksumAsset = $release.assets | Where-Object { $_.name -eq $checksumName } | Select-Object -First 1
-
-if (-not $archiveAsset) { throw "release $tag has no asset named $archiveName" }
-if (-not $checksumAsset) { throw "release $tag has no checksum for $archiveName" }
 
 # ---------------------------------------------------------------------------
 # 2. Download and verify. Nothing below this point is installed until the
@@ -171,8 +212,16 @@ try {
   $checksumPath = Join-Path $workDir $checksumName
 
   Write-Host "downloading $archiveName"
-  Invoke-WebRequest -Uri $archiveAsset.browser_download_url -OutFile $archivePath
-  Invoke-WebRequest -Uri $checksumAsset.browser_download_url -OutFile $checksumPath
+  try {
+    Invoke-WebRequest -Uri (Get-AssetUrl $tag $archiveName) -OutFile $archivePath -UseBasicParsing
+  } catch {
+    throw "release $tag has no asset named $archiveName"
+  }
+  try {
+    Invoke-WebRequest -Uri (Get-AssetUrl $tag $checksumName) -OutFile $checksumPath -UseBasicParsing
+  } catch {
+    throw "release $tag has no checksum for $archiveName"
+  }
 
   Write-Host "verifying checksum"
   # The sidecar is the standard `sha256sum`/`shasum` line: "<hash>  <filename>".
@@ -190,15 +239,15 @@ try {
   $extractDir = Join-Path $workDir "extracted"
   Expand-Archive -Path $archivePath -DestinationPath $extractDir
 
-  $staged = Join-Path $extractDir "bbb-$version-$Target"
-  $stagedExe = Join-Path $staged "bbb.exe"
+  $staged = Join-Path $extractDir "$Exe-$version-$Target"
+  $stagedExe = Join-Path $staged "$Exe.exe"
   if (-not (Test-Path $stagedExe)) {
-    throw "the archive did not contain bbb.exe — this is a packaging bug, not a local problem"
+    throw "the archive did not contain $Exe.exe — this is a packaging bug, not a local problem"
   }
 
   $null = & $stagedExe --version 2>&1
   if ($LASTEXITCODE -ne 0) {
-    throw "the downloaded bbb.exe does not run on this machine (checked with --version)"
+    throw "the downloaded $Exe.exe does not run on this machine (checked with --version)"
   }
 
   $previousVersion = $null
@@ -215,14 +264,15 @@ try {
   Move-Item -Path $staged -Destination $versionDir
 
   # -----------------------------------------------------------------------
-  # 4. Repoint `current` — the one step that changes what a running `bbb` on
-  #    PATH resolves to. A directory junction, not a symlink: junctions need
-  #    no elevated privilege on Windows, unlike NTFS symlinks.
+  # 4. Repoint `current` — the one step that changes what a running
+  #    `bookmarks-but-better` on PATH resolves to. A directory junction, not a
+  #    symlink: junctions need no elevated privilege on Windows, unlike NTFS
+  #    symlinks.
   # -----------------------------------------------------------------------
   if (Test-Path $CurrentLink) { Remove-Item -Force $CurrentLink }
   New-Item -ItemType Junction -Path $CurrentLink -Target $versionDir | Out-Null
 
-  $currentExe = Join-Path $CurrentLink "bbb.exe"
+  $currentExe = Join-Path $CurrentLink "$Exe.exe"
   $null = & $currentExe --version 2>&1
   $postSwapOk = $LASTEXITCODE -eq 0
 
@@ -251,17 +301,18 @@ try {
     Write-Host "added $CurrentLink to your user PATH (restart your shell to pick it up)"
   }
   # Also make it available for the rest of *this* process, so the `setup`
-  # call below (and this session) can use `bbb` without a new shell.
+  # call below (and this session) can use `bookmarks-but-better` without a new
+  # shell.
   if (($env:Path -split ";") -notcontains $CurrentLink) {
     $env:Path = "$env:Path;$CurrentLink"
   }
 
   if ($previousVersion -and $previousVersion -ne $version) {
-    Write-Host "upgraded bbb: $previousVersion -> $version"
+    Write-Host "upgraded ${Exe}: $previousVersion -> $version"
   } elseif ($previousVersion) {
-    Write-Host "reinstalled bbb $version"
+    Write-Host "reinstalled $Exe $version"
   } else {
-    Write-Host "installed bbb $version"
+    Write-Host "installed $Exe $version"
   }
   Write-Host "  binary:  $currentExe"
   Write-Host "  version: $versionDir"

@@ -132,11 +132,26 @@ dependencies = [
 ]
 
 [[package]]
-name = "bbb"
+name = "bitflags"
+version = "2.13.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b588b76d00fde79687d7646a9b5bdf3cc0f655e0bbd080335a95d7e96f3587da"
+
+[[package]]
+name = "block-buffer"
+version = "0.12.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d2f6c7dbe95a6ed67ad9f18e57daf93a2f034c524b99fd2b76d18fdfeb6660aa"
+dependencies = [
+ "hybrid-array",
+]
+
+[[package]]
+name = "bookmarks-but-better"
 version = "4.0.0"
 dependencies = [
  "axum",
- "bbb-vault-core",
+ "bookmarks-but-better-vault-core",
  "cap-fs-ext",
  "cap-std",
  "clap",
@@ -157,7 +172,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "bbb-vault-core"
+name = "bookmarks-but-better-vault-core"
 version = "4.0.0"
 dependencies = [
  "cap-fs-ext",
@@ -169,21 +184,6 @@ dependencies = [
  "serde_json",
  "sha2",
  "unicode-normalization",
-]
-
-[[package]]
-name = "bitflags"
-version = "2.13.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b588b76d00fde79687d7646a9b5bdf3cc0f655e0bbd080335a95d7e96f3587da"
-
-[[package]]
-name = "block-buffer"
-version = "0.12.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d2f6c7dbe95a6ed67ad9f18e57daf93a2f034c524b99fd2b76d18fdfeb6660aa"
-dependencies = [
- "hybrid-array",
 ]
 
 [[package]]

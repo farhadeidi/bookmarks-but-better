@@ -118,10 +118,14 @@ describe("bookmark-store actionable mutation errors", () => {
 
   it("maps read_only to an actionable message carrying the server detail", async () => {
     const message = await mutateAndGetError(
-      new DaemonLikeError("read_only", "Unprocessable", "bbb_id is missing.")
+      new DaemonLikeError(
+        "read_only",
+        "Unprocessable",
+        "bookmarks_but_better_id is missing."
+      )
     )
     expect(message).toBe(
-      "This item is read-only and can't be edited. bbb_id is missing."
+      "This item is read-only and can't be edited. bookmarks_but_better_id is missing."
     )
   })
 

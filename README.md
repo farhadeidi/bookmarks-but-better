@@ -60,16 +60,31 @@ Or load manually:
 3. Open `about:debugging#/runtime/this-firefox`
 4. Click **Load Temporary Add-on** and select any file inside `dist-firefox/`
 
-### Daemon (optional, beta)
+### Daemon (optional)
 
-The extension can also point at a local `bbb` daemon — a small background
-process that serves your bookmarks from a folder of Markdown files instead of
-the browser's own bookmark store, over `127.0.0.1`/`localhost` only. This is
-entirely optional; browser and standalone modes need nothing from it.
+The extension can also point at a local `bookmarks-but-better` daemon — a small
+background process that serves your bookmarks from a folder of Markdown files
+instead of the browser's own bookmark store, over `127.0.0.1`/`localhost` only.
+This is entirely optional; browser and standalone modes need nothing from it.
 
-The daemon has no stable release yet — it ships only as a prerelease. See
-[docs/DAEMON.md](docs/DAEMON.md) for how to install it, what the install
-scripts do, and how to point the extension at it.
+```sh
+# macOS / Linux
+curl -fsSL https://github.com/farhadeidi/bookmarks-but-better/releases/latest/download/install.sh | bash
+```
+
+```powershell
+# Windows (PowerShell)
+irm https://github.com/farhadeidi/bookmarks-but-better/releases/latest/download/install.ps1 | iex
+```
+
+```sh
+# Any platform, if you already have Node.js
+npx bookmarks-but-better@latest
+```
+
+All three install the same thing, from the same GitHub Release, checksum-verified.
+See [docs/DAEMON.md](docs/DAEMON.md) for what the install scripts do, and how to
+point the extension at the daemon.
 
 ## Screenshots
 
@@ -98,6 +113,7 @@ bun run typecheck         # Type check
 bun run lint              # Lint
 bun run format            # Format code
 bun run test              # Run tests
+bun run test:npm          # Test the npx launcher in packages/bookmarks-but-better
 ```
 
 ## Releasing

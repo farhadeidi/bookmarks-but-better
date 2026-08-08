@@ -392,8 +392,9 @@ export function SettingsDialog() {
                     </div>
                     <p className="text-xs text-muted-foreground">
                       Use browser bookmarks, manage an independent collection,
-                      or connect to a local <code>bbb</code> daemon. Browser and
-                      Standalone require a page reload to take effect.
+                      or connect to a local <code>bookmarks-but-better</code>{" "}
+                      daemon. Browser and Standalone require a page reload to
+                      take effect.
                     </p>
                     {showDaemonPanel && <DaemonConnectionPanel />}
                   </div>

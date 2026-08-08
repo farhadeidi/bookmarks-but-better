@@ -47,7 +47,7 @@ export interface OmniboxFacade {
 }
 
 const SEARCH_LIMIT = 8
-const OPAQUE_PREFIX = "bbb:"
+const OPAQUE_PREFIX = "bookmarks-but-better:"
 const API_BASE = "/api/v1"
 
 export function escapeSuggestionDescription(value: string): string {

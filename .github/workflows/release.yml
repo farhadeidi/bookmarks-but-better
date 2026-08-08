@@ -140,7 +140,8 @@ jobs:
           failed=0
           note() { echo "::error::$*"; failed=1; }
 
-          for pair in "package.json:$pkg" "manifest.chrome.json:$chrome" \
+          for pair in "package.json:$pkg" \
+                      "manifest.chrome.json:$chrome" \
                       "manifest.firefox.json:$firefox" "Cargo.toml:$cargo"; do
             file="${pair%%:*}"; value="${pair#*:}"
             if [ "$value" != "$base" ]; then
@@ -160,11 +161,11 @@ jobs:
 
           # The internal constraint and the lockfile are the two places a Cargo
           # version bump is normally forgotten.
-          if ! grep -qF "bbb-vault-core = { path = \"../bbb-vault-core\", version = \"$base\" }" \
-                 crates/bbb/Cargo.toml; then
-            note "crates/bbb/Cargo.toml does not constrain bbb-vault-core to '$base'."
+          if ! grep -qF "bookmarks-but-better-vault-core = { path = \"../bookmarks-but-better-vault-core\", version = \"$base\" }" \
+                 crates/bookmarks-but-better/Cargo.toml; then
+            note "crates/bookmarks-but-better/Cargo.toml does not constrain bookmarks-but-better-vault-core to '$base'."
           fi
-          for crate in bbb bbb-vault-core; do
+          for crate in bookmarks-but-better bookmarks-but-better-vault-core; do
             locked=$(awk -v c="$crate" '
               $0 == "name = \"" c "\"" { getline; gsub(/[",]/, "", $3); print $3; exit }
             ' Cargo.lock)
@@ -299,29 +300,75 @@ jobs:
           retention-days: 7
 
   # --------------------------------------------------------------------------
+  # 3b. The installers themselves, as release assets.
+  # --------------------------------------------------------------------------
+  #
+  # `install.sh` and `install.ps1` are attached to every release under those
+  # exact names, each with a `.sha256` sidecar. Two things depend on that and
+  # on nothing else:
+  #
+  #   - the documented copy-and-paste command, which fetches
+  #     `/releases/latest/download/install.sh` rather than a branch, so what
+  #     runs is the script that was released alongside the archives it installs
+  #     — not whatever `main` happens to hold;
+  #   - `npx bookmarks-but-better@latest`, which downloads the installer for
+  #     the platform it is on, verifies it against the sidecar, and runs it.
+  #
+  # A fixed name is the whole point: unlike the daemon archives, these two are
+  # resolved before any version is known.
+  installers:
+    name: Package the installers
+    needs: [validate, checks]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Stage the installers and their checksums
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          cp install.sh install.ps1 artifacts/
+          cd artifacts
+          for file in install.sh install.ps1; do
+            sha256sum "$file" > "$file.sha256"
+          done
+          sha256sum --check ./*.sha256
+
+      - name: Upload the installers
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: release-installers
+          path: artifacts/
+          if-no-files-found: error
+          retention-days: 7
+
+  # --------------------------------------------------------------------------
   # 4. The daemon, once per supported platform.
   # --------------------------------------------------------------------------
   #
-  # The daemon does not compile the UI into the binary: `crates/bbb/src/ui.rs`
-  # serves it from a sandboxed `--ui-dir` handle chosen at run time, which is
-  # what lets the UI be replaced without a rebuild and what keeps the symlink
-  # refusal enforceable. "Embedding" it therefore means shipping it *in the
-  # archive*, next to the binary, so the downloaded artifact is self-contained:
+  # The daemon does not compile the UI into the binary:
+  # `crates/bookmarks-but-better/src/ui.rs` serves it from a sandboxed
+  # `--ui-dir` handle chosen at run time, which is what lets the UI be replaced
+  # without a rebuild and what keeps the symlink refusal enforceable.
+  # "Embedding" it therefore means shipping it *in the archive*, next to the
+  # binary, so the downloaded artifact is self-contained:
   #
-  #     bbb-<version>-<target>/
-  #       bbb[.exe]      the daemon, HTTP API and CLI
-  #       ui/            the built web UI — pass it as --ui-dir
-  #       README.md      crates/bbb/README.md
+  #     bookmarks-but-better-<version>-<target>/
+  #       bookmarks-but-better[.exe]   the daemon, HTTP API and CLI
+  #       ui/                          the built web UI — pass it as --ui-dir
+  #       README.md                    crates/bookmarks-but-better/README.md
   #       LICENSE
   #
-  #     ./bbb serve --vault <path> --ui-dir ./ui
+  #     ./bookmarks-but-better serve --vault <path> --ui-dir ./ui
   #
   # Correctness is not established here: `checks` already ran the full Rust
   # suite natively on Linux, macOS and Windows. These jobs only produce release
   # binaries, which is why the cross-compiled aarch64 targets are build-only —
   # an x86_64 runner cannot execute them.
   daemon:
-    name: Build bbb for ${{ matrix.target }}
+    name: Build bookmarks-but-better for ${{ matrix.target }}
     needs: [validate, checks, web]
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 45
@@ -389,7 +436,11 @@ jobs:
           key: ${{ matrix.target }}
 
       - name: Build the daemon
-        run: cargo build --release --locked --package bbb --bin bbb --target "${{ matrix.target }}"
+        run: |
+          cargo build --release --locked \
+            --package bookmarks-but-better \
+            --bin bookmarks-but-better \
+            --target "${{ matrix.target }}"
 
       - name: Download the daemon UI
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
@@ -404,14 +455,16 @@ jobs:
           TARGET: ${{ matrix.target }}
         run: |
           set -euo pipefail
-          name="bbb-$VERSION-$TARGET"
-          binary="bbb"
-          if [ "$TARGET" = "x86_64-pc-windows-msvc" ]; then binary="bbb.exe"; fi
+          name="bookmarks-but-better-$VERSION-$TARGET"
+          binary="bookmarks-but-better"
+          if [ "$TARGET" = "x86_64-pc-windows-msvc" ]; then
+            binary="bookmarks-but-better.exe"
+          fi
 
           mkdir -p "staging/$name"
           cp "target/$TARGET/release/$binary" "staging/$name/$binary"
           cp -R daemon-ui "staging/$name/ui"
-          cp crates/bbb/README.md "staging/$name/README.md"
+          cp crates/bookmarks-but-better/README.md "staging/$name/README.md"
           cp LICENSE "staging/$name/LICENSE"
 
           # A daemon with no index.html to serve starts and then refuses the UI
@@ -460,7 +513,7 @@ jobs:
   # --------------------------------------------------------------------------
   github-release:
     name: Publish the GitHub release
-    needs: [validate, web, daemon]
+    needs: [validate, web, installers, daemon]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -517,15 +570,43 @@ jobs:
           NOTE
             fi
 
-            cat <<'NOTE'
+            cat <<NOTE
 
           ### The daemon
+
+          #### Install it
+
+          Every command below downloads from **this release** and verifies the
+          published SHA-256 before installing anything.
+
+          \`\`\`sh
+          # macOS / Linux
+          curl -fsSL https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/install.sh | bash
+          \`\`\`
+
+          \`\`\`powershell
+          # Windows
+          iwr -useb https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/install.ps1 -OutFile install.ps1; ./install.ps1
+          \`\`\`
+
+          \`\`\`sh
+          # Any platform, if you have Node.js
+          npx bookmarks-but-better@latest --version ${TAG}
+          \`\`\`
+
+          Drop the \`/download/${TAG}/\` part for \`/latest/download/\` to always
+          get the newest stable release instead of this one.
+
+          NOTE
+
+            cat <<'NOTE'
+          #### Or unpack it yourself
 
           Download the archive for your platform, verify it against its
           `.sha256`, unpack it, and run:
 
           ```sh
-          ./bbb serve --vault <path-to-your-vault> --ui-dir ./ui
+          ./bookmarks-but-better serve --vault <path-to-your-vault> --ui-dir ./ui
           ```
 
           The `ui/` directory in the archive is the built web UI; `--ui-dir` is
@@ -537,7 +618,7 @@ jobs:
           Authenticode signature, so Gatekeeper and SmartScreen will both object.
           Verify the `.sha256` first, then:
 
-          - **macOS** — `xattr -d com.apple.quarantine ./bbb`
+          - **macOS** — `xattr -d com.apple.quarantine ./bookmarks-but-better`
           - **Windows** — *More info* → *Run anyway* on the SmartScreen prompt
 
           Linux is unaffected.

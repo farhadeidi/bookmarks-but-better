@@ -15,7 +15,7 @@ interface NodeMeta {
 }
 
 /**
- * A directory the vault can see but cannot name: no `.bbb-folder.md`, so the
+ * A directory the vault can see but cannot name: no `.bookmarks-but-better-folder.md`, so the
  * daemon serves it under a synthetic `!path` id. It has no identity an order
  * file could record, so it is excluded from every child order — the daemon
  * refuses a payload that mentions one (400) just as firmly as one that counts

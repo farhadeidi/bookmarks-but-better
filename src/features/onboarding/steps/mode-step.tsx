@@ -64,9 +64,9 @@ export function ModeStep({ value, onChange }: ModeStepProps) {
             />
             <span className="font-medium">Daemon</span>
             <span className="text-xs text-muted-foreground">
-              Bookmarks live in a local <code>bbb</code> daemon vault, shared
-              across browsers and profiles on this machine. Requires installing
-              the daemon.
+              Bookmarks live in a local <code>bookmarks-but-better</code> daemon
+              vault, shared across browsers and profiles on this machine.
+              Requires installing the daemon.
             </span>
           </button>
         )}

@@ -1,4 +1,4 @@
-Bookmarks - But Better replaces your new tab page with a clean, organized bookmarks dashboard that puts your favorite sites front and center.
+Bookmarks But Better replaces your new tab page with a clean, organized bookmarks dashboard that puts your favorite sites front and center.
 
 Every time you open a new tab, instead of an empty page or a search bar, you see your bookmarks laid out in a beautiful masonry grid. No more digging through menus, no more forgetting what you saved. Your bookmarks are right there, exactly where you need them.
 

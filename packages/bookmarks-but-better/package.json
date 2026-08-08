@@ -1,0 +1,26 @@
+{
+  "name": "bookmarks-but-better",
+  "version": "0.1.0",
+  "description": "Installs the Bookmarks But Better daemon from its GitHub Release and runs setup.",
+  "keywords": ["bookmarks", "markdown", "daemon", "installer"],
+  "homepage": "https://bookmarks.farhadeidi.com",
+  "bugs": "https://github.com/farhadeidi/bookmarks-but-better/issues",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/farhadeidi/bookmarks-but-better.git",
+    "directory": "packages/bookmarks-but-better"
+  },
+  "license": "MIT",
+  "author": "Bookmarks But Better contributors",
+  "type": "module",
+  "bin": {
+    "bookmarks-but-better": "bin/bookmarks-but-better.mjs"
+  },
+  "files": ["bin", "lib", "README.md"],
+  "engines": {
+    "node": ">=18.17"
+  },
+  "scripts": {
+    "test": "node --test"
+  }
+}

@@ -13,7 +13,7 @@
  * The object store is shared with `StandaloneStorageAdapter`, which is where
  * ordinary UI preferences (`cardLayouts`, `colorTheme`, …) live and which
  * writes whatever key the UI asks it to. Daemon keys are therefore namespaced
- * under `bbb.daemon.`, a prefix no UI preference or bookmark id uses, so an
+ * under `bookmarks-but-better.daemon.`, a prefix no UI preference or bookmark id uses, so an
  * extension's connection settings cannot be shadowed by — or shadow — a
  * standalone preference that happens to be named similarly.
  */
@@ -30,7 +30,7 @@ const STORE_NAME = "preferences"
 export const ADAPTER_PREF_KEY = "adapterMode"
 
 /** Every key this module owns beyond the original `adapterMode` starts here. */
-const DAEMON_NAMESPACE = "bbb.daemon."
+const DAEMON_NAMESPACE = "bookmarks-but-better.daemon."
 const DAEMON_CONNECTION_KEY = `${DAEMON_NAMESPACE}connection`
 
 export type { AdapterMode, DaemonConnectionConfig }

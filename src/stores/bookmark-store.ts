@@ -14,7 +14,7 @@ export type BookmarkStoreStatus = "loading" | "ready" | "unavailable"
  * adapters' errors are plain `Error`s and fall through to the generic path.
  *
  * `code` is the daemon's stable `application/problem+json` code (see
- * `crates/bbb/src/problem.rs::ProblemCode` in the daemon repo) — switched on
+ * `crates/bookmarks-but-better/src/problem.rs::ProblemCode` in the daemon repo) — switched on
  * directly rather than on HTTP status, since several distinct codes share a
  * status (e.g. `stale_revision`, `folder_not_empty`, `ambiguous_id`, and
  * `subtree_changed` are all 409s with different meanings).

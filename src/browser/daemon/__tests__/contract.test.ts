@@ -47,7 +47,7 @@ const TREE_FIXTURE: DaemonTreeResponse = {
             {
               code: "invalid_id",
               severity: "error",
-              detail: "bbb_id is missing.",
+              detail: "bookmarks_but_better_id is missing.",
               path: "notes/Example--a1b2c3d4.md",
               line: 2,
             },
@@ -87,7 +87,7 @@ describe("daemon wire contract", () => {
     expect(fetchMock.mock.calls[0][0]).toBe("/api/v1/tree")
     expect(tree).toEqual(TREE_FIXTURE.tree)
     expect(tree[0].children?.[0].diagnostics?.[0].detail).toBe(
-      "bbb_id is missing."
+      "bookmarks_but_better_id is missing."
     )
   })
 

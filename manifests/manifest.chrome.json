@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "Bookmarks - But Better",
+  "name": "Bookmarks But Better",
   "description": "A clean, beautiful bookmarks dashboard for your new tab with themes, dark mode, and full bookmark management.",
   "version": "4.0.0",
   "chrome_url_overrides": {
@@ -15,7 +15,7 @@
     "type": "module"
   },
   "omnibox": {
-    "keyword": "bbb"
+    "keyword": "bookmarks-but-better"
   },
   "permissions": [
     "activeTab",
