@@ -7,99 +7,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
-
-- **Capture pages directly from Chrome and Firefox into a daemon vault.** The
-  extension action now opens a compact popup that saves the active page into a
-  writable vault folder, without mirroring or importing the browser's native
-  bookmark store
-- **Search daemon bookmarks from the browser address bar.** Type
-  `bookmarks-but-better`, press <kbd>Tab</kbd>, and enter a title or URL
-  fragment to see live suggestions; choosing one opens the current bookmark URL
-  with the browser's requested tab disposition
-- A bounded, case-insensitive `GET /api/v1/search` daemon endpoint for bookmark
-  titles and URLs, with deterministic ranking and opaque bookmark identifiers
-- **`npx bookmarks-but-better@latest` installs the daemon.** A published npm
-  package carrying no binaries: it downloads the installer for your platform
-  from the GitHub Release, verifies it against its published SHA-256, and runs
-  it, so the install it performs is as persistent as any other. Every installer
-  flag is forwarded, and `--version <tag>` pins the installer and the daemon to
-  the same release
-- **`install.sh` and `install.ps1` are release assets** under those exact names,
-  each with a `.sha256`. The documented command now fetches
-  `…/releases/latest/download/install.sh`, so what runs is the script published
-  alongside the archives it installs rather than whatever `main` holds
-
-### Fixed
-
-- **`install.sh` and `install.ps1` no longer fail out of the box.** Both default
-  to the latest *stable* release, and every stable release before this one is an
-  extension-only one carrying no daemon archive — so the documented
-  copy-and-paste command ended in `release v3.2.0 has no asset named
-  bookmarks-but-better-…` and installed nothing. Each now reports that and falls
-  back to the newest prerelease that does have a build for the platform. The
-  fallback needs no undoing later: a stable release shipping daemon archives is
-  resolved and installed normally
-- **`install.sh` can finish `bookmarks-but-better setup` under `curl … | bash`.**
-  Standard input there is the pipe the script itself arrived on, already read to
-  the end, so setup was handed an immediate EOF and died on its first question.
-  It is now run against the terminal, and where there is no terminal at all the
-  install completes and says to run `bookmarks-but-better setup` by hand
-
-### Changed
-
-- **Everything the project ships is named `bookmarks-but-better`.** The
-  executable, the crates, the release archives, the install directories and the
-  environment prefix (`BOOKMARKS_BUT_BETTER_*`) all use the full name; the
-  omnibox keyword is now `bookmarks-but-better`. This is a breaking change with
-  no aliases and no migration: an existing pre-release install has to be
-  reinstalled, and any vault created by an earlier beta has to be recreated or
-  updated manually to use the renamed metadata and control files
-- **The npm launcher has its own version lifecycle.** Its initial version is
-  `0.1.0`; future versions track changes to the bootstrapper itself rather than
-  mirroring daemon and extension releases
-- **`install.sh` needs no `jq`.** Both installers resolve a release from GitHub
-  Release URLs only — the `/releases/latest` redirect, the releases Atom feed
-  and `/releases/download/<tag>/<asset>` — instead of the GitHub JSON API, so
-  `curl`, `tar` and a SHA-256 tool are the whole toolchain
-
-- **The daemon's default port is now 52222** (was 47321). Several browsers on
-  one machine have to agree on where the daemon is without being told, so the
-  default moved to a port far less likely to collide. There is no compatibility
-  listener — the daemon binds one port — but an installation that was
-  *explicitly* configured on 47321 keeps working unchanged, and an explicit
-  `--port` is never replaced by the new default.
-
-## [4.0.0] - 2026-07-29
+## [4.0.0] - 2026-08-11
 
 ### Added
 
-- **Local-first daemon (`bookmarks-but-better`)** — a Rust daemon, HTTP API and CLI that serves a
-  Markdown vault, and optionally the built web UI, over loopback only. Ships as a
-  downloadable release archive for Linux (x86_64, aarch64), macOS (Intel, Apple
-  Silicon) and Windows (x86_64), each with a SHA-256 checksum and the built UI
-  bundled alongside the binary
-- `bookmarks-but-better init`, `doctor`, `rescan` and `serve` subcommands; every
-  one names its vault explicitly, with no path discovery and no configured
-  default
-- Canonical Markdown vault format (`bookmarks-but-better-vault-core`): parsing, validation,
-  deterministic scanning and byte-preserving updates, with stable identities that
-  survive moves, renames and restarts
+- **Local-first daemon (`bookmarks-but-better`)** — a Rust daemon, HTTP API and
+  CLI that serves a Markdown vault and, optionally, the web UI over loopback
+  only. Release archives cover Linux (x86_64 and aarch64), macOS (Intel and
+  Apple Silicon), and Windows (x86_64), each with a SHA-256 checksum
+- `bookmarks-but-better init`, `doctor`, `rescan`, `setup`, `serve` and
+  user-level service-management commands
+- Canonical Markdown vault format with deterministic scanning, byte-preserving
+  updates, stable identities, optimistic revisions and crash-safe recovery
 - Daemon-managed manual child ordering, so the organizer's drag-and-drop order
   persists in the vault
 - A daemon build target for the web UI (`bun run build:daemon`), served by the
   daemon from `--ui-dir`
-- Release pipeline: `v4.0.0-beta.N` tags produce a GitHub prerelease with
-  downloadable artifacts and never contact a store; stable `v4.0.0` tags produce a
-  normal release and gate store publishing behind a manually approved
-  `production-stores` environment
+- **Capture pages directly from Chrome and Firefox into a daemon vault** from a
+  compact extension popup, without importing the browser bookmark store
+- **Search daemon bookmarks from the address bar** with the
+  `bookmarks-but-better` omnibox keyword and deterministic title/URL ranking
+- **`npx bookmarks-but-better@latest` installs the daemon** through the same
+  checksum-verified release installers as the shell and PowerShell entry points
+- Release assets now include `install.sh` and `install.ps1`, their checksums,
+  both extension packages and five platform-specific daemon archives
+- Stable store publishing is gated by the manually approved
+  `production-stores` environment; beta tags never contact either store
 
 ### Fixed
 
-- Daemon mode now shows real site favicons instead of a generated letter placeholder for every bookmark
+- Existing v2/v3 users retain their completed setup state during upgrade, and
+  changing between Browser, Standalone and Daemon never reopens onboarding
+- Daemon mode now shows real site favicons instead of generated placeholders
+- Installers now fall back explicitly when a selected historical stable release
+  has no daemon archive, and piped shell installs correctly attach interactive
+  setup to the terminal
 
 ### Changed
 
+- Everything shipped by the project now uses the `bookmarks-but-better` name.
+  This only breaks pre-release daemon installations; released extension IDs and
+  user storage remain unchanged
+- The daemon's default port is now `52222`. An installation explicitly
+  configured on the previous `47321` default keeps that port
+- The npm launcher has an independent version lifecycle and ships no binaries
+- Installers resolve releases without `jq` or the GitHub JSON API
 - Daemon mode fetches favicons from Google's public favicon services. The primary
   provider (`t1.gstatic.com/faviconV2`) is the one every build already uses; the
   fallback is standalone's (`www.google.com/s2/favicons`), not the extension
@@ -211,7 +163,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Rewrote README for end users with screenshots and badges
 
-[4.0.0]: https://github.com/farhadeidi/bookmarks-but-better/compare/v3.2.0...v4.0.0
+[4.0.0]: https://github.com/farhadeidi/bookmarks-but-better/compare/v3.2.1...v4.0.0
 [3.2.0]: https://github.com/farhadeidi/bookmarks-but-better/compare/v3.1.0...v3.2.0
 [3.1.0]: https://github.com/farhadeidi/bookmarks-but-better/compare/v3.0.0...v3.1.0
 [3.0.0]: https://github.com/farhadeidi/bookmarks-but-better/compare/v2.1.0...v3.0.0

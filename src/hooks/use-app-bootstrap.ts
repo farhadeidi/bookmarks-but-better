@@ -4,6 +4,10 @@ import { useBookmarkStore } from "@/stores/bookmark-store"
 import { usePreferencesStore } from "@/stores/preferences-store"
 import { useUIStore } from "@/stores/ui-store"
 import { getScreenshotMode } from "@/hooks/use-screenshot-mode"
+import {
+  getOnboardingCompleted,
+  setOnboardingCompleted,
+} from "@/browser/onboarding-preference"
 
 /**
  * Detects the active adapter and initializes the bookmark and preferences
@@ -41,9 +45,21 @@ export function useAppBootstrap() {
       if (screenshotMode === "onboarding") {
         openOnboarding()
       } else if (!screenshotMode) {
-        const onboardingCompleted = await adapter.storage.get<boolean>(
-          "onboardingCompleted"
-        )
+        let onboardingCompleted = await getOnboardingCompleted()
+
+        // v2-v3 stored this flag behind the active adapter. Import a completed
+        // setup into the adapter-independent key once, so changing bookmark
+        // sources in v4 can never make an established user look new again.
+        if (onboardingCompleted === null) {
+          const legacyCompleted = await adapter.storage.get<boolean>(
+            "onboardingCompleted"
+          )
+          onboardingCompleted = legacyCompleted === true
+          if (onboardingCompleted) {
+            await setOnboardingCompleted(true)
+          }
+        }
+
         if (!cancelled && !onboardingCompleted) {
           openOnboarding()
         }

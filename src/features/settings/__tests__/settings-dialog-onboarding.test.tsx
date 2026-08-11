@@ -7,6 +7,7 @@ import { useUIStore } from "@/stores/ui-store"
 import { usePreferencesStore } from "@/stores/preferences-store"
 import { useBookmarkStore } from "@/stores/bookmark-store"
 import { SettingsDialog } from "../settings-dialog"
+import { getOnboardingCompleted } from "@/browser/onboarding-preference"
 
 class StubResizeObserver {
   observe() {}
@@ -58,6 +59,9 @@ describe("SettingsDialog setup wizard", () => {
     fireEvent.click(screen.getByRole("button", { name: "Show setup wizard" }))
 
     expect(storageSet).toHaveBeenCalledWith("onboardingCompleted", false)
+    await vi.waitFor(async () => {
+      expect(await getOnboardingCompleted()).toBe(false)
+    })
     await vi.waitFor(() => {
       expect(useUIStore.getState().settingsOpen).toBe(false)
       expect(useUIStore.getState().onboardingOpen).toBe(true)

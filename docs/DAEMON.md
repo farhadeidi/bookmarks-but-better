@@ -37,10 +37,13 @@ builtin option, and `/bin/sh` is dash on Debian and Ubuntu.
 
 ### Choosing a release
 
-Each installer resolves the latest **stable** release by default. Every stable
-release up to and including `v3.2.0` was extension-only and carried no daemon
-build; when the resolved release has no build for your platform, each reports
-that and falls back to the newest prerelease that does:
+Each installer resolves the latest **stable** release by default. Version 4 is
+the first stable release that carries daemon builds, so a normal install now
+resolves the stable archive directly.
+
+For historical or pinned extension-only releases up to `v3.2.0`, the installer
+reports the missing daemon asset and falls back to the newest prerelease that
+does carry a build. The fallback is explicit, never silent:
 
 ```
 resolving the latest stable release
@@ -49,8 +52,8 @@ falling back to the latest prerelease — pass --version <tag> to pin a specific
 installing v4.0.0-beta.2 (version 4.0.0-beta.2)
 ```
 
-The fallback is announced, never silent, and it is not reached at all once the
-resolved stable release carries daemon archives.
+The fallback is not reached for v4 or later stable releases that carry daemon
+archives.
 
 To choose explicitly rather than rely on the fallback:
 
