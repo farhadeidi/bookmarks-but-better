@@ -1,68 +1,51 @@
-Bookmarks But Better replaces your new tab page with a clean, organized bookmarks dashboard that puts your favorite sites front and center.
+Bookmarks But Better replaces your new tab page with a clean, organized dashboard for the bookmarks you already have. It can also be set as your Firefox homepage.
 
-Every time you open a new tab, instead of an empty page or a search bar, you see your bookmarks laid out in a beautiful masonry grid. No more digging through menus, no more forgetting what you saved. Your bookmarks are right there, exactly where you need them.
+Open a new tab and see your folders in a responsive masonry layout instead of digging through browser menus. There is no account, no advertising, no analytics and no tracking.
 
-🆕 What's new in v3.1.0:
-- Bookmark Organizer: a full tree editor to drag, reorder, rename, create, and delete bookmarks and folders in one place
-- Create subfolders and bookmarks directly inside any folder from the tree or the folder card menu
-- Expand All / Collapse All and a Folders Only toggle to focus on structure
-- Cleaner toolbar with a frosted background so footer actions always stay visible
+WHAT'S NEW IN VERSION 4
 
-💡 Why you'll love it:
-Your browser already has your bookmarks. You already organized them into folders. But the default bookmark experience buries them behind menus and clicks. This extension takes what you already have and presents it beautifully. There's nothing to set up, no account to create, no data to import. Install it, open a new tab, and your bookmarks are already there.
+- Optional local-first Markdown vault powered by the Bookmarks But Better daemon
+- Save the active page from the extension popup when connected to a daemon vault
+- Search daemon bookmarks from the address bar: type “bookmarks-but-better”, press Tab, then search by title or URL
+- Import and export standard browser bookmark HTML files
+- Improved setup flow that preserves completed setup and existing preferences during upgrades
+- Reliable bookmark-root recovery when a previously selected folder was deleted
 
-✨ Features:
-- Drag and drop: reorder bookmarks within a folder or move them between folders by simply dragging and dropping
-- Bookmark Organizer: a dedicated tree editor to drag-and-drop reorder, rename, create, and delete bookmarks and folders across your entire library in one sheet
-- Folder management: create new folders, rename them, delete them, and rearrange folder tabs with drag-and-drop ordering
-- Masonry layout: your bookmark folders are displayed as cards in a responsive, Pinterest-style grid that adapts to your screen size
-- Two view modes per folder: switch between a detailed list view with titles and favicons, or a compact icon grid for folders you know by heart
-- Beautiful themes: choose from 10 handcrafted color themes including Default, Amber, Bubblegum, Caffeine, Claude, Claymorphism, Cyberpunk, Solar Dusk, T3 Chat, and Vintage Paper
-- Light and dark mode: follows your system preference automatically, or toggle manually with a single click. Press D on your keyboard to switch instantly
-- Edit everything inline: rename bookmarks, change URLs, create new bookmarks, and manage folders without ever leaving the page
-- Choose your root folder: pick any bookmark folder as your starting point. Only want to see your work bookmarks? Or just your personal ones? Set it in seconds
-- Import and export: bring bookmarks in or take them out using the standard HTML bookmark format that every browser understands
-- High-quality favicons: every bookmark gets a sharp, recognizable icon, even on high-resolution displays
-- Always in sync: every change you make is saved directly to your browser bookmarks. Edit a bookmark here and it updates everywhere
+FEATURES
 
-🔒 Built for privacy:
-This extension was built with a simple principle: your bookmarks are yours. There is no data collection. No analytics. No tracking. No ads. No account required. All your data stays in your browser using your browser's built-in bookmarks and storage APIs. The only external request the extension makes is fetching website icons from Google's public favicon service.
+- Responsive masonry dashboard
+- Full Bookmark Organizer tree editor
+- Drag bookmarks between folders and reorder them
+- Create, rename and delete bookmarks and folders
+- List and icon-grid views per folder
+- Choose any folder as the dashboard root
+- Ten color themes plus light, dark and system modes
+- High-quality favicons with a clean letter fallback
+- Browser, standalone and optional daemon bookmark sources
+- Standard HTML import and export
 
-Your bookmarks deserve better than a dropdown menu. Give them a home.
+UPGRADING
 
-📋 Changelog:
+Version 4 upgrades in place. Existing users keep their root folder, layouts, themes and completed setup state. The setup wizard is shown again only when requested from Settings.
 
-v3.1.0 — Bookmark Organizer
-- Full tree editor: drag-and-drop reorder, rename, create, and delete bookmarks and folders
-- Per-folder create actions: add a subfolder or bookmark directly inside any folder
-- Expand All / Collapse All and Folders Only toggle
-- New Bookmark option in folder card context menu
-- Frosted FAB toolbar background for better visibility
+PRIVACY
 
-v3.0.0 — Drag & Drop, Folder Management, and Performance
-- Drag-and-drop bookmark sorting within and across folders
-- Folder order dialog for rearranging folder tabs
-- Create folder button
-- Performance: memoized components, lazy-loaded dialogs, eliminated double-refresh
-- Fixed bookmark links opening in new tab, drop indicator duplication, native drag interference
+Bookmarks But Better has no account system, analytics, tracking, ads or bookmark-content collection. Browser mode reads and updates bookmarks through Firefox's built-in APIs. Preferences remain local to the browser profile.
 
-v2.1.0 — Folder Actions and Layout Settings
-- Folder actions: rename, delete, and reorder folders
-- Layout settings for customizing bookmark grid columns
+Bookmark origins are sent to Google's public favicon service to retrieve icons; URL paths are not sent. Daemon mode is optional, binds to localhost only and is contacted only after the user explicitly connects it.
 
-v2.0.0 — Public Release
-- First-run onboarding wizard with theme selection
-- Curated seed bookmarks for new users
-- Google Favicon V2 for higher quality icons
-- 10 handcrafted color themes
-- Import and export bookmarks
+PERMISSION JUSTIFICATIONS
 
-🔑 Permission justifications:
+activeTab: Reads the active tab's title and URL only when the user opens the extension popup to save that page.
 
-bookmarks: Core functionality. The extension reads and displays your bookmarks on the new tab page. It also allows you to create, edit, and delete bookmarks directly from the dashboard.
+bookmarks: Displays and manages the user's Firefox bookmark tree.
 
-storage: Used to save your preferences such as selected root folder, color theme, card layout mode, and onboarding completion status. All data is stored locally in your browser using the browser's built-in storage API.
+storage: Saves local preferences, the selected root folder and completed setup state.
 
-Host permissions:
+HOST PERMISSIONS
 
-https://t1.gstatic.com/*: Used to fetch high-quality favicons from Google's Favicon V2 service. This is the sole source for bookmark icons displayed in the dashboard.
+https://t1.gstatic.com/*: Google Favicon V2 provider.
+
+OPTIONAL HOST PERMISSIONS
+
+http://127.0.0.1/* and http://localhost/*: Requested only when the user connects the extension to their optional local daemon. They are not granted during installation.

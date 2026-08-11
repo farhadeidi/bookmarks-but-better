@@ -1,17 +1,25 @@
 // @vitest-environment jsdom
 
 import * as React from "react"
-import { afterEach, describe, expect, it, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { render, waitFor, cleanup } from "@testing-library/react"
 import { useAppBootstrap } from "./use-app-bootstrap"
 import { useBookmarkStore } from "@/stores/bookmark-store"
+import { useUIStore } from "@/stores/ui-store"
+import { installFakeIndexedDB } from "@/browser/__tests__/fake-indexeddb"
+import {
+  getOnboardingCompleted,
+  setOnboardingCompleted,
+} from "@/browser/onboarding-preference"
 import type { BrowserAdapter } from "@/browser"
 
 vi.mock("@/browser", () => ({
   detectAdapter: vi.fn(),
 }))
 
-function createMockAdapter() {
+installFakeIndexedDB()
+
+function createMockAdapter(legacyOnboardingCompleted: boolean | null = null) {
   const listeners = {
     changed: new Set<() => void>(),
     created: new Set<() => void>(),
@@ -47,7 +55,13 @@ function createMockAdapter() {
       openInManager: vi.fn(),
     },
     storage: {
-      get: vi.fn().mockResolvedValue(null),
+      get: vi
+        .fn()
+        .mockImplementation((key: string) =>
+          Promise.resolve(
+            key === "onboardingCompleted" ? legacyOnboardingCompleted : null
+          )
+        ),
       set: vi.fn().mockResolvedValue(undefined),
       remove: vi.fn().mockResolvedValue(undefined),
     },
@@ -82,12 +96,61 @@ function Harness() {
   return null
 }
 
+beforeEach(() => {
+  installFakeIndexedDB()
+  useUIStore.setState({ onboardingOpen: false })
+})
+
 afterEach(() => {
   cleanup()
   vi.restoreAllMocks()
+  installFakeIndexedDB()
 })
 
 describe("useAppBootstrap", () => {
+  it("migrates a completed v2-v3 setup and does not reopen onboarding", async () => {
+    const { adapter } = createMockAdapter(true)
+    const { detectAdapter } = await import("@/browser")
+    vi.mocked(detectAdapter).mockResolvedValue(adapter)
+
+    render(<Harness />)
+
+    await waitFor(() => {
+      expect(adapter.storage.get).toHaveBeenCalledWith("onboardingCompleted")
+    })
+    await waitFor(async () => {
+      expect(await getOnboardingCompleted()).toBe(true)
+    })
+    expect(useUIStore.getState().onboardingOpen).toBe(false)
+  })
+
+  it("keeps onboarding closed after the adapter changes", async () => {
+    await setOnboardingCompleted(true)
+    const { adapter } = createMockAdapter(null)
+    const { detectAdapter } = await import("@/browser")
+    vi.mocked(detectAdapter).mockResolvedValue(adapter)
+
+    render(<Harness />)
+
+    await waitFor(() => {
+      expect(useBookmarkStore.getState().isLoading).toBe(false)
+    })
+    expect(adapter.storage.get).not.toHaveBeenCalledWith("onboardingCompleted")
+    expect(useUIStore.getState().onboardingOpen).toBe(false)
+  })
+
+  it("opens onboarding for a genuinely fresh profile", async () => {
+    const { adapter } = createMockAdapter(null)
+    const { detectAdapter } = await import("@/browser")
+    vi.mocked(detectAdapter).mockResolvedValue(adapter)
+
+    render(<Harness />)
+
+    await waitFor(() => {
+      expect(useUIStore.getState().onboardingOpen).toBe(true)
+    })
+  })
+
   it("unsubscribes all bookmark listeners on unmount, including under StrictMode double-invoke", async () => {
     const { adapter, listeners } = createMockAdapter()
     const { detectAdapter } = await import("@/browser")

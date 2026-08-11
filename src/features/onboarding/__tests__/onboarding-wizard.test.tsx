@@ -8,6 +8,7 @@ import { ThemeProvider } from "@/components/theme-provider"
 import { usePreferencesStore } from "@/stores/preferences-store"
 import { useBookmarkStore } from "@/stores/bookmark-store"
 import { OnboardingWizard } from "../onboarding-wizard"
+import { getOnboardingCompleted } from "@/browser/onboarding-preference"
 
 class StubResizeObserver {
   observe() {}
@@ -157,6 +158,9 @@ describe("OnboardingWizard mode step", () => {
       expect(
         usePreferencesStore.getState().setAdapterMode
       ).toHaveBeenCalledWith("browser")
+    })
+    await waitFor(async () => {
+      expect(await getOnboardingCompleted()).toBe(true)
     })
   })
 })

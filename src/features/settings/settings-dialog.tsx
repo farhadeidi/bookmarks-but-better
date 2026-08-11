@@ -52,6 +52,7 @@ import {
 } from "./export-scope"
 import { DaemonConnectionPanel } from "./daemon-connection-panel"
 import type { BookmarkNode } from "@/browser"
+import { setOnboardingCompleted } from "@/browser/onboarding-preference"
 
 /** A parsed file waiting for the user to confirm where it should land. */
 interface PendingImport {
@@ -145,7 +146,10 @@ export function SettingsDialog() {
   }
 
   const handleShowOnboarding = async () => {
-    await adapter?.storage.set("onboardingCompleted", false)
+    await Promise.all([
+      setOnboardingCompleted(false),
+      adapter?.storage.set("onboardingCompleted", false),
+    ])
     closeSettings()
     openOnboarding()
   }

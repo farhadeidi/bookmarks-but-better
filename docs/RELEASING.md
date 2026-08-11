@@ -73,6 +73,20 @@ manifests. That is fine, because no store ever sees them.
 
 ## Cutting the stable release
 
+Before creating the stable tag:
+
+1. Install the unpacked Chrome and Firefox builds over profiles that have
+   completed setup on v3.2.1. Confirm the dashboard opens directly, the selected
+   root and appearance are unchanged, and the setup wizard is not shown.
+2. In a fresh profile, complete setup once in each bookmark-source mode. Restart
+   the extension and confirm setup stays closed. Then switch sources and repeat.
+3. Review `marketing/store-description.chrome.txt` and
+   `marketing/store-description.firefox.txt` against the final manifests,
+   especially permission and privacy disclosures.
+4. Confirm the store screenshots and promotional assets show the current v4 UI.
+5. Run `bun run check` and confirm the latest CI run is green on Linux, macOS
+   and Windows.
+
 ```sh
 git tag v4.0.0
 git push origin v4.0.0

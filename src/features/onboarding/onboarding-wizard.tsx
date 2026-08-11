@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { resolveEffectiveCreateParentId } from "@/features/root-folder-select"
 import type { AdapterMode } from "@/browser/types"
+import { setOnboardingCompleted } from "@/browser/onboarding-preference"
 
 type ThemeMode = "light" | "dark" | "system"
 
@@ -166,8 +167,12 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
     setStoreColorTheme(colorTheme)
     setTheme(themeMode)
 
-    // Set onboarding completed flag
-    await adapter?.storage.set("onboardingCompleted", true)
+    // The global value survives adapter changes. Keep the legacy adapter value
+    // too so a downgrade to v3 does not show onboarding again.
+    await Promise.all([
+      setOnboardingCompleted(true),
+      adapter?.storage.set("onboardingCompleted", true),
+    ])
 
     onComplete()
   }
@@ -180,7 +185,10 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
     setStoreColorTheme("default")
     setTheme("dark")
 
-    await adapter?.storage.set("onboardingCompleted", true)
+    await Promise.all([
+      setOnboardingCompleted(true),
+      adapter?.storage.set("onboardingCompleted", true),
+    ])
 
     onComplete()
   }

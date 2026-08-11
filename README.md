@@ -6,7 +6,7 @@
   </picture>
 </p>
 
-<h1 align="center">Bookmarks - But Better</h1>
+<h1 align="center">Bookmarks But Better</h1>
 
 <p align="center">
   A clean, beautiful bookmarks dashboard that replaces your new tab page.
@@ -35,8 +35,14 @@
 - **Choose your root folder** — Display bookmarks from any folder
 - **Import and export** — Standard HTML bookmark files
 - **Smart favicons** — Sharp, high-quality site icons with a clean letter fallback when a site has none
-- **Always in sync** — Changes saved directly to your browser bookmarks
-- **100% private** — No analytics, no tracking, no data leaves your browser
+- **Quick capture** — Save the active tab from the extension popup
+- **Address-bar search** — Search a connected daemon vault with the `bookmarks-but-better` omnibox keyword
+- **Three bookmark sources** — Browser bookmarks, a browser-local standalone collection, or an optional Markdown vault daemon
+- **Private by design** — No account, analytics, tracking, ads, or bookmark-content collection
+
+Existing extension users upgrade in place. Version 4 preserves their selected
+root folder, layouts, themes and completed setup state; the setup wizard is not
+shown again unless they explicitly choose **Show setup wizard** in Settings.
 
 ## Install
 
@@ -85,6 +91,9 @@ npx bookmarks-but-better@latest
 All three install the same thing, from the same GitHub Release, checksum-verified.
 See [docs/DAEMON.md](docs/DAEMON.md) for what the install scripts do, and how to
 point the extension at the daemon.
+
+The daemon binds to loopback only. Connecting from the extension requests
+optional localhost access at that moment, not during extension installation.
 
 ## Screenshots
 
