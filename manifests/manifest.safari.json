@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Bookmarks But Better",
   "description": "A clean, beautiful bookmarks dashboard backed by a local daemon, with themes, dark mode, and full bookmark management.",
-  "version": "4.0.0",
+  "version": "4.1.0",
   "action": {
     "default_popup": "popup.html",
     "default_title": "Save bookmark"

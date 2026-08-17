@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.1.0] - 2026-08-17
+
 ### Added
 
 - **Source Configuration** — enabled sources plus one Active Source per browser
@@ -32,9 +34,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`bun run build:safari`) whose manifest omits the bookmarks API, omnibox and
   new-tab override Safari does not provide; product code branches on
   capabilities, not browser names
-- **Categorized settings** — General, Sources, Appearance, Bookmarks,
-  Data & Migration, Advanced and About, as vertical tabs on wide screens and a
-  compact selector on narrow ones
+- **Categorized settings** — General, Sources, Appearance, Data & Migration,
+  Advanced and About, as vertical tabs on wide screens and a compact selector
+  on narrow ones. Browser-specific bookmark options live inside the Browser
+  Source section rather than appearing for Daemon Sources
+- **Profile-local source labels and Vault controls** — rename source labels,
+  refresh a daemon's Vault list, enable sources independently, and forget a
+  connection without conflating those actions
 - **Dev Workbench** — `bun run dev` opens the complete application in a plain
   browser, no extension and no daemon required, against deterministic
   URL-addressable scenarios (`browser-daemon` by default, plus
@@ -60,6 +66,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Profile-wide preferences (theme, layout width, nested folders) now survive
   source switches unchanged; per-folder layouts and the root folder remain
   scoped to their source
+- The dashboard source switcher follows the active theme, has responsive
+  spacing, and bookmark cards use the full available width on mobile
+- The floating action toolbar now contains only Bookmark Tree and Settings;
+  appearance and product information remain available inside Settings
+
+### Fixed
+
+- Daemon discovery now keeps Source Configuration and the live Source Session
+  synchronized when an Active Vault disappears or changes protocol, without
+  restarting for a display-label-only rename
+- Daemon-only onboarding starts with the Daemon Source selected, so Safari
+  users cannot skip the required connection step
+- Dev Workbench Reset clears source preferences as well as bookmark trees and
+  rejects late writes from the previous scenario
+- Development seed scenarios now use the complete bookmark fixture and load
+  real favicons with the same fallback behavior as production
 
 ## [4.0.0] - 2026-08-11
 
@@ -217,6 +239,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Rewrote README for end users with screenshots and badges
 
+[4.1.0]: https://github.com/farhadeidi/bookmarks-but-better/compare/v4.0.0...v4.1.0
 [4.0.0]: https://github.com/farhadeidi/bookmarks-but-better/compare/v3.2.1...v4.0.0
 [3.2.0]: https://github.com/farhadeidi/bookmarks-but-better/compare/v3.1.0...v3.2.0
 [3.1.0]: https://github.com/farhadeidi/bookmarks-but-better/compare/v3.0.0...v3.1.0
