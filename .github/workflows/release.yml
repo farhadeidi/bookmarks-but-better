@@ -2,13 +2,13 @@ name: Release
 
 # What a tag does — and nothing else does it.
 #
-#   git push origin v4.0.0-beta.1
+#   git push origin v4.1.0-beta.1
 #       Builds and tests every deliverable, then publishes a GitHub
-#       *prerelease* carrying the Chrome zip, the Firefox zip and a daemon
-#       archive for each supported platform. No store is contacted. There is no
-#       approval to give, because there is no job to approve.
+#       *prerelease* carrying the Chrome, Firefox and Safari zips plus a daemon
+#       archive for each supported platform. No store is contacted. There is
+#       no approval to give, because there is no job to approve.
 #
-#   git push origin v4.0.0
+#   git push origin v4.1.0
 #       The same build and the same tests, published as a normal GitHub
 #       Release. Only then does `publish-stores` become available, and it waits
 #       on the `production-stores` environment — a human has to approve the
@@ -116,8 +116,8 @@ jobs:
             exit 1
           fi
 
-          version="${REF_NAME#v}"     # 4.0.0        or 4.0.0-beta.1
-          base="${version%%-*}"       # 4.0.0        either way
+          version="${REF_NAME#v}"     # 4.1.0        or 4.1.0-beta.1
+          base="${version%%-*}"       # 4.1.0        either way
           if [ "$version" = "$base" ]; then prerelease=false; else prerelease=true; fi
 
           # Every version file carries the *base* version. A browser manifest
@@ -130,6 +130,7 @@ jobs:
           pkg=$(jq -r '.version' package.json)
           chrome=$(jq -r '.version' manifests/manifest.chrome.json)
           firefox=$(jq -r '.version' manifests/manifest.firefox.json)
+          safari=$(jq -r '.version' manifests/manifest.safari.json)
           cargo=$(awk '
             /^\[workspace\.package\]/ { in_section = 1; next }
             /^\[/                     { in_section = 0 }
@@ -142,7 +143,8 @@ jobs:
 
           for pair in "package.json:$pkg" \
                       "manifest.chrome.json:$chrome" \
-                      "manifest.firefox.json:$firefox" "Cargo.toml:$cargo"; do
+                      "manifest.firefox.json:$firefox" \
+                      "manifest.safari.json:$safari" "Cargo.toml:$cargo"; do
             file="${pair%%:*}"; value="${pair#*:}"
             if [ "$value" != "$base" ]; then
               note "$file says '$value' but tag $REF_NAME means '$base'."
@@ -151,7 +153,9 @@ jobs:
 
           # A manifest that ever grew a prerelease suffix would be rejected by
           # the store at upload time, which is far too late to find out.
-          for pair in "manifest.chrome.json:$chrome" "manifest.firefox.json:$firefox"; do
+          for pair in "manifest.chrome.json:$chrome" \
+                      "manifest.firefox.json:$firefox" \
+                      "manifest.safari.json:$safari"; do
             file="${pair%%:*}"; value="${pair#*:}"
             if [[ ! "$value" =~ ^[0-9]+(\.[0-9]+){0,3}$ ]]; then
               note "$file version '$value' is not a valid browser extension version" \
@@ -214,7 +218,7 @@ jobs:
       contents: read
 
   # --------------------------------------------------------------------------
-  # 3. The web deliverables: both extensions, and the UI the daemon serves.
+  # 3. The web deliverables: all three extensions, and the UI the daemon serves.
   # --------------------------------------------------------------------------
   web:
     name: Build the extensions and the daemon UI
@@ -235,11 +239,11 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      # The three `build:*` scripts, unchanged and called by their own names.
+      # The extension and daemon build scripts, unchanged and called by name.
       # Nothing here patches a manifest or rewrites a version: what ships is
       # what `bun run build:chrome` produces on a developer's machine.
       - name: Build the extensions
-        run: bun run build
+        run: bun run build && bun run build:safari
 
       - name: Build the daemon UI
         run: bun run build:daemon
@@ -250,7 +254,7 @@ jobs:
         run: |
           set -euo pipefail
           base="${VERSION%%-*}"
-          for dist in dist-chrome dist-firefox; do
+          for dist in dist-chrome dist-firefox dist-safari; do
             built=$(jq -r '.version' "$dist/manifest.json")
             if [ "$built" != "$base" ]; then
               echo "::error::$dist/manifest.json says '$built', expected '$base'."
@@ -271,6 +275,7 @@ jobs:
           mkdir -p artifacts
           (cd dist-chrome && zip -r -q "../artifacts/bookmarks-but-better-chrome-$VERSION.zip" .)
           (cd dist-firefox && zip -r -q "../artifacts/bookmarks-but-better-firefox-$VERSION.zip" .)
+          (cd dist-safari && zip -r -q "../artifacts/bookmarks-but-better-safari-$VERSION.zip" .)
           cd artifacts
           for file in *.zip; do
             sha256sum "$file" > "$file.sha256"
@@ -1074,7 +1079,7 @@ jobs:
         env:
           OUTCOME: ${{ steps.chrome.outcome }}
           VERSION: ${{ needs.validate.outputs.version }}
-          # The ref to pick under *Use workflow from* is the tag, `v4.0.0` —
+          # The ref to pick under *Use workflow from* is the tag, `v4.1.0` —
           # not the bare version. Naming the wrong one sends the operator to a
           # dropdown entry that does not exist.
           TAG: ${{ needs.validate.outputs.tag }}
@@ -1159,8 +1164,8 @@ jobs:
           OUTCOME: ${{ steps.amo.outcome }}
           ADDON_ID: ${{ steps.amo.outputs.addon_id }}
           VERSION: ${{ needs.validate.outputs.version }}
-          # The tag, `v4.0.0` — the ref to select under *Use workflow from*.
-          # `VERSION` is the bare `4.0.0` and matches no dropdown entry.
+          # The tag, `v4.1.0` — the ref to select under *Use workflow from*.
+          # `VERSION` is the bare `4.1.0` and matches no dropdown entry.
           TAG: ${{ needs.validate.outputs.tag }}
         run: |
           set -euo pipefail

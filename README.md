@@ -55,12 +55,14 @@ shown again unless they explicitly choose **Show setup wizard** in Settings.
 Or load manually:
 
 **Chrome**
+
 1. Clone this repository
 2. Run `bun install && bun run build:chrome`
 3. Open `chrome://extensions`, enable **Developer mode**
 4. Click **Load unpacked** and select the `dist-chrome/` folder
 
 **Firefox**
+
 1. Clone this repository
 2. Run `bun install && bun run build:firefox`
 3. Open `about:debugging#/runtime/this-firefox`
@@ -137,8 +139,8 @@ permission and mutation behavior. See
 A tag ships everything, and nothing else does:
 
 ```bash
-git push origin v4.0.0-beta.1   # GitHub prerelease with downloadable artifacts, no store
-git push origin v4.0.0          # GitHub release, then store publishing after an approval
+git push origin v4.1.0-beta.1   # GitHub prerelease with downloadable artifacts, no store
+git push origin v4.1.0          # GitHub release, then store publishing after an approval
 ```
 
 See [docs/RELEASING.md](docs/RELEASING.md) for the version checklist, the

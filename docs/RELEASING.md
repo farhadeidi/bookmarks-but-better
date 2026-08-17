@@ -1,6 +1,6 @@
 # Releasing
 
-One product version covers the app, both extension manifests and the Cargo
+One product version covers the app, all three extension manifests and the Cargo
 workspace, and a tag is what turns that version into a release. The small `npx`
 launcher has an independent version and is published only when its own code
 changes.
@@ -8,8 +8,8 @@ changes.
 Two commands do the whole job:
 
 ```sh
-git push origin v4.0.0-beta.1   # a prerelease: artifacts to download, no store
-git push origin v4.0.0          # the real thing: stores, after an approval
+git push origin v4.1.0-beta.1   # a prerelease: artifacts to download, no store
+git push origin v4.1.0          # the real thing: stores, after an approval
 ```
 
 No product artifact is published another way. Merging to `main` runs
@@ -18,10 +18,10 @@ the separately versioned, manual publishing step documented below.
 
 ## What each tag does
 
-| You push          | You get                                                                  | Stores                                       |
-| ----------------- | ------------------------------------------------------------------------ | -------------------------------------------- |
-| `v4.0.0-beta.N`   | A GitHub **prerelease** with both extension zips, five daemon archives and both installers | **Never contacted.** The job does not exist.  |
-| `v4.0.0`          | A normal GitHub **Release** with the same artifacts                      | After a maintainer approves the deployment.   |
+| You push        | You get                                                                                     | Stores                                       |
+| --------------- | ------------------------------------------------------------------------------------------- | -------------------------------------------- |
+| `v4.1.0-beta.N` | A GitHub **prerelease** with three extension zips, five daemon archives and both installers | **Never contacted.** The job does not exist. |
+| `v4.1.0`        | A normal GitHub **Release** with the same artifacts                                         | After a maintainer approves the deployment.  |
 
 Both run the identical build and the identical test suite — the release workflow
 calls `ci.yml` rather than keeping a second copy of the gates that could drift
@@ -29,24 +29,24 @@ from it. A beta is a real build; the only thing it does not do is publish.
 
 ## Cutting a beta
 
-1. Reconcile the product version everywhere. For `4.0.0` that means `4.0.0` —
-   exactly this string — in these six places:
-
+1. Reconcile the product version everywhere. For `4.1.0` that means `4.1.0` —
+   exactly this string — in these seven places:
    - `package.json`
    - `manifests/manifest.chrome.json`
    - `manifests/manifest.firefox.json`
+   - `manifests/manifest.safari.json`
    - `Cargo.toml` (`[workspace.package] version`)
    - `crates/bookmarks-but-better/Cargo.toml` (the
      `bookmarks-but-better-vault-core` constraint, twice)
    - `Cargo.lock` — run `cargo update --workspace` after the two above
 
-2. Add a `## [4.0.0]` section to `CHANGELOG.md`.
+2. Add a `## [4.1.0]` section to `CHANGELOG.md`.
 
 3. Tag and push:
 
    ```sh
-   git tag v4.0.0-beta.1
-   git push origin v4.0.0-beta.1
+   git tag v4.1.0-beta.1
+   git push origin v4.1.0-beta.1
    ```
 
 The `validate` job checks every one of those before anything is built, and fails
@@ -55,20 +55,20 @@ not a bad release.
 
 ### Betas keep the plain version, on purpose
 
-A beta tag is `v4.0.0-beta.1`, but every manifest inside it still reads `4.0.0`.
+A beta tag is `v4.1.0-beta.1`, but every manifest inside it still reads `4.1.0`.
 That is not an oversight and must not be "fixed":
 
 - Chrome accepts one to four dot-separated integers as a version and nothing
-  else. `4.0.0-beta.1` is not a valid extension version.
+  else. `4.1.0-beta.1` is not a valid extension version.
 - AMO rejects it too.
 
 So the beta-ness lives in the tag and in the GitHub prerelease, never in a
-manifest. The artifact *filenames* carry the full tag (`…-chrome-4.0.0-beta.1.zip`)
+manifest. The artifact _filenames_ carry the full tag (`…-chrome-4.1.0-beta.1.zip`)
 so a downloaded build is still identifiable, and the release notes say so. The
 `validate` job enforces both halves: manifests must equal the base version, and
 must be numeric.
 
-Iterating means `-beta.2`, `-beta.3`, and so on. All of them build `4.0.0`
+Iterating means `-beta.2`, `-beta.3`, and so on. All of them build `4.1.0`
 manifests. That is fine, because no store ever sees them.
 
 ## Cutting the stable release
@@ -78,8 +78,9 @@ Before creating the stable tag:
 1. Install the unpacked Chrome and Firefox builds over profiles that have
    completed setup on v3.2.1. Confirm the dashboard opens directly, the selected
    root and appearance are unchanged, and the setup wizard is not shown.
-2. In a fresh profile, complete setup once in each bookmark-source mode. Restart
-   the extension and confirm setup stays closed. Then switch sources and repeat.
+2. In a fresh profile, complete setup once with the Browser Source and once with
+   a Daemon Source. Restart the extension and confirm setup stays closed. Then
+   switch sources and repeat.
 3. Review `marketing/store-description.chrome.txt` and
    `marketing/store-description.firefox.txt` against the final manifests,
    especially permission and privacy disclosures.
@@ -88,8 +89,8 @@ Before creating the stable tag:
    and Windows.
 
 ```sh
-git tag v4.0.0
-git push origin v4.0.0
+git tag v4.1.0
+git push origin v4.1.0
 ```
 
 The build, the tests, the GitHub Release and its artifacts all happen without
@@ -138,7 +139,7 @@ The job summary says this on every run, and links the dashboard. Check it:
 
 > **"Re-run failed jobs" is not the recovery mechanism — for any run.** It
 > publishes nothing, by design. Store submission is limited to the **first
-> attempt**, of a tag push *and* of a manual dispatch alike, and a re-run writes
+> attempt**, of a tag push _and_ of a manual dispatch alike, and a re-run writes
 > a job summary saying so and pointing here.
 >
 > **That includes re-running a manual recovery that failed.** This is the one
@@ -156,8 +157,8 @@ The job summary says this on every run, and links the dashboard. Check it:
 > uploaded — but re-running still will not publish.
 >
 > On a tag push the restriction exists for a second reason too: a re-run cannot
-> tell the two situations apart. Without the limit it would re-run *both* store
-> steps with neither toggle consulted; and if the previous attempt *did* reach a
+> tell the two situations apart. Without the limit it would re-run _both_ store
+> steps with neither toggle consulted; and if the previous attempt _did_ reach a
 > store, Chrome goes first, so it would re-upload an already-published version,
 > be rejected, and abort before reaching the Firefox step that needed retrying.
 
@@ -182,7 +183,7 @@ was created and re-running will not create it — pick one:
 1. **Delete the tag and push it again.** A clean first attempt does everything.
    Simplest, and correct as long as nothing was published anywhere yet.
 2. **Create the release by hand** from the run's artifacts
-   (`gh release create v4.0.0 artifacts/*`), then dispatch for the stores.
+   (`gh release create v4.1.0 artifacts/*`), then dispatch for the stores.
 
 Do not skip this. A dispatch **refuses to run** unless a published release
 already exists for the tag — see [What stops an accidental
@@ -195,7 +196,7 @@ Whether a store failed or the run never got that far, the way to publish is the
 same — run the workflow manually:
 
 1. **Actions → Release → Run workflow**.
-2. Under **Use workflow from**, pick the **tag** (`v4.0.0`), not a branch. A
+2. Under **Use workflow from**, pick the **tag** (`v4.1.0`), not a branch. A
    dispatch from a branch is refused — the pipeline will not publish something
    that was never tagged.
 3. Tick the store or stores you need. **Both default to off**, because a re-run
@@ -252,11 +253,11 @@ secrets, and the six store credentials are repository-scoped on purpose
 ([step 2](#2-the-six-store-credentials-stay-at-repository-scope)).
 
 Store submission is additionally limited to the **first attempt of a run** — a
-tag push *or* a manual dispatch — and so is creating the GitHub release. A re-run
+tag push _or_ a manual dispatch — and so is creating the GitHub release. A re-run
 can neither publish to a store nor overwrite a release that already exists.
 
 A **manual dispatch** carries one more precondition, because its whole premise is
-that it is *finishing* a release rather than starting one. Before any credential
+that it is _finishing_ a release rather than starting one. Before any credential
 is touched it queries the GitHub API and refuses unless there is a release for
 the exact validated tag that is **published, not a draft, and not a prerelease**.
 An unanswerable query — an API error rather than a clean "not found" — is also a
@@ -279,13 +280,13 @@ workflow**.
 
 Each release carries five, one per supported platform, each with a `.sha256`:
 
-| Target                       | Archive   |
-| ---------------------------- | --------- |
-| `x86_64-unknown-linux-gnu`   | `.tar.gz` |
-| `aarch64-unknown-linux-gnu`  | `.tar.gz` |
-| `x86_64-apple-darwin`        | `.tar.gz` |
-| `aarch64-apple-darwin`       | `.tar.gz` |
-| `x86_64-pc-windows-msvc`     | `.zip`    |
+| Target                      | Archive   |
+| --------------------------- | --------- |
+| `x86_64-unknown-linux-gnu`  | `.tar.gz` |
+| `aarch64-unknown-linux-gnu` | `.tar.gz` |
+| `x86_64-apple-darwin`       | `.tar.gz` |
+| `aarch64-apple-darwin`      | `.tar.gz` |
+| `x86_64-pc-windows-msvc`    | `.zip`    |
 
 Each unpacks to:
 
@@ -319,7 +320,7 @@ release job started.
 There is no Apple Developer ID signature or notarization, and no Authenticode
 signature. Gatekeeper and SmartScreen will both object, and users will need
 `xattr -d com.apple.quarantine ./bookmarks-but-better` on macOS or
-*More info → Run anyway* on Windows. The release notes say so on every release.
+_More info → Run anyway_ on Windows. The release notes say so on every release.
 
 Changing that means buying an Apple Developer account and a code-signing
 certificate, and adding signing keys to the release pipeline. Until then the
@@ -350,7 +351,7 @@ content `<hash>  <filename>`), or the top-level directory inside the archive is
 a breaking change for both scripts and needs to update them alongside
 `release.yml`.
 
-Both also default to the latest *stable* release. A stable release carrying no
+Both also default to the latest _stable_ release. A stable release carrying no
 daemon archive — every one up to and including `v3.2.0` — is reported rather
 than failed on, and each falls back to the newest prerelease that does have a
 build for the platform (see [DAEMON.md](DAEMON.md)). The fallback is not a
@@ -400,7 +401,7 @@ checksum verification, unpack, symlink swap, upgrade, rollback-on-tamper)
 against a locally served fake release that speaks the same three GitHub
 endpoints. The launcher tests cover its platform, argument and URL decisions,
 which are pure functions, so neither touches the network. Neither runs on a
-tag, so together they do not prove the scripts work against a *real* published
+tag, so together they do not prove the scripts work against a _real_ published
 release — only that they still do exactly what they did the last time this
 suite ran.
 
@@ -411,18 +412,18 @@ state is auditable and so it can be rebuilt if the repository is ever recreated.
 
 Current state:
 
-| Item | Status |
-| --- | --- |
-| `production-stores` environment | exists |
-| Required reviewer | set |
-| Deployment rule: `v*` tags | set |
-| `PRODUCTION_STORES_CONFIGURED` (environment scope) | set |
-| Six store credentials | repository scope, **by decision** — see step 2 |
-| `v*` tag ruleset | optional, see step 4 |
+| Item                                               | Status                                         |
+| -------------------------------------------------- | ---------------------------------------------- |
+| `production-stores` environment                    | exists                                         |
+| Required reviewer                                  | set                                            |
+| Deployment rule: `v*` tags                         | set                                            |
+| `PRODUCTION_STORES_CONFIGURED` (environment scope) | set                                            |
+| Six store credentials                              | repository scope, **by decision** — see step 2 |
+| `v*` tag ruleset                                   | optional, see step 4                           |
 
 Nothing on this page blocks a release.
 
-> **Why it fails closed.** GitHub *auto-creates* an environment the first time a
+> **Why it fails closed.** GitHub _auto-creates_ an environment the first time a
 > workflow names one, with no protection rules — no reviewers, no secrets. A
 > repository that skipped this setup would therefore look identical to one that
 > did it, and would publish on the first stable tag with nobody asked. The canary
@@ -438,28 +439,28 @@ Nothing on this page blocks a release.
 - For **Deployment branches and tags**, choose **Selected branches and tags** and
   add a **tag** rule matching `v*`.
 
-  Do **not** choose *Protected branches only*. It excludes tags entirely, and
+  Do **not** choose _Protected branches only_. It excludes tags entirely, and
   every release here is tag-triggered, so that setting makes all store
-  publishing fail permanently. There is no "protected branches *and tags*"
-  option; the three choices are *All branches*, *Protected branches only*, and
-  *Selected branches and tags*.
+  publishing fail permanently. There is no "protected branches _and tags_"
+  option; the three choices are _All branches_, _Protected branches only_, and
+  _Selected branches and tags_.
 
 ### 2. The six store credentials stay at **repository** scope
 
 These already exist as **repository** secrets and are deliberately left there.
 Names are unchanged from the previous workflow:
 
-| Secret                  | Used for                     | Scope      |
-| ----------------------- | ---------------------------- | ---------- |
-| `CHROME_EXTENSION_ID`   | Chrome Web Store             | repository |
-| `CHROME_CLIENT_ID`      | Chrome Web Store             | repository |
-| `CHROME_CLIENT_SECRET`  | Chrome Web Store             | repository |
-| `CHROME_REFRESH_TOKEN`  | Chrome Web Store             | repository |
-| `AMO_JWT_ISSUER`        | Firefox AMO                  | repository |
-| `AMO_JWT_SECRET`        | Firefox AMO                  | repository |
+| Secret                 | Used for         | Scope      |
+| ---------------------- | ---------------- | ---------- |
+| `CHROME_EXTENSION_ID`  | Chrome Web Store | repository |
+| `CHROME_CLIENT_ID`     | Chrome Web Store | repository |
+| `CHROME_CLIENT_SECRET` | Chrome Web Store | repository |
+| `CHROME_REFRESH_TOKEN` | Chrome Web Store | repository |
+| `AMO_JWT_ISSUER`       | Firefox AMO      | repository |
+| `AMO_JWT_SECRET`       | Firefox AMO      | repository |
 
 Nothing needs doing here before a release. An environment job reads repository
-secrets perfectly well — environment secrets merely *shadow* same-named
+secrets perfectly well — environment secrets merely _shadow_ same-named
 repository ones — so the pipeline works as it stands.
 
 **Why they were not moved.** GitHub never returns a stored secret's value, not
@@ -468,8 +469,8 @@ scope to another. Moving these would mean regenerating each one at its source �
 and generating a new AMO API key **revokes the live one**. That is a real risk to
 a working release path in exchange for no change to the approval gate.
 
-**This does not weaken the gate.** Approval is enforced by the *environment
-attached to the job*, not by where the secrets are stored. `publish-stores` names
+**This does not weaken the gate.** Approval is enforced by the _environment
+attached to the job_, not by where the secrets are stored. `publish-stores` names
 `production-stores`, so GitHub holds the whole job — every step, before any of
 them runs — until a required reviewer approves it. That is true regardless of
 which scope the credentials come from.
@@ -487,13 +488,13 @@ decide to take it on later.
 
 One **environment** secret on `production-stores`:
 
-| Secret                          | Value                           | Scope                |
-| ------------------------------- | ------------------------------- | -------------------- |
-| `PRODUCTION_STORES_CONFIGURED`  | any non-empty value, e.g. `yes` | **environment only** |
+| Secret                         | Value                           | Scope                |
+| ------------------------------ | ------------------------------- | -------------------- |
+| `PRODUCTION_STORES_CONFIGURED` | any non-empty value, e.g. `yes` | **environment only** |
 
 The value is never read, logged, or compared — only its existence is. It is the
 signal that this page was filled in by a person rather than conjured by GitHub,
-which is why it is a *different name* from the six credentials: those are
+which is why it is a _different name_ from the six credentials: those are
 expected at repository scope, and this one must never be.
 
 > **Rule: `PRODUCTION_STORES_CONFIGURED` must never exist at repository scope.**
@@ -513,7 +514,7 @@ placement.
 
 There is a second guard in the job that checks all six credential names resolve
 to a non-empty value. It is a **partial-publish** guard, not a configuration
-check: Chrome is submitted before Firefox, so a credential missing from *every*
+check: Chrome is submitted before Firefox, so a credential missing from _every_
 scope would publish to one store and strand the other. It says nothing about
 which scope supplied a value, and does not need to.
 
@@ -564,7 +565,7 @@ Required — all done:
 
 - [x] `production-stores` environment exists
 - [x] Required reviewer added
-- [x] Deployment rule is *Selected branches and tags* with a `v*` **tag** rule
+- [x] Deployment rule is _Selected branches and tags_ with a `v*` **tag** rule
 - [x] `PRODUCTION_STORES_CONFIGURED` added, **environment scope only**
 - [x] Six store credentials present at repository scope (deliberate; step 2)
 

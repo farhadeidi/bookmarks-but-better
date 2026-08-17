@@ -22,7 +22,7 @@ path = "src/main.rs"
 # The format itself lives in `bookmarks-but-better-vault-core`; nothing here re-implements
 # parsing, scanning or byte-preserving updates.
 [dependencies]
-bookmarks-but-better-vault-core = { path = "../bookmarks-but-better-vault-core", version = "4.0.0" }
+bookmarks-but-better-vault-core = { path = "../bookmarks-but-better-vault-core", version = "4.1.0" }
 # HTTP routing, extractors and the SSE response type.
 axum = "0.8.9"
 # Capability-oriented filesystem handles, the same ones the format core walks
@@ -82,7 +82,7 @@ windows-sys = { version = "0.61.2", features = [
 # Integration tests are their own crates, so the pieces they touch directly are
 # listed again here; Cargo unifies them with the versions above.
 axum = "0.8.9"
-bookmarks-but-better-vault-core = { path = "../bookmarks-but-better-vault-core", version = "4.0.0" }
+bookmarks-but-better-vault-core = { path = "../bookmarks-but-better-vault-core", version = "4.1.0" }
 serde_json = "1.0.151"
 # `ServiceExt::oneshot`, which drives the router without binding a socket.
 tower = { version = "0.5.3", features = ["util"] }
