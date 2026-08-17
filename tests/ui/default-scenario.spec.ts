@@ -94,6 +94,11 @@ test("mobile source and action controls stay contained without overlapping", asy
   await expect(tabs).toBeVisible()
   await expect(toolbar).toBeVisible()
   await expect(workbench).toBeVisible()
+  await expect(toolbar.getByRole("button")).toHaveCount(2)
+  await expect(
+    toolbar.getByRole("button", { name: "Bookmark tree" })
+  ).toBeVisible()
+  await expect(toolbar.getByRole("button", { name: "Settings" })).toBeVisible()
 
   const [tabsBox, toolbarBox, workbenchBox, firstActionBox] = await Promise.all(
     [
@@ -110,7 +115,6 @@ test("mobile source and action controls stay contained without overlapping", asy
     expect(box!.x + box!.width).toBeLessThanOrEqual(305)
   }
   await expect(tabs).toHaveCSS("overflow-x", "auto")
-  await expect(toolbar).toHaveCSS("overflow-x", "auto")
   expect(firstActionBox?.height).toBeGreaterThanOrEqual(48)
   expect(workbenchBox!.y + workbenchBox!.height).toBeLessThanOrEqual(
     toolbarBox!.y - 8

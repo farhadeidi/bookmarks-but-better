@@ -65,6 +65,22 @@ test("Browser bookmark settings live inside Sources instead of a separate catego
   ).toBeVisible()
 })
 
+test("appearance controls and product information remain available in Settings", async ({
+  page,
+}) => {
+  const dialog = await openSettings(page)
+
+  await dialog.getByRole("tab", { name: "Appearance" }).click()
+  await expect(dialog.getByText("Light / dark", { exact: true })).toBeVisible()
+  await expect(dialog.getByText("Color theme", { exact: true })).toBeVisible()
+
+  await dialog.getByRole("tab", { name: "About" }).click()
+  await expect(
+    dialog.getByText("Bookmarks — But Better", { exact: true })
+  ).toBeVisible()
+  await expect(dialog.getByRole("link", { name: "GitHub" })).toBeVisible()
+})
+
 test("a source can be given a profile-local display label", async ({
   page,
 }) => {
