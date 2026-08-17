@@ -30,6 +30,8 @@ function renderWizard(onComplete = vi.fn()) {
 }
 
 beforeEach(() => {
+  // A desktop extension context: the mode step offers the Browser Source.
+  vi.stubGlobal("chrome", { bookmarks: {}, storage: {} })
   vi.stubGlobal(
     "matchMedia",
     vi.fn().mockImplementation((query: string) => ({
@@ -42,8 +44,6 @@ beforeEach(() => {
   vi.stubGlobal("ResizeObserver", StubResizeObserver)
 
   usePreferencesStore.setState({
-    adapterMode: "browser",
-    setAdapterMode: vi.fn(),
     adapter: {
       bookmarks: {
         getTree: vi.fn().mockResolvedValue([]),
@@ -116,22 +116,19 @@ describe("OnboardingWizard mode step", () => {
     expect(screen.getByText("Choose your bookmark folder")).toBeTruthy()
   })
 
-  it("skips straight to the root folder step for Standalone", async () => {
+  it("never offers the Standalone source to a new profile, in any spelling", async () => {
     const user = userEvent.setup()
     renderWizard()
 
     await user.click(screen.getByRole("button", { name: "Get Started" }))
-    await user.click(
-      screen.getByRole("button", {
-        name: "Advanced: use a standalone collection stored in this browser only",
-      })
-    )
-    await user.click(screen.getByRole("button", { name: "Next" }))
+    expect(screen.getByText("Where do your bookmarks live?")).toBeTruthy()
 
-    expect(screen.getByText("Choose your bookmark folder")).toBeTruthy()
+    // The sunset removed it from new-user UI entirely.
+    expect(screen.queryByText(/standalone/i)).toBeNull()
+    void user
   })
 
-  it("does not persist adapterMode when the wizard completes with Daemon selected but not connected", async () => {
+  it("completing with Daemon selected but not connected still marks onboarding done", async () => {
     const user = userEvent.setup()
     renderWizard()
 
@@ -139,14 +136,12 @@ describe("OnboardingWizard mode step", () => {
     await user.click(screen.getByRole("button", { name: /Daemon/ }))
     await user.click(screen.getByRole("button", { name: "Skip, use defaults" }))
 
-    await waitFor(() => {
-      expect(
-        usePreferencesStore.getState().setAdapterMode
-      ).not.toHaveBeenCalled()
+    await waitFor(async () => {
+      expect(await getOnboardingCompleted()).toBe(true)
     })
   })
 
-  it("persists adapterMode for Browser on completion", async () => {
+  it("completing with Browser selected marks onboarding done", async () => {
     const user = userEvent.setup()
     renderWizard()
 
@@ -154,11 +149,6 @@ describe("OnboardingWizard mode step", () => {
     await user.click(screen.getByRole("button", { name: /Browser/ }))
     await user.click(screen.getByRole("button", { name: "Skip, use defaults" }))
 
-    await waitFor(() => {
-      expect(
-        usePreferencesStore.getState().setAdapterMode
-      ).toHaveBeenCalledWith("browser")
-    })
     await waitFor(async () => {
       expect(await getOnboardingCompleted()).toBe(true)
     })

@@ -46,7 +46,11 @@ export function Favicon({
     [src, handleError]
   )
 
-  if (failed && (!fallbackSrc || src === fallbackSrc)) {
+  // An <img src=""> fires neither load nor error in Chromium, so an empty
+  // primary URL can never reach handleError on its own: treat it as failed
+  // from the first render. This is also the production edge for a malformed
+  // page URL, where GoogleFaviconV2Provider.getUrl returns "".
+  if (failed || !primarySrc) {
     // Final fallback: first letter of domain
     let letter = "?"
     try {

@@ -3,7 +3,9 @@ set -euo pipefail
 
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)
 vault=$(mktemp -d)
-port=${BOOKMARKS_BUT_BETTER_E2E_PORT:-52222}
+# Never the product default (52222): a test run must not collide with a real
+# daemon a developer may have installed, and must never touch a real vault.
+port=${BOOKMARKS_BUT_BETTER_E2E_PORT:-52224}
 cargo=${CARGO:-"$HOME/.cargo/bin/cargo"}
 
 cleanup() {

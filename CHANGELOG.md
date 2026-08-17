@@ -7,6 +7,60 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Source Configuration** — enabled sources plus one Active Source per browser
+  profile, persisted locally and never synced. Browser Sources and Daemon
+  Sources stay separate collections; there is no merged view and no implicit
+  move between sources
+- **Live source switching** — an explicit Source Session transition that
+  disposes the previous session's listeners and change stream, expires stale
+  in-flight work, closes node-bound UI and re-initializes the dashboard
+  without a reload. An unreachable daemon stays selected with recovery
+  controls; there is never a silent fallback to browser bookmarks
+- **A compact source switcher** above the bookmarks — tab-style with several
+  enabled sources, a name/health badge with one. The capture popup labels its
+  destination and offers a quick change; the omnibox follows the same Active
+  Source
+- **Multiple Vaults per daemon** — repeatable `--vault ID=PATH`, atomic
+  startup, duplicate-id and overlapping-root rejection, `GET /api/v1/vaults`
+  discovery and vault-scoped routes under `/api/v1/vaults/{id}/…`. Legacy
+  unscoped routes answer a stable `vault_required` error when more than one
+  Vault is hosted, and the daemon-served web app switches among Vaults
+  client-side. Client preferences are namespaced per Vault
+- **Safari support (daemon-only)** — a Safari Web Extension build
+  (`bun run build:safari`) whose manifest omits the bookmarks API, omnibox and
+  new-tab override Safari does not provide; product code branches on
+  capabilities, not browser names
+- **Categorized settings** — General, Sources, Appearance, Bookmarks,
+  Data & Migration, Advanced and About, as vertical tabs on wide screens and a
+  compact selector on narrow ones
+- **Dev Workbench** — `bun run dev` opens the complete application in a plain
+  browser, no extension and no daemon required, against deterministic
+  URL-addressable scenarios (`browser-daemon` by default, plus
+  `fresh-chrome`, `browser-only`, `multi-vault`, `daemon-offline`,
+  `slow-daemon`, `legacy-standalone`, `safari`, `empty`, `large-library`)
+  with scenario persistence, a deterministic Reset, and failure controls for
+  offline, latency, permission, discovery, mutation and stale-revision
+  behavior. The environment-specific source mechanics moved behind a
+  SourceEnvironment seam; the workbench and its simulated sources are
+  eliminated from every production build. `bun run test:ui` covers the
+  highest-value flows with Playwright against an isolated dev server
+
+### Changed
+
+- **The Standalone Source is in its sunset period**: new users cannot select
+  it anywhere, existing profiles that were using it keep access with a
+  deprecation notice, and an explicit copy-based migration (preview, conflict
+  handling, verification) moves bookmarks to a Browser or Daemon Source
+  without ever deleting the legacy data. Removal lands in the next major
+  version
+- Connecting a daemon discovers its Vaults and offers each as its own source,
+  keeping Browser bookmarks enabled alongside
+- Profile-wide preferences (theme, layout width, nested folders) now survive
+  source switches unchanged; per-folder layouts and the root folder remain
+  scoped to their source
+
 ## [4.0.0] - 2026-08-11
 
 ### Added

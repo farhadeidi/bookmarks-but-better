@@ -8,15 +8,20 @@ import {
   screen,
   waitFor,
 } from "@testing-library/react"
+import { installFakeIndexedDB } from "@/browser/__tests__/fake-indexeddb"
 import App from "../App"
 import { ThemeProvider } from "@/components/theme-provider"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { useBookmarkStore } from "@/stores/bookmark-store"
 import type { BrowserAdapter } from "@/browser"
 
-vi.mock("@/browser", () => ({
-  detectAdapter: vi.fn(),
-}))
+vi.mock("@/sources/adapters", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/sources/adapters")>()
+  return {
+    ...actual,
+    createAdapterForSource: vi.fn(),
+  }
+})
 
 class StubResizeObserver {
   observe() {}
@@ -24,7 +29,17 @@ class StubResizeObserver {
   disconnect() {}
 }
 
+installFakeIndexedDB()
+
 beforeEach(() => {
+  installFakeIndexedDB()
+  vi.stubGlobal("chrome", {
+    bookmarks: {},
+    storage: {
+      local: { get: vi.fn().mockResolvedValue({}), set: vi.fn() },
+      sync: { get: vi.fn().mockResolvedValue({}) },
+    },
+  })
   vi.stubGlobal(
     "matchMedia",
     vi.fn().mockImplementation((query: string) => ({
@@ -95,8 +110,25 @@ describe("App daemon-unavailable state", () => {
       return Promise.resolve([{ id: "root", title: "Root", children: [] }])
     })
 
-    const { detectAdapter } = await import("@/browser")
-    vi.mocked(detectAdapter).mockResolvedValue(adapter)
+    const { createAdapterForSource } = await import("@/sources/adapters")
+    vi.mocked(createAdapterForSource).mockReturnValue(adapter)
+
+    // The persisted source configuration says browser is active and enabled.
+    const { useSourceStore, resetSourceSession } =
+      await import("@/stores/source-store")
+    const { emptySourceConfig } = await import("@/sources/config")
+    resetSourceSession()
+    useSourceStore.setState({
+      status: "loading",
+      switching: false,
+      lastSwitchError: null,
+      config: {
+        ...emptySourceConfig(),
+        sources: { browser: { enabled: true } },
+        activeSourceId: "browser",
+      },
+      activeSourceId: "browser",
+    })
 
     renderApp()
 

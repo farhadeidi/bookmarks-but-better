@@ -347,3 +347,144 @@ describe("DaemonApiError", () => {
     expect(error.status).toBe(404)
   })
 })
+
+describe("vault-scoped clients", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it("scopes every vault-specific path under /vaults/{id}", () => {
+    const client = new DaemonClient({
+      origin: "http://127.0.0.1:52222",
+      vaultId: "reading-list",
+    })
+    expect(client.url("/tree")).toBe(
+      "http://127.0.0.1:52222/api/v1/vaults/reading-list/tree"
+    )
+    expect(client.url("/bookmarks/abc--b1b2b3b4b5b6b7b8/move")).toBe(
+      "http://127.0.0.1:52222/api/v1/vaults/reading-list/bookmarks/abc--b1b2b3b4b5b6b7b8/move"
+    )
+    expect(client.eventsUrl).toBe(
+      "http://127.0.0.1:52222/api/v1/vaults/reading-list/events"
+    )
+  })
+
+  it("encodes a vault id with path characters in it", () => {
+    const client = new DaemonClient({ origin: "", vaultId: "a b/c" })
+    expect(client.url("/tree")).toBe("/api/v1/vaults/a%20b%2Fc/tree")
+  })
+
+  it("keeps daemon-level requests unscoped even when a vault is named", async () => {
+    // One fresh Response per request: a Response body can only be read once.
+    const fetchMock = vi
+      .fn()
+      .mockImplementationOnce(() =>
+        Promise.resolve(jsonResponse({ status: "ok" }))
+      )
+      .mockImplementationOnce(() =>
+        Promise.resolve(jsonResponse({ vaults: [{ id: "main" }] }))
+      )
+    vi.stubGlobal("fetch", fetchMock)
+
+    const client = new DaemonClient({
+      origin: "http://127.0.0.1:52222",
+      vaultId: "main",
+    })
+    await client.fetchHealth()
+    await client.fetchVaults()
+
+    expect(fetchMock.mock.calls[0][0]).toBe(
+      "http://127.0.0.1:52222/api/v1/health"
+    )
+    expect(fetchMock.mock.calls[1][0]).toBe(
+      "http://127.0.0.1:52222/api/v1/vaults"
+    )
+  })
+
+  it("vault health targets the scoped route when a vault is named, legacy otherwise", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockImplementationOnce(() =>
+        Promise.resolve(jsonResponse({ status: "ok" }))
+      )
+      .mockImplementationOnce(() =>
+        Promise.resolve(jsonResponse({ status: "ok" }))
+      )
+    vi.stubGlobal("fetch", fetchMock)
+
+    const scoped = new DaemonClient({ origin: "", vaultId: "main" })
+    await scoped.fetchVaultHealth()
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/v1/vaults/main/health")
+
+    const unscoped = new DaemonClient({ origin: "" })
+    await unscoped.fetchVaultHealth()
+    expect(fetchMock.mock.calls[1][0]).toBe("/api/v1/health")
+  })
+
+  it("search and tree requests carry the vault scope", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({ tree: [] }))
+      .mockResolvedValueOnce(jsonResponse({ results: [] }))
+    vi.stubGlobal("fetch", fetchMock)
+
+    const client = new DaemonClient({
+      origin: "http://127.0.0.1:52222",
+      vaultId: "main",
+    })
+    await client.fetchTree()
+    await client.search("query", 4)
+
+    expect(fetchMock.mock.calls[0][0]).toBe(
+      "http://127.0.0.1:52222/api/v1/vaults/main/tree"
+    )
+    expect(fetchMock.mock.calls[1][0]).toBe(
+      "http://127.0.0.1:52222/api/v1/vaults/main/search?q=query&limit=4"
+    )
+  })
+
+  it("surfaces vault_required as a stable DaemonApiError code", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse(
+        {
+          type: "about:blank",
+          title: "A vault must be selected",
+          status: 400,
+          code: "vault_required",
+          detail: "this daemon hosts 2 vaults",
+        },
+        { status: 400 }
+      )
+    )
+    vi.stubGlobal("fetch", fetchMock)
+
+    const client = new DaemonClient({ origin: "" })
+    const error = await client.fetchTree().catch((e: unknown) => e)
+
+    expect(error).toBeInstanceOf(DaemonApiError)
+    expect((error as DaemonApiError).code).toBe("vault_required")
+    expect((error as DaemonApiError).status).toBe(400)
+  })
+
+  it("surfaces unknown_vault the same way", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse(
+        {
+          type: "about:blank",
+          title: "No such vault",
+          status: 404,
+          code: "unknown_vault",
+          detail: "no hosted vault has the id `nope`",
+        },
+        { status: 404 }
+      )
+    )
+    vi.stubGlobal("fetch", fetchMock)
+
+    const client = new DaemonClient({ origin: "", vaultId: "nope" })
+    const error = await client.fetchTree().catch((e: unknown) => e)
+
+    expect((error as DaemonApiError).code).toBe("unknown_vault")
+    expect((error as DaemonApiError).status).toBe(404)
+  })
+})

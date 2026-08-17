@@ -2,9 +2,9 @@
 
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { installFakeIndexedDB } from "@/browser/__tests__/fake-indexeddb"
-import { getAdapterModePreference } from "@/browser/adapter-preference"
 import { usePreferencesStore } from "../preferences-store"
-import type { BrowserAdapter } from "@/browser"
+import { ProfileStorageAdapter } from "../profile-storage"
+import type { BrowserAdapter, StorageAdapter } from "@/browser"
 
 installFakeIndexedDB()
 
@@ -14,11 +14,23 @@ afterEach(() => {
 })
 
 /**
- * A stand-in for the Chrome adapter: its storage backend is chrome.storage,
- * completely separate from the pre-adapter IndexedDB preference store.
+ * A source-scoped stand-in: an in-memory map, like Standalone's IndexedDB in
+ * miniature, so each test controls exactly what the "active source" holds.
  */
-function createChromeLikeAdapter(): BrowserAdapter {
-  const backing = new Map<string, unknown>()
+function memoryStorage(backing = new Map<string, unknown>()): StorageAdapter {
+  return {
+    get: async <T>(key: string): Promise<T | null> =>
+      backing.has(key) ? (backing.get(key) as T) : null,
+    set: async (key: string, value: unknown) => {
+      backing.set(key, value)
+    },
+    remove: async (key: string) => {
+      backing.delete(key)
+    },
+  }
+}
+
+function adapterWith(storage: StorageAdapter): BrowserAdapter {
   return {
     bookmarks: {
       getTree: vi.fn().mockResolvedValue([]),
@@ -34,20 +46,7 @@ function createChromeLikeAdapter(): BrowserAdapter {
       onMoved: vi.fn(() => () => {}),
       openInManager: vi.fn(),
     },
-    storage: {
-      // Not wrapped in vi.fn(): this test never spies on `get`, and
-      // Mock<T>'s generic collapses a truly generic function's return type
-      // to `unknown`, so a plain function is both simpler and correctly typed.
-      get: async <T>(key: string): Promise<T | null> => {
-        return backing.has(key) ? (backing.get(key) as T) : null
-      },
-      set: vi.fn(async (key: string, value: unknown) => {
-        backing.set(key, value)
-      }),
-      remove: vi.fn(async (key: string) => {
-        backing.delete(key)
-      }),
-    },
+    storage,
     favicon: { getUrl: vi.fn(), isAvailable: vi.fn().mockReturnValue(true) },
     capabilities: {
       openInManager: true,
@@ -58,25 +57,127 @@ function createChromeLikeAdapter(): BrowserAdapter {
   }
 }
 
-describe("usePreferencesStore adapter mode", () => {
-  it("persists the adapter mode switch to the shared pre-adapter store, not the active adapter's storage", async () => {
-    const chromeLikeAdapter = createChromeLikeAdapter()
-    usePreferencesStore.setState({ adapter: chromeLikeAdapter })
+describe("usePreferencesStore lifetimes", () => {
+  it("reads profile-wide keys from the source's storage once, then only from the profile namespace", async () => {
+    // What an upgrading profile has: a colorTheme written wherever the old
+    // active source's adapter put it. (`folderOrder` is present so the
+    // dev-seed path — which fills a wholly fresh profile — stays out.)
+    const sourceBacking = new Map<string, unknown>([
+      ["colorTheme", "caffeine"],
+      ["folderOrder", []],
+    ])
+    const source = memoryStorage(sourceBacking)
+    await usePreferencesStore.getState().init(adapterWith(source))
 
-    usePreferencesStore.getState().setAdapterMode("standalone")
+    expect(usePreferencesStore.getState().colorTheme).toBe("caffeine")
 
-    expect(usePreferencesStore.getState().adapterMode).toBe("standalone")
+    // The read was migrated into the profile namespace…
+    const profile = new ProfileStorageAdapter()
+    expect(await profile.get("colorTheme")).toBe("caffeine")
 
-    // This is what detectAdapter() reads on the next launch — it must see
-    // "standalone" regardless of which adapter was active when the user
-    // switched, or switching from browser to standalone would never persist.
-    expect(await getAdapterModePreference()).toBe("standalone")
+    // …and a source that never had the value sees the profile's.
+    const fresh = memoryStorage()
+    await usePreferencesStore.getState().init(adapterWith(fresh))
+    expect(usePreferencesStore.getState().colorTheme).toBe("caffeine")
+  })
 
-    // The active (chrome-like) adapter's own storage should not have been
-    // used as the persistence path for this preference.
-    expect(chromeLikeAdapter.storage.set).not.toHaveBeenCalledWith(
-      "adapterMode",
-      "standalone"
+  it("profile-wide writes land in the profile namespace, not the source's", async () => {
+    const sourceBacking = new Map<string, unknown>([["folderOrder", []]])
+    const source = memoryStorage(sourceBacking)
+    await usePreferencesStore.getState().init(adapterWith(source))
+
+    usePreferencesStore.getState().setMaxColumns(5)
+    usePreferencesStore.getState().setNestedFolders(true)
+
+    const profile = new ProfileStorageAdapter()
+    expect(await profile.get("maxColumns")).toBe(5)
+    expect(await profile.get("nestedFolders")).toBe(true)
+    expect(sourceBacking.has("maxColumns")).toBe(false)
+    expect(sourceBacking.has("nestedFolders")).toBe(false)
+  })
+
+  it("source-scoped keys stay with the source they were read from", async () => {
+    const firstBacking = new Map<string, unknown>([
+      ["rootFolderLike", "ignored"],
+      ["cardLayouts", { folderA: "grid" }],
+      ["folderOrder", ["x", "y"]],
+    ])
+    await usePreferencesStore
+      .getState()
+      .init(adapterWith(memoryStorage(firstBacking)))
+
+    expect(usePreferencesStore.getState().cardLayouts).toEqual({
+      folderA: "grid",
+    })
+    expect(usePreferencesStore.getState().folderOrder).toEqual(["x", "y"])
+
+    // Switching sources re-reads those keys from the new source's storage.
+    await usePreferencesStore
+      .getState()
+      .init(adapterWith(memoryStorage(new Map([["folderOrder", []]]))))
+
+    expect(usePreferencesStore.getState().cardLayouts).toEqual({})
+    expect(usePreferencesStore.getState().folderOrder).toEqual([])
+
+    // While profile-wide state survives the switch untouched.
+    const profile = new ProfileStorageAdapter()
+    expect(await profile.get("cardLayouts")).toBeNull()
+  })
+
+  it("a source-scoped write goes through the active adapter's storage", async () => {
+    const backing = new Map<string, unknown>([["folderOrder", []]])
+    await usePreferencesStore
+      .getState()
+      .init(adapterWith(memoryStorage(backing)))
+
+    usePreferencesStore.getState().setCardLayout("folderA", "list")
+
+    expect(backing.get("cardLayouts")).toEqual({ folderA: "list" })
+  })
+
+  it("a superseded session's reads do not overwrite the newer session's values", async () => {
+    // Session A starts reading, then a second transition supersedes it and
+    // finishes its own init first; A's reads resolve only afterwards.
+    let releaseReads: () => void = () => {}
+    const readsGate = new Promise<void>((resolve) => {
+      releaseReads = resolve
+    })
+    const staleBacking = new Map<string, unknown>([
+      ["cardLayouts", { staleFolder: "grid" }],
+      ["folderOrder", ["stale"]],
+    ])
+    const gatedStorage: ReturnType<typeof memoryStorage> = {
+      ...memoryStorage(staleBacking),
+      get: async <T>(key: string): Promise<T | null> => {
+        await readsGate
+        return staleBacking.has(key) ? (staleBacking.get(key) as T) : null
+      },
+    }
+    const staleAdapter = adapterWith(gatedStorage)
+    const freshAdapter = adapterWith(
+      memoryStorage(new Map<string, unknown>([["folderOrder", []]]))
     )
+
+    let token = 1
+    const stale = usePreferencesStore
+      .getState()
+      .init(staleAdapter, { isCurrent: () => token === 1 })
+    token = 2
+    await usePreferencesStore
+      .getState()
+      .init(freshAdapter, { isCurrent: () => token === 2 })
+
+    expect(usePreferencesStore.getState().adapter).toBe(freshAdapter)
+    expect(usePreferencesStore.getState().cardLayouts).toEqual({})
+    expect(usePreferencesStore.getState().folderOrder).toEqual([])
+
+    releaseReads()
+    await stale
+
+    // The stale session's source-scoped values must not land over the
+    // newer session's.
+    expect(usePreferencesStore.getState().adapter).toBe(freshAdapter)
+    expect(usePreferencesStore.getState().cardLayouts).toEqual({})
+    expect(usePreferencesStore.getState().folderOrder).toEqual([])
   })
 })

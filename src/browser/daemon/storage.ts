@@ -1,6 +1,6 @@
 /**
- * UI preferences for daemon mode (served or extension), namespaced away from
- * Standalone's.
+ * UI preferences for daemon sources (served or extension), namespaced per
+ * Vault.
  *
  * Before this module existed, daemon mode reused `StandaloneStorageAdapter`
  * outright: same IndexedDB database, same object store, same unprefixed keys
@@ -12,10 +12,13 @@
  * different ids entirely, so switching modes could silently display the
  * wrong root folder, or overwrite one mode's saved layout with the other's.
  *
- * Every key here therefore lives under `bookmarks-but-better.daemon.ui.`, the same top-level
- * namespace `adapter-preference.ts` already uses for the connection config —
- * so the two modules' keys stay legible as belonging together without ever
- * colliding with each other or with Standalone's.
+ * Two Vaults hosted by one daemon are in exactly that situation relative to
+ * each other — and so are two daemons that happen to use the same vault id —
+ * so every key here lives under
+ * `bookmarks-but-better.daemon.ui.<origin-slug>.<vaultId>.` once a vault is
+ * named. With no vault named (the single-Vault served app), the original
+ * `bookmarks-but-better.daemon.ui.` namespace is kept, so those profiles
+ * keep the preferences they already wrote.
  */
 
 import type { StorageAdapter } from "../types"
@@ -25,11 +28,33 @@ const DB_NAME = "bookmarks-but-better-prefs"
 const DB_VERSION = 1
 const STORE_NAME = "preferences"
 
-const NAMESPACE = "bookmarks-but-better.daemon.ui."
-const LEGACY_MIGRATION_FLAG = `${NAMESPACE}migratedLegacyKeys`
+const LEGACY_NAMESPACE = "bookmarks-but-better.daemon.ui."
+const LEGACY_MIGRATION_FLAG = `${LEGACY_NAMESPACE}migratedLegacyKeys`
 /** Nothing under this prefix is a legacy UI preference — it is this module's
  * own namespace, or `adapter-preference.ts`'s. */
 const OWNED_PREFIX = "bookmarks-but-better.daemon."
+
+/** `http://127.0.0.1:52222` → `127.0.0.1-52222`; same-origin → `served`. */
+export function originSlug(origin: string): string {
+  const slug = origin
+    .replace(/^https?:\/\//, "")
+    .replaceAll(":", "-")
+    .replaceAll("/", "")
+    .replaceAll(".", "-")
+    .replaceAll("#", "")
+  return slug || "served"
+}
+
+/** The namespace one vault's preferences live under. */
+export function daemonVaultNamespace(
+  origin: string | undefined,
+  vaultId: string | null | undefined
+): string {
+  if (!vaultId) {
+    return LEGACY_NAMESPACE
+  }
+  return `bookmarks-but-better.daemon.ui.${originSlug(origin ?? "")}.${vaultId}.`
+}
 
 function openDB(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -101,7 +126,7 @@ function migrateLegacyKeysOnce(db: IDBDatabase): Promise<void> {
         const writeTx = db.transaction(STORE_NAME, "readwrite")
         const store = writeTx.objectStore(STORE_NAME)
         for (const [key, value] of entries) {
-          store.put(value, `${NAMESPACE}${key}`)
+          store.put(value, `${LEGACY_NAMESPACE}${key}`)
         }
         store.put(true, LEGACY_MIGRATION_FLAG)
         writeTx.oncomplete = () => resolve()
@@ -113,9 +138,22 @@ function migrateLegacyKeysOnce(db: IDBDatabase): Promise<void> {
   })
 }
 
+export interface DaemonStorageOptions {
+  /** The connection's canonical origin; `undefined` for the served app. */
+  origin?: string
+  /** The vault whose preferences this adapter namespaces; `null` keeps the
+   * legacy single-vault namespace. */
+  vaultId?: string | null
+}
+
 export class DaemonStorageAdapter implements StorageAdapter {
   private db: IDBDatabase | null = null
   private migrated: Promise<void> | null = null
+  private readonly namespace: string
+
+  constructor(options: DaemonStorageOptions = {}) {
+    this.namespace = daemonVaultNamespace(options.origin, options.vaultId)
+  }
 
   private async ready(): Promise<IDBDatabase> {
     if (!this.db) {
@@ -123,16 +161,24 @@ export class DaemonStorageAdapter implements StorageAdapter {
     }
     // Persisted behind `LEGACY_MIGRATION_FLAG`, so every instance after the
     // very first one this profile ever creates resolves this immediately.
-    this.migrated ??= migrateLegacyKeysOnce(this.db)
-    await this.migrated
+    // Only the legacy namespace needs it: the per-vault namespaces start
+    // empty by construction.
+    if (this.namespace === LEGACY_NAMESPACE) {
+      this.migrated ??= migrateLegacyKeysOnce(this.db)
+      await this.migrated
+    }
     return this.db
+  }
+
+  private key(id: string): string {
+    return `${this.namespace}${id}`
   }
 
   async get<T>(key: string): Promise<T | null> {
     const db = await this.ready()
     return new Promise((resolve, reject) => {
       const tx = db.transaction(STORE_NAME, "readonly")
-      const request = tx.objectStore(STORE_NAME).get(`${NAMESPACE}${key}`)
+      const request = tx.objectStore(STORE_NAME).get(this.key(key))
       request.onsuccess = () => {
         resolve(request.result !== undefined ? (request.result as T) : null)
       }
@@ -144,9 +190,7 @@ export class DaemonStorageAdapter implements StorageAdapter {
     const db = await this.ready()
     return new Promise((resolve, reject) => {
       const tx = db.transaction(STORE_NAME, "readwrite")
-      const request = tx
-        .objectStore(STORE_NAME)
-        .put(value, `${NAMESPACE}${key}`)
+      const request = tx.objectStore(STORE_NAME).put(value, this.key(key))
       request.onsuccess = () => resolve()
       request.onerror = () => reject(request.error)
     })
@@ -156,7 +200,7 @@ export class DaemonStorageAdapter implements StorageAdapter {
     const db = await this.ready()
     return new Promise((resolve, reject) => {
       const tx = db.transaction(STORE_NAME, "readwrite")
-      const request = tx.objectStore(STORE_NAME).delete(`${NAMESPACE}${key}`)
+      const request = tx.objectStore(STORE_NAME).delete(this.key(key))
       request.onsuccess = () => resolve()
       request.onerror = () => reject(request.error)
     })

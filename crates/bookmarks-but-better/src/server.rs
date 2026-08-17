@@ -1,4 +1,4 @@
-//! Putting the daemon together: lock, vault, router, watcher, shutdown.
+//! Putting the daemon together: locks, vaults, router, watchers, shutdown.
 
 use std::io;
 use std::net::{IpAddr, SocketAddr};
@@ -8,14 +8,11 @@ use std::sync::Arc;
 use axum::Router;
 use tokio::net::TcpListener;
 
-use crate::api::{self, ApiState};
-use crate::fsx;
+use crate::api;
 use crate::host;
-use crate::lock::{LockError, VaultLock};
-use crate::staging;
+use crate::registry::{VaultRegistry, VaultSpec};
 use crate::ui;
-use crate::vault::Vault;
-use crate::watch::{self, WatchHandle, WatchOptions};
+use crate::watch::{self, WatchOptions, Watchers};
 
 /// The path prefix every API route lives under.
 pub const API_PREFIX: &str = "/api/v1";
@@ -28,8 +25,9 @@ pub const DEFAULT_PORT: u16 = 52222;
 /// Everything needed to start serving.
 #[derive(Debug, Clone)]
 pub struct ServeOptions {
-    /// The vault to serve. Nothing outside this directory is ever read.
-    pub vault: PathBuf,
+    /// The vaults to serve, each as an independently identified source.
+    /// Nothing outside these directories is ever read.
+    pub vaults: Vec<VaultSpec>,
     /// The address to bind. Loopback only in this milestone.
     pub bind: IpAddr,
     /// The port to bind; `0` asks the operating system for a free one.
@@ -43,7 +41,7 @@ pub struct ServeOptions {
 impl Default for ServeOptions {
     fn default() -> Self {
         Self {
-            vault: PathBuf::new(),
+            vaults: Vec::new(),
             bind: DEFAULT_BIND,
             port: DEFAULT_PORT,
             ui_dir: None,
@@ -53,13 +51,23 @@ impl Default for ServeOptions {
 }
 
 impl ServeOptions {
-    /// Options for serving `vault` with every default.
+    /// Options for serving one vault under the default id, with every default.
+    ///
+    /// The single-vault spelling the CLI and the tests have always used. For
+    /// more than one vault, see [`ServeOptions::with_vault`].
     #[must_use]
     pub fn new(vault: impl Into<PathBuf>) -> Self {
         Self {
-            vault: vault.into(),
+            vaults: vec![VaultSpec::new(crate::registry::DEFAULT_VAULT_ID, vault)],
             ..Self::default()
         }
+    }
+
+    /// Adds another vault to the set to serve.
+    #[must_use]
+    pub fn with_vault(mut self, id: impl Into<String>, path: impl Into<PathBuf>) -> Self {
+        self.vaults.push(VaultSpec::new(id, path));
+        self
     }
 
     /// Sets the UI directory.
@@ -78,74 +86,44 @@ impl ServeOptions {
     }
 }
 
-/// An open vault with a router in front of it.
+/// Open vaults with a router in front of them.
 ///
-/// Holding one of these means holding the vault's lock. Dropping it releases
-/// the lock, so a test that builds a daemon per temporary vault cannot leak a
+/// Holding one of these means holding every vault's lock. Dropping it releases
+/// the locks, so a test that builds a daemon per temporary vault cannot leak a
 /// claim into the next test.
+///
+/// Startup is atomic over the configured set: either every vault validates,
+/// locks and scans, or [`Daemon::open`] fails having released whatever it had
+/// already taken.
 #[derive(Debug)]
 pub struct Daemon {
-    vault: Arc<Vault>,
+    registry: Arc<VaultRegistry>,
     router: Router,
-    // Dropped last-but-one; the lock is what other processes see.
-    _lock: VaultLock,
 }
 
 impl Daemon {
-    /// Locks the vault, scans it, and builds the router.
+    /// Locks every vault, scans them, and builds the router.
     ///
-    /// The vault must already be initialized; use [`crate::init::initialize`]
+    /// Each vault must already be initialized; use [`crate::init::initialize`]
     /// first. This refusal is deliberate — a daemon that initialized whatever
     /// directory it was pointed at would write a file into a mistyped path.
     ///
     /// # Errors
     ///
-    /// [`StartError::NotAVault`] when the root has no `.bookmarks-but-better-folder.md`,
-    /// [`StartError::Locked`] when another daemon holds it,
-    /// [`StartError::Vault`] when it cannot be scanned, and
+    /// [`StartError::Registry`] when the configured set is unusable or the
+    /// first unopenable vault fails — duplicate ids, overlapping roots, a
+    /// directory that is not a vault, a vault another daemon holds, or a vault
+    /// that cannot be scanned — and
     /// [`StartError::UiDir`] when the UI directory has no `index.html`.
     pub fn open(options: &ServeOptions) -> Result<Self, StartError> {
-        // The root is opened once, no-follow, and everything below is resolved
+        // Each root is opened no-follow, and everything below is resolved
         // against that handle. A symlinked vault root is refused here, exactly
         // as the scanner refuses it.
-        let root = fsx::open_root(&options.vault).map_err(|error| StartError::Vault {
-            path: options.vault.clone(),
-            error,
-        })?;
+        let registry = VaultRegistry::open(&options.vaults).map_err(StartError::Registry)?;
+        let registry = Arc::new(registry);
 
-        let (lock, state) =
-            VaultLock::acquire(&root, &options.vault).map_err(|error| match error {
-                held @ LockError::Held { .. } => StartError::Locked(held),
-                LockError::Io { path, error } => StartError::Vault { path, error },
-            })?;
-
-        // The lock is held, so anything left in staging belongs to a run that
-        // is no longer alive. Each interrupted operation is finished or undone
-        // according to its own manifest; nothing is ever discarded.
-        let notices = staging::recover(&state, &root);
-        for notice in &notices {
-            tracing::error!(
-                directory = %notice.directory,
-                operation = %notice.operation,
-                "entries from an interrupted change were kept and need attention"
-            );
-        }
-
-        let vault = Vault::open_with_state(&options.vault, state, notices).map_err(|error| {
-            StartError::Vault {
-                path: options.vault.clone(),
-                error,
-            }
-        })?;
-        if vault.snapshot().scan.folder().id().is_none() {
-            return Err(StartError::NotAVault {
-                path: options.vault.clone(),
-            });
-        }
-        let vault = Arc::new(vault);
-
-        let api = api::router(ApiState {
-            vault: Arc::clone(&vault),
+        let api = api::router(api::ApiState {
+            registry: Arc::clone(&registry),
         });
         let mut router = Router::new().nest(API_PREFIX, api);
 
@@ -164,11 +142,7 @@ impl Daemon {
 
         let router = router.layer(axum::middleware::from_fn(host::guard));
 
-        Ok(Self {
-            vault,
-            router,
-            _lock: lock,
-        })
+        Ok(Self { registry, router })
     }
 
     /// The router, for tests that drive it without binding a socket.
@@ -176,16 +150,35 @@ impl Daemon {
         self.router.clone()
     }
 
-    /// The vault being served.
+    /// The vaults being served, in configuration order.
     #[must_use]
-    pub fn vault(&self) -> &Arc<Vault> {
-        &self.vault
+    pub fn registry(&self) -> &Arc<VaultRegistry> {
+        &self.registry
     }
 
-    /// Starts the watcher for this vault.
+    /// The sole vault, for the single-vault call sites that predate the
+    /// registry. Multi-vault callers iterate [`Daemon::registry`] instead.
+    ///
+    /// # Panics
+    ///
+    /// When more than one vault is hosted; those callers have no vault to
+    /// mean, and a silent `first()` would hide the mistake.
     #[must_use]
-    pub fn watch(&self, options: WatchOptions) -> WatchHandle {
-        watch::spawn(Arc::clone(&self.vault), options)
+    pub fn vault(&self) -> &Arc<crate::vault::Vault> {
+        self.registry
+            .sole()
+            .map(|hosted| &hosted.vault)
+            .expect("vault() is the single-vault accessor; use registry() for more")
+    }
+
+    /// Starts a watcher for every vault.
+    #[must_use]
+    pub fn watch(&self, options: WatchOptions) -> Watchers {
+        let mut watchers = Watchers::new();
+        for hosted in self.registry.all() {
+            watchers.push(watch::spawn(Arc::clone(&hosted.vault), options));
+        }
+        watchers
     }
 
     /// Serves until `shutdown` resolves, then drains in-flight requests.
@@ -199,16 +192,16 @@ impl Daemon {
         shutdown: impl Future<Output = ()> + Send + 'static,
         watch_options: WatchOptions,
     ) -> io::Result<()> {
-        let watcher = self.watch(watch_options);
+        let watchers = self.watch(watch_options);
         let router = self.router();
 
         let result = axum::serve(listener, router)
             .with_graceful_shutdown(shutdown)
             .await;
 
-        // The watcher is stopped after the server so that a rescan triggered by
-        // the last request still completes.
-        watcher.shutdown().await;
+        // The watchers are stopped after the server so that a rescan
+        // triggered by the last request still completes.
+        watchers.shutdown().await;
         result
     }
 }
@@ -226,20 +219,9 @@ pub async fn bind(options: &ServeOptions) -> io::Result<TcpListener> {
 #[derive(Debug)]
 #[non_exhaustive]
 pub enum StartError {
-    /// The directory is not an initialized vault.
-    NotAVault {
-        /// The directory that was pointed at.
-        path: PathBuf,
-    },
-    /// Another process holds the vault.
-    Locked(LockError),
-    /// The vault could not be read.
-    Vault {
-        /// The path that failed.
-        path: PathBuf,
-        /// The underlying error.
-        error: io::Error,
-    },
+    /// The configured set of vaults is unusable, or one of them could not be
+    /// opened. Startup is atomic: nothing is held when this is returned.
+    Registry(crate::registry::RegistryError),
     /// The UI directory cannot serve a single-page application.
     UiDir {
         /// The directory that was given.
@@ -250,22 +232,7 @@ pub enum StartError {
 impl core::fmt::Display for StartError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
-            Self::NotAVault { path } => write!(
-                f,
-                "{} is not an initialized vault (no {} at its root)\n         run: bookmarks-but-better init --vault {}\n         or:  bookmarks-but-better serve --vault {} --init",
-                path.display(),
-                bookmarks_but_better_vault_core::FOLDER_FILE_NAME,
-                path.display(),
-                path.display(),
-            ),
-            Self::Locked(error) => write!(f, "{error}"),
-            Self::Vault { path, error } => {
-                write!(
-                    f,
-                    "the vault {} could not be opened: {error}",
-                    path.display()
-                )
-            }
+            Self::Registry(error) => write!(f, "{error}"),
             Self::UiDir { path } => write!(
                 f,
                 "the ui directory {} has no index.html, so it cannot serve the web app",
@@ -278,9 +245,8 @@ impl core::fmt::Display for StartError {
 impl core::error::Error for StartError {
     fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
         match self {
-            Self::Locked(error) => Some(error),
-            Self::Vault { error, .. } => Some(error),
-            Self::NotAVault { .. } | Self::UiDir { .. } => None,
+            Self::Registry(error) => Some(error),
+            Self::UiDir { .. } => None,
         }
     }
 }

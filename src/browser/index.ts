@@ -1,4 +1,4 @@
-export { detectAdapter } from "./detect"
+export { isBrowserExtension, migrateSyncToLocal } from "./runtime"
 export type {
   BookmarkNode,
   BookmarkDiagnostic,
@@ -7,4 +7,5 @@ export type {
   FaviconProvider,
   AdapterCapabilities,
   BrowserAdapter,
+  AdapterHealth,
 } from "./types"

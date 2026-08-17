@@ -76,7 +76,16 @@ function dependencies(
 ): CaptureControllerDependencies {
   return {
     getActiveTab: vi.fn().mockResolvedValue(tab),
-    selectAdapter: vi.fn().mockResolvedValue({ mode: "browser", adapter }),
+    selectAdapter: vi.fn().mockResolvedValue({
+      adapter,
+      source: {
+        id: "browser",
+        kind: "browser",
+        label: "Browser bookmarks",
+      },
+      choices: [],
+    }),
+    persistActiveSource: vi.fn().mockResolvedValue(true),
   }
 }
 
@@ -152,7 +161,7 @@ describe("CaptureController", () => {
     expect(adapter.storage.set).not.toHaveBeenCalled()
     expect(controller.getSnapshot()).toMatchObject({
       phase: "success",
-      message: "Saved to Bookmarks Bar.",
+      message: "Saved to Bookmarks Bar in Browser bookmarks.",
     })
   })
 
@@ -163,7 +172,8 @@ describe("CaptureController", () => {
     await controller.initialize()
     expect(controller.getSnapshot()).toMatchObject({
       phase: "error",
-      message: "The selected bookmark source is not ready.",
+      message:
+        "The active bookmark source is not ready. Change the destination or retry.",
     })
 
     controller.dispose()

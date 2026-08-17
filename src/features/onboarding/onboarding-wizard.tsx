@@ -14,8 +14,8 @@ import { DoneStep } from "./steps/done-step"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { resolveEffectiveCreateParentId } from "@/features/root-folder-select"
-import type { AdapterMode } from "@/browser/types"
 import { setOnboardingCompleted } from "@/browser/onboarding-preference"
+import type { OnboardingSourceChoice } from "./steps/mode-step"
 
 type ThemeMode = "light" | "dark" | "system"
 
@@ -31,10 +31,12 @@ const SHOW_MODE_STEP = import.meta.env.VITE_BUILD_TARGET !== "daemon"
 export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
   const [currentStep, setCurrentStep] = React.useState(0)
 
-  // Local wizard state
-  const [adapterMode, setAdapterModeLocal] = React.useState<AdapterMode>(
-    usePreferencesStore.getState().adapterMode
-  )
+  // Local wizard state. There is no adapter-mode to persist any more: the
+  // default profile already has Browser enabled and active, and connecting a
+  // daemon — the only other choice — persists through the connect flow
+  // itself. The choice only gates whether the daemon-setup step appears.
+  const [sourceChoice, setSourceChoice] =
+    React.useState<OnboardingSourceChoice>("browser")
   const [rootFolderId, setRootFolderId] = React.useState<string | null>(null)
   const [colorTheme, setColorTheme] = React.useState<ColorTheme>("default")
   const [themeMode, setThemeMode] = React.useState<ThemeMode>("dark")
@@ -42,7 +44,6 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
   // Store actions for persisting on completion
   const setStoreRootFolderId = useBookmarkStore((s) => s.setRootFolderId)
   const setStoreColorTheme = usePreferencesStore((s) => s.setColorTheme)
-  const setStoreAdapterMode = usePreferencesStore((s) => s.setAdapterMode)
   const adapter = usePreferencesStore((s) => s.adapter)
   const { setTheme } = useTheme()
 
@@ -88,17 +89,13 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
     )
   }, [bookmarkTree, bookmarkAdapter])
 
-  const showDaemonSetupStep = SHOW_MODE_STEP && adapterMode === "daemon"
+  const showDaemonSetupStep = SHOW_MODE_STEP && sourceChoice === "daemon"
 
   const steps = React.useMemo(() => {
     const list: React.ReactNode[] = [<WelcomeStep key="welcome" />]
     if (SHOW_MODE_STEP) {
       list.push(
-        <ModeStep
-          key="mode"
-          value={adapterMode}
-          onChange={setAdapterModeLocal}
-        />
+        <ModeStep key="mode" value={sourceChoice} onChange={setSourceChoice} />
       )
     }
     if (showDaemonSetupStep) {
@@ -121,7 +118,7 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
     )
     return list
   }, [
-    adapterMode,
+    sourceChoice,
     showDaemonSetupStep,
     rootFolderId,
     colorTheme,
@@ -151,18 +148,10 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
     }
   }
 
-  const persistAdapterMode = () => {
-    // Daemon mode is only ever persisted through `connectToDaemon`'s own
-    // validate/permission/health-check flow (triggered from the daemon-setup
-    // step's connection panel), never set directly here.
-    if (adapterMode !== "daemon") {
-      setStoreAdapterMode(adapterMode)
-    }
-  }
-
   const handleComplete = async () => {
-    // Persist all selections
-    persistAdapterMode()
+    // Persist all selections. The source choice needs no write of its own:
+    // a fresh profile already has Browser enabled and active, and choosing
+    // the daemon persists through the daemon-setup step's Connect flow.
     setStoreRootFolderId(rootFolderId)
     setStoreColorTheme(colorTheme)
     setTheme(themeMode)
@@ -178,9 +167,7 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
   }
 
   const handleSkip = async () => {
-    // Preserve any root folder and mode selection already made, use defaults
-    // for the rest
-    persistAdapterMode()
+    // Preserve any root folder choice already made, use defaults for the rest
     setStoreRootFolderId(rootFolderId)
     setStoreColorTheme("default")
     setTheme("dark")
@@ -217,11 +204,13 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
     <div className="fixed inset-0 z-50 flex animate-in items-center justify-center bg-black/50 backdrop-blur-xl duration-200 fade-in">
       {/* Modal */}
       <div className="relative w-full max-w-lg animate-in rounded-xl border border-border bg-card p-6 shadow-2xl duration-200 zoom-in-95 fade-in">
-        {/* Skip link */}
+        {/* Skip link — raised above the sliding step content so real-browser
+            hit testing reaches it (the steps are plain in-flow blocks that
+            would otherwise intercept the click). */}
         {currentStep > 0 && currentStep < TOTAL_STEPS - 1 && (
           <button
             onClick={handleSkip}
-            className="absolute top-4 right-4 text-xs text-muted-foreground transition-colors hover:text-foreground"
+            className="absolute top-4 right-4 z-10 text-xs text-muted-foreground transition-colors hover:text-foreground"
           >
             Skip, use defaults
           </button>

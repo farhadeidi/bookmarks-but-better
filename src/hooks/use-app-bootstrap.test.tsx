@@ -6,6 +6,8 @@ import { render, waitFor, cleanup } from "@testing-library/react"
 import { useAppBootstrap } from "./use-app-bootstrap"
 import { useBookmarkStore } from "@/stores/bookmark-store"
 import { useUIStore } from "@/stores/ui-store"
+import { useSourceStore, resetSourceSession } from "@/stores/source-store"
+import { emptySourceConfig } from "@/sources/config"
 import { installFakeIndexedDB } from "@/browser/__tests__/fake-indexeddb"
 import {
   getOnboardingCompleted,
@@ -13,9 +15,15 @@ import {
 } from "@/browser/onboarding-preference"
 import type { BrowserAdapter } from "@/browser"
 
-vi.mock("@/browser", () => ({
-  detectAdapter: vi.fn(),
-}))
+vi.mock("@/sources/adapters", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/sources/adapters")>()
+  return {
+    ...actual,
+    createAdapterForSource: vi.fn(),
+  }
+})
+
+const { createAdapterForSource } = await import("@/sources/adapters")
 
 installFakeIndexedDB()
 
@@ -98,20 +106,43 @@ function Harness() {
 
 beforeEach(() => {
   installFakeIndexedDB()
+  // A desktop extension context: the fresh profile's Browser Source must
+  // survive normalization for these bootstraps to have a source at all.
+  vi.stubGlobal("chrome", {
+    bookmarks: {},
+    storage: {
+      local: { get: vi.fn().mockResolvedValue({}), set: vi.fn() },
+      sync: { get: vi.fn().mockResolvedValue({}) },
+    },
+  })
   useUIStore.setState({ onboardingOpen: false })
+  // The source store's session is module-global; every test starts a fresh
+  // one over a browser-source config.
+  resetSourceSession()
+  useSourceStore.setState({
+    status: "loading",
+    switching: false,
+    lastSwitchError: null,
+    config: {
+      ...emptySourceConfig(),
+      sources: { browser: { enabled: true } },
+      activeSourceId: "browser",
+    },
+    activeSourceId: "browser",
+  })
 })
 
 afterEach(() => {
   cleanup()
   vi.restoreAllMocks()
+  vi.unstubAllGlobals()
   installFakeIndexedDB()
 })
 
 describe("useAppBootstrap", () => {
   it("migrates a completed v2-v3 setup and does not reopen onboarding", async () => {
     const { adapter } = createMockAdapter(true)
-    const { detectAdapter } = await import("@/browser")
-    vi.mocked(detectAdapter).mockResolvedValue(adapter)
+    vi.mocked(createAdapterForSource).mockReturnValue(adapter)
 
     render(<Harness />)
 
@@ -124,11 +155,10 @@ describe("useAppBootstrap", () => {
     expect(useUIStore.getState().onboardingOpen).toBe(false)
   })
 
-  it("keeps onboarding closed after the adapter changes", async () => {
+  it("keeps onboarding closed after the source changes", async () => {
     await setOnboardingCompleted(true)
     const { adapter } = createMockAdapter(null)
-    const { detectAdapter } = await import("@/browser")
-    vi.mocked(detectAdapter).mockResolvedValue(adapter)
+    vi.mocked(createAdapterForSource).mockReturnValue(adapter)
 
     render(<Harness />)
 
@@ -141,8 +171,7 @@ describe("useAppBootstrap", () => {
 
   it("opens onboarding for a genuinely fresh profile", async () => {
     const { adapter } = createMockAdapter(null)
-    const { detectAdapter } = await import("@/browser")
-    vi.mocked(detectAdapter).mockResolvedValue(adapter)
+    vi.mocked(createAdapterForSource).mockReturnValue(adapter)
 
     render(<Harness />)
 
@@ -151,31 +180,27 @@ describe("useAppBootstrap", () => {
     })
   })
 
-  it("unsubscribes all bookmark listeners on unmount, including under StrictMode double-invoke", async () => {
+  it("a StrictMode double-invoke initializes exactly one session, not two", async () => {
     const { adapter, listeners } = createMockAdapter()
-    const { detectAdapter } = await import("@/browser")
-    vi.mocked(detectAdapter).mockResolvedValue(adapter)
+    vi.mocked(createAdapterForSource).mockReturnValue(adapter)
 
-    const { unmount } = render(
+    render(
       <React.StrictMode>
         <Harness />
       </React.StrictMode>
     )
 
     await waitFor(() => {
+      expect(useBookmarkStore.getState().isLoading).toBe(false)
+    })
+    // Subscriptions land in the same microtask chain that clears isLoading;
+    // wait for them explicitly rather than asserting a mid-flight moment.
+    await waitFor(() => {
       expect(totalListenerCount(listeners)).toBeGreaterThan(0)
     })
 
-    // Give the (StrictMode-cancelled) first bootstrap pass a chance to
-    // resolve and clean up after itself before we unmount.
-    await waitFor(() => {
-      expect(useBookmarkStore.getState().isLoading).toBe(false)
-    })
-
-    unmount()
-
-    await waitFor(() => {
-      expect(totalListenerCount(listeners)).toBe(0)
-    })
+    // One session means one set of subscriptions, not one per effect invoke:
+    // the second pass awaits the first's single-flight initialization.
+    expect(totalListenerCount(listeners)).toBe(4)
   })
 })

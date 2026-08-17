@@ -4,7 +4,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { installFakeIndexedDB } from "@/browser/__tests__/fake-indexeddb"
 import { useUIStore } from "@/stores/ui-store"
-import { usePreferencesStore } from "@/stores/preferences-store"
 import { useBookmarkStore } from "@/stores/bookmark-store"
 import { SettingsDialog } from "../settings-dialog"
 import { getOnboardingCompleted } from "@/browser/onboarding-preference"
@@ -19,11 +18,19 @@ installFakeIndexedDB()
 
 beforeEach(() => {
   vi.stubGlobal("ResizeObserver", StubResizeObserver)
+  vi.stubGlobal(
+    "matchMedia",
+    vi.fn().mockImplementation((query: string) => ({
+      matches: true,
+      media: query,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    }))
+  )
   useUIStore.setState({
     settingsOpen: true,
     onboardingOpen: false,
   })
-  usePreferencesStore.setState({ adapterMode: "browser" })
   useBookmarkStore.setState({ tree: [], rootFolderId: null })
 })
 

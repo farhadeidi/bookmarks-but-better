@@ -6,7 +6,6 @@
     "17": "grid"
   },
   "nestedFolders": false,
-  "adapterMode": "standalone",
   "colorTheme": "default",
   "maxColumns": 4,
   "containerMode": "contained",

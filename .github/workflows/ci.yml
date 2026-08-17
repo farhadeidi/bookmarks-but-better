@@ -76,6 +76,20 @@ jobs:
           BOOKMARKS_BUT_BETTER_E2E_PORT: 52223
         run: bun run test:e2e:daemon
 
+      # The multi-Vault contract against a daemon hosting two isolated
+      # temporary vaults: discovery, vault-scoped routing, vault_required on
+      # the legacy unscoped routes, and the served web app switching Vaults.
+      - name: Run multi-vault daemon end-to-end test
+        env:
+          BOOKMARKS_BUT_BETTER_E2E_MULTIVAULT_PORT: 52226
+        run: bun run test:e2e:multi-vault
+
+      # The Dev Workbench UI flows (default scenario, source switching,
+      # offline recovery, deterministic reset, Safari capabilities) against
+      # an isolated dev server on port 5179 — no extension, no real daemon.
+      - name: Run Dev Workbench UI tests
+        run: bun run test:ui
+
   install-scripts:
     name: Install script checks
     runs-on: ubuntu-latest

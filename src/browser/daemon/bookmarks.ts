@@ -105,7 +105,12 @@ export class DaemonBookmarkAdapter implements BookmarkAdapter {
   }
 
   async checkHealth(): Promise<AdapterHealth> {
-    const health = await this.client.fetchHealth()
+    // Vault-scoped when the client names a vault (the vault's warnings and
+    // generation), daemon-level otherwise. Either way a non-ok status or a
+    // network failure surfaces as an error the user can act on.
+    const health = this.client.vaultId
+      ? await this.client.fetchVaultHealth()
+      : await this.client.fetchHealth()
     return { ready: health.status === "ok", warnings: health.warnings }
   }
 

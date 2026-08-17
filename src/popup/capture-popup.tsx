@@ -19,6 +19,7 @@ import {
   SelectTrigger,
 } from "@/components/ui/select"
 import { Spinner } from "@/components/ui/spinner"
+import { platformCapabilities } from "@/sources/platform"
 import {
   CaptureController,
   createCaptureDependencies,
@@ -37,7 +38,9 @@ export function CapturePopup({ dependencies }: CapturePopupProps) {
     url: "",
     folders: [],
     folderId: "",
+    sourceId: "",
     sourceLabel: "",
+    choices: [],
     message: null,
   }))
   const controllerRef = React.useRef<CaptureController | null>(null)
@@ -61,6 +64,17 @@ export function CapturePopup({ dependencies }: CapturePopupProps) {
   const canSubmit =
     snapshot.phase === "ready" && snapshot.title.trim().length > 0
 
+  // Safari cannot override the new-tab page, so its only route to the
+  // dashboard is a tab opened from here. Capability-seam driven, not a
+  // browser-name branch.
+  const canOpenDashboard = React.useMemo(() => {
+    const caps = platformCapabilities()
+    return caps.isExtension && !caps.browserSource
+  }, [])
+  const openDashboard = () => {
+    void chrome.tabs.create({ url: chrome.runtime.getURL("index.html") })
+  }
+
   return (
     <main className="isolate flex min-h-64 w-96 max-w-full flex-col gap-5 bg-background p-5 text-foreground antialiased">
       <header className="flex min-w-0 items-start gap-3">
@@ -71,9 +85,40 @@ export function CapturePopup({ dependencies }: CapturePopupProps) {
         />
         <div className="min-w-0 flex-1">
           <h1 className="font-semibold text-balance">Save this page</h1>
-          <p className="truncate text-base text-pretty text-muted-foreground sm:text-sm">
-            {snapshot.sourceLabel || "Preparing bookmark source…"}
-          </p>
+          {/* The destination: the profile's Active Source, labelled on every
+              capture so what "Save" writes is never a guess. With more than
+              one enabled source the label becomes a quick change. */}
+          {snapshot.choices.length > 1 ? (
+            <Select
+              value={snapshot.sourceId}
+              onValueChange={(sourceId) => {
+                if (sourceId) void controllerRef.current?.switchSource(sourceId)
+              }}
+              disabled={isBusy}
+            >
+              <SelectTrigger
+                className="h-7 w-full border-none bg-accent/40 px-2 text-sm text-muted-foreground shadow-none sm:text-xs"
+                aria-label="Destination source"
+              >
+                <span className="truncate">
+                  {snapshot.sourceLabel || "Choosing destination…"}
+                </span>
+              </SelectTrigger>
+              <SelectContent align="start" alignItemWithTrigger={false}>
+                <SelectGroup>
+                  {snapshot.choices.map((choice) => (
+                    <SelectItem key={choice.id} value={choice.id}>
+                      {choice.label}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+              </SelectContent>
+            </Select>
+          ) : (
+            <p className="truncate text-base text-pretty text-muted-foreground sm:text-sm">
+              {snapshot.sourceLabel || "Preparing bookmark source…"}
+            </p>
+          )}
         </div>
       </header>
 
@@ -193,6 +238,18 @@ export function CapturePopup({ dependencies }: CapturePopupProps) {
                 ? "Saved"
                 : "Save bookmark"}
           </Button>
+
+          {canOpenDashboard && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="w-full"
+              onClick={openDashboard}
+            >
+              Open the dashboard
+            </Button>
+          )}
         </form>
       )}
     </main>

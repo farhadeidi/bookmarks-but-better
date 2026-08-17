@@ -60,7 +60,16 @@ function popupDependencies(): {
         title: "Example",
         url: "https://example.com",
       }),
-      selectAdapter: vi.fn().mockResolvedValue({ mode: "browser", adapter }),
+      selectAdapter: vi.fn().mockResolvedValue({
+        adapter,
+        source: {
+          id: "browser",
+          kind: "browser",
+          label: "Browser bookmarks",
+        },
+        choices: [],
+      }),
+      persistActiveSource: vi.fn().mockResolvedValue(true),
     },
   }
 }

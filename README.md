@@ -113,7 +113,7 @@ optional localhost access at that moment, not during extension installation.
 
 ```bash
 bun install               # Install dependencies
-bun run dev               # Start dev server (standalone mode)
+bun run dev               # Dev Workbench — the full app in a browser, with simulated scenarios
 bun run build             # Build for both Chrome and Firefox
 bun run build:chrome      # Build for Chrome only → dist-chrome/
 bun run build:firefox     # Build for Firefox only → dist-firefox/
@@ -122,8 +122,15 @@ bun run typecheck         # Type check
 bun run lint              # Lint
 bun run format            # Format code
 bun run test              # Run tests
+bun run test:ui           # Playwright UI tests against the Dev Workbench (isolated dev server)
 bun run test:npm          # Test the npx launcher in packages/bookmarks-but-better
 ```
+
+`bun run dev` needs no extension and no daemon: it opens the complete
+application against deterministic, URL-addressable scenarios (`?scenario=safari`,
+`?scenario=daemon-offline`, …) with failure controls for offline, latency,
+permission and mutation behavior. See
+[docs/DEV_WORKBENCH.md](docs/DEV_WORKBENCH.md).
 
 ## Releasing
 

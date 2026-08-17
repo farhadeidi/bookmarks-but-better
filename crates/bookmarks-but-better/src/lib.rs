@@ -1,5 +1,5 @@
-//! The **Bookmarks But Better** daemon: an HTTP API and static web host over a
-//! Markdown vault, plus the CLI that drives it.
+//! The **Bookmarks But Better** daemon: an HTTP API and static web host over
+//! one or more Markdown vaults, plus the CLI that drives it.
 //!
 //! This crate owns *behaviour*. The on-disk format — parsing, scanning,
 //! validation and byte-preserving updates — lives entirely in
@@ -7,12 +7,16 @@
 //!
 //! # What the daemon guarantees
 //!
-//! * **Only the configured vault is touched.** Every read, write and watch is
-//!   rooted at the one directory the user named. Nothing scans elsewhere, and a
+//! * **Only the configured vaults are touched.** Every read, write and watch is
+//!   rooted at the directories the user named. Nothing scans elsewhere, and a
 //!   directory that is not already a vault is refused rather than initialized
 //!   by surprise.
-//! * **One writer.** An advisory lock on `<vault>/.bookmarks-but-better/lock` means a second
+//! * **One writer per vault.** An advisory lock on `<vault>/.bookmarks-but-better/lock` means a second
 //!   daemon fails to start instead of racing the first.
+//! * **Atomic startup.** The configured set of vaults is validated before
+//!   anything opens, and the first vault that cannot be locked, recovered or
+//!   scanned fails the whole start-up with everything already taken released
+//!   again.
 //! * **No silent overwrites.** Every mutation carries the revision the client
 //!   last saw; a mismatch is a `409`, never a write. A change to what a folder
 //!   holds — or to the order it holds it in — additionally carries that
@@ -32,9 +36,10 @@
 //! # Layout
 //!
 //! ```text
-//! cli      the four subcommands
-//! server   lock + vault + router + watcher + shutdown
-//! api      the /api/v1 routes
+//! cli      the subcommands
+//! server   registry + router + watchers + shutdown
+//! registry the hosted set of vaults: validation, atomic open, discovery ids
+//! api      the /api/v1 routes, unscoped and vault-scoped
 //! vault    the cached scan, the generation, and every mutation
 //! fsx      handle-relative, no-follow filesystem primitives
 //! staging  reversible deletion
@@ -80,6 +85,7 @@ pub mod entry;
 pub mod init;
 pub mod lock;
 pub mod problem;
+pub mod registry;
 pub mod server;
 pub mod service;
 pub mod setup;
@@ -90,6 +96,7 @@ pub use crate::entry::EntryRef;
 pub use crate::init::{InitOutcome, initialize};
 pub use crate::lock::VaultLock;
 pub use crate::problem::{Problem, ProblemCode};
+pub use crate::registry::{DEFAULT_VAULT_ID, HostedVault, VaultRegistry, VaultSpec};
 pub use crate::server::{Daemon, ServeOptions, StartError};
 pub use crate::vault::Vault;
 
