@@ -474,6 +474,19 @@ describe("selectors", () => {
     expect(sources[1].kind).toBe("daemon")
     expect(sources[1].vaultId).toBe("main")
   })
+
+  it("updates a profile-local label without restarting the active session", async () => {
+    await useSourceStore.getState().setSourceLabel(DAEMON_ID, "Research")
+
+    expect(
+      enabledSourceDescriptors(useSourceStore.getState())[1]
+    ).toMatchObject({
+      id: DAEMON_ID,
+      label: "Research",
+      defaultLabel: "main · 127.0.0.1:52222",
+    })
+    expect(createAdapterForSource).not.toHaveBeenCalled()
+  })
 })
 
 describe("teardown", () => {

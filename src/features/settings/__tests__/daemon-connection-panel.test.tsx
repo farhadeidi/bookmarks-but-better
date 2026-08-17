@@ -72,7 +72,9 @@ describe("DaemonConnectionPanel", () => {
     expect(connectToDaemon.mock.calls[0][0]).toBe("127.0.0.1:47321")
     // Live switching replaced the reload: the panel settles back to idle.
     await waitFor(() => {
-      expect(screen.getByText("http://127.0.0.1:47321")).toBeTruthy()
+      expect(
+        useSourceStore.getState().config.connections["http://127.0.0.1:47321"]
+      ).toBeTruthy()
     })
   })
 
@@ -93,27 +95,6 @@ describe("DaemonConnectionPanel", () => {
     })
     expect(screen.getByRole("button", { name: "Retry" })).toBeTruthy()
     expect(useSourceStore.getState().config.connections).toEqual({})
-  })
-
-  it("lists a stored connection with its own Forget action", () => {
-    seedConfig({ "http://127.0.0.1:47321": {} })
-    render(<DaemonConnectionPanel />)
-
-    expect(screen.getByText("http://127.0.0.1:47321")).toBeTruthy()
-    expect(screen.getByRole("button", { name: "Forget" })).toBeTruthy()
-  })
-
-  it("forgets through the source store, which owns persistence", async () => {
-    seedConfig({ "http://127.0.0.1:47321": {} })
-    const forgetDaemon = vi.fn().mockResolvedValue(undefined)
-    useSourceStore.setState({ forgetDaemon })
-
-    render(<DaemonConnectionPanel />)
-    fireEvent.click(screen.getByRole("button", { name: "Forget" }))
-
-    await waitFor(() =>
-      expect(forgetDaemon).toHaveBeenCalledWith("http://127.0.0.1:47321")
-    )
   })
 
   it("reveals the bearer-token field and install guide under Advanced", () => {

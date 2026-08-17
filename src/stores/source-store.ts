@@ -40,6 +40,7 @@ import {
   orderSourceIds,
   removeSource,
   setActiveSource as withActive,
+  setSourceLabel as withSourceLabel,
   upsertDaemonSource,
   type SourceConfig,
 } from "@/sources/config"
@@ -66,14 +67,16 @@ interface SourceState {
    * `false` when disabling was refused (it is the last enabled source).
    */
   setSourceEnabled(id: string, enabled: boolean): Promise<boolean>
+  /** Changes only the profile-local display label; no session is restarted. */
+  setSourceLabel(id: string, label: string): Promise<void>
   connectDaemon(
     originInput: string,
     options?: DaemonConnectOptions
   ): Promise<DaemonConnectResult>
   /** Forgets a daemon connection: sources, token and host permission. */
   forgetDaemon(origin: string): Promise<void>
-  /** Re-runs discovery for every connection, best-effort. */
-  refreshDaemonVaults(): Promise<void>
+  /** Re-runs discovery for one connection, or every connection when omitted. */
+  refreshDaemonVaults(origin?: string): Promise<void>
 }
 
 /** Session token: bumped by every transition; stale async work checks it. */
@@ -168,6 +171,12 @@ export const useSourceStore = create<SourceState>((set, get) => ({
     return true
   },
 
+  async setSourceLabel(id, label) {
+    const config = withSourceLabel(get().config, id, label)
+    await saveSourceConfig(config)
+    set({ config })
+  },
+
   async connectDaemon(originInput, options = {}) {
     const e = await env()
     const result = await e.connect(originInput, options)
@@ -231,9 +240,16 @@ export const useSourceStore = create<SourceState>((set, get) => ({
     }
   },
 
-  async refreshDaemonVaults() {
+  async refreshDaemonVaults(origin) {
     const e = await env()
-    const discoveries = await e.refreshDiscoveries(get().config.connections)
+    const currentConfig = get().config
+    const connections =
+      origin === undefined
+        ? currentConfig.connections
+        : Object.hasOwn(currentConfig.connections, origin)
+          ? { [origin]: currentConfig.connections[origin] }
+          : {}
+    const discoveries = await e.refreshDiscoveries(connections)
     let config = get().config
     for (const discovery of discoveries) {
       config = syncConnectionVaults(

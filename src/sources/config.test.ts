@@ -11,11 +11,13 @@ import {
   enableSource,
   enabledSourceIds,
   forgetDaemonConnection,
+  initialSourceConfig,
   migrateFromAdapterMode,
   normalizeSourceConfig,
   parseDaemonSourceId,
   removeSource,
   setActiveSource,
+  setSourceLabel,
   upsertDaemonSource,
   type SourceConfig,
 } from "./config"
@@ -67,6 +69,48 @@ describe("daemon source ids", () => {
     expect(parseDaemonSourceId("browser")).toBeNull()
     expect(parseDaemonSourceId("daemon:no-separator")).toBeNull()
     expect(parseDaemonSourceId("daemon:origin#")).toBeNull()
+  })
+})
+
+describe("profile-local source labels", () => {
+  it("sets a trimmed label and restores the default when cleared", () => {
+    const config = initialSourceConfig(extensionCaps)
+    const labeled = setSourceLabel(config, BROWSER_SOURCE_ID, "  Personal  ")
+
+    expect(labeled.sources[BROWSER_SOURCE_ID]?.label).toBe("Personal")
+    expect(config.sources[BROWSER_SOURCE_ID]?.label).toBeUndefined()
+
+    const restored = setSourceLabel(labeled, BROWSER_SOURCE_ID, "   ")
+    expect(restored.sources[BROWSER_SOURCE_ID]?.label).toBeUndefined()
+  })
+
+  it("preserves a local label when daemon discovery refreshes Vault metadata", () => {
+    const origin = "http://127.0.0.1:52222"
+    const id = daemonSourceId(origin, "reading")
+    const config: SourceConfig = {
+      version: 2,
+      connections: { [origin]: {} },
+      sources: {
+        [id]: {
+          enabled: true,
+          origin,
+          vaultId: "reading",
+          name: "Reading",
+          label: "Research",
+        },
+      },
+      activeSourceId: id,
+    }
+
+    const refreshed = upsertDaemonSource(config, origin, {
+      id: "reading",
+      name: "Reading list",
+    })
+
+    expect(refreshed.sources[id]).toMatchObject({
+      label: "Research",
+      name: "Reading list",
+    })
   })
 })
 

@@ -101,7 +101,9 @@ ever heard of.
 Once the daemon is running, open the extension's Settings → **Sources**, enter
 the daemon's address (`127.0.0.1:52222` by default) and click **Connect**.
 Every Vault the daemon hosts appears as its own source you can enable,
-disable, and switch between — Browser bookmarks stay enabled alongside them.
+disable, give a browser-profile-local display label, and switch between —
+Browser bookmarks stay enabled alongside them. The label is only an alias in
+that browser profile; it never renames the Vault itself.
 
 The extension only requests permission to reach loopback addresses at that
 point — never at install time — and only records the connection if a real
@@ -129,6 +131,12 @@ Each Vault is a separate source with vault-scoped routes under
 and friends) keep working only while exactly one Vault is hosted; with more
 than one they answer a stable `vault_required` error rather than picking a
 hidden default. Adding or removing Vaults is a restart, by design for now.
+
+Settings → **Sources** groups discovered Vaults under their daemon connection.
+After changing the daemon's `--vault` configuration and restarting it, use
+**Refresh Vaults** there to update the list. Forgetting a daemon removes the
+connection and all of its discovered sources from that browser profile;
+disabling one Vault keeps the connection for later.
 
 ## More
 

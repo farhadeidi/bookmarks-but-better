@@ -1,7 +1,14 @@
 // @vitest-environment jsdom
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { cleanup, render, screen, waitFor } from "@testing-library/react"
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react"
 import { installFakeIndexedDB } from "@/browser/__tests__/fake-indexeddb"
 import { useSourceStore } from "@/stores/source-store"
 import { daemonSourceId } from "@/sources/config"
@@ -65,5 +72,44 @@ describe("SourcesPanel enable switches", () => {
     })
     expect(switchOf("Enable main · 127.0.0.1:52224", false)).toBeTruthy()
     expect(switchOf("Enable Browser bookmarks", true)).toBeTruthy()
+  })
+})
+
+describe("SourcesPanel source management", () => {
+  it("groups Vaults under their daemon and exposes refresh and forget actions", () => {
+    render(<SourcesPanel onMigrateStandalone={() => {}} />)
+
+    const daemon = screen.getByRole("group", { name: `Daemon ${ORIGIN}` })
+    expect(within(daemon).getByText("1 Vault")).toBeTruthy()
+    expect(
+      within(daemon).getByRole("button", { name: "Refresh Vaults" })
+    ).toBeTruthy()
+    expect(
+      within(daemon).getByRole("button", { name: "Forget daemon" })
+    ).toBeTruthy()
+    expect(
+      within(daemon).getByText(/Add, remove, or rename Vaults/)
+    ).toBeTruthy()
+  })
+
+  it("renames a source only for this profile", async () => {
+    render(<SourcesPanel onMigrateStandalone={() => {}} />)
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Rename main · 127.0.0.1:52224",
+      })
+    )
+    fireEvent.change(screen.getByRole("textbox", { name: "Display label" }), {
+      target: { value: "Research" },
+    })
+    fireEvent.click(screen.getByRole("button", { name: "Save label" }))
+
+    await waitFor(() => {
+      expect(screen.getByText("Research")).toBeTruthy()
+    })
+    expect(useSourceStore.getState().config.sources[VAULT_ID]?.label).toBe(
+      "Research"
+    )
   })
 })

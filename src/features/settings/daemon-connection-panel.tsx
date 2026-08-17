@@ -96,17 +96,13 @@ function InstallGuide() {
  * live, with no reload.
  */
 export function DaemonConnectionPanel() {
-  const connections = useSourceStore((s) => s.config.connections)
   const connectDaemon = useSourceStore((s) => s.connectDaemon)
-  const forgetDaemon = useSourceStore((s) => s.forgetDaemon)
 
   const [origin, setOrigin] = React.useState(DEFAULT_DAEMON_ORIGIN)
   const [bearerToken, setBearerToken] = React.useState("")
   const [phase, setPhase] = React.useState<Phase>("idle")
   const [error, setError] = React.useState<AttemptError | null>(null)
   const [showAdvanced, setShowAdvanced] = React.useState(false)
-
-  const savedOrigins = Object.keys(connections)
 
   const handleConnect = React.useCallback(async () => {
     setPhase("connecting")
@@ -170,32 +166,6 @@ export function DaemonConnectionPanel() {
           </p>
         )}
       </div>
-
-      {savedOrigins.length > 0 && (
-        <div className="flex flex-col gap-2">
-          <span className="text-sm font-medium">Connected daemons</span>
-          {savedOrigins.map((saved) => (
-            <div
-              key={saved}
-              className="flex items-center justify-between gap-2 rounded-lg border border-border/60 p-3"
-            >
-              <span className="min-w-0 truncate text-sm">{saved}</span>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => void forgetDaemon(saved)}
-              >
-                Forget
-              </Button>
-            </div>
-          ))}
-          <p className="text-xs text-muted-foreground">
-            Forgetting removes the address, its token and its sources. Disabling
-            a source keeps the connection for later.
-          </p>
-        </div>
-      )}
 
       <Button
         type="button"

@@ -64,3 +64,41 @@ test("Browser bookmark settings live inside Sources instead of a separate catego
     dialog.getByText("Nested folders", { exact: true })
   ).toBeVisible()
 })
+
+test("a source can be given a profile-local display label", async ({
+  page,
+}) => {
+  const dialog = await openSettings(page)
+  await dialog.getByRole("tab", { name: "Sources" }).click()
+
+  await dialog.getByRole("button", { name: "Rename reading" }).click()
+  const labelInput = dialog.getByRole("textbox", { name: "Display label" })
+  await labelInput.fill("Research")
+  await dialog.getByRole("button", { name: "Save label" }).click()
+
+  await expect(dialog.getByText("Research", { exact: true })).toBeVisible()
+  await dialog.getByRole("button", { name: "Close" }).click()
+  await expect(
+    page.getByRole("tab", { name: "Research", exact: true })
+  ).toBeVisible()
+})
+
+test("each daemon connection exposes its discovered Vaults and refresh control", async ({
+  page,
+}) => {
+  const dialog = await openSettings(page)
+  await dialog.getByRole("tab", { name: "Sources" }).click()
+
+  const daemon = dialog.getByRole("group", {
+    name: "Daemon http://127.0.0.1:52222",
+  })
+  await expect(daemon.getByText("2 Vaults", { exact: true })).toBeVisible()
+  await expect(daemon.getByText("reading", { exact: true })).toBeVisible()
+  await expect(daemon.getByText("archive", { exact: true })).toBeVisible()
+  await expect(
+    daemon.getByRole("button", { name: "Refresh Vaults" })
+  ).toBeVisible()
+  await expect(daemon).toContainText(
+    "Add, remove, or rename Vaults in the daemon configuration"
+  )
+})

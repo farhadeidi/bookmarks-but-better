@@ -55,13 +55,23 @@ describe("the production environment", () => {
     const connections = { "http://127.0.0.1:52222": { bearerToken: "t" } }
 
     const built = await productionSourceEnvironment.adapterFor(
-      { id: "browser", kind: "browser", label: "Browser bookmarks" },
+      {
+        id: "browser",
+        kind: "browser",
+        label: "Browser bookmarks",
+        defaultLabel: "Browser bookmarks",
+      },
       connections
     )
 
     expect(built).toBe(sentinel)
     expect(createAdapterForSource).toHaveBeenCalledWith(
-      { id: "browser", kind: "browser", label: "Browser bookmarks" },
+      {
+        id: "browser",
+        kind: "browser",
+        label: "Browser bookmarks",
+        defaultLabel: "Browser bookmarks",
+      },
       connections
     )
   })

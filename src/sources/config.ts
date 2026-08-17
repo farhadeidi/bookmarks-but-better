@@ -44,6 +44,11 @@ export function parseDaemonSourceId(
 export interface SourceEntry {
   enabled: boolean
   /**
+   * Optional display label chosen for this browser profile. It never changes
+   * the Browser collection, daemon Vault id, or daemon-provided Vault name.
+   */
+  label?: string
+  /**
    * Standalone only: this profile used Standalone before the sunset, so it
    * keeps access for the sunset period. New profiles never see this flag.
    */
@@ -225,6 +230,29 @@ export function setActiveSource(
   return { ...config, activeSourceId: id }
 }
 
+/**
+ * Sets a profile-local display label without changing the source's identity.
+ * Whitespace-only labels restore the source's default label.
+ */
+export function setSourceLabel(
+  config: SourceConfig,
+  id: string,
+  label: string
+): SourceConfig {
+  const entry = config.sources[id]
+  if (!entry) return config
+
+  const trimmed = label.trim()
+  const nextEntry: SourceEntry = { ...entry }
+  if (trimmed) nextEntry.label = trimmed
+  else delete nextEntry.label
+
+  return {
+    ...config,
+    sources: { ...config.sources, [id]: nextEntry },
+  }
+}
+
 /** Upserts a discovered daemon vault as a source. */
 export function upsertDaemonSource(
   config: SourceConfig,
@@ -247,6 +275,7 @@ export function upsertDaemonSource(
       ...config.sources,
       [id]: {
         enabled,
+        ...(existing?.label ? { label: existing.label } : {}),
         origin,
         vaultId: vault.id,
         ...(vault.name ? { name: vault.name } : {}),

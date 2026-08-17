@@ -15,6 +15,8 @@ export interface SourceDescriptor {
   kind: SourceKind
   /** The label every surface shows for this source. */
   label: string
+  /** The source-owned label used when this profile has no custom label. */
+  defaultLabel: string
   /** Daemon only: the connection's canonical origin. */
   origin?: string
   /** Daemon only: the vault's id on its daemon. */
@@ -38,13 +40,21 @@ export function describeSource(
   entry: SourceEntry
 ): SourceDescriptor {
   if (id === BROWSER_SOURCE_ID) {
-    return { id, kind: "browser", label: "Browser bookmarks" }
+    const defaultLabel = "Browser bookmarks"
+    return {
+      id,
+      kind: "browser",
+      defaultLabel,
+      label: entry.label?.trim() || defaultLabel,
+    }
   }
   if (id === STANDALONE_SOURCE_ID) {
+    const defaultLabel = "Standalone (legacy)"
     return {
       id,
       kind: "standalone",
-      label: "Standalone (legacy)",
+      defaultLabel,
+      label: entry.label?.trim() || defaultLabel,
       legacy: entry.legacy,
     }
   }
@@ -53,14 +63,16 @@ export function describeSource(
   if (daemon) {
     const name = entry.name?.trim()
     const unscoped = entry.unscoped === true
+    const defaultLabel = name
+      ? name
+      : unscoped
+        ? shortOrigin(daemon.origin)
+        : `${daemon.vaultId} · ${shortOrigin(daemon.origin)}`
     return {
       id,
       kind: "daemon",
-      label: name
-        ? name
-        : unscoped
-          ? shortOrigin(daemon.origin)
-          : `${daemon.vaultId} · ${shortOrigin(daemon.origin)}`,
+      defaultLabel,
+      label: entry.label?.trim() || defaultLabel,
       origin: daemon.origin,
       vaultId: entry.vaultId ?? daemon.vaultId,
       ...(unscoped ? { unscoped: true } : {}),
@@ -69,5 +81,10 @@ export function describeSource(
 
   // Unknown ids (a future kind, a corrupted entry) still need a label rather
   // than a crash; they sort last and cannot be created by this build.
-  return { id, kind: "daemon", label: id }
+  return {
+    id,
+    kind: "daemon",
+    defaultLabel: id,
+    label: entry.label?.trim() || id,
+  }
 }
