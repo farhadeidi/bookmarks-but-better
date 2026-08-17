@@ -164,7 +164,7 @@ export const BookmarkItem = React.memo(function BookmarkItem({
             <a
               href={bookmark.url}
               draggable="false"
-              className="flex items-center gap-2.5 rounded-lg px-2 py-1.5 transition-colors hover:bg-accent"
+              className="flex min-w-0 items-center gap-2.5 rounded-lg px-2 py-2.5 transition-colors hover:bg-accent sm:py-1.5"
             />
           }
         >
@@ -175,7 +175,9 @@ export const BookmarkItem = React.memo(function BookmarkItem({
             title={bookmark.title}
             size={16}
           />
-          <span className="truncate text-sm">{bookmark.title}</span>
+          <span className="min-w-0 truncate text-base sm:text-sm">
+            {bookmark.title}
+          </span>
         </HoverCardTrigger>
         <HoverCardContent side="right" className="w-72">
           <HoverCardBody

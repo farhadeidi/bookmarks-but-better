@@ -6,15 +6,15 @@ import {
 } from "@/stores/preferences-store"
 import { useTheme } from "@/components/theme-provider"
 import { WelcomeStep } from "./steps/welcome-step"
-import { ModeStep } from "./steps/mode-step"
+import { SourceStep, type OnboardingSourceChoice } from "./steps/source-step"
 import { DaemonSetupStep } from "./steps/daemon-setup-step"
 import { RootFolderStep } from "./steps/root-folder-step"
 import { AppearanceStep } from "./steps/appearance-step"
 import { DoneStep } from "./steps/done-step"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
+import { platformCapabilities } from "@/sources/platform"
 import { resolveEffectiveCreateParentId } from "@/features/root-folder-select"
-import type { AdapterMode } from "@/browser/types"
 import { setOnboardingCompleted } from "@/browser/onboarding-preference"
 
 type ThemeMode = "light" | "dark" | "system"
@@ -23,18 +23,32 @@ interface OnboardingWizardProps {
   onComplete: () => void
 }
 
-// The mode step (and its conditional daemon-setup follow-up) is skipped in
+// The source step (and its conditional daemon-setup follow-up) is skipped in
 // the daemon-served build, since that build always serves its own
-// same-origin daemon adapter — there is no choice to make there.
-const SHOW_MODE_STEP = import.meta.env.VITE_BUILD_TARGET !== "daemon"
+// same-origin daemon source — there is no choice to make there.
+const SHOW_SOURCE_STEP = import.meta.env.VITE_BUILD_TARGET !== "daemon"
+
+/**
+ * The wizard's source choice, normalized to what this platform offers: the
+ * Browser Source when it exists, otherwise the Daemon Source — the only
+ * offered source on a capability-only (Safari) platform.
+ */
+function initialSourceChoice(): OnboardingSourceChoice {
+  return platformCapabilities().browserSource ? "browser" : "daemon"
+}
 
 export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
   const [currentStep, setCurrentStep] = React.useState(0)
 
-  // Local wizard state
-  const [adapterMode, setAdapterModeLocal] = React.useState<AdapterMode>(
-    usePreferencesStore.getState().adapterMode
-  )
+  // Local wizard state. There is no source choice to persist: the default
+  // profile already has Browser enabled and active, and connecting a
+  // daemon — the only other choice — persists through the connect flow
+  // itself. The choice only gates whether the daemon-setup step appears,
+  // so it starts on the sole offered source: when the Browser Source does
+  // not exist here, daemon is already chosen and Next cannot skip the
+  // daemon setup.
+  const [sourceChoice, setSourceChoice] =
+    React.useState<OnboardingSourceChoice>(initialSourceChoice)
   const [rootFolderId, setRootFolderId] = React.useState<string | null>(null)
   const [colorTheme, setColorTheme] = React.useState<ColorTheme>("default")
   const [themeMode, setThemeMode] = React.useState<ThemeMode>("dark")
@@ -42,7 +56,6 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
   // Store actions for persisting on completion
   const setStoreRootFolderId = useBookmarkStore((s) => s.setRootFolderId)
   const setStoreColorTheme = usePreferencesStore((s) => s.setColorTheme)
-  const setStoreAdapterMode = usePreferencesStore((s) => s.setAdapterMode)
   const adapter = usePreferencesStore((s) => s.adapter)
   const { setTheme } = useTheme()
 
@@ -88,16 +101,16 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
     )
   }, [bookmarkTree, bookmarkAdapter])
 
-  const showDaemonSetupStep = SHOW_MODE_STEP && adapterMode === "daemon"
+  const showDaemonSetupStep = SHOW_SOURCE_STEP && sourceChoice === "daemon"
 
   const steps = React.useMemo(() => {
     const list: React.ReactNode[] = [<WelcomeStep key="welcome" />]
-    if (SHOW_MODE_STEP) {
+    if (SHOW_SOURCE_STEP) {
       list.push(
-        <ModeStep
-          key="mode"
-          value={adapterMode}
-          onChange={setAdapterModeLocal}
+        <SourceStep
+          key="source"
+          value={sourceChoice}
+          onChange={setSourceChoice}
         />
       )
     }
@@ -121,7 +134,7 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
     )
     return list
   }, [
-    adapterMode,
+    sourceChoice,
     showDaemonSetupStep,
     rootFolderId,
     colorTheme,
@@ -151,18 +164,11 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
     }
   }
 
-  const persistAdapterMode = () => {
-    // Daemon mode is only ever persisted through `connectToDaemon`'s own
-    // validate/permission/health-check flow (triggered from the daemon-setup
-    // step's connection panel), never set directly here.
-    if (adapterMode !== "daemon") {
-      setStoreAdapterMode(adapterMode)
-    }
-  }
-
   const handleComplete = async () => {
-    // Persist all selections
-    persistAdapterMode()
+    // Persist all selections. The source choice needs no write of its own:
+    // a fresh profile already starts on the source its platform offers, and
+    // choosing the daemon persists through the daemon-setup step's Connect
+    // flow.
     setStoreRootFolderId(rootFolderId)
     setStoreColorTheme(colorTheme)
     setTheme(themeMode)
@@ -178,9 +184,7 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
   }
 
   const handleSkip = async () => {
-    // Preserve any root folder and mode selection already made, use defaults
-    // for the rest
-    persistAdapterMode()
+    // Preserve any root folder choice already made, use defaults for the rest
     setStoreRootFolderId(rootFolderId)
     setStoreColorTheme("default")
     setTheme("dark")
@@ -217,11 +221,13 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
     <div className="fixed inset-0 z-50 flex animate-in items-center justify-center bg-black/50 backdrop-blur-xl duration-200 fade-in">
       {/* Modal */}
       <div className="relative w-full max-w-lg animate-in rounded-xl border border-border bg-card p-6 shadow-2xl duration-200 zoom-in-95 fade-in">
-        {/* Skip link */}
+        {/* Skip link — raised above the sliding step content so real-browser
+            hit testing reaches it (the steps are plain in-flow blocks that
+            would otherwise intercept the click). */}
         {currentStep > 0 && currentStep < TOTAL_STEPS - 1 && (
           <button
             onClick={handleSkip}
-            className="absolute top-4 right-4 text-xs text-muted-foreground transition-colors hover:text-foreground"
+            className="absolute top-4 right-4 z-10 text-xs text-muted-foreground transition-colors hover:text-foreground"
           >
             Skip, use defaults
           </button>

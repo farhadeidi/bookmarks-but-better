@@ -62,6 +62,15 @@ pub enum ProblemCode {
     HostNotAllowed,
     /// The vault could not be read or written.
     VaultUnavailable,
+    /// The daemon hosts more than one vault, so the request must name one.
+    ///
+    /// Returned by the legacy unscoped routes only. It exists so a client
+    /// built before Vaults had ids can tell "this route needs a vault" apart
+    /// from every other bad request, instead of the daemon quietly picking a
+    /// hidden default for it.
+    VaultRequired,
+    /// No hosted vault has the requested id.
+    UnknownVault,
 }
 
 impl ProblemCode {
@@ -87,6 +96,8 @@ impl ProblemCode {
             Self::StaleStateRevision => "stale_state_revision",
             Self::HostNotAllowed => "host_not_allowed",
             Self::VaultUnavailable => "vault_unavailable",
+            Self::VaultRequired => "vault_required",
+            Self::UnknownVault => "unknown_vault",
         }
     }
 
@@ -97,8 +108,10 @@ impl ProblemCode {
     #[must_use]
     pub const fn status(self) -> StatusCode {
         match self {
-            Self::NotFound | Self::RouteNotFound => StatusCode::NOT_FOUND,
-            Self::InvalidRequest => StatusCode::BAD_REQUEST,
+            Self::NotFound | Self::RouteNotFound | Self::UnknownVault => StatusCode::NOT_FOUND,
+            // Both client errors the client can act on by re-reading the
+            // request: fix the body, or name a vault.
+            Self::InvalidRequest | Self::VaultRequired => StatusCode::BAD_REQUEST,
             Self::StaleRevision
             | Self::StaleStateRevision
             | Self::FolderNotEmpty
@@ -138,6 +151,8 @@ impl ProblemCode {
             Self::StaleStateRevision => "Stale state revision",
             Self::HostNotAllowed => "Host not allowed",
             Self::VaultUnavailable => "Vault unavailable",
+            Self::VaultRequired => "A vault must be selected",
+            Self::UnknownVault => "No such vault",
         }
     }
 }

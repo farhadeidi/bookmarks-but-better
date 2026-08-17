@@ -1,7 +1,10 @@
 import { expect, test } from "@playwright/test"
 
+// Never the product default (52222): the fallback matches run-daemon.sh's
+// isolated default port, so running the spec directly cannot touch a real
+// daemon. run-daemon.sh always exports the override on top of this.
 const baseUrl =
-  process.env.BOOKMARKS_BUT_BETTER_E2E_BASE_URL ?? "http://127.0.0.1:52222"
+  process.env.BOOKMARKS_BUT_BETTER_E2E_BASE_URL ?? "http://127.0.0.1:52224"
 
 async function api(path: string, init?: RequestInit) {
   const response = await fetch(`${baseUrl}/api/v1${path}`, init)

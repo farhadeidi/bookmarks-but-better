@@ -2,12 +2,11 @@ import type {
   DaemonSearchResponse,
   DaemonSearchResult,
 } from "@/browser/daemon/client"
+import { DaemonClient } from "@/browser/daemon/client"
+import type { DaemonConnectionConfig } from "@/browser/types"
 import { hasDaemonHostPermission } from "@/browser/daemon/permissions"
-import {
-  getAdapterModePreference,
-  getDaemonConnectionConfig,
-} from "@/browser/adapter-preference"
-import type { BookmarkNode, DaemonConnectionConfig } from "@/browser/types"
+import { loadSourceConfig } from "@/sources/persistence"
+import type { BookmarkNode } from "@/browser/types"
 
 export type OmniboxDisposition =
   | "currentTab"
@@ -19,9 +18,12 @@ export interface OmniboxSuggestion {
   description: string
 }
 
+/** What the omnibox needs to search one daemon Vault: where, and which. */
 export interface PersistedDaemonSelection {
-  mode: "daemon"
   config: DaemonConnectionConfig
+  /** The vault to scope every search and fetch to; `null` is the legacy
+   * single-vault spelling. */
+  vaultId: string | null
 }
 
 export interface OmniboxFacade {
@@ -38,17 +40,19 @@ export interface OmniboxFacade {
   getDaemonSelection(): Promise<PersistedDaemonSelection | null>
   hasHostPermission(): Promise<boolean>
   search(
-    config: DaemonConnectionConfig,
+    selection: PersistedDaemonSelection,
     query: string,
     limit: number
   ): Promise<DaemonSearchResponse>
-  fetchNode(config: DaemonConnectionConfig, id: string): Promise<BookmarkNode>
+  fetchNode(
+    selection: PersistedDaemonSelection,
+    id: string
+  ): Promise<BookmarkNode>
   navigate(url: string, disposition: OmniboxDisposition): Promise<void>
 }
 
 const SEARCH_LIMIT = 8
 const OPAQUE_PREFIX = "bookmarks-but-better:"
-const API_BASE = "/api/v1"
 
 export function escapeSuggestionDescription(value: string): string {
   return value
@@ -137,11 +141,7 @@ export function registerOmniboxListeners(facade: OmniboxFacade): void {
           return
         }
 
-        const response = await facade.search(
-          selection.config,
-          query,
-          SEARCH_LIMIT
-        )
+        const response = await facade.search(selection, query, SEARCH_LIMIT)
         if (revision !== inputRevision) return
         suggestResults(response.results.slice(0, SEARCH_LIMIT).map(suggestion))
       } catch {
@@ -159,7 +159,7 @@ export function registerOmniboxListeners(facade: OmniboxFacade): void {
         const selection = await facade.getDaemonSelection()
         if (!selection) return
         if (!(await facade.hasHostPermission())) return
-        const node = await facade.fetchNode(selection.config, id)
+        const node = await facade.fetchNode(selection, id)
         const url = navigableUrl(node.url)
         if (!url) return
         await facade.navigate(url, disposition)
@@ -171,29 +171,42 @@ export function registerOmniboxListeners(facade: OmniboxFacade): void {
   })
 }
 
+/**
+ * The Active Source, read from the same persisted Source Configuration the
+ * dashboard and popup use — that sharing is what makes the active source
+ * profile-wide rather than per-surface. Only a Daemon Source is searchable
+ * from the omnibox: the Browser Source has no search API to query here.
+ */
 async function getDaemonSelection(): Promise<PersistedDaemonSelection | null> {
-  const [mode, config] = await Promise.all([
-    getAdapterModePreference(),
-    getDaemonConnectionConfig(),
-  ])
-  return mode === "daemon" && config ? { mode, config } : null
-}
+  const config = await loadSourceConfig(
+    (await import("@/sources/platform")).platformCapabilities()
+  )
+  const activeId = config.activeSourceId
+  if (!activeId || !activeId.startsWith("daemon:")) return null
 
-async function daemonRequest<T>(
-  config: DaemonConnectionConfig,
-  path: string
-): Promise<T> {
-  const response = await fetch(`${config.origin}${API_BASE}${path}`, {
-    headers: {
-      Accept: "application/json",
-      ...(config.bearerToken
-        ? { Authorization: `Bearer ${config.bearerToken}` }
+  const entry = config.sources[activeId]
+  const origin = entry?.origin
+  if (!origin) return null
+  const connection = config.connections[origin]
+  if (!connection) return null
+
+  return {
+    config: {
+      origin,
+      ...(connection.bearerToken
+        ? { bearerToken: connection.bearerToken }
         : {}),
     },
+    vaultId: entry.unscoped ? null : (entry.vaultId ?? null),
+  }
+}
+
+function daemonClientFor(selection: PersistedDaemonSelection): DaemonClient {
+  return new DaemonClient({
+    origin: selection.config.origin,
+    bearerToken: selection.config.bearerToken,
+    vaultId: selection.vaultId,
   })
-  if (!response.ok)
-    throw new Error(`Daemon request failed (${response.status})`)
-  return (await response.json()) as T
 }
 
 export function createBrowserOmniboxFacade(): OmniboxFacade {
@@ -209,18 +222,11 @@ export function createBrowserOmniboxFacade(): OmniboxFacade {
     },
     getDaemonSelection,
     hasHostPermission: hasDaemonHostPermission,
-    search(config, query, limit) {
-      const params = new URLSearchParams({ q: query, limit: String(limit) })
-      return daemonRequest<DaemonSearchResponse>(
-        config,
-        `/search?${params.toString()}`
-      )
+    search(selection, query, limit) {
+      return daemonClientFor(selection).search(query, limit)
     },
-    fetchNode(config, id) {
-      return daemonRequest<BookmarkNode>(
-        config,
-        `/bookmarks/${encodeURIComponent(id)}`
-      )
+    fetchNode(selection, id) {
+      return daemonClientFor(selection).fetchNode(id)
     },
     async navigate(url, disposition) {
       if (disposition === "currentTab") {

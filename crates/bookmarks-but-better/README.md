@@ -81,9 +81,20 @@ Everything lives under `/api/v1`. Errors are
 [`application/problem+json`](https://www.rfc-editor.org/rfc/rfc9457) with a
 stable `code`.
 
+One daemon may host several Vaults (`serve --vault ID=PATH`, repeatable).
+Every Vault-specific route below then also exists under
+`/vaults/{vaultId}/…`, `GET /vaults` lists what is hosted, and the unscoped
+spellings remain valid only while exactly one Vault is hosted — with more
+than one they answer `vault_required` (400) rather than picking a hidden
+default. `/health` is daemon-level in either case: it always carries
+`{status, version, vaults}`, and includes the single-Vault legacy fields
+`generation`/`warnings` only when exactly one Vault is hosted.
+
 | Method   | Path                     | Notes                                            |
 | -------- | ------------------------ | ------------------------------------------------ |
-| `GET`    | `/health`                | `{status, version, generation, warnings}`        |
+| `GET`    | `/health`                | daemon-level `{status, version, vaults[, generation, warnings]}` |
+| `GET`    | `/vaults`                | `{vaults: [{id, name}]}` — discovery             |
+| `GET`    | `/vaults/{v}/health`     | the legacy health shape, aimed at one Vault      |
 | `GET`    | `/tree`                  | `{tree: [root]}` — one root holding the subtree   |
 | `GET`    | `/search?q=…&limit=…`    | `{results: [{id, title, url}]}` — bookmarks only |
 | `GET`    | `/bookmarks/{id}`        | one entry                                         |

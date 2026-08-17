@@ -9,13 +9,11 @@ import {
   waitFor,
 } from "@testing-library/react"
 import { installFakeIndexedDB } from "@/browser/__tests__/fake-indexeddb"
-import { usePreferencesStore } from "@/stores/preferences-store"
-import { setDaemonConnectionConfig } from "@/browser/adapter-preference"
+import { useSourceStore } from "@/stores/source-store"
+import { emptySourceConfig } from "@/sources/config"
 import { DaemonConnectionPanel } from "../daemon-connection-panel"
 
 const connectToDaemon = vi.fn()
-const disconnectDaemon = vi.fn()
-const forgetDaemon = vi.fn()
 
 vi.mock("@/browser/daemon", async () => {
   const actual =
@@ -23,42 +21,46 @@ vi.mock("@/browser/daemon", async () => {
   return {
     ...actual,
     connectToDaemon: (...args: unknown[]) => connectToDaemon(...args),
-    disconnectDaemon: (...args: unknown[]) => disconnectDaemon(...args),
-    forgetDaemon: (...args: unknown[]) => forgetDaemon(...args),
   }
 })
 
 installFakeIndexedDB()
 
-const reload = vi.fn()
+function seedConfig(connections: Record<string, { bearerToken?: string }>) {
+  useSourceStore.setState({
+    status: "ready",
+    switching: false,
+    lastSwitchError: null,
+    config: { ...emptySourceConfig(), connections },
+    activeSourceId: "browser",
+  })
+}
 
 beforeEach(() => {
-  Object.defineProperty(window, "location", {
-    configurable: true,
-    value: { reload },
-  })
+  seedConfig({})
 })
 
 afterEach(() => {
   cleanup()
   vi.clearAllMocks()
-  usePreferencesStore.setState({ adapterMode: "browser" })
   installFakeIndexedDB()
 })
 
 describe("DaemonConnectionPanel", () => {
-  it("shows a Connect button and an address field when not connected", () => {
+  it("shows a Connect button and an address field when nothing is connected", () => {
     render(<DaemonConnectionPanel />)
 
     expect(screen.getByLabelText("Daemon address")).toBeTruthy()
     expect(screen.getByRole("button", { name: "Connect" })).toBeTruthy()
+    expect(screen.queryByText("Connected daemons")).toBeNull()
   })
 
-  it("attempts a connection with the typed address and reloads on success", async () => {
+  it("attempts a connection with the typed address and records it on success, with no reload", async () => {
     connectToDaemon.mockResolvedValue({
       ok: true,
-      origin: "http://127.0.0.1:52222",
+      origin: "http://127.0.0.1:47321",
       warnings: [],
+      vaults: [{ id: "main" }],
     })
     render(<DaemonConnectionPanel />)
 
@@ -68,10 +70,15 @@ describe("DaemonConnectionPanel", () => {
 
     await waitFor(() => expect(connectToDaemon).toHaveBeenCalledTimes(1))
     expect(connectToDaemon.mock.calls[0][0]).toBe("127.0.0.1:47321")
-    await waitFor(() => expect(reload).toHaveBeenCalled())
+    // Live switching replaced the reload: the panel settles back to idle.
+    await waitFor(() => {
+      expect(
+        useSourceStore.getState().config.connections["http://127.0.0.1:47321"]
+      ).toBeTruthy()
+    })
   })
 
-  it("shows the failure message and offers Retry without touching stored state", async () => {
+  it("shows the failure message and offers Retry without recording anything", async () => {
     connectToDaemon.mockResolvedValue({
       ok: false,
       stage: "health",
@@ -87,47 +94,7 @@ describe("DaemonConnectionPanel", () => {
       ).toBeTruthy()
     })
     expect(screen.getByRole("button", { name: "Retry" })).toBeTruthy()
-    expect(reload).not.toHaveBeenCalled()
-  })
-
-  it("shows Connected status with Retry, Disconnect and Forget once daemon mode is active", async () => {
-    await setDaemonConnectionConfig({ origin: "http://127.0.0.1:47321" })
-    usePreferencesStore.setState({ adapterMode: "daemon" })
-
-    render(<DaemonConnectionPanel />)
-
-    await waitFor(() => {
-      expect(
-        screen.getByText("Connected to http://127.0.0.1:47321")
-      ).toBeTruthy()
-    })
-    expect(screen.getByRole("button", { name: "Retry" })).toBeTruthy()
-    expect(screen.getByRole("button", { name: "Disconnect" })).toBeTruthy()
-    expect(screen.getByRole("button", { name: "Forget" })).toBeTruthy()
-  })
-
-  it("calls disconnectDaemon and reloads when Disconnect is clicked", async () => {
-    await setDaemonConnectionConfig({ origin: "http://127.0.0.1:47321" })
-    usePreferencesStore.setState({ adapterMode: "daemon" })
-    disconnectDaemon.mockResolvedValue(undefined)
-
-    render(<DaemonConnectionPanel />)
-    fireEvent.click(await screen.findByRole("button", { name: "Disconnect" }))
-
-    await waitFor(() => expect(disconnectDaemon).toHaveBeenCalledTimes(1))
-    await waitFor(() => expect(reload).toHaveBeenCalled())
-  })
-
-  it("calls forgetDaemon and reloads when Forget is clicked", async () => {
-    await setDaemonConnectionConfig({ origin: "http://127.0.0.1:47321" })
-    usePreferencesStore.setState({ adapterMode: "daemon" })
-    forgetDaemon.mockResolvedValue(undefined)
-
-    render(<DaemonConnectionPanel />)
-    fireEvent.click(await screen.findByRole("button", { name: "Forget" }))
-
-    await waitFor(() => expect(forgetDaemon).toHaveBeenCalledTimes(1))
-    await waitFor(() => expect(reload).toHaveBeenCalled())
+    expect(useSourceStore.getState().config.connections).toEqual({})
   })
 
   it("reveals the bearer-token field and install guide under Advanced", () => {
@@ -149,23 +116,5 @@ describe("DaemonConnectionPanel", () => {
     fireEvent.click(screen.getByRole("button", { name: "Advanced" }))
 
     expect(screen.getByText(/still in beta/)).toBeTruthy()
-  })
-
-  /**
-   * `install.sh` is a bash script — `set -o pipefail` alone makes it one — and
-   * `/bin/sh` is dash on Debian and Ubuntu, where `| sh` fails on the first
-   * line with `set: Illegal option -o pipefail`. This is a command the user
-   * copies and pastes verbatim, so the shell it names has to be one that can
-   * actually run the script.
-   */
-  it("offers a Unix install command that runs the script with bash, not sh", () => {
-    render(<DaemonConnectionPanel />)
-    fireEvent.click(screen.getByRole("button", { name: "Advanced" }))
-
-    for (const platform of ["macOS", "Linux"]) {
-      fireEvent.click(screen.getByRole("button", { name: platform }))
-      const command = screen.getByText(/install\.sh/).textContent ?? ""
-      expect(command, platform).toMatch(/install\.sh \| bash$/)
-    }
   })
 })

@@ -211,7 +211,7 @@ export const BookmarkCard = React.memo(function BookmarkCard({
       ref={dropRef as React.RefObject<HTMLDivElement>}
       data-testid="bookmark-card"
       className={cn(
-        "flex flex-col gap-3 rounded-2xl bg-card p-4 ring-1 ring-border transition-shadow",
+        "flex w-full min-w-0 flex-col gap-3 rounded-2xl bg-card p-4 ring-1 ring-border transition-shadow",
         nested && "ring-border/50",
         isOver && "shadow-md ring-2 ring-primary/50"
       )}
@@ -237,7 +237,7 @@ export const BookmarkCard = React.memo(function BookmarkCard({
         <h3
           className={cn(
             "min-w-0 flex-1 truncate font-medium",
-            nested ? "text-xs" : "text-sm"
+            nested ? "text-base sm:text-xs" : "text-base sm:text-sm"
           )}
         >
           {folder.title}

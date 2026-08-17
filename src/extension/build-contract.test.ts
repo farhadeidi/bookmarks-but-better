@@ -8,7 +8,7 @@ import {
   buildEntryNames,
 } from "./build-contract"
 
-async function manifest(name: "chrome" | "firefox") {
+async function manifest(name: "chrome" | "firefox" | "safari") {
   return JSON.parse(
     await readFile(
       new URL(`../../manifests/manifest.${name}.json`, import.meta.url),
@@ -21,6 +21,7 @@ describe("extension build contract", () => {
   it("builds the new tab, popup, and stable background entries for extensions", () => {
     expect(buildEntryNames("chrome")).toEqual(["index", "popup", "background"])
     expect(buildEntryNames("firefox")).toEqual(["index", "popup", "background"])
+    expect(buildEntryNames("safari")).toEqual(["index", "popup", "background"])
     expect(BACKGROUND_OUTPUT_FILE).toBe("background.js")
     expect(BACKGROUND_OUTPUT_FORMAT).toBe("iife")
   })
@@ -46,5 +47,30 @@ describe("extension build contract", () => {
     expect(chrome.permissions).not.toContain("tabs")
     expect(firefox.permissions).toContain("activeTab")
     expect(firefox.permissions).not.toContain("clipboardWrite")
+  })
+
+  /**
+   * Safari is daemon-only because its WebExtensions implementation has no
+   * bookmarks API and no omnibox, and it allows no new-tab override. The
+   * manifest is the contract: the capability is omitted, not guarded at
+   * runtime by feature code.
+   */
+  it("the Safari manifest omits every capability Safari does not have", async () => {
+    const safari = await manifest("safari")
+
+    expect(safari.action).toMatchObject({ default_popup: "popup.html" })
+    expect(safari.background).toEqual({
+      service_worker: BACKGROUND_OUTPUT_FILE,
+      type: "module",
+    })
+    expect(safari.permissions).not.toContain("bookmarks")
+    expect(safari.omnibox).toBeUndefined()
+    expect(safari.chrome_url_overrides).toBeUndefined()
+    expect(safari.chrome_settings_overrides).toBeUndefined()
+    // Loopback daemon connections remain optional, requested on Connect.
+    expect(safari.optional_host_permissions).toEqual([
+      "http://127.0.0.1/*",
+      "http://localhost/*",
+    ])
   })
 })

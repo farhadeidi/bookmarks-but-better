@@ -2,10 +2,8 @@
 
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { installFakeIndexedDB } from "@/browser/__tests__/fake-indexeddb"
-import {
-  setAdapterModePreference,
-  setDaemonConnectionConfig,
-} from "@/browser/adapter-preference"
+import { saveSourceConfig } from "@/sources/persistence"
+import { daemonSourceId } from "@/sources/config"
 import type { DaemonSearchResponse } from "@/browser/daemon/client"
 import type { BookmarkNode } from "@/browser/types"
 import {
@@ -54,8 +52,8 @@ function fakeFacade() {
     }),
     setDefaultSuggestion: vi.fn(),
     getDaemonSelection: vi.fn().mockResolvedValue({
-      mode: "daemon",
       config: { origin: "http://127.0.0.1:52222" },
+      vaultId: "main",
     }),
     hasHostPermission: vi.fn().mockResolvedValue(true),
     search: vi.fn().mockResolvedValue({ results: [] }),
@@ -79,7 +77,7 @@ describe("omnibox listener registration", () => {
     expect(fake.facade.setDefaultSuggestion).toHaveBeenCalledOnce()
   })
 
-  it("does nothing unless persisted daemon mode and permission are both present", async () => {
+  it("does nothing unless an active daemon source and permission are both present", async () => {
     const fake = fakeFacade()
     vi.mocked(fake.facade.getDaemonSelection).mockResolvedValue(null)
     registerOmniboxListeners(fake.facade)
@@ -150,7 +148,10 @@ describe("omnibox selection", () => {
       await flush()
 
       expect(fake.facade.fetchNode).toHaveBeenCalledWith(
-        { origin: "http://127.0.0.1:52222" },
+        {
+          config: { origin: "http://127.0.0.1:52222" },
+          vaultId: "main",
+        },
         node.id
       )
       expect(fake.facade.navigate).toHaveBeenCalledWith(
@@ -203,22 +204,34 @@ describe("omnibox encoding", () => {
 })
 
 describe("browser omnibox facade", () => {
-  it("reads daemon selection through the shared adapter preference APIs", async () => {
+  it("reads the active daemon source from the shared Source Configuration", async () => {
     const facade = createBrowserOmniboxFacade()
-    await setDaemonConnectionConfig({
-      origin: "LOCALHOST",
-      bearerToken: "secret",
-    })
+    const origin = "http://localhost:52222"
 
+    // Browser active: nothing for the omnibox to search.
+    await saveSourceConfig({
+      version: 2,
+      connections: { [origin]: { bearerToken: "secret" } },
+      sources: { browser: { enabled: true } },
+      activeSourceId: "browser",
+    })
     await expect(facade.getDaemonSelection()).resolves.toBeNull()
 
-    await setAdapterModePreference("daemon")
-    await expect(facade.getDaemonSelection()).resolves.toEqual({
-      mode: "daemon",
-      config: {
-        origin: "http://localhost:52222",
-        bearerToken: "secret",
+    // The daemon vault active: the selection carries the connection and the
+    // vault scope, canonicalized the same way everywhere.
+    const id = daemonSourceId(origin, "reading")
+    await saveSourceConfig({
+      version: 2,
+      connections: { [origin]: { bearerToken: "secret" } },
+      sources: {
+        browser: { enabled: true },
+        [id]: { enabled: true, origin, vaultId: "reading" },
       },
+      activeSourceId: id,
+    })
+    await expect(facade.getDaemonSelection()).resolves.toEqual({
+      config: { origin, bearerToken: "secret" },
+      vaultId: "reading",
     })
   })
 

@@ -86,6 +86,32 @@ describe("bookmark-store health-gated readiness", () => {
     expect(useBookmarkStore.getState().status).toBe("ready")
   })
 
+  it("a successful retry clears `isLoading` left true by the failed load before it", async () => {
+    const getTree = vi.fn().mockResolvedValue([{ id: "root", title: "Root" }])
+    const checkHealth = vi
+      .fn()
+      .mockResolvedValueOnce({ ready: false })
+      .mockResolvedValueOnce({ ready: true })
+    const adapter = baseAdapter({ getTree, checkHealth })
+    useBookmarkStore.setState({
+      adapter,
+      status: "loading",
+      loadError: null,
+      rootFolderId: null,
+      // What a failed init leaves behind.
+      isLoading: true,
+    })
+
+    await useBookmarkStore.getState().retry()
+    expect(useBookmarkStore.getState().status).toBe("unavailable")
+
+    await useBookmarkStore.getState().retry()
+    expect(useBookmarkStore.getState().status).toBe("ready")
+    // Without this, the dashboard keeps rendering its loading state with a
+    // ready tree behind it.
+    expect(useBookmarkStore.getState().isLoading).toBe(false)
+  })
+
   it("skips the health check entirely for adapters that don't implement it (chrome/firefox/standalone)", async () => {
     const getTree = vi.fn().mockResolvedValue([])
     const adapter = baseAdapter({ getTree })

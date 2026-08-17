@@ -4,8 +4,9 @@ The extension can point at a local `bookmarks-but-better` daemon — a small
 background process that serves your bookmarks from a folder of Markdown files
 instead of the browser's own bookmark store, over `127.0.0.1`/`localhost` only.
 
-This is entirely optional. Browser and standalone modes need nothing on this
-page.
+This is entirely optional — the Browser Source needs nothing on this page.
+On Safari the daemon is the only option, because Safari does not expose
+browser bookmarks to extensions.
 
 ## Install
 
@@ -97,14 +98,45 @@ ever heard of.
 
 ## Connecting the extension
 
-Once the daemon is running, open the extension's Settings → **Bookmark
-Source** → **Daemon**, enter the daemon's address (`127.0.0.1:52222` by
-default) and click **Connect**.
+Once the daemon is running, open the extension's Settings → **Sources**, enter
+the daemon's address (`127.0.0.1:52222` by default) and click **Connect**.
+Every Vault the daemon hosts appears as its own source you can enable,
+disable, give a browser-profile-local display label, and switch between —
+Browser bookmarks stay enabled alongside them. The label is only an alias in
+that browser profile; it never renames the Vault itself.
 
 The extension only requests permission to reach loopback addresses at that
-point — never at install time — and only switches to the daemon if a real
+point — never at install time — and only records the connection if a real
 health check against it succeeds. A daemon that cannot be reached is reported
 as an error, never a silent fall back to your browser bookmarks.
+
+## Multiple vaults in one daemon
+
+One daemon can host several Vaults. Repeat `--vault`, giving each an id:
+
+```bash
+bookmarks-but-better serve \
+  --vault reading=~/vaults/reading \
+  --vault archive=~/vaults/archive
+```
+
+Ids are unique slugs (lowercase letters, digits, hyphens) and their
+directories must not overlap; startup fails atomically otherwise. A plain
+`--vault PATH` claims the id `default`, which is what a single-vault daemon
+has always served.
+
+Each Vault is a separate source with vault-scoped routes under
+`/api/v1/vaults/{id}/…` (tree, search, bookmarks, folders, events, health).
+`GET /api/v1/vaults` lists what is hosted. The legacy unscoped routes (`/tree`
+and friends) keep working only while exactly one Vault is hosted; with more
+than one they answer a stable `vault_required` error rather than picking a
+hidden default. Adding or removing Vaults is a restart, by design for now.
+
+Settings → **Sources** groups discovered Vaults under their daemon connection.
+After changing the daemon's `--vault` configuration and restarting it, use
+**Refresh Vaults** there to update the list. Forgetting a daemon removes the
+connection and all of its discovered sources from that browser profile;
+disabling one Vault keeps the connection for later.
 
 ## More
 

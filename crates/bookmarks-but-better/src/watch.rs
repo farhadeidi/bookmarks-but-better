@@ -78,6 +78,50 @@ impl WatchHandle {
     }
 }
 
+/// The watchers for every vault one daemon hosts, as one shut-down handle.
+///
+/// A multi-vault daemon starts one watcher per vault; callers that only want
+/// "stop watching everything" — the CLI's serve loop, the tests — should not
+/// have to care how many there are.
+#[derive(Debug, Default)]
+pub struct Watchers {
+    handles: Vec<WatchHandle>,
+}
+
+impl Watchers {
+    /// An empty set; add watchers with [`Watchers::push`].
+    #[must_use]
+    pub const fn new() -> Self {
+        Self {
+            handles: Vec::new(),
+        }
+    }
+
+    /// Adds a running watcher to the set.
+    pub fn push(&mut self, handle: WatchHandle) {
+        self.handles.push(handle);
+    }
+
+    /// Whether no watcher is running.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.handles.is_empty()
+    }
+
+    /// How many watchers are running.
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.handles.len()
+    }
+
+    /// Shuts every watcher down, in order, waiting for each to finish.
+    pub async fn shutdown(self) {
+        for handle in self.handles {
+            handle.shutdown().await;
+        }
+    }
+}
+
 /// Starts watching `vault` and reconciling it.
 ///
 /// A watcher that cannot be created is not fatal: the periodic reconcile still

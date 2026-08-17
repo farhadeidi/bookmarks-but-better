@@ -82,23 +82,7 @@ impl Harness {
 
     /// Sends a request and reads the whole response.
     pub(crate) async fn send(&self, request: Request<Body>) -> Response {
-        let response = self
-            .daemon
-            .router()
-            .oneshot(request)
-            .await
-            .expect("the router is infallible");
-
-        let status = response.status();
-        let headers = response.headers().clone();
-        let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
-            .await
-            .expect("read body");
-        Response {
-            status,
-            headers,
-            body: bytes.to_vec(),
-        }
+        respond(&self.daemon, request).await
     }
 
     /// `GET path`.
@@ -357,6 +341,34 @@ fn request(method: &str, path: &str) -> axum::http::request::Builder {
         .method(method)
         .uri(path)
         .header(header::HOST, TEST_HOST)
+}
+
+/// Sends a request to a daemon's router and reads the whole response.
+///
+/// The multi-vault tests drive a daemon they built themselves rather than a
+/// [`Harness`], but the reading half of "send and inspect" is shared.
+pub(crate) async fn respond(daemon: &Daemon, request: Request<Body>) -> Response {
+    let response = daemon
+        .router()
+        .oneshot(request)
+        .await
+        .expect("the router is infallible");
+
+    let status = response.status();
+    let headers = response.headers().clone();
+    let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .expect("read body");
+    Response {
+        status,
+        headers,
+        body: bytes.to_vec(),
+    }
+}
+
+/// A request builder carrying the loopback `Host` every test must send.
+pub(crate) fn test_request(method: &str, path: &str) -> axum::http::request::Builder {
+    request(method, path)
 }
 
 fn json_request(method: &str, path: &str, body: &Value) -> Request<Body> {

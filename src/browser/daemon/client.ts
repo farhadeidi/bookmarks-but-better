@@ -116,6 +116,16 @@ export interface DaemonClientOptions {
    */
   origin?: string
   /**
+   * The vault every vault-specific request targets, or `null`/omitted for the
+   * legacy unscoped routes.
+   *
+   * A daemon may host several Vaults; each request must name its target
+   * (ADR-0001). Omitting this is only valid against a daemon hosting exactly
+   * one Vault — anything else answers `vault_required`, which is precisely
+   * the error this field exists to avoid sending.
+   */
+  vaultId?: string | null
+  /**
    * An optional bearer token, sent as an `Authorization` header.
    *
    * There is no pairing in this milestone, so nothing sets this yet. It is
@@ -128,6 +138,16 @@ export interface DaemonClientOptions {
   timeoutMs?: number
   /** Test-only seam: inject a fetch implementation. */
   fetchImpl?: typeof fetch
+}
+
+/** One vault as `GET /api/v1/vaults` lists it. */
+export interface DaemonVault {
+  id: string
+  name?: string
+}
+
+export interface DaemonVaultsResponse {
+  vaults: DaemonVault[]
 }
 
 /**
@@ -149,6 +169,8 @@ export interface DaemonClientOptions {
 export class DaemonClient {
   /** The configured origin: `""` when same-origin. */
   readonly origin: string
+  /** The vault vault-specific requests target, when one was named. */
+  readonly vaultId: string | null
   readonly timeoutMs: number
   private readonly bearerToken?: string
   private readonly fetchImpl?: typeof fetch
@@ -156,6 +178,7 @@ export class DaemonClient {
   constructor(options: DaemonClientOptions = {}) {
     const origin = options.origin?.trim() ?? ""
     this.origin = origin.endsWith("/") ? origin.slice(0, -1) : origin
+    this.vaultId = options.vaultId ?? null
     this.bearerToken = options.bearerToken
     this.timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS
     this.fetchImpl = options.fetchImpl
@@ -163,6 +186,19 @@ export class DaemonClient {
 
   /** The absolute (or same-origin relative) URL of an API path. Never carries the token. */
   url(path: string): string {
+    const scoped = this.vaultId
+      ? `/vaults/${encodeURIComponent(this.vaultId)}${path}`
+      : path
+    return `${this.origin}${API_BASE}${scoped}`
+  }
+
+  /**
+   * The URL of a daemon-level path, ignoring any vault this client targets.
+   *
+   * Discovery and daemon health are about the daemon, not one vault, so they
+   * must not be scoped even when everything else this client sends is.
+   */
+  daemonUrl(path: string): string {
     return `${this.origin}${API_BASE}${path}`
   }
 
@@ -182,7 +218,18 @@ export class DaemonClient {
       : {}
   }
 
-  private async request<T>(path: string, init: RequestInit = {}): Promise<T> {
+  /**
+   * Sends a request to a resolved URL. Both scopes funnel through here.
+   *
+   * `path` is the label for error messages — the API path only, never the
+   * resolved URL, so an origin (and anything ever attached to it) cannot
+   * leak into a message that gets logged or rendered.
+   */
+  private async send<T>(
+    path: string,
+    url: string,
+    init: RequestInit = {}
+  ): Promise<T> {
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), this.timeoutMs)
     // Resolved per call, not per instance, so a test that stubs the global
@@ -191,7 +238,7 @@ export class DaemonClient {
 
     let response: Response
     try {
-      response = await doFetch.call(globalThis, this.url(path), {
+      response = await doFetch.call(globalThis, url, {
         ...init,
         signal: controller.signal,
         headers: {
@@ -237,8 +284,42 @@ export class DaemonClient {
     return (text ? JSON.parse(text) : undefined) as T
   }
 
+  /** Sends a vault-scoped (or, with no vault named, legacy unscoped) request. */
+  private async request<T>(path: string, init: RequestInit = {}): Promise<T> {
+    return this.send(path, this.url(path), init)
+  }
+
+  /** Sends a daemon-level request, ignoring any vault this client targets. */
+  private async daemonRequest<T>(
+    path: string,
+    init: RequestInit = {}
+  ): Promise<T> {
+    return this.send(path, this.daemonUrl(path), init)
+  }
+
   fetchHealth(): Promise<DaemonHealth> {
-    return this.request<DaemonHealth>("/health")
+    return this.daemonRequest<DaemonHealth>("/health")
+  }
+
+  /**
+   * Vault discovery: every Vault this daemon hosts.
+   *
+   * Daemon-level, so it works on the same client regardless of which vault
+   * (if any) the client is scoped to.
+   */
+  fetchVaults(): Promise<DaemonVaultsResponse> {
+    return this.daemonRequest<DaemonVaultsResponse>("/vaults")
+  }
+
+  /** Health of the vault this client targets: the legacy shape, aimed at it. */
+  fetchVaultHealth(): Promise<DaemonHealth> {
+    if (!this.vaultId) {
+      return this.daemonRequest<DaemonHealth>("/health")
+    }
+    // Sent daemon-level (the path carries its own scope) rather than through
+    // `request`, which would prefix the vault a second time.
+    const path = `/vaults/${encodeURIComponent(this.vaultId)}/health`
+    return this.send(path, this.daemonUrl(path))
   }
 
   fetchTree(): Promise<DaemonTreeResponse> {

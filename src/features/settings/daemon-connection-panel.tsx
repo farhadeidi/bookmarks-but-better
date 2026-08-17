@@ -2,38 +2,15 @@ import * as React from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { usePreferencesStore } from "@/stores/preferences-store"
-import {
-  DEFAULT_DAEMON_ORIGIN,
-  connectToDaemon,
-  disconnectDaemon,
-  forgetDaemon,
-  type DaemonConnectStage,
-} from "@/browser/daemon"
-import { getDaemonConnectionConfig } from "@/browser/adapter-preference"
+import { useSourceStore } from "@/stores/source-store"
+import { DEFAULT_DAEMON_ORIGIN } from "@/browser/daemon"
+import type { DaemonConnectStage } from "@/browser/daemon"
 
 type Phase = "idle" | "connecting" | "error"
 
 interface AttemptError {
   stage: DaemonConnectStage
   message: string
-}
-
-/**
- * Where Disconnect/Forget should switch to: `"browser"` inside an actual
- * browser-extension context (bookmarks and storage are right there),
- * `"standalone"` everywhere else — the same choice `detectAdapter` itself
- * falls back to when nothing else applies.
- */
-function fallbackMode(): "browser" | "standalone" {
-  try {
-    return typeof chrome !== "undefined" &&
-      typeof chrome.bookmarks !== "undefined"
-      ? "browser"
-      : "standalone"
-  } catch {
-    return "standalone"
-  }
 }
 
 type Platform = "macos" | "linux" | "windows"
@@ -113,147 +90,82 @@ function InstallGuide() {
   )
 }
 
+/**
+ * Connecting a daemon: validate, permission, health-check, discover — then
+ * the source store persists the connection and switches to its first Vault,
+ * live, with no reload.
+ */
 export function DaemonConnectionPanel() {
-  const adapterMode = usePreferencesStore((s) => s.adapterMode)
-  const isActive = adapterMode === "daemon"
+  const connectDaemon = useSourceStore((s) => s.connectDaemon)
 
   const [origin, setOrigin] = React.useState(DEFAULT_DAEMON_ORIGIN)
   const [bearerToken, setBearerToken] = React.useState("")
-  const [savedOrigin, setSavedOrigin] = React.useState<string | null>(null)
   const [phase, setPhase] = React.useState<Phase>("idle")
   const [error, setError] = React.useState<AttemptError | null>(null)
   const [showAdvanced, setShowAdvanced] = React.useState(false)
 
-  React.useEffect(() => {
-    let cancelled = false
-    getDaemonConnectionConfig().then((config) => {
-      if (cancelled || !config) return
-      setSavedOrigin(config.origin)
-      setOrigin(config.origin)
-    })
-    return () => {
-      cancelled = true
-    }
-  }, [])
-
   const handleConnect = React.useCallback(async () => {
     setPhase("connecting")
     setError(null)
-    const result = await connectToDaemon(origin, {
+    const result = await connectDaemon(origin, {
       bearerToken: bearerToken || undefined,
     })
     if (result.ok) {
-      // The app bootstrapped its adapter once, at page load, so switching the
-      // active source needs a fresh load rather than a live adapter swap.
-      window.location.reload()
+      // The source store has already switched, live.
+      setPhase("idle")
       return
     }
     setPhase("error")
     setError({ stage: result.stage, message: result.message })
-  }, [origin, bearerToken])
-
-  const handleDisconnect = React.useCallback(async () => {
-    await disconnectDaemon(fallbackMode())
-    window.location.reload()
-  }, [])
-
-  const handleForget = React.useCallback(async () => {
-    await forgetDaemon(fallbackMode())
-    setSavedOrigin(null)
-    window.location.reload()
-  }, [])
+  }, [origin, bearerToken, connectDaemon])
 
   return (
     <div className="flex flex-col gap-3">
-      {isActive ? (
-        <div className="flex flex-col gap-2 rounded-lg border border-border/60 p-3">
-          <div className="flex items-center gap-2">
-            <span className="h-2 w-2 rounded-full bg-green-500" aria-hidden />
-            <span className="text-sm font-medium">
-              Connected to {savedOrigin ?? origin}
-            </span>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled={phase === "connecting"}
-              onClick={handleConnect}
-            >
-              {phase === "connecting" ? "Checking…" : "Retry"}
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={handleDisconnect}
-            >
-              Disconnect
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={handleForget}
-            >
-              Forget
-            </Button>
-          </div>
-          {error && (
-            <p className="text-xs text-destructive" role="alert">
-              {error.message}
-            </p>
-          )}
+      <div className="flex flex-col gap-2">
+        <Label className="text-sm font-medium" htmlFor="daemon-address">
+          Daemon address
+        </Label>
+        <div className="flex gap-2">
+          <Input
+            id="daemon-address"
+            value={origin}
+            onChange={(e) => setOrigin(e.target.value)}
+            placeholder={DEFAULT_DAEMON_ORIGIN}
+            aria-label="Daemon address"
+            disabled={phase === "connecting"}
+          />
+          <Button
+            type="button"
+            size="sm"
+            disabled={phase === "connecting" || origin.trim() === ""}
+            title={
+              origin.trim() === ""
+                ? "Enter the daemon address first."
+                : undefined
+            }
+            onClick={handleConnect}
+          >
+            {phase === "connecting"
+              ? "Connecting…"
+              : error
+                ? "Retry"
+                : "Connect"}
+          </Button>
         </div>
-      ) : (
-        <div className="flex flex-col gap-2">
-          <Label className="text-sm font-medium">Daemon Address</Label>
-          <div className="flex gap-2">
-            <Input
-              value={origin}
-              onChange={(e) => setOrigin(e.target.value)}
-              placeholder={DEFAULT_DAEMON_ORIGIN}
-              aria-label="Daemon address"
-              disabled={phase === "connecting"}
-            />
-            <Button
-              type="button"
-              size="sm"
-              disabled={phase === "connecting" || origin.trim() === ""}
-              title={
-                origin.trim() === ""
-                  ? "Enter the daemon address first."
-                  : undefined
-              }
-              onClick={handleConnect}
-            >
-              {phase === "connecting"
-                ? "Connecting…"
-                : error
-                  ? "Retry"
-                  : "Connect"}
-            </Button>
-          </div>
-          <p className="text-xs text-muted-foreground">
-            Connects to a local <code>bookmarks-but-better</code> daemon over
-            loopback (127.0.0.1 or localhost). Nothing is requested from the
-            daemon, and no browser permission is asked for, until you click
-            Connect. An unreachable daemon is reported as an error here — it
-            never falls back to browser bookmarks.
+        <p className="text-xs text-muted-foreground">
+          Connects to a local <code>bookmarks-but-better</code> daemon over
+          loopback (127.0.0.1 or localhost). Nothing is requested from the
+          daemon, and no browser permission is asked for, until you click
+          Connect. Every Vault it hosts becomes its own source; an unreachable
+          daemon is reported as an error — it never falls back to another
+          source.
+        </p>
+        {error && (
+          <p className="text-xs text-destructive" role="alert">
+            {error.message}
           </p>
-          {error && (
-            <p className="text-xs text-destructive" role="alert">
-              {error.message}
-            </p>
-          )}
-          {savedOrigin && (
-            <p className="text-xs text-muted-foreground">
-              Previously connected to {savedOrigin}.
-            </p>
-          )}
-        </div>
-      )}
+        )}
+      </div>
 
       <Button
         type="button"
@@ -268,10 +180,11 @@ export function DaemonConnectionPanel() {
       {showAdvanced && (
         <div className="flex flex-col gap-3">
           <div className="flex flex-col gap-2">
-            <Label className="text-sm font-medium">
+            <Label className="text-sm font-medium" htmlFor="daemon-token">
               Bearer token (optional)
             </Label>
             <Input
+              id="daemon-token"
               type="password"
               value={bearerToken}
               onChange={(e) => setBearerToken(e.target.value)}
@@ -280,7 +193,8 @@ export function DaemonConnectionPanel() {
               disabled={phase === "connecting"}
             />
             <p className="text-xs text-muted-foreground">
-              There is no pairing flow yet, so this is normally left blank.
+              There is no pairing flow yet, so this is normally left blank. One
+              token authenticates the whole connection — every Vault it hosts.
             </p>
           </div>
           <InstallGuide />

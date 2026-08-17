@@ -2,13 +2,12 @@
 
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { installFakeIndexedDB } from "../../__tests__/fake-indexeddb"
-import { connectToDaemon, disconnectDaemon, forgetDaemon } from "../connect"
 import {
-  getAdapterModePreference,
-  getDaemonConnectionConfig,
-  setAdapterModePreference,
-  setDaemonConnectionConfig,
-} from "../../adapter-preference"
+  connectToDaemon,
+  discoverDaemonVaults,
+  LEGACY_DISCOVERY_VAULT_ID,
+} from "../connect"
+import { DaemonClient } from "../client"
 
 installFakeIndexedDB()
 
@@ -17,15 +16,23 @@ afterEach(() => {
   installFakeIndexedDB()
 })
 
-function okHealthFetch(body: Record<string, unknown> = { status: "ok" }) {
-  return vi
-    .fn()
-    .mockResolvedValue(new Response(JSON.stringify(body), { status: 200 }))
+function fetchSequence(responses: Response[]) {
+  const fetchImpl = vi.fn()
+  for (const response of responses) {
+    fetchImpl.mockImplementationOnce(() => Promise.resolve(response))
+  }
+  // Anything past the scripted responses fails loudly rather than quietly.
+  fetchImpl.mockRejectedValue(new TypeError("unexpected request"))
+  return fetchImpl
+}
+
+function jsonResponse(body: Record<string, unknown>, status = 200) {
+  return new Response(JSON.stringify(body), { status })
 }
 
 describe("connectToDaemon", () => {
   it("rejects an invalid address at the validate stage without contacting anything", async () => {
-    const fetchImpl = okHealthFetch()
+    const fetchImpl = fetchSequence([])
 
     const result = await connectToDaemon("not a loopback address", {
       fetchImpl,
@@ -34,12 +41,10 @@ describe("connectToDaemon", () => {
     expect(result.ok).toBe(false)
     expect(result.ok ? undefined : result.stage).toBe("validate")
     expect(fetchImpl).not.toHaveBeenCalled()
-    expect(await getAdapterModePreference()).toBeNull()
-    expect(await getDaemonConnectionConfig()).toBeNull()
   })
 
   it("rejects a non-loopback host at the validate stage", async () => {
-    const fetchImpl = okHealthFetch()
+    const fetchImpl = fetchSequence([])
     const result = await connectToDaemon("http://192.168.1.5:52222", {
       fetchImpl,
     })
@@ -50,7 +55,7 @@ describe("connectToDaemon", () => {
   })
 
   it("stops at the permission stage when the host permission is denied, and never reaches the network", async () => {
-    const fetchImpl = okHealthFetch()
+    const fetchImpl = fetchSequence([])
     vi.stubGlobal("chrome", {
       permissions: {
         contains: (_q: unknown, cb: (granted: boolean) => void) => cb(false),
@@ -63,7 +68,6 @@ describe("connectToDaemon", () => {
     expect(result.ok).toBe(false)
     expect(result.ok ? undefined : result.stage).toBe("permission")
     expect(fetchImpl).not.toHaveBeenCalled()
-    expect(await getAdapterModePreference()).toBeNull()
   })
 
   /**
@@ -85,10 +89,6 @@ describe("connectToDaemon", () => {
         request,
       },
     })
-    // Health fails, so this attempt persists nothing of its own — and the
-    // promise is settled below rather than left floating, since a connection
-    // that resolved after the test ended would write into the next one's
-    // storage.
     const attempt = connectToDaemon("127.0.0.1:52222", {
       fetchImpl: vi.fn().mockRejectedValue(new TypeError("down")),
     })
@@ -96,7 +96,6 @@ describe("connectToDaemon", () => {
     expect(request).toHaveBeenCalledOnce()
 
     expect(await attempt).toMatchObject({ ok: false, stage: "health" })
-    expect(await getDaemonConnectionConfig()).toBeNull()
   })
 
   it("reports a health-stage failure when the daemon cannot be reached", async () => {
@@ -108,37 +107,56 @@ describe("connectToDaemon", () => {
 
     expect(result.ok).toBe(false)
     expect(result.ok ? undefined : result.stage).toBe("health")
-    expect(await getAdapterModePreference()).toBeNull()
-    expect(await getDaemonConnectionConfig()).toBeNull()
   })
 
   it("reports a health-stage failure when the daemon reports an unhealthy status", async () => {
-    const fetchImpl = okHealthFetch({ status: "degraded" })
+    const fetchImpl = fetchSequence([jsonResponse({ status: "degraded" })])
 
     const result = await connectToDaemon("127.0.0.1:52222", { fetchImpl })
 
     expect(result.ok).toBe(false)
     expect(result.ok ? undefined : result.stage).toBe("health")
-    expect(await getAdapterModePreference()).toBeNull()
   })
 
-  it("persists the connection and switches to daemon mode only once every stage succeeds", async () => {
-    const fetchImpl = okHealthFetch({ status: "ok", version: "4.0.0" })
+  it("succeeds with the discovered vaults once health and discovery answer", async () => {
+    const fetchImpl = fetchSequence([
+      jsonResponse({ status: "ok", version: "4.0.0" }),
+      jsonResponse({
+        vaults: [
+          { id: "reading", name: "Reading" },
+          { id: "archive", name: "Archive" },
+        ],
+      }),
+    ])
 
     const result = await connectToDaemon("127.0.0.1:47321", { fetchImpl })
 
-    expect(result).toMatchObject({ ok: true, origin: "http://127.0.0.1:47321" })
-    expect(await getAdapterModePreference()).toBe("daemon")
-    expect(await getDaemonConnectionConfig()).toEqual({
+    expect(result).toMatchObject({
+      ok: true,
       origin: "http://127.0.0.1:47321",
+      vaults: [
+        { id: "reading", name: "Reading" },
+        { id: "archive", name: "Archive" },
+      ],
+      legacyProtocol: false,
     })
+    // Health is daemon-level; discovery is daemon-level; neither is scoped.
+    expect(fetchImpl.mock.calls[0][0]).toBe(
+      "http://127.0.0.1:47321/api/v1/health"
+    )
+    expect(fetchImpl.mock.calls[1][0]).toBe(
+      "http://127.0.0.1:47321/api/v1/vaults"
+    )
   })
 
   it("carries vault warnings through on success without failing the connection", async () => {
-    const fetchImpl = okHealthFetch({
-      status: "ok",
-      warnings: [{ code: "w", severity: "warning", detail: "example" }],
-    })
+    const fetchImpl = fetchSequence([
+      jsonResponse({
+        status: "ok",
+        warnings: [{ code: "w", severity: "warning", detail: "example" }],
+      }),
+      jsonResponse({ vaults: [{ id: "main" }] }),
+    ])
 
     const result = await connectToDaemon("127.0.0.1:52222", { fetchImpl })
 
@@ -148,67 +166,86 @@ describe("connectToDaemon", () => {
     ])
   })
 
-  it("preserves whatever source was already configured when a connect attempt fails", async () => {
-    await setAdapterModePreference("browser")
-    const fetchImpl = vi.fn().mockRejectedValue(new TypeError("network down"))
-
-    const result = await connectToDaemon("127.0.0.1:52222", { fetchImpl })
-
-    expect(result.ok).toBe(false)
-    expect(await getAdapterModePreference()).toBe("browser")
-  })
-
-  it("a Retry is just the same attempt again — succeeding after an earlier failure updates the stored mode", async () => {
-    await setAdapterModePreference("standalone")
-    const failing = vi.fn().mockRejectedValue(new TypeError("down"))
+  it("a Retry is just the same attempt again, with nothing persisted on failure either way", async () => {
     const first = await connectToDaemon("127.0.0.1:52222", {
-      fetchImpl: failing,
+      fetchImpl: vi.fn().mockRejectedValue(new TypeError("down")),
     })
     expect(first.ok).toBe(false)
-    expect(await getAdapterModePreference()).toBe("standalone")
 
-    const succeeding = okHealthFetch()
     const second = await connectToDaemon("127.0.0.1:52222", {
-      fetchImpl: succeeding,
+      fetchImpl: fetchSequence([
+        jsonResponse({ status: "ok" }),
+        jsonResponse({ vaults: [{ id: "main" }] }),
+      ]),
     })
     expect(second.ok).toBe(true)
-    expect(await getAdapterModePreference()).toBe("daemon")
   })
 })
 
-describe("disconnectDaemon", () => {
-  it("switches the mode away from daemon but keeps the stored connection", async () => {
-    await setDaemonConnectionConfig({ origin: "http://127.0.0.1:47321" })
-    await setAdapterModePreference("daemon")
+describe("discoverDaemonVaults", () => {
+  it("lists what the daemon reports", async () => {
+    const client = new DaemonClient({
+      origin: "http://127.0.0.1:52222",
+      fetchImpl: fetchSequence([
+        jsonResponse({
+          vaults: [
+            { id: "a", name: "A" },
+            { id: "b", name: "B" },
+          ],
+        }),
+      ]),
+    })
 
-    await disconnectDaemon("browser")
-
-    expect(await getAdapterModePreference()).toBe("browser")
-    expect(await getDaemonConnectionConfig()).toEqual({
-      origin: "http://127.0.0.1:47321",
+    expect(await discoverDaemonVaults(client)).toMatchObject({
+      vaults: [
+        { id: "a", name: "A" },
+        { id: "b", name: "B" },
+      ],
+      legacyProtocol: false,
     })
   })
-})
 
-describe("forgetDaemon", () => {
-  it("clears the stored connection, releases the permission, and switches away from daemon mode", async () => {
-    const remove = vi.fn((_q: unknown, cb: () => void) => cb())
-    vi.stubGlobal("chrome", {
-      permissions: {
-        contains: (_q: unknown, cb: (granted: boolean) => void) => cb(true),
-        remove,
-      },
+  it("reports a pre-Vault-id daemon as one legacy vault rather than a failure", async () => {
+    const client = new DaemonClient({
+      origin: "http://127.0.0.1:52222",
+      fetchImpl: fetchSequence([
+        jsonResponse(
+          {
+            type: "about:blank",
+            title: "No such route",
+            status: 404,
+            code: "route_not_found",
+            detail: "no such route",
+          },
+          404
+        ),
+      ]),
     })
-    await setDaemonConnectionConfig({ origin: "http://127.0.0.1:47321" })
-    await setAdapterModePreference("daemon")
 
-    await forgetDaemon("standalone")
+    expect(await discoverDaemonVaults(client)).toMatchObject({
+      vaults: [{ id: LEGACY_DISCOVERY_VAULT_ID }],
+      legacyProtocol: true,
+    })
+  })
 
-    expect(await getAdapterModePreference()).toBe("standalone")
-    expect(await getDaemonConnectionConfig()).toBeNull()
-    expect(remove).toHaveBeenCalledWith(
-      { origins: ["http://127.0.0.1/*", "http://localhost/*"] },
-      expect.any(Function)
-    )
+  it("an empty vault list is read as the legacy single-vault daemon", async () => {
+    const client = new DaemonClient({
+      origin: "",
+      fetchImpl: fetchSequence([jsonResponse({ vaults: [] })]),
+    })
+
+    expect(await discoverDaemonVaults(client)).toMatchObject({
+      vaults: [{ id: LEGACY_DISCOVERY_VAULT_ID }],
+      legacyProtocol: true,
+    })
+  })
+
+  it("a daemon that cannot be reached surfaces the failure", async () => {
+    const client = new DaemonClient({
+      origin: "http://127.0.0.1:59999",
+      fetchImpl: vi.fn().mockRejectedValue(new TypeError("down")),
+    })
+
+    await expect(discoverDaemonVaults(client)).rejects.toThrow()
   })
 })

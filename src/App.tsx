@@ -1,9 +1,11 @@
 import * as React from "react"
 import { useBookmarkStore } from "@/stores/bookmark-store"
-import { usePreferencesStore } from "@/stores/preferences-store"
+import { useSourceStore } from "@/stores/source-store"
 import { useUIStore } from "@/stores/ui-store"
 import { BookmarkGrid } from "@/features/bookmark-grid"
 import { DndMonitor } from "@/features/dnd"
+import { SourceSwitcher } from "@/features/source-switcher"
+import { StandaloneDeprecationBanner } from "@/features/standalone-sunset"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Button } from "@/components/ui/button"
 import {
@@ -11,39 +13,24 @@ import {
   TooltipTrigger,
   TooltipContent,
 } from "@/components/ui/tooltip"
-import {
-  HoverCard,
-  HoverCardTrigger,
-  HoverCardContent,
-} from "@/components/ui/hover-card"
-import {
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
-  DropdownMenuGroup,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-} from "@/components/ui/dropdown-menu"
 import { HugeiconsIcon } from "@hugeicons/react"
-import {
-  Settings03Icon,
-  Sun02Icon,
-  Moon02Icon,
-  ComputerSettingsIcon,
-  PaintBucketIcon,
-  Recycle02Icon,
-  Folder01Icon,
-  InformationCircleIcon,
-} from "@hugeicons/core-free-icons"
-import { useTheme } from "@/components/theme-provider"
-import { COLOR_THEMES, type ColorTheme } from "@/stores/preferences-store"
+import { Settings03Icon, FolderTreeIcon } from "@hugeicons/core-free-icons"
 import { useAppBootstrap } from "@/hooks/use-app-bootstrap"
 
 const SettingsDialog = React.lazy(() =>
   import("@/features/settings").then((m) => ({ default: m.SettingsDialog }))
 )
+// The guard's constants fold in every production bundle, so this is `null`
+// there — and the dynamic import, the whole dev chunk and its preload entry
+// are eliminated by dead-branch removal.
+const ScenarioWorkbench =
+  import.meta.env.DEV && import.meta.env.MODE !== "test"
+    ? React.lazy(() =>
+        import("@/dev/workbench").then((m) => ({
+          default: m.ScenarioWorkbench,
+        }))
+      )
+    : null
 const BookmarkEditorDialog = React.lazy(() =>
   import("@/features/bookmark-editor").then((m) => ({
     default: m.BookmarkEditorDialog,
@@ -66,36 +53,51 @@ const OnboardingWizard = React.lazy(() =>
 )
 
 export function App() {
-  const { onboardingChecked, screenshotMode } = useAppBootstrap()
+  const { onboardingChecked } = useAppBootstrap()
   const onboardingOpen = useUIStore((s) => s.onboardingOpen)
   const closeOnboarding = useUIStore((s) => s.closeOnboarding)
   const openSettings = useUIStore((s) => s.openSettings)
+  const sourceStatus = useSourceStore((s) => s.status)
+  const hasActiveSource = useSourceStore((s) => s.activeSourceId !== null)
+  const switching = useSourceStore((s) => s.switching)
   const isLoading = useBookmarkStore((s) => s.isLoading)
   const status = useBookmarkStore((s) => s.status)
   const loadError = useBookmarkStore((s) => s.loadError)
   const retry = useBookmarkStore((s) => s.retry)
   const openBookmarkOrganizer = useUIStore((s) => s.openBookmarkOrganizer)
-  const colorTheme = usePreferencesStore((s) => s.colorTheme)
-  const setColorTheme = usePreferencesStore((s) => s.setColorTheme)
-  const { theme, setTheme } = useTheme()
-
-  const themeOrder = ["light", "dark", "system"] as const
-  const themeIcon = {
-    light: Sun02Icon,
-    dark: Moon02Icon,
-    system: ComputerSettingsIcon,
-  }
-
-  const cycleTheme = () => {
-    const idx = themeOrder.indexOf(theme)
-    setTheme(themeOrder[(idx + 1) % themeOrder.length])
-  }
 
   return (
     <ScrollArea className="h-svh bg-background text-foreground">
       {/* Main content */}
-      <main className="px-4 pt-8 pb-24">
-        {status === "unavailable" ? (
+      <main className="flex flex-col gap-5 px-4 pt-8 pb-24">
+        {/* The compact source control: tab switcher with several enabled
+            sources, name/health badge with one. Sits above the bookmarks so
+            the destination of every operation below it is visible. */}
+        {sourceStatus === "ready" && <SourceSwitcher />}
+        {sourceStatus === "ready" && <StandaloneDeprecationBanner />}
+
+        {sourceStatus === "ready" && !hasActiveSource ? (
+          <div
+            className="flex flex-col items-center gap-3 p-12 text-center text-muted-foreground"
+            role="status"
+          >
+            <p className="font-medium text-foreground">
+              No bookmark source yet.
+            </p>
+            <p className="max-w-md text-sm">
+              This build has no Browser Source — connect a local{" "}
+              <code>bookmarks-but-better</code> daemon and each Vault it hosts
+              becomes a source.
+            </p>
+            <Button variant="outline" size="sm" onClick={openSettings}>
+              Connect a daemon
+            </Button>
+          </div>
+        ) : switching ? (
+          <div className="flex items-center justify-center gap-2 p-12 text-muted-foreground">
+            Switching source…
+          </div>
+        ) : status === "unavailable" ? (
           <div
             role="alert"
             className="flex flex-col items-center gap-3 p-12 text-center text-muted-foreground"
@@ -106,9 +108,14 @@ export function App() {
             <p className="text-sm">
               {loadError ?? "Could not reach the bookmark source."}
             </p>
-            <Button variant="outline" size="sm" onClick={() => void retry()}>
-              Retry
-            </Button>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={() => void retry()}>
+                Retry
+              </Button>
+              <Button variant="outline" size="sm" onClick={openSettings}>
+                Switch source
+              </Button>
+            </div>
           </div>
         ) : isLoading || status === "loading" ? (
           <div className="flex items-center justify-center p-12 text-muted-foreground">
@@ -119,8 +126,14 @@ export function App() {
         )}
       </main>
 
-      {/* FAB buttons */}
-      <div className="fixed right-6 bottom-6 z-10 flex items-center gap-2 rounded-2xl border border-border/60 bg-background/90 px-2 py-1.5 shadow-sm backdrop-blur-sm">
+      {/* The two global actions. Appearance and product information live in
+          their corresponding Settings categories instead of being duplicated
+          here. */}
+      <div
+        role="toolbar"
+        aria-label="App actions"
+        className="fixed right-4 bottom-4 z-10 flex w-fit items-center gap-2 rounded-2xl border border-border/60 bg-background/90 px-2 py-1.5 shadow-sm backdrop-blur-sm sm:right-6 sm:bottom-6 max-sm:[&_button]:size-12"
+      >
         <Tooltip>
           <TooltipTrigger
             render={
@@ -128,67 +141,13 @@ export function App() {
                 variant="outline"
                 size="icon"
                 onClick={openBookmarkOrganizer}
-                aria-label="Bookmark Organizer"
+                aria-label="Bookmark tree"
               />
             }
           >
-            <HugeiconsIcon icon={Folder01Icon} size={18} />
+            <HugeiconsIcon icon={FolderTreeIcon} />
           </TooltipTrigger>
-          <TooltipContent side="top">Bookmark Organizer</TooltipContent>
-        </Tooltip>
-        {/* Dropdown theme picker */}
-        <DropdownMenu>
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <DropdownMenuTrigger
-                  render={
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      aria-label="Pick color theme"
-                    >
-                      <HugeiconsIcon icon={PaintBucketIcon} size={18} />
-                    </Button>
-                  }
-                />
-              }
-            />
-            <TooltipContent side="top">Color theme</TooltipContent>
-          </Tooltip>
-          <DropdownMenuContent side="top" align="end">
-            <DropdownMenuGroup>
-              <DropdownMenuLabel>Color Theme</DropdownMenuLabel>
-            </DropdownMenuGroup>
-            <DropdownMenuSeparator />
-            <DropdownMenuRadioGroup
-              value={colorTheme}
-              onValueChange={(value) => setColorTheme(value as ColorTheme)}
-            >
-              {COLOR_THEMES.map((t) => (
-                <DropdownMenuRadioItem key={t} value={t} className="capitalize">
-                  {t}
-                </DropdownMenuRadioItem>
-              ))}
-            </DropdownMenuRadioGroup>
-          </DropdownMenuContent>
-        </DropdownMenu>
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={cycleTheme}
-                aria-label="Toggle theme"
-              />
-            }
-          >
-            <HugeiconsIcon icon={themeIcon[theme]} size={18} />
-          </TooltipTrigger>
-          <TooltipContent side="top" className="capitalize">
-            {theme}
-          </TooltipContent>
+          <TooltipContent side="top">Bookmark tree</TooltipContent>
         </Tooltip>
         <Tooltip>
           <TooltipTrigger
@@ -201,87 +160,22 @@ export function App() {
               />
             }
           >
-            <HugeiconsIcon icon={Settings03Icon} size={18} />
+            <HugeiconsIcon icon={Settings03Icon} />
           </TooltipTrigger>
           <TooltipContent side="top">Settings</TooltipContent>
         </Tooltip>
-        <HoverCard>
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <HoverCardTrigger
-                  render={
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      aria-label="App info"
-                    />
-                  }
-                >
-                  <HugeiconsIcon icon={InformationCircleIcon} size={18} />
-                </HoverCardTrigger>
-              }
-            />
-            <TooltipContent side="top">App info</TooltipContent>
-          </Tooltip>
-          <HoverCardContent side="top" align="end">
-            <div className="flex flex-col gap-2">
-              <div className="flex flex-col gap-1.5">
-                <span className="text-sm font-medium">
-                  Bookmarks — But Better
-                </span>
-                <span className="text-xs text-muted-foreground">
-                  Version {__APP_VERSION__}
-                </span>
-              </div>
-              <div className="flex flex-col gap-1">
-                <a
-                  href="https://chromewebstore.google.com/detail/nflojekghnganlcjncbepnnnkgakghif?utm_source=extension-info"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-xs text-muted-foreground underline-offset-2 hover:underline"
-                >
-                  Chrome Web Store
-                </a>
-                <a
-                  href="https://github.com/farhadeidi/bookmarks-but-better"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-xs text-muted-foreground underline-offset-2 hover:underline"
-                >
-                  GitHub
-                </a>
-              </div>
-            </div>
-          </HoverCardContent>
-        </HoverCard>
-        {import.meta.env.DEV && !screenshotMode && (
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={() => {
-                    indexedDB.deleteDatabase("bookmarks-but-better")
-                    indexedDB.deleteDatabase("bookmarks-but-better-prefs")
-                    chrome?.storage?.sync?.clear?.()
-                    chrome?.storage?.local?.clear?.()
-                    window.location.reload()
-                  }}
-                  aria-label="Reset data (dev)"
-                />
-              }
-            >
-              <HugeiconsIcon icon={Recycle02Icon} size={18} />
-            </TooltipTrigger>
-            <TooltipContent side="top">Reset data (dev)</TooltipContent>
-          </Tooltip>
-        )}
       </div>
 
       {/* DnD monitor (renders nothing, handles drop logic) */}
       <DndMonitor />
+
+      {/* Dev Workbench: the dev-server-only scenario panel, absent from
+          every production bundle. */}
+      {ScenarioWorkbench && (
+        <React.Suspense fallback={null}>
+          <ScenarioWorkbench />
+        </React.Suspense>
+      )}
 
       {/* Dialogs */}
       <React.Suspense fallback={null}>

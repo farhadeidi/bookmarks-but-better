@@ -151,18 +151,61 @@ const fn default_search_limit() -> usize {
     8
 }
 
+/// The body of `GET /api/v1/vaults`: Vault discovery.
+///
+/// Every client that wants to offer more than "the one vault" starts here.
+#[derive(Debug, Clone, Serialize)]
+pub struct VaultsResponse {
+    /// Every hosted Vault, in configuration order.
+    pub vaults: Vec<VaultDto>,
+}
+
+/// One hosted Vault as discovery renders it.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VaultDto {
+    /// The Vault's id, unique within this daemon and usable as a path
+    /// segment in the vault-scoped routes.
+    pub id: String,
+    /// The display name: the Vault root folder's title when it has one, and
+    /// the id otherwise.
+    pub name: String,
+}
+
+/// One hosted Vault as the daemon-level health response summarizes it.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VaultSummaryDto {
+    /// The Vault's id.
+    pub id: String,
+    /// The display name.
+    pub name: String,
+}
+
 /// The body of `GET /api/v1/health`.
+///
+/// Health is a daemon-level concern: the daemon answers `ok` while it is
+/// serving, regardless of what any one Vault's diagnostics look like. The
+/// vault-specific `generation` and `warnings` fields are carried only when
+/// exactly one Vault is hosted — the legacy single-Vault shape, unchanged —
+/// and a multi-Vault client reads them from `/vaults/{id}/health` instead.
 #[derive(Debug, Clone, Serialize)]
 pub struct HealthResponse {
-    /// Always `ok` while the daemon is serving; the vault's own problems are
-    /// reported in `warnings`, not by claiming the daemon is unhealthy.
+    /// Always `ok` while the daemon is serving; a Vault's own problems are
+    /// reported in its warnings, not by claiming the daemon is unhealthy.
     pub status: &'static str,
     /// The daemon's crate version.
     pub version: &'static str,
-    /// The current vault generation; it changes whenever the tree changes.
-    pub generation: u64,
-    /// Every diagnostic in the vault, in display order.
-    pub warnings: Vec<DiagnosticDto>,
+    /// Every hosted Vault.
+    pub vaults: Vec<VaultSummaryDto>,
+    /// The current vault generation; present only in the single-Vault legacy
+    /// shape.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub generation: Option<u64>,
+    /// Every diagnostic in the vault; present only in the single-Vault
+    /// legacy shape.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub warnings: Option<Vec<DiagnosticDto>>,
 }
 
 /// The body of `POST /api/v1/rescan`.

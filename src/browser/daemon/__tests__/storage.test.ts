@@ -2,7 +2,7 @@
 
 import { afterEach, describe, expect, it } from "vitest"
 import { installFakeIndexedDB } from "../../__tests__/fake-indexeddb"
-import { DaemonStorageAdapter } from "../storage"
+import { DaemonStorageAdapter, daemonVaultNamespace } from "../storage"
 import { StandaloneStorageAdapter } from "../../standalone/storage"
 import {
   setAdapterModePreference,
@@ -112,5 +112,68 @@ describe("DaemonStorageAdapter", () => {
       // Standalone's own value is untouched by the daemon adapter's write.
       expect(await standalone.get("maxColumns")).toBe(3)
     })
+  })
+})
+
+describe("per-vault namespaces", () => {
+  afterEach(() => {
+    installFakeIndexedDB()
+  })
+
+  it("two vaults on one daemon never see each other's preferences", async () => {
+    const main = new DaemonStorageAdapter({
+      origin: "http://127.0.0.1:52222",
+      vaultId: "main",
+    })
+    const archive = new DaemonStorageAdapter({
+      origin: "http://127.0.0.1:52222",
+      vaultId: "archive",
+    })
+
+    await main.set("rootFolderId", "main-root")
+    await archive.set("rootFolderId", "archive-root")
+
+    expect(await main.get("rootFolderId")).toBe("main-root")
+    expect(await archive.get("rootFolderId")).toBe("archive-root")
+  })
+
+  it("the same vault id on two daemons stays isolated by origin", async () => {
+    const first = new DaemonStorageAdapter({
+      origin: "http://127.0.0.1:52222",
+      vaultId: "main",
+    })
+    const second = new DaemonStorageAdapter({
+      origin: "http://localhost:52223",
+      vaultId: "main",
+    })
+
+    await first.set("cardLayouts", { a: "grid" })
+    await second.set("cardLayouts", { b: "list" })
+
+    expect(await first.get("cardLayouts")).toEqual({ a: "grid" })
+    expect(await second.get("cardLayouts")).toEqual({ b: "list" })
+  })
+
+  it("a vault-scoped adapter does not read the legacy single-vault namespace", async () => {
+    const legacy = new DaemonStorageAdapter()
+    await legacy.set("rootFolderId", "legacy-root")
+
+    const scoped = new DaemonStorageAdapter({
+      origin: "http://127.0.0.1:52222",
+      vaultId: "main",
+    })
+    expect(await scoped.get("rootFolderId")).toBeNull()
+
+    await scoped.set("rootFolderId", "scoped-root")
+    expect(await legacy.get("rootFolderId")).toBe("legacy-root")
+  })
+
+  it("the namespace is legible and stable", async () => {
+    expect(daemonVaultNamespace("http://127.0.0.1:52222", "main")).toBe(
+      "bookmarks-but-better.daemon.ui.127-0-0-1-52222.main."
+    )
+    expect(daemonVaultNamespace(undefined, null)).toBe(
+      "bookmarks-but-better.daemon.ui."
+    )
   })
 })

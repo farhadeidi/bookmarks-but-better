@@ -1,10 +1,9 @@
 import { create } from "zustand"
 import type { BrowserAdapter } from "@/browser"
 import {
-  getAdapterModePreference,
-  setAdapterModePreference,
-} from "@/browser/adapter-preference"
-import type { AdapterMode } from "@/browser/types"
+  ProfileStorageAdapter,
+  readProfilePreference,
+} from "@/stores/profile-storage"
 
 type CardLayout = "list" | "grid"
 export type ColorTheme =
@@ -33,22 +32,27 @@ export const COLOR_THEMES: ColorTheme[] = [
 ]
 
 interface PreferencesState {
+  // Source-scoped: keyed to one source's folder ids, read and written
+  // through the active source's storage adapter.
   cardLayouts: Record<string, CardLayout>
+  folderOrder: string[]
+  // Profile-wide: this browser profile's look and feel, independent of the
+  // active source. Stored in the fixed profile namespace.
   nestedFolders: boolean
-  adapterMode: AdapterMode
   colorTheme: ColorTheme
   maxColumns: number
   containerMode: "fluid" | "contained"
-  folderOrder: string[]
   experimentalCardDrag: boolean
   isFoldersOnlyEnabledInTreeEditor: boolean
   adapter: BrowserAdapter | null
 
   // Actions
-  init(adapter: BrowserAdapter): Promise<void>
+  init(
+    adapter: BrowserAdapter,
+    options?: { isCurrent?: () => boolean }
+  ): Promise<void>
   setCardLayout(folderId: string, layout: CardLayout): void
   setNestedFolders(value: boolean): void
-  setAdapterMode(mode: AdapterMode): void
   setColorTheme(theme: ColorTheme): void
   setMaxColumns(value: number): void
   setContainerMode(mode: "fluid" | "contained"): void
@@ -57,10 +61,12 @@ interface PreferencesState {
   setIsFoldersOnlyEnabledInTreeEditor(value: boolean): void
 }
 
+/** One profile-wide store for the whole session; never re-created per source. */
+const profileStorage = new ProfileStorageAdapter()
+
 export const usePreferencesStore = create<PreferencesState>((set, get) => ({
   cardLayouts: {},
   nestedFolders: false,
-  adapterMode: "browser",
   colorTheme: "default",
   maxColumns: 4,
   containerMode: "contained",
@@ -69,13 +75,16 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
   isFoldersOnlyEnabledInTreeEditor: true,
   adapter: null,
 
-  async init(adapter: BrowserAdapter) {
+  async init(adapter: BrowserAdapter, options = {}) {
+    // See bookmark-store.init: a superseded Source Session transition must
+    // not apply its (source-scoped) preferences over the newer session's.
+    const isCurrent = options.isCurrent ?? (() => true)
+    if (!isCurrent()) return
     set({ adapter })
 
     const [
       cardLayouts,
       nestedFolders,
-      adapterMode,
       colorTheme,
       maxColumns,
       containerMode,
@@ -84,20 +93,29 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
       isFoldersOnlyEnabledInTreeEditor,
     ] = await Promise.all([
       adapter.storage.get<Record<string, CardLayout>>("cardLayouts"),
-      adapter.storage.get<boolean>("nestedFolders"),
-      getAdapterModePreference(),
-      adapter.storage.get<ColorTheme>("colorTheme"),
-      adapter.storage.get<number>("maxColumns"),
-      adapter.storage.get<"fluid" | "contained">("containerMode"),
+      readProfilePreference<boolean>("nestedFolders", adapter.storage),
+      readProfilePreference<ColorTheme>("colorTheme", adapter.storage),
+      readProfilePreference<number>("maxColumns", adapter.storage),
+      readProfilePreference<"fluid" | "contained">(
+        "containerMode",
+        adapter.storage
+      ),
       adapter.storage.get<string[]>("folderOrder"),
-      adapter.storage.get<boolean>("experimentalCardDrag"),
-      adapter.storage.get<boolean>("isFoldersOnlyEnabledInTreeEditor"),
+      readProfilePreference<boolean>("experimentalCardDrag", adapter.storage),
+      readProfilePreference<boolean>(
+        "isFoldersOnlyEnabledInTreeEditor",
+        adapter.storage
+      ),
     ])
+
+    // A second transition may have started (and finished) during those
+    // reads; its values are the live ones, and a superseded session must
+    // not apply over them. Mirrors bookmark-store.init's re-checks.
+    if (!isCurrent()) return
 
     const isFreshState =
       cardLayouts === null &&
       nestedFolders === null &&
-      adapterMode === null &&
       colorTheme === null &&
       maxColumns === null &&
       containerMode === null &&
@@ -109,6 +127,8 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
       const { default: seed } = await import("@/dev/seed-preferences.json")
       seedPrefDefaults = seed as Record<string, unknown>
     }
+
+    if (!isCurrent()) return
 
     const resolvedColorTheme =
       colorTheme ??
@@ -126,10 +146,6 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
         nestedFolders ??
         (seedPrefDefaults?.nestedFolders as boolean | undefined) ??
         false,
-      adapterMode:
-        adapterMode ??
-        (seedPrefDefaults?.adapterMode as AdapterMode | undefined) ??
-        "browser",
       colorTheme: resolvedColorTheme,
       maxColumns: Math.max(
         2,
@@ -176,29 +192,24 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
 
   setNestedFolders(value: boolean) {
     set({ nestedFolders: value })
-    get().adapter?.storage.set("nestedFolders", value)
-  },
-
-  setAdapterMode(mode: AdapterMode) {
-    set({ adapterMode: mode })
-    setAdapterModePreference(mode)
+    void profileStorage.set("nestedFolders", value)
   },
 
   setColorTheme(theme: ColorTheme) {
     set({ colorTheme: theme })
-    get().adapter?.storage.set("colorTheme", theme)
+    void profileStorage.set("colorTheme", theme)
     applyColorTheme(theme)
   },
 
   setMaxColumns(value: number) {
     const clamped = Math.max(2, Math.min(6, value))
     set({ maxColumns: clamped })
-    get().adapter?.storage.set("maxColumns", clamped)
+    void profileStorage.set("maxColumns", clamped)
   },
 
   setContainerMode(mode: "fluid" | "contained") {
     set({ containerMode: mode })
-    get().adapter?.storage.set("containerMode", mode)
+    void profileStorage.set("containerMode", mode)
   },
 
   setFolderOrder(order: string[]) {
@@ -208,12 +219,12 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
 
   setExperimentalCardDrag(value: boolean) {
     set({ experimentalCardDrag: value })
-    get().adapter?.storage.set("experimentalCardDrag", value)
+    void profileStorage.set("experimentalCardDrag", value)
   },
 
   setIsFoldersOnlyEnabledInTreeEditor(value: boolean) {
     set({ isFoldersOnlyEnabledInTreeEditor: value })
-    get().adapter?.storage.set("isFoldersOnlyEnabledInTreeEditor", value)
+    void profileStorage.set("isFoldersOnlyEnabledInTreeEditor", value)
   },
 }))
 

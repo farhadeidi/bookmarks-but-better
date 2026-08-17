@@ -1,22 +1,28 @@
 import type { BrowserAdapter, DaemonConnectionConfig } from "../types"
 import { DaemonBookmarkAdapter } from "./bookmarks"
-import { DaemonClient, createSameOriginDaemonClient } from "./client"
+import {
+  DaemonClient,
+  type DaemonClientOptions,
+  createSameOriginDaemonClient,
+} from "./client"
 import { DaemonFaviconAdapter } from "./favicon"
 import { DaemonStorageAdapter } from "./storage"
 
 /**
  * The capabilities are a property of the *daemon*, not of how it was reached,
  * so served and extension modes share them exactly. If they ever diverge, the
- * two factories below are where the divergence belongs — not a runtime check.
+ * factories below are where the divergence belongs — not a runtime check.
  */
-function daemonAdapterFor(client: DaemonClient): BrowserAdapter {
+function daemonAdapterFor(
+  client: DaemonClient,
+  storage: DaemonStorageAdapter
+): BrowserAdapter {
   return {
     bookmarks: new DaemonBookmarkAdapter({ client }),
     // UI preferences stay client-local in IndexedDB regardless of adapter,
-    // but namespaced away from Standalone's — see `./storage` for why a
-    // shared, unprefixed store would be a real collision, not a theoretical
-    // one, for the extension switching between the two modes.
-    storage: new DaemonStorageAdapter(),
+    // namespaced per Vault — see `./storage` for why a shared, unprefixed
+    // store would be a real collision, not a theoretical one.
+    storage,
     favicon: new DaemonFaviconAdapter(),
     capabilities: {
       openInManager: false,
@@ -38,10 +44,33 @@ function daemonAdapterFor(client: DaemonClient): BrowserAdapter {
  *
  * This is what `VITE_BUILD_TARGET=daemon` builds and what has always existed.
  * There is nothing to configure and nothing to get wrong — the page was served
- * by the daemon it talks to — so it deliberately takes no arguments.
+ * by the daemon it talks to — so it deliberately takes no arguments. It uses
+ * the legacy unscoped routes, which that daemon answers while it hosts exactly
+ * one Vault; the source layer scopes explicitly once discovery has named one.
  */
 export function createServedDaemonAdapter(): BrowserAdapter {
-  return daemonAdapterFor(createSameOriginDaemonClient())
+  return daemonAdapterFor(
+    createSameOriginDaemonClient(),
+    new DaemonStorageAdapter()
+  )
+}
+
+/**
+ * A daemon-served UI aimed at one named Vault of its own daemon.
+ *
+ * The served app with several hosted Vaults switches among them without a
+ * process-wide active Vault: each source session builds its own adapter
+ * scoped to the Vault it shows.
+ */
+export function createServedVaultAdapter(vaultId: string): BrowserAdapter {
+  return daemonAdapterFor(
+    new DaemonClient({ origin: "", vaultId }),
+    new DaemonStorageAdapter({ origin: undefined, vaultId })
+  )
+}
+
+export interface ExtensionDaemonOptions extends DaemonClientOptions {
+  config: DaemonConnectionConfig
 }
 
 /**
@@ -53,12 +82,18 @@ export function createServedDaemonAdapter(): BrowserAdapter {
  * past the settings form.
  */
 export function createExtensionDaemonAdapter(
-  config: DaemonConnectionConfig
+  config: DaemonConnectionConfig,
+  vaultId?: string | null
 ): BrowserAdapter {
   return daemonAdapterFor(
     new DaemonClient({
       origin: config.origin,
       bearerToken: config.bearerToken,
+      vaultId: vaultId ?? null,
+    }),
+    new DaemonStorageAdapter({
+      origin: config.origin,
+      vaultId: vaultId ?? null,
     })
   )
 }
@@ -74,12 +109,18 @@ export function createDaemonAdapter(): BrowserAdapter {
 
 export { DaemonBookmarkAdapter } from "./bookmarks"
 export { DaemonFaviconAdapter } from "./favicon"
-export { DaemonStorageAdapter } from "./storage"
+export {
+  DaemonStorageAdapter,
+  daemonVaultNamespace,
+  originSlug,
+} from "./storage"
 export { connectDaemonEvents, createSseParser } from "./sse"
 export {
   DaemonApiError,
   DaemonClient,
   createSameOriginDaemonClient,
+  type DaemonVault,
+  type DaemonVaultsResponse,
 } from "./client"
 export {
   DEFAULT_DAEMON_ORIGIN,
@@ -90,8 +131,8 @@ export {
 } from "./endpoint"
 export {
   connectToDaemon,
-  disconnectDaemon,
-  forgetDaemon,
+  discoverDaemonVaults,
+  LEGACY_DISCOVERY_VAULT_ID,
   type DaemonConnectOptions,
   type DaemonConnectResult,
   type DaemonConnectStage,

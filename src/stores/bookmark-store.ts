@@ -116,7 +116,16 @@ interface BookmarkState {
   rootFolder: BookmarkNode | null
 
   // Actions
-  init(adapter: BrowserAdapter): Promise<void | (() => void)>
+  init(
+    adapter: BrowserAdapter,
+    options?: { isCurrent?: () => boolean }
+  ): Promise<void | (() => void)>
+  /**
+   * Clears everything and returns to the pre-init state. Used when the
+   * Source Session ends with no usable source; listener disposal is the
+   * transition's job, not this one.
+   */
+  reset(): void
   setRootFolderId(id: string | null): void
   refresh(): Promise<void>
   retry(): Promise<void>
@@ -167,18 +176,70 @@ export const useBookmarkStore = create<BookmarkState>((set, get) => ({
   mutationError: null,
   rootFolder: null,
 
-  async init(adapter: BrowserAdapter) {
-    set({ adapter, isLoading: true, status: "loading", loadError: null })
+  async init(adapter: BrowserAdapter, options = {}) {
+    // A Source Session transition can be superseded while this init is in
+    // flight (a second switch began). `isCurrent` is how the superseded
+    // init learns it must not apply its results: a stale tree landing after
+    // a newer session's would quietly revert the dashboard to the previous
+    // source's bookmarks.
+    const isCurrent = options.isCurrent ?? (() => true)
+    if (!isCurrent()) {
+      // Superseded before it began: nothing was subscribed, but the adapter
+      // this dead transition created must still not leak.
+      return () => adapter.bookmarks.dispose?.()
+    }
+
+    set({
+      adapter,
+      isLoading: true,
+      status: "loading",
+      loadError: null,
+      // The previous source's tree must not stay on screen behind the
+      // loading state: a switch is a session transition, not an overlay.
+      tree: [],
+      rootFolderId: null,
+      rootFolder: null,
+    })
+
+    // Subscriptions belong to the session, not to the load succeeding: a
+    // failed load must not leave the session deaf to the adapter's events
+    // (retry() only reloads — without these, a recovered session never
+    // refreshes on changes) or leak the adapter's stream on teardown.
+    const debouncedRefresh = debounce(() => get().refresh(), 100)
+
+    const unsubscribers = [
+      adapter.bookmarks.onChanged(debouncedRefresh),
+      adapter.bookmarks.onCreated(debouncedRefresh),
+      adapter.bookmarks.onRemoved(debouncedRefresh),
+      adapter.bookmarks.onMoved(debouncedRefresh),
+    ]
+
+    const cleanup = () => {
+      for (const unsub of unsubscribers) {
+        unsub()
+      }
+      adapter.bookmarks.dispose?.()
+    }
 
     let tree: BookmarkNode[] = []
     try {
       tree = await loadTree(adapter)
-      set({ status: "ready" })
     } catch (error) {
-      set({ status: "unavailable", loadError: toErrorMessage(error) })
+      if (isCurrent()) {
+        set({ status: "unavailable", loadError: toErrorMessage(error) })
+      }
+      // The session moved on: the failure belongs to a source nobody is
+      // looking at, and the newer session's state must not be clobbered.
+      // Either way this session's subscriptions and adapter are its own
+      // cleanup's to tear down.
+      return cleanup
     }
+    if (!isCurrent()) return cleanup
+
+    set({ status: "ready" })
 
     const savedRootId = await adapter.storage.get<string>("rootFolderId")
+    if (!isCurrent()) return cleanup
 
     const rootFolder = savedRootId ? findNode(tree, savedRootId) : null
 
@@ -189,21 +250,20 @@ export const useBookmarkStore = create<BookmarkState>((set, get) => ({
       isLoading: false,
     })
 
-    const debouncedRefresh = debounce(() => get().refresh(), 100)
+    return cleanup
+  },
 
-    const unsubscribers = [
-      adapter.bookmarks.onChanged(debouncedRefresh),
-      adapter.bookmarks.onCreated(debouncedRefresh),
-      adapter.bookmarks.onRemoved(debouncedRefresh),
-      adapter.bookmarks.onMoved(debouncedRefresh),
-    ]
-
-    return () => {
-      for (const unsub of unsubscribers) {
-        unsub()
-      }
-      adapter.bookmarks.dispose?.()
-    }
+  reset() {
+    set({
+      tree: [],
+      rootFolderId: null,
+      rootFolder: null,
+      isLoading: true,
+      adapter: null,
+      status: "loading",
+      loadError: null,
+      mutationError: null,
+    })
   },
 
   setRootFolderId(id: string | null) {
@@ -233,7 +293,16 @@ export const useBookmarkStore = create<BookmarkState>((set, get) => ({
     try {
       const tree = await loadTree(adapter)
       const rootFolder = rootFolderId ? findNode(tree, rootFolderId) : null
-      set({ tree, rootFolder, status: "ready", loadError: null })
+      // `isLoading` too: a failed load leaves it true (init only clears it
+      // on success), so a retry that succeeds must clear it as well or the
+      // dashboard stays on its loading state with a ready tree behind it.
+      set({
+        tree,
+        rootFolder,
+        status: "ready",
+        loadError: null,
+        isLoading: false,
+      })
     } catch (error) {
       set({ status: "unavailable", loadError: toErrorMessage(error) })
     }

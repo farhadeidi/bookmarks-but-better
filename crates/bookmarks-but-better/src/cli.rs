@@ -14,6 +14,7 @@ use clap::{Parser, Subcommand};
 
 use crate::doctor;
 use crate::init::{self, InitOutcome};
+use crate::registry::VaultSpec;
 use crate::server::{self, DEFAULT_BIND, DEFAULT_PORT, Daemon, ServeOptions};
 use crate::service;
 use crate::setup;
@@ -48,11 +49,17 @@ pub struct Cli {
 /// The subcommands.
 #[derive(Debug, Subcommand)]
 pub enum Command {
-    /// Serve the vault and, optionally, the web UI.
+    /// Serve the vaults and, optionally, the web UI.
     Serve {
-        /// The vault directory. It must already be initialized.
-        #[arg(long, value_name = "PATH")]
-        vault: PathBuf,
+        /// A vault to serve, as `PATH` for one vault or `ID=PATH` to name it.
+        ///
+        /// Repeat the flag to host several vaults in one daemon: each becomes
+        /// an independently identified Bookmark Source with vault-scoped
+        /// routes under `/api/v1/vaults/{id}/…`. Ids are unique and their
+        /// directories must not overlap; a plain `PATH` claims the id
+        /// `default`, so two of them collide.
+        #[arg(long = "vault", value_name = "PATH | ID=PATH", required = true)]
+        vaults: Vec<String>,
 
         /// The loopback address to bind.
         #[arg(long, default_value_t = DEFAULT_BIND, value_name = "ADDR")]
@@ -66,7 +73,7 @@ pub enum Command {
         #[arg(long, value_name = "PATH")]
         ui_dir: Option<PathBuf>,
 
-        /// Initialize the vault first if it has no root metadata file.
+        /// Initialize each vault first if it has no root metadata file.
         ///
         /// Without this, serving an uninitialized directory is an error: a
         /// daemon that wrote into whatever path it was handed would turn a
@@ -168,12 +175,12 @@ impl Cli {
         self.install_logging();
         match self.command {
             Command::Serve {
-                vault,
+                vaults,
                 bind,
                 port,
                 ui_dir,
                 init,
-            } => run_serve(&vault, bind, port, ui_dir, init),
+            } => run_serve(&vaults, bind, port, ui_dir, init),
             Command::Init { vault } => run_init(&vault),
             Command::Doctor { vault } => run_doctor(&vault),
             Command::Rescan { vault } => run_rescan(&vault),
@@ -196,7 +203,7 @@ impl Cli {
 }
 
 fn run_serve(
-    vault: &std::path::Path,
+    vault_arguments: &[String],
     bind: IpAddr,
     port: u16,
     ui_dir: Option<PathBuf>,
@@ -208,26 +215,44 @@ fn run_serve(
         ));
     }
 
-    let vault = match server::resolve_vault_path(vault) {
-        Ok(path) => path,
-        Err(error) => {
-            return fail(format_args!(
-                "the vault path could not be resolved: {error}"
-            ));
-        }
-    };
+    let mut specs = Vec::with_capacity(vault_arguments.len());
+    for argument in vault_arguments {
+        let spec = match VaultSpec::parse(argument) {
+            Ok(spec) => spec,
+            Err(bad) => {
+                return fail(format_args!(
+                    "--vault {bad} carries no path; use --vault PATH or --vault ID=PATH"
+                ));
+            }
+        };
+        let path = match server::resolve_vault_path(&spec.path) {
+            Ok(path) => path,
+            Err(error) => {
+                return fail(format_args!(
+                    "the vault path could not be resolved: {error}"
+                ));
+            }
+        };
+        specs.push(VaultSpec::new(spec.id, path));
+    }
 
     if allow_init {
-        match init::initialize(&vault) {
-            Ok(InitOutcome::Created { id }) => {
-                tracing::info!(vault = %vault.display(), %id, "initialized the vault root");
+        for spec in &specs {
+            match init::initialize(&spec.path) {
+                Ok(InitOutcome::Created { id }) => {
+                    tracing::info!(vault = %spec.path.display(), %id, "initialized the vault root");
+                }
+                Ok(InitOutcome::AlreadyInitialized { .. }) => {}
+                Err(error) => return fail(format_args!("{error}")),
             }
-            Ok(InitOutcome::AlreadyInitialized { .. }) => {}
-            Err(error) => return fail(format_args!("{error}")),
         }
     }
 
-    let mut options = ServeOptions::new(&vault).with_address(bind, port);
+    let mut options = ServeOptions {
+        vaults: specs,
+        ..ServeOptions::default()
+    }
+    .with_address(bind, port);
     options.ui_dir = ui_dir;
     options.watch = WatchOptions::default();
 
@@ -256,13 +281,20 @@ fn run_serve(
             Err(error) => return fail(format_args!("the bound address is unknown: {error}")),
         };
 
-        let snapshot = daemon.vault().snapshot();
+        for hosted in daemon.registry().all() {
+            let snapshot = hosted.vault.snapshot();
+            tracing::info!(
+                vault_id = %hosted.id,
+                vault = %hosted.vault.root().display(),
+                generation = snapshot.generation,
+                bookmarks = snapshot.scan.bookmarks().count(),
+                warnings = snapshot.scan.diagnostics().len(),
+                "hosting vault"
+            );
+        }
         tracing::info!(
-            vault = %options.vault.display(),
+            vaults = daemon.registry().len(),
             url = %format_args!("http://{address}"),
-            generation = snapshot.generation,
-            bookmarks = snapshot.scan.bookmarks().count(),
-            warnings = snapshot.scan.diagnostics().len(),
             ui = options.ui_dir.is_some(),
             "serving"
         );

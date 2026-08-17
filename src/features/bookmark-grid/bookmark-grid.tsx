@@ -177,16 +177,19 @@ export function BookmarkGrid() {
 
   return (
     <div
-      className={cn(containerMode === "contained" && "mx-auto max-w-[1440px]")}
+      className={cn(
+        "w-full min-w-0",
+        containerMode === "contained" && "mx-auto max-w-[1440px]"
+      )}
     >
       <div
-        className="grid items-start gap-4"
+        className="grid w-full min-w-0 items-start gap-4"
         style={{
           gridTemplateColumns: `repeat(${columnCount}, minmax(0, 1fr))`,
         }}
       >
         {columns.map((columnFolders, colIndex) => (
-          <div key={colIndex} className="flex flex-col gap-4">
+          <div key={colIndex} className="flex min-w-0 flex-col gap-4">
             {columnFolders.map((folder) =>
               experimentalCardDrag ? (
                 <SortableFolderCard
