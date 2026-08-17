@@ -5,7 +5,7 @@ import { platformCapabilities } from "@/sources/platform"
 
 export type OnboardingSourceChoice = "browser" | "daemon"
 
-interface ModeStepProps {
+interface SourceStepProps {
   value: OnboardingSourceChoice
   onChange: (choice: OnboardingSourceChoice) => void
 }
@@ -19,7 +19,7 @@ interface ModeStepProps {
  * API (Safari), only the daemon is offered — the capability seam decides,
  * not a browser name.
  */
-export function ModeStep({ value, onChange }: ModeStepProps) {
+export function SourceStep({ value, onChange }: SourceStepProps) {
   const caps = platformCapabilities()
 
   return (

@@ -20,7 +20,6 @@ export interface OmniboxSuggestion {
 
 /** What the omnibox needs to search one daemon Vault: where, and which. */
 export interface PersistedDaemonSelection {
-  mode: "daemon"
   config: DaemonConnectionConfig
   /** The vault to scope every search and fetch to; `null` is the legacy
    * single-vault spelling. */
@@ -192,7 +191,6 @@ async function getDaemonSelection(): Promise<PersistedDaemonSelection | null> {
   if (!connection) return null
 
   return {
-    mode: "daemon",
     config: {
       origin,
       ...(connection.bearerToken

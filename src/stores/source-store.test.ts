@@ -31,12 +31,13 @@ vi.mock("@/browser/daemon", async (importOriginal) => {
   return {
     ...actual,
     connectToDaemon: vi.fn(),
+    discoverDaemonVaults: vi.fn(),
     removeDaemonHostPermission: vi.fn().mockResolvedValue(undefined),
   }
 })
 
 const { createAdapterForSource } = await import("@/sources/adapters")
-const { connectToDaemon, removeDaemonHostPermission } =
+const { connectToDaemon, discoverDaemonVaults, removeDaemonHostPermission } =
   await import("@/browser/daemon")
 
 type Deferred<T> = {
@@ -464,6 +465,139 @@ describe("forgetting a daemon connection", () => {
     // The last one going away does release it.
     await useSourceStore.getState().forgetDaemon(otherOrigin)
     expect(removeDaemonHostPermission).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe("refreshing daemon vaults", () => {
+  /** Starts a real live session on the seeded active daemon source. */
+  async function sessionOnDaemon(
+    browser: ReturnType<typeof mockAdapter>,
+    daemon: ReturnType<typeof mockAdapter>
+  ) {
+    browser.tree.resolve([])
+    await useSourceStore.getState().switchSource("browser")
+    daemon.tree.resolve([])
+    await useSourceStore.getState().switchSource(DAEMON_ID)
+    expect(useBookmarkStore.getState().adapter).toBe(daemon.adapter)
+  }
+
+  it("discovery removing the active vault moves config and session to the next source together", async () => {
+    const browser = mockAdapter()
+    const daemon = mockAdapter()
+    vi.mocked(createAdapterForSource).mockImplementation((source) =>
+      source.id === "browser" ? browser.adapter : daemon.adapter
+    )
+    await sessionOnDaemon(browser, daemon)
+
+    vi.mocked(discoverDaemonVaults).mockResolvedValue({
+      vaults: [],
+      legacyProtocol: false,
+    })
+    await useSourceStore.getState().refreshDaemonVaults(ORIGIN)
+
+    const state = useSourceStore.getState()
+    expect(state.config.sources[DAEMON_ID]).toBeUndefined()
+    expect(state.activeSourceId).toBe("browser")
+    // The live session followed the config: the old adapter is disposed and
+    // the store serves the browser adapter, not a stale daemon session.
+    expect(useBookmarkStore.getState().adapter).toBe(browser.adapter)
+    expect(daemon.dispose).toHaveBeenCalledTimes(1)
+  })
+
+  it("discovery removing the last enabled source tears the session down to empty", async () => {
+    const browser = mockAdapter()
+    const daemon = mockAdapter()
+    vi.mocked(createAdapterForSource).mockImplementation((source) =>
+      source.id === "browser" ? browser.adapter : daemon.adapter
+    )
+    await sessionOnDaemon(browser, daemon)
+
+    // With the browser source disabled, the active vault is all that
+    // remains — its removal leaves nothing to fall back to.
+    await useSourceStore.getState().setSourceEnabled("browser", false)
+    vi.mocked(discoverDaemonVaults).mockResolvedValue({
+      vaults: [],
+      legacyProtocol: false,
+    })
+    await useSourceStore.getState().refreshDaemonVaults(ORIGIN)
+
+    expect(useSourceStore.getState().activeSourceId).toBeNull()
+    expect(useBookmarkStore.getState().adapter).toBeNull()
+    expect(daemon.dispose).toHaveBeenCalledTimes(1)
+  })
+
+  it("a same-source protocol change restarts the session against the new spelling", async () => {
+    // The vault was stored under the legacy unscoped protocol; discovery
+    // reports the daemon now knows its vaults.
+    useSourceStore.setState({
+      config: {
+        version: 2,
+        connections: { [ORIGIN]: {} },
+        sources: {
+          [DAEMON_ID]: {
+            enabled: true,
+            origin: ORIGIN,
+            vaultId: "main",
+            unscoped: true,
+          },
+        },
+        activeSourceId: DAEMON_ID,
+      },
+    })
+    const unscoped = mockAdapter()
+    vi.mocked(createAdapterForSource).mockReturnValue(unscoped.adapter)
+    unscoped.tree.resolve([])
+    // connectDaemon is the one entry point that starts a session on the
+    // already-active source: it re-connects and transitions unconditionally.
+    vi.mocked(connectToDaemon).mockResolvedValue({
+      ok: true,
+      origin: ORIGIN,
+      warnings: [],
+      vaults: [{ id: "main" }],
+      legacyProtocol: true,
+    })
+    await useSourceStore.getState().connectDaemon(ORIGIN)
+    expect(useBookmarkStore.getState().adapter).toBe(unscoped.adapter)
+
+    vi.mocked(discoverDaemonVaults).mockResolvedValue({
+      vaults: [{ id: "main", name: "Reading" }],
+      legacyProtocol: false,
+    })
+    const scoped = mockAdapter()
+    vi.mocked(createAdapterForSource).mockReturnValue(scoped.adapter)
+    scoped.tree.resolve([])
+    await useSourceStore.getState().refreshDaemonVaults(ORIGIN)
+
+    expect(useSourceStore.getState().activeSourceId).toBe(DAEMON_ID)
+    expect(useBookmarkStore.getState().adapter).toBe(scoped.adapter)
+    expect(unscoped.dispose).toHaveBeenCalledTimes(1)
+    // The rebuilt adapter is vault-scoped now, not unscoped.
+    const [descriptor] = vi.mocked(createAdapterForSource).mock.calls.at(-1)!
+    expect(descriptor).toMatchObject({ id: DAEMON_ID, vaultId: "main" })
+    expect(descriptor.unscoped).toBeUndefined()
+  })
+
+  it("a vault rename refreshes the config without restarting the session", async () => {
+    const browser = mockAdapter()
+    const daemon = mockAdapter()
+    vi.mocked(createAdapterForSource).mockImplementation((source) =>
+      source.id === "browser" ? browser.adapter : daemon.adapter
+    )
+    await sessionOnDaemon(browser, daemon)
+    vi.mocked(createAdapterForSource).mockClear()
+
+    vi.mocked(discoverDaemonVaults).mockResolvedValue({
+      vaults: [{ id: "main", name: "Reading list" }],
+      legacyProtocol: false,
+    })
+    await useSourceStore.getState().refreshDaemonVaults(ORIGIN)
+
+    expect(useSourceStore.getState().config.sources[DAEMON_ID]).toMatchObject({
+      name: "Reading list",
+    })
+    expect(useBookmarkStore.getState().adapter).toBe(daemon.adapter)
+    expect(createAdapterForSource).not.toHaveBeenCalled()
+    expect(daemon.dispose).not.toHaveBeenCalled()
   })
 })
 

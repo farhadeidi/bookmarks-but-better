@@ -28,7 +28,14 @@ import {
 } from "./engine"
 import { currentFaults, currentScenario, engineFor } from "./runtime"
 import type { DevScenario, SeedNode } from "./scenarios"
-import { delay, devDelete, devGet, devPut, PREFS_STORE } from "./state"
+import {
+  currentSourceEpoch,
+  delay,
+  devDelete,
+  devGet,
+  devPutUnlessSealed,
+  PREFS_STORE,
+} from "./state"
 
 const BROWSER_CAPABILITIES: AdapterCapabilities = {
   openInManager: false,
@@ -67,9 +74,16 @@ const devFavicon: FaviconProvider = {
 /** Source-scoped preference storage, one namespace per simulated source. */
 class DevStorageAdapter implements StorageAdapter {
   private readonly sourceKey: string
+  /**
+   * The scenario epoch this adapter's world belongs to: a preference save
+   * settling after a reset's wipe must not resurrect pre-reset preferences,
+   * exactly like an engine's tree persist.
+   */
+  private readonly epoch: number
 
   constructor(sourceKey: string) {
     this.sourceKey = sourceKey
+    this.epoch = currentSourceEpoch()
   }
 
   private key(id: string): string {
@@ -81,7 +95,7 @@ class DevStorageAdapter implements StorageAdapter {
   }
 
   async set<T>(key: string, value: T): Promise<void> {
-    await devPut(PREFS_STORE, this.key(key), value)
+    await devPutUnlessSealed(PREFS_STORE, this.key(key), value, this.epoch)
   }
 
   async remove(key: string): Promise<void> {

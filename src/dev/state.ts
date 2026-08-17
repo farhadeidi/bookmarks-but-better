@@ -133,28 +133,43 @@ export function devDelete(store: string, key: string): Promise<void> {
   ).then(() => undefined)
 }
 
-/** Clears every persisted source tree and per-source preference. */
+/**
+ * Clears every persisted source tree and per-source preference: both stores
+ * the simulated world owns, in one transaction, so a reset restores the
+ * scenario's seed exactly.
+ */
 export function clearSourceData(): Promise<void> {
-  return withStore(
-    DEV_DB_NAME,
-    DEV_DB_VERSION,
-    [STATE_STORE, SOURCES_STORE, PREFS_STORE],
+  return openDB(DEV_DB_NAME, DEV_DB_VERSION, [
+    STATE_STORE,
     SOURCES_STORE,
-    "readwrite",
-    (s) => s.clear()
-  ).then(() => undefined)
+    PREFS_STORE,
+  ]).then(
+    (db) =>
+      new Promise<void>((resolve, reject) => {
+        const tx = db.transaction([SOURCES_STORE, PREFS_STORE], "readwrite")
+        tx.objectStore(SOURCES_STORE).clear()
+        tx.objectStore(PREFS_STORE).clear()
+        tx.oncomplete = () => {
+          db.close()
+          resolve()
+        }
+        tx.onerror = () => reject(tx.error)
+        tx.onabort = () => reject(tx.error)
+      })
+  )
 }
 
 /**
  * Scenario-reset sealing for simulated source data.
  *
- * `clearSourceData` wipes the sources store, but an engine write still in
- * flight for the old world (a latency-delayed mutation awaiting its
- * persist) could otherwise land after the wipe and resurrect the pre-reset
- * tree — while the fresh (scenario, revision) stamp suppresses the reseed
- * that should have caught it. A reseeding reset therefore seals the epoch
- * first; engine writes capture the epoch when their engine is created and
- * are dropped once it has moved on.
+ * `clearSourceData` wipes the sources and prefs stores, but a write still in
+ * flight for the old world (a latency-delayed mutation — or preference save —
+ * still awaiting its persist) could otherwise land after the wipe and
+ * resurrect pre-reset state — while the fresh (scenario, revision) stamp
+ * suppresses the reseed that should have caught it. A reseeding reset
+ * therefore seals the epoch first; engine and storage writes capture the
+ * epoch when their engine or adapter is created and are dropped once it has
+ * moved on.
  *
  * Transaction ordering makes the split safe: an IndexedDB write whose
  * transaction was created before the wipe's commits before it (and is
@@ -176,9 +191,9 @@ export function sealSourceEpoch(): void {
 
 /**
  * A dev-store put dropped when the epoch it was begun under was sealed —
- * for the simulated sources' tree persistence. Unlike `devPut`, the seal
- * is re-checked after the database is open, immediately before the write's
- * transaction is created.
+ * for the simulated sources' tree and preference persistence. Unlike
+ * `devPut`, the seal is re-checked after the database is open, immediately
+ * before the write's transaction is created.
  */
 export function devPutUnlessSealed<T>(
   store: string,

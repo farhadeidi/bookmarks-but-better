@@ -52,7 +52,6 @@ function fakeFacade() {
     }),
     setDefaultSuggestion: vi.fn(),
     getDaemonSelection: vi.fn().mockResolvedValue({
-      mode: "daemon",
       config: { origin: "http://127.0.0.1:52222" },
       vaultId: "main",
     }),
@@ -78,7 +77,7 @@ describe("omnibox listener registration", () => {
     expect(fake.facade.setDefaultSuggestion).toHaveBeenCalledOnce()
   })
 
-  it("does nothing unless persisted daemon mode and permission are both present", async () => {
+  it("does nothing unless an active daemon source and permission are both present", async () => {
     const fake = fakeFacade()
     vi.mocked(fake.facade.getDaemonSelection).mockResolvedValue(null)
     registerOmniboxListeners(fake.facade)
@@ -150,7 +149,6 @@ describe("omnibox selection", () => {
 
       expect(fake.facade.fetchNode).toHaveBeenCalledWith(
         {
-          mode: "daemon",
           config: { origin: "http://127.0.0.1:52222" },
           vaultId: "main",
         },
@@ -232,7 +230,6 @@ describe("browser omnibox facade", () => {
       activeSourceId: id,
     })
     await expect(facade.getDaemonSelection()).resolves.toEqual({
-      mode: "daemon",
       config: { origin, bearerToken: "secret" },
       vaultId: "reading",
     })

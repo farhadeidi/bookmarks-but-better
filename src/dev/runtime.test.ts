@@ -11,6 +11,8 @@ import { getOnboardingCompleted } from "@/browser/onboarding-preference"
 import { daemonSourceId } from "@/sources/config"
 import {
   devGet,
+  devPut,
+  PREFS_STORE,
   SOURCES_STORE,
   writeAppliedStamp,
   type AppliedScenarioStamp,
@@ -279,6 +281,37 @@ describe("Reset Scenario", () => {
       daemonOnline: false,
       daemonLatencyMs: 0,
     })
+  })
+
+  it("per-source preferences do not survive Reset Scenario", async () => {
+    await ensureDevRuntime()
+    await devPut(PREFS_STORE, "browser::colorTheme", "sunset")
+    expect(await devGet(PREFS_STORE, "browser::colorTheme")).not.toBeNull()
+
+    await resetScenario()
+
+    expect(await devGet(SOURCES_STORE, "tree:browser")).toBeNull()
+    expect(await devGet(PREFS_STORE, "browser::colorTheme")).toBeNull()
+  })
+
+  it("a preference save from the pre-reset world cannot resurrect after the wipe", async () => {
+    await ensureDevRuntime()
+    const { devAdapterForSource } = await import("./adapters")
+    const adapter = await devAdapterForSource({
+      id: "browser",
+      kind: "browser",
+      label: "Browser bookmarks",
+      defaultLabel: "Browser bookmarks",
+    })
+    await adapter.storage.set("colorTheme", "sunset")
+    expect(await devGet(PREFS_STORE, "browser::colorTheme")).not.toBeNull()
+
+    await resetScenario()
+
+    // The adapter belongs to the sealed pre-reset world; its late save is
+    // dropped rather than landing after the wipe.
+    await adapter.storage.set("colorTheme", "too late")
+    expect(await devGet(PREFS_STORE, "browser::colorTheme")).toBeNull()
   })
 })
 

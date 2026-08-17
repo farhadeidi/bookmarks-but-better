@@ -250,7 +250,8 @@ export const useSourceStore = create<SourceState>((set, get) => ({
           ? { [origin]: currentConfig.connections[origin] }
           : {}
     const discoveries = await e.refreshDiscoveries(connections)
-    let config = get().config
+    const before = get().config
+    let config = before
     for (const discovery of discoveries) {
       config = syncConnectionVaults(
         config,
@@ -260,21 +261,43 @@ export const useSourceStore = create<SourceState>((set, get) => ({
       )
     }
     config = normalizeSourceConfig(config, e.capabilities())
-    const activeChanged =
-      config.activeSourceId !== get().config.activeSourceId ||
-      sourcesDiffer(config, get().config)
+    // The decision is made against the world the live session still backs,
+    // captured before `set` overwrites it — after the set the old active
+    // source id is unobservable.
+    const activeIdChanged = config.activeSourceId !== before.activeSourceId
+    const activeAdapterChanged = activeSourceAdapterChanged(before, config)
     await saveSourceConfig(config)
     set({ config, activeSourceId: config.activeSourceId })
-    if (activeChanged && config.activeSourceId) {
-      if (config.activeSourceId !== get().activeSourceId) {
+    if (activeIdChanged || activeAdapterChanged) {
+      if (config.activeSourceId) {
         await transitionTo(config.activeSourceId, config, set)
+      } else {
+        await teardownToEmpty()
       }
     }
   },
 }))
 
-function sourcesDiffer(a: SourceConfig, b: SourceConfig): boolean {
-  return JSON.stringify(a.sources) !== JSON.stringify(b.sources)
+/**
+ * Whether the Active Source is still reached the same way after a refresh:
+ * the session restarts when the adapter-bearing fields of its entry changed
+ * (which connection, which Vault, or the legacy unscoped spelling), not when
+ * only its display name moved.
+ */
+function activeSourceAdapterChanged(
+  before: SourceConfig,
+  after: SourceConfig
+): boolean {
+  const id = after.activeSourceId
+  if (!id) return false
+  const previous = before.sources[id]
+  const current = after.sources[id]
+  if (!previous || !current) return true
+  return (
+    previous.origin !== current.origin ||
+    previous.vaultId !== current.vaultId ||
+    (previous.unscoped === true) !== (current.unscoped === true)
+  )
 }
 
 /**
