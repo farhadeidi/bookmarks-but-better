@@ -169,7 +169,11 @@ export function App() {
       </main>
 
       {/* FAB buttons */}
-      <div className="fixed right-6 bottom-6 z-10 flex items-center gap-2 rounded-2xl border border-border/60 bg-background/90 px-2 py-1.5 shadow-sm backdrop-blur-sm">
+      <div
+        role="toolbar"
+        aria-label="App actions"
+        className="fixed right-4 bottom-4 left-4 z-10 no-scrollbar flex items-center gap-2 overflow-x-auto rounded-2xl border border-border/60 bg-background/90 px-2 py-1.5 shadow-sm backdrop-blur-sm sm:right-6 sm:bottom-6 sm:left-auto max-sm:[&_button]:size-12"
+      >
         <Tooltip>
           <TooltipTrigger
             render={

@@ -49,11 +49,11 @@ export function SourceSwitcher() {
     const only = sources[0]
     const healthy = status === "ready"
     return (
-      <div className="flex justify-center">
+      <div className="flex min-w-0 justify-center">
         <button
           type="button"
           onClick={openSettings}
-          className="inline-flex items-center gap-2 rounded-full bg-muted/60 px-3 py-1.5 text-sm text-muted-foreground ring-1 ring-border/60 hover:bg-muted hover:text-foreground"
+          className="inline-flex max-w-full items-center gap-2 rounded-full bg-muted/60 px-3 py-2.5 text-base text-muted-foreground ring-1 ring-border/60 hover:bg-muted hover:text-foreground sm:py-1.5 sm:text-sm"
           title="Manage sources in Settings → Sources"
         >
           <span
@@ -76,11 +76,11 @@ export function SourceSwitcher() {
   const overflow = sources.slice(MAX_TABS)
 
   return (
-    <div className="flex justify-center">
+    <div className="flex min-w-0 justify-center">
       <div
         role="tablist"
         aria-label="Bookmark source"
-        className="inline-flex max-w-full flex-wrap items-center justify-center gap-1 rounded-full bg-muted/60 p-1 ring-1 ring-border/60"
+        className="no-scrollbar flex w-max max-w-full flex-nowrap items-center justify-start gap-1 overflow-x-auto rounded-full bg-muted/60 p-1 ring-1 ring-border/60"
       >
         {visible.map((source) => (
           <button
@@ -96,7 +96,7 @@ export function SourceSwitcher() {
                 : `Switch to ${source.label}`
             }
             className={cn(
-              "inline-flex max-w-56 items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium",
+              "inline-flex max-w-56 shrink-0 items-center gap-1.5 rounded-full px-3 py-2.5 text-base font-medium sm:py-1.5 sm:text-sm",
               source.id === activeSourceId
                 ? "bg-background text-foreground shadow-xs ring-1 ring-border dark:shadow-none"
                 : "text-muted-foreground hover:bg-background/50 hover:text-foreground"

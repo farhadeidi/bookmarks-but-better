@@ -67,6 +67,56 @@ test("the themed source control has breathing room above the bookmark grid", asy
   expect(tabsBackground).not.toBe(pageBackground)
 })
 
+test("bookmark cards fill the available content width on mobile", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.goto("/")
+
+  const card = page.getByTestId("bookmark-card").first()
+  await expect(card).toBeVisible()
+  const box = await card.boundingBox()
+
+  expect(box).not.toBeNull()
+  expect(box!.x).toBeLessThanOrEqual(17)
+  expect(box!.width).toBeGreaterThanOrEqual(357)
+})
+
+test("mobile source and action controls stay contained without overlapping", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 320, height: 568 })
+  await page.goto("/")
+
+  const tabs = page.getByRole("tablist", { name: "Bookmark source" })
+  const toolbar = page.getByRole("toolbar", { name: "App actions" })
+  const workbench = page.getByRole("button", { name: "Open Dev Workbench" })
+  await expect(tabs).toBeVisible()
+  await expect(toolbar).toBeVisible()
+  await expect(workbench).toBeVisible()
+
+  const [tabsBox, toolbarBox, workbenchBox, firstActionBox] = await Promise.all(
+    [
+      tabs.boundingBox(),
+      toolbar.boundingBox(),
+      workbench.boundingBox(),
+      toolbar.getByRole("button").first().boundingBox(),
+    ]
+  )
+
+  for (const box of [tabsBox, toolbarBox]) {
+    expect(box).not.toBeNull()
+    expect(box!.x).toBeGreaterThanOrEqual(15)
+    expect(box!.x + box!.width).toBeLessThanOrEqual(305)
+  }
+  await expect(tabs).toHaveCSS("overflow-x", "auto")
+  await expect(toolbar).toHaveCSS("overflow-x", "auto")
+  expect(firstActionBox?.height).toBeGreaterThanOrEqual(48)
+  expect(workbenchBox!.y + workbenchBox!.height).toBeLessThanOrEqual(
+    toolbarBox!.y - 8
+  )
+})
+
 test("the workbench is present, collapsed, and reports the scenario", async ({
   page,
 }) => {
