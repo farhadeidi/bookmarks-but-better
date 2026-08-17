@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { daemonSourceId } from "@/sources/config"
+import seedBookmarks from "./seed-bookmarks.json"
 import {
   DEFAULT_SCENARIO_ID,
   DEV_SCENARIOS,
@@ -8,6 +9,18 @@ import {
 } from "./scenarios"
 
 const ORIGIN = "http://127.0.0.1:52222"
+
+function countBookmarks(
+  nodes: Array<{ url?: string; children?: Array<unknown> }>
+): number {
+  return nodes.reduce((count, node) => {
+    const children = (node.children ?? []) as Array<{
+      url?: string
+      children?: Array<unknown>
+    }>
+    return count + (node.url ? 1 : 0) + countBookmarks(children)
+  }, 0)
+}
 
 describe("the scenario registry", () => {
   it("exposes exactly the documented scenarios", () => {
@@ -37,6 +50,15 @@ describe("the scenario registry", () => {
 })
 
 describe("initial source configuration", () => {
+  it("seeds the default Browser Source from the complete development dataset", () => {
+    const scenario = getScenario(DEFAULT_SCENARIO_ID)
+
+    expect(countBookmarks(scenario.browserTree ?? [])).toBe(
+      countBookmarks(seedBookmarks)
+    )
+    expect(countBookmarks(scenario.browserTree ?? [])).toBeGreaterThan(250)
+  })
+
   it("the default scenario connects browser bookmarks plus the reading and archive Vaults", () => {
     const config = initialConfigFor(getScenario("browser-daemon"))
 

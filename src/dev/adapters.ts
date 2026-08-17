@@ -18,6 +18,8 @@ import type {
   StorageAdapter,
 } from "@/browser"
 import { DaemonApiError } from "@/browser/daemon/client"
+import { GoogleFaviconV2Provider } from "@/browser/favicon/google-favicon-v2"
+import { GoogleFaviconProvider } from "@/browser/favicon/google-favicon"
 import type { SourceDescriptor } from "@/sources/descriptors"
 import {
   materializeSeed,
@@ -52,15 +54,14 @@ const DAEMON_CAPABILITIES: AdapterCapabilities = {
   rootIsCreatable: true,
 }
 
-/**
- * The dev favicon story: no network icon sources in the simulated world —
- * every URL is empty, so the Favicon component's letter-avatar fallback
- * renders (the same path production takes for an unavailable icon).
- */
+const primaryFavicon = new GoogleFaviconV2Provider()
+const fallbackFavicon = new GoogleFaviconProvider()
+
+/** Exercise the same public favicon path used by production adapters. */
 const devFavicon: FaviconProvider = {
-  getUrl: () => "",
-  getFallbackUrl: () => "",
-  isAvailable: () => false,
+  getUrl: (pageUrl) => primaryFavicon.getUrl(pageUrl),
+  getFallbackUrl: (pageUrl) => fallbackFavicon.getUrl(pageUrl),
+  isAvailable: () => true,
 }
 
 /** Source-scoped preference storage, one namespace per simulated source. */

@@ -28,20 +28,43 @@ test("the default scenario provides Browser plus the reading and archive vaults"
   await expect(page.getByText("Hacker News")).toBeVisible()
 })
 
-test("bookmarks show letter avatars — the dev world has no favicon URLs, and an empty src must not render a blank tile", async ({
+test("the Dev Workbench exercises real favicon URLs instead of forcing every bookmark to a letter fallback", async ({
   page,
 }) => {
   await page.goto("/")
 
-  // Every dev adapter returns an empty favicon URL, so each bookmark falls
-  // back to the first letter of its domain (an <img src=""> fires no error
-  // event in Chromium; the fallback must engage without one).
-  const mdn = page.locator("span[aria-label='MDN Web Docs']")
-  await expect(mdn).toHaveText("D") // developer.mozilla.org
-  await expect(page.locator("span[aria-label='Hacker News']")).toHaveText("N") // news.ycombinator.com
-
-  // The letter avatars are spans, not blank img tiles.
+  const faviconImages = page
+    .getByTestId("bookmark-card")
+    .locator("img[src*='favicon']")
+  await expect(faviconImages.first()).toBeVisible()
+  expect(await faviconImages.count()).toBeGreaterThan(0)
   await expect(page.locator("img[src='']")).toHaveCount(0)
+})
+
+test("the themed source control has breathing room above the bookmark grid", async ({
+  page,
+}) => {
+  await page.goto("/")
+  await page.evaluate(() => document.documentElement.classList.add("dark"))
+
+  const tabs = page.getByRole("tablist", { name: "Bookmark source" })
+  const firstCard = page.getByTestId("bookmark-card").first()
+  const [tabsBox, cardBox] = await Promise.all([
+    tabs.boundingBox(),
+    firstCard.boundingBox(),
+  ])
+
+  expect(tabsBox).not.toBeNull()
+  expect(cardBox).not.toBeNull()
+  expect(cardBox!.y - (tabsBox!.y + tabsBox!.height)).toBeGreaterThanOrEqual(16)
+
+  const [pageBackground, tabsBackground] = await Promise.all([
+    page
+      .locator("body")
+      .evaluate((node) => getComputedStyle(node).backgroundColor),
+    tabs.evaluate((node) => getComputedStyle(node).backgroundColor),
+  ])
+  expect(tabsBackground).not.toBe(pageBackground)
 })
 
 test("the workbench is present, collapsed, and reports the scenario", async ({

@@ -81,6 +81,8 @@ describe("SettingsDialog Sources category", () => {
 
     expect(screen.getByText("Browser bookmarks")).toBeTruthy()
     expect(screen.getByRole("button", { name: "Active" })).toBeTruthy()
+    expect(screen.getByText("Root folder")).toBeTruthy()
+    expect(screen.getByText("Nested folders")).toBeTruthy()
   })
 
   it("never offers Standalone to a profile that never used it", () => {
@@ -99,12 +101,12 @@ describe("SettingsDialog categories", () => {
       "General",
       "Sources",
       "Appearance",
-      "Bookmarks",
       "Data & Migration",
       "Advanced",
       "About",
     ]) {
       expect(screen.getByRole("tab", { name: label })).toBeTruthy()
     }
+    expect(screen.queryByRole("tab", { name: "Bookmarks" })).toBeNull()
   })
 })

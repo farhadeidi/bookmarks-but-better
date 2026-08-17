@@ -42,6 +42,7 @@ export interface DevRuntime {
 }
 
 const SCENARIO_PARAM = "scenario"
+const DEV_SCENARIO_SEED_VERSION = 1
 
 let runtime: DevRuntime | null = null
 let bootstrapInFlight: Promise<DevRuntime> | null = null
@@ -116,6 +117,7 @@ async function applyScenarioSeed(
   await writeAppliedStamp({
     scenarioId: state.scenarioId,
     revision: state.revision,
+    seedVersion: DEV_SCENARIO_SEED_VERSION,
   })
 }
 
@@ -161,7 +163,8 @@ async function bootstrap(): Promise<DevRuntime> {
   if (
     !stamp ||
     stamp.scenarioId !== state.scenarioId ||
-    stamp.revision !== state.revision
+    stamp.revision !== state.revision ||
+    stamp.seedVersion !== DEV_SCENARIO_SEED_VERSION
   ) {
     await applyScenarioSeed(scenario, state)
   }

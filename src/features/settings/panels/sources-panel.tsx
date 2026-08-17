@@ -7,6 +7,42 @@ import { allSourceDescriptors, useSourceStore } from "@/stores/source-store"
 import { platformCapabilities } from "@/sources/platform"
 import { STANDALONE_DEPRECATION_MESSAGE } from "@/features/standalone-sunset"
 import { DaemonConnectionPanel } from "../daemon-connection-panel"
+import { useBookmarkStore } from "@/stores/bookmark-store"
+import { usePreferencesStore } from "@/stores/preferences-store"
+import { RootFolderSelect } from "@/features/root-folder-select"
+
+function BrowserSourceSettings() {
+  const rootFolderId = useBookmarkStore((s) => s.rootFolderId)
+  const setRootFolderId = useBookmarkStore((s) => s.setRootFolderId)
+  const nestedFolders = usePreferencesStore((s) => s.nestedFolders)
+  const setNestedFolders = usePreferencesStore((s) => s.setNestedFolders)
+
+  return (
+    <div className="flex flex-col gap-5 border-t border-border/60 bg-muted/20 p-4">
+      <RootFolderSelect
+        value={rootFolderId}
+        onChange={setRootFolderId}
+        label="Root folder"
+        description="Choose which Browser bookmarks folder appears on the dashboard."
+      />
+
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex min-w-0 flex-col gap-1">
+          <Label className="text-sm font-medium">Nested folders</Label>
+          <p className="text-sm text-muted-foreground">
+            Show Browser bookmark subfolders inside their parent cards.
+          </p>
+        </div>
+        <Switch
+          className="shrink-0"
+          aria-label="Show nested Browser bookmark folders"
+          checked={nestedFolders}
+          onCheckedChange={setNestedFolders}
+        />
+      </div>
+    </div>
+  )
+}
 
 /**
  * The Sources category: every source this profile knows, its enabled state,
@@ -59,35 +95,42 @@ export function SourcesPanel({
           {localSources.map((source) => (
             <div
               key={source.id}
-              className="flex items-center justify-between gap-3 rounded-lg border border-border/60 p-3"
+              className="overflow-hidden rounded-xl bg-card ring-1 ring-border/60"
             >
-              <div className="flex min-w-0 flex-col gap-0.5">
-                <span className="truncate text-sm font-medium">
-                  {source.label}
-                </span>
-                {source.kind === "standalone" && (
-                  <span className="text-xs text-amber-600 dark:text-amber-400">
-                    {STANDALONE_DEPRECATION_MESSAGE}
+              <div className="flex items-center justify-between gap-3 p-3">
+                <div className="flex min-w-0 flex-col gap-0.5">
+                  <span className="truncate text-sm font-medium">
+                    {source.label}
                   </span>
-                )}
+                  {source.kind === "standalone" && (
+                    <span className="text-sm text-amber-600 dark:text-amber-400">
+                      {STANDALONE_DEPRECATION_MESSAGE}
+                    </span>
+                  )}
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  <Button
+                    size="sm"
+                    variant={
+                      source.id === activeSourceId ? "default" : "outline"
+                    }
+                    disabled={switching || source.id === activeSourceId}
+                    onClick={() => void switchSource(source.id)}
+                  >
+                    {source.id === activeSourceId ? "Active" : "Make active"}
+                  </Button>
+                  <Switch
+                    aria-label={`Enable ${source.label}`}
+                    checked={Boolean(sourceEntries[source.id]?.enabled)}
+                    onCheckedChange={(checked) =>
+                      void handleToggle(source.id, checked)
+                    }
+                  />
+                </div>
               </div>
-              <div className="flex shrink-0 items-center gap-2">
-                <Button
-                  size="sm"
-                  variant={source.id === activeSourceId ? "default" : "outline"}
-                  disabled={switching || source.id === activeSourceId}
-                  onClick={() => void switchSource(source.id)}
-                >
-                  {source.id === activeSourceId ? "Active" : "Make active"}
-                </Button>
-                <Switch
-                  aria-label={`Enable ${source.label}`}
-                  checked={Boolean(sourceEntries[source.id]?.enabled)}
-                  onCheckedChange={(checked) =>
-                    void handleToggle(source.id, checked)
-                  }
-                />
-              </div>
+              {source.kind === "browser" && source.id === activeSourceId && (
+                <BrowserSourceSettings />
+              )}
             </div>
           ))}
           {sources.some((s) => s.kind === "standalone") && (
@@ -106,7 +149,7 @@ export function SourcesPanel({
       <div className="flex flex-col gap-2">
         <Label className="text-sm font-medium">Daemon sources</Label>
         {daemonSources.length === 0 && (
-          <p className="text-xs text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             No daemon connected yet. Each Vault a daemon hosts becomes its own
             source.
           </p>
@@ -114,13 +157,13 @@ export function SourcesPanel({
         {daemonSources.map((source) => (
           <div
             key={source.id}
-            className="flex items-center justify-between gap-3 rounded-lg border border-border/60 p-3"
+            className="flex items-center justify-between gap-3 rounded-xl bg-card p-3 ring-1 ring-border/60"
           >
             <div className="flex min-w-0 flex-col gap-0.5">
               <span className="truncate text-sm font-medium">
                 {source.label}
               </span>
-              <span className="truncate text-xs text-muted-foreground">
+              <span className="truncate text-sm text-muted-foreground">
                 {source.origin}
               </span>
             </div>
@@ -154,7 +197,7 @@ export function SourcesPanel({
 
       {caps.daemonSource && <DaemonConnectionPanel />}
 
-      <p className="text-xs text-muted-foreground">
+      <p className="text-sm text-muted-foreground">
         Source Configuration is local to this browser profile and is never
         synced. Exactly one enabled source is the Active Source across the
         dashboard, the capture popup and the omnibox.

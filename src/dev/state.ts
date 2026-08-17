@@ -216,6 +216,8 @@ export function writeRuntime(state: DevRuntimeSnapshot): Promise<void> {
 export interface AppliedScenarioStamp {
   scenarioId: string
   revision: number
+  /** Invalidates persisted dev trees when the checked-in seed changes. */
+  seedVersion: number
 }
 
 export function readAppliedStamp(): Promise<AppliedScenarioStamp | null> {

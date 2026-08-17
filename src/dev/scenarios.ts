@@ -23,6 +23,7 @@ import {
 } from "@/sources/config"
 import type { PlatformCapabilities } from "@/sources/platform"
 import type { DevFaultControls } from "./state"
+import seedBookmarks from "./seed-bookmarks.json"
 
 /** One node of a seed tree. Ids are assigned deterministically at seeding. */
 export interface SeedNode {
@@ -77,30 +78,25 @@ function devCapabilities(
 
 const ORIGIN = "http://127.0.0.1:52222"
 
-const browserBookmarks: SeedNode[] = [
-  {
-    title: "Development",
-    children: [
-      { title: "MDN Web Docs", url: "https://developer.mozilla.org" },
-      { title: "GitHub", url: "https://github.com" },
-      { title: "Stack Overflow", url: "https://stackoverflow.com" },
-      { title: "Hacker News", url: "https://news.ycombinator.com" },
-    ],
-  },
-  {
-    title: "Reading List",
-    children: [
-      {
-        title: "The Pragmatic Engineer",
-        url: "https://newsletter.pragmaticengineer.com",
-      },
-      { title: "Julia Evans", url: "https://jvns.ca" },
-      { title: "Simon Willison", url: "https://simonwillison.net" },
-    ],
-  },
-  { title: "Gmail", url: "https://mail.google.com" },
-  { title: "YouTube", url: "https://www.youtube.com" },
-]
+interface RawSeedNode {
+  title: string
+  url?: string
+  children?: RawSeedNode[]
+}
+
+function asSeedNodes(nodes: RawSeedNode[]): SeedNode[] {
+  return nodes.map((node) => ({
+    title: node.title,
+    ...(node.url ? { url: node.url } : {}),
+    ...(node.children ? { children: asSeedNodes(node.children) } : {}),
+  }))
+}
+
+const seedRoot = seedBookmarks[0] as RawSeedNode
+const seedBookmarksBar = seedRoot.children?.find(
+  (node) => node.title === "Bookmarks Bar"
+)
+const browserBookmarks = asSeedNodes(seedBookmarksBar?.children ?? [])
 
 const readingVault: SeedNode[] = [
   {

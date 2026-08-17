@@ -7,7 +7,7 @@ import {
 
 /**
  * The refactor promised two things: every setting the product had lands in
- * exactly one category, and the categories are the agreed seven. This suite
+ * exactly one category, and the categories are the agreed six. This suite
  * pins both, so a setting added without a home fails here rather than
  * silently vanishing from the UI.
  */
@@ -17,7 +17,6 @@ describe("settings categorization", () => {
       "general",
       "sources",
       "appearance",
-      "bookmarks",
       "data-migration",
       "advanced",
       "about",

@@ -53,7 +53,7 @@ export function SourceSwitcher() {
         <button
           type="button"
           onClick={openSettings}
-          className="inline-flex items-center gap-2 rounded-full border border-border/60 bg-background/80 px-3 py-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
+          className="inline-flex items-center gap-2 rounded-full bg-muted/60 px-3 py-1.5 text-sm text-muted-foreground ring-1 ring-border/60 hover:bg-muted hover:text-foreground"
           title="Manage sources in Settings → Sources"
         >
           <span
@@ -76,65 +76,62 @@ export function SourceSwitcher() {
   const overflow = sources.slice(MAX_TABS)
 
   return (
-    <div
-      role="tablist"
-      aria-label="Bookmark source"
-      className="flex flex-wrap items-center justify-center gap-1"
-    >
-      {visible.map((source) => (
-        <button
-          key={source.id}
-          role="tab"
-          type="button"
-          aria-selected={source.id === activeSourceId}
-          disabled={switching || source.id === activeSourceId}
-          onClick={() => void switchSource(source.id)}
-          title={
-            source.id === activeSourceId
-              ? "This is the active source"
-              : `Switch to ${source.label}`
-          }
-          className={cn(
-            "inline-flex max-w-56 items-center gap-1.5 rounded-full border px-3 py-1 text-xs transition-colors",
-            source.id === activeSourceId
-              ? "border-primary bg-accent font-medium text-foreground"
-              : "border-border/60 text-muted-foreground hover:bg-accent/50 hover:text-foreground",
-            source.kind === "standalone" &&
-              source.id === activeSourceId &&
-              "border-amber-500/60"
-          )}
-        >
-          {source.kind === "standalone" && (
-            <span aria-hidden title="Legacy source being retired">
-              ⚠
-            </span>
-          )}
-          <span className="truncate">{source.label}</span>
-        </button>
-      ))}
-      {overflow.length > 0 && (
-        <DropdownMenu>
-          <DropdownMenuTrigger
-            render={
-              <Button variant="ghost" size="sm" className="h-6 px-2 text-xs">
-                +{overflow.length} more
-              </Button>
+    <div className="flex justify-center">
+      <div
+        role="tablist"
+        aria-label="Bookmark source"
+        className="inline-flex max-w-full flex-wrap items-center justify-center gap-1 rounded-full bg-muted/60 p-1 ring-1 ring-border/60"
+      >
+        {visible.map((source) => (
+          <button
+            key={source.id}
+            role="tab"
+            type="button"
+            aria-selected={source.id === activeSourceId}
+            disabled={switching || source.id === activeSourceId}
+            onClick={() => void switchSource(source.id)}
+            title={
+              source.id === activeSourceId
+                ? "This is the active source"
+                : `Switch to ${source.label}`
             }
-          />
-          <DropdownMenuContent align="center">
-            <DropdownMenuLabel>Other sources</DropdownMenuLabel>
-            {overflow.map((source) => (
-              <DropdownMenuItem
-                key={source.id}
-                disabled={source.id === activeSourceId}
-                onClick={() => void switchSource(source.id)}
-              >
-                {source.label}
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      )}
+            className={cn(
+              "inline-flex max-w-56 items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium",
+              source.id === activeSourceId
+                ? "bg-background text-foreground shadow-xs ring-1 ring-border dark:shadow-none"
+                : "text-muted-foreground hover:bg-background/50 hover:text-foreground"
+            )}
+          >
+            {source.kind === "standalone" && (
+              <span className="text-amber-600 dark:text-amber-400">Legacy</span>
+            )}
+            <span className="truncate">{source.label}</span>
+          </button>
+        ))}
+        {overflow.length > 0 && (
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={
+                <Button variant="ghost" size="sm" className="h-7 px-2 text-sm">
+                  +{overflow.length} more
+                </Button>
+              }
+            />
+            <DropdownMenuContent align="center">
+              <DropdownMenuLabel>Other sources</DropdownMenuLabel>
+              {overflow.map((source) => (
+                <DropdownMenuItem
+                  key={source.id}
+                  disabled={source.id === activeSourceId}
+                  onClick={() => void switchSource(source.id)}
+                >
+                  {source.label}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
+      </div>
     </div>
   )
 }

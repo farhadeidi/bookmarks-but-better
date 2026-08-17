@@ -9,7 +9,12 @@ import {
 } from "@/sources/platform"
 import { getOnboardingCompleted } from "@/browser/onboarding-preference"
 import { daemonSourceId } from "@/sources/config"
-import { devGet, SOURCES_STORE } from "./state"
+import {
+  devGet,
+  SOURCES_STORE,
+  writeAppliedStamp,
+  type AppliedScenarioStamp,
+} from "./state"
 import { materializeSeed } from "./engine"
 import {
   ensureDevRuntime,
@@ -140,6 +145,36 @@ describe("persisted scenario state", () => {
 
     expect(listener).toHaveBeenCalled()
     expect(runtimeSnapshot().faults.mutationFailure).toBe(true)
+    expect(await devGet(SOURCES_STORE, "tree:browser")).toBeNull()
+  })
+
+  it("reseeds profiles whose applied stamp predates the current seed schema", async () => {
+    await ensureDevRuntime()
+    const engine = await engineFor("browser", "browser", () =>
+      materializeSeed(
+        "0",
+        "",
+        "b",
+        [],
+        [
+          { id: "1", title: "Bookmarks Bar", children: [] },
+          { id: "2", title: "Other bookmarks", children: [] },
+        ]
+      )
+    )
+    await engine.create({ parentId: "1", title: "Legacy dev seed" })
+    expect(await devGet(SOURCES_STORE, "tree:browser")).not.toBeNull()
+
+    // Simulate the stamp written by a Workbench build before seed schemas
+    // existed. A matching scenario/revision must not preserve its stale tree.
+    await writeAppliedStamp({
+      scenarioId: "browser-daemon",
+      revision: 1,
+    } as AppliedScenarioStamp)
+    resetDevRuntime()
+    setPlatformCapabilities(getScenarioCaps())
+
+    await ensureDevRuntime()
     expect(await devGet(SOURCES_STORE, "tree:browser")).toBeNull()
   })
 })

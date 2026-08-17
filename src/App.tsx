@@ -111,7 +111,7 @@ export function App() {
   return (
     <ScrollArea className="h-svh bg-background text-foreground">
       {/* Main content */}
-      <main className="px-4 pt-8 pb-24">
+      <main className="flex flex-col gap-5 px-4 pt-8 pb-24">
         {/* The compact source control: tab switcher with several enabled
             sources, name/health badge with one. Sits above the bookmarks so
             the destination of every operation below it is visible. */}

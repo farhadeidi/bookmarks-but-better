@@ -16,7 +16,6 @@ import {
 } from "./settings-categories"
 import { GeneralPanel } from "./panels/settings-panels"
 import { AppearancePanel } from "./panels/settings-panels"
-import { BookmarksPanel } from "./panels/settings-panels"
 import { DataMigrationPanel } from "./panels/settings-panels"
 import { AdvancedPanel } from "./panels/settings-panels"
 import { AboutPanel } from "./panels/settings-panels"
@@ -56,17 +55,17 @@ export function SettingsDialog() {
         />
       )}
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-h-[85vh] gap-0 overflow-hidden p-0 sm:max-w-2xl md:max-w-3xl">
-          <DialogHeader className="border-b px-6 py-4">
+        <DialogContent className="grid h-[calc(100svh-1rem)] grid-rows-[auto_minmax(0,1fr)] gap-0 overflow-hidden bg-card p-0 text-card-foreground shadow-xl ring-border sm:h-[min(46rem,calc(100svh-3rem))] sm:max-w-2xl md:max-w-3xl dark:shadow-none">
+          <DialogHeader className="border-b border-border/60 px-5 py-4 sm:px-6">
             <DialogTitle>Settings</DialogTitle>
             <DialogDescription>{active?.description}</DialogDescription>
           </DialogHeader>
 
-          <div className="flex max-h-[calc(85vh-5rem)] min-h-0 flex-col sm:flex-row">
+          <div className="grid min-h-0 grid-rows-[auto_minmax(0,1fr)] sm:grid-cols-[11rem_minmax(0,1fr)] sm:grid-rows-1">
             {wide ? (
               <nav
                 aria-label="Settings categories"
-                className="flex w-44 shrink-0 flex-col gap-1 overflow-y-auto border-r p-3"
+                className="flex min-h-0 flex-col gap-1 overflow-y-auto border-r border-border/60 bg-muted/30 p-3"
               >
                 {SETTINGS_CATEGORIES.map((c) => (
                   <button
@@ -76,9 +75,9 @@ export function SettingsDialog() {
                     aria-selected={c.id === category}
                     onClick={() => setCategory(c.id)}
                     className={cn(
-                      "rounded-md px-3 py-2 text-left text-sm transition-colors",
+                      "rounded-md px-3 py-2 text-left text-sm font-medium",
                       c.id === category
-                        ? "bg-accent font-medium text-foreground"
+                        ? "bg-accent text-accent-foreground"
                         : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
                     )}
                   >
@@ -89,7 +88,7 @@ export function SettingsDialog() {
             ) : (
               <nav
                 aria-label="Settings categories"
-                className="no-scrollbar flex shrink-0 gap-1 overflow-x-auto border-b p-2"
+                className="no-scrollbar flex min-w-0 gap-1 overflow-x-auto border-b border-border/60 bg-muted/30 p-2"
               >
                 {SETTINGS_CATEGORIES.map((c) => (
                   <button
@@ -99,10 +98,10 @@ export function SettingsDialog() {
                     aria-selected={c.id === category}
                     onClick={() => setCategory(c.id)}
                     className={cn(
-                      "shrink-0 rounded-full border px-3 py-1 text-xs transition-colors",
+                      "shrink-0 rounded-md px-3 py-2 text-sm font-medium",
                       c.id === category
-                        ? "border-primary bg-accent font-medium text-foreground"
-                        : "border-border/60 text-muted-foreground"
+                        ? "bg-accent text-accent-foreground"
+                        : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
                     )}
                   >
                     {c.label}
@@ -111,7 +110,7 @@ export function SettingsDialog() {
               </nav>
             )}
 
-            <div className="min-h-0 flex-1 overflow-y-auto p-6">
+            <div className="min-h-0 min-w-0 overflow-y-auto bg-background/35 p-5 sm:p-6">
               {category === "general" && <GeneralPanel />}
               {category === "sources" && (
                 <SourcesPanel
@@ -119,7 +118,6 @@ export function SettingsDialog() {
                 />
               )}
               {category === "appearance" && <AppearancePanel />}
-              {category === "bookmarks" && <BookmarksPanel />}
               {category === "data-migration" && (
                 <DataMigrationPanel
                   onMigrateStandalone={() => setMigrationOpen(true)}

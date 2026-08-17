@@ -27,10 +27,7 @@ import {
 } from "@/stores/preferences-store"
 import { useBookmarkStore } from "@/stores/bookmark-store"
 import { useTheme } from "@/components/theme-provider"
-import {
-  RootFolderSelect,
-  buildRootFolderOptions,
-} from "@/features/root-folder-select"
+import { buildRootFolderOptions } from "@/features/root-folder-select"
 import { serializeNetscapeBookmarks } from "@/browser/import-export/netscape-serializer"
 import { parseNetscapeBookmarks } from "@/browser/import-export/netscape-parser"
 import { resolveDefaultImportParentId } from "../import-target"
@@ -190,41 +187,6 @@ export function AppearancePanel() {
           Contained limits the dashboard to 1440px wide and centers it on the
           screen.
         </p>
-      </div>
-    </div>
-  )
-}
-
-// ---------------------------------------------------------------------------
-// Bookmarks
-// ---------------------------------------------------------------------------
-
-export function BookmarksPanel() {
-  const rootFolderId = useBookmarkStore((s) => s.rootFolderId)
-  const setRootFolderId = useBookmarkStore((s) => s.setRootFolderId)
-  const nestedFolders = usePreferencesStore((s) => s.nestedFolders)
-  const setNestedFolders = usePreferencesStore((s) => s.setNestedFolders)
-
-  return (
-    <div className="flex flex-col gap-6">
-      <RootFolderSelect
-        value={rootFolderId}
-        onChange={setRootFolderId}
-        label="Root folder"
-        description="Choose which folder to display as the root of your bookmarks. This choice belongs to the active source."
-      />
-
-      <div className="flex items-center justify-between">
-        <div className="flex flex-col gap-1">
-          <Label className="text-sm font-medium">Nested folders</Label>
-          <p className="text-xs text-muted-foreground">
-            Show subfolders inside their parent cards.
-          </p>
-        </div>
-        <Switch
-          checked={nestedFolders}
-          onCheckedChange={(checked) => setNestedFolders(checked)}
-        />
       </div>
     </div>
   )

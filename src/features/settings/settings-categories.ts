@@ -7,7 +7,6 @@ export type SettingsCategoryId =
   | "general"
   | "sources"
   | "appearance"
-  | "bookmarks"
   | "data-migration"
   | "advanced"
   | "about"
@@ -33,11 +32,6 @@ export const SETTINGS_CATEGORIES: readonly SettingsCategory[] = [
     id: "appearance",
     label: "Appearance",
     description: "Theme, colors and layout width.",
-  },
-  {
-    id: "bookmarks",
-    label: "Bookmarks",
-    description: "Root folder and folder display.",
   },
   {
     id: "data-migration",
@@ -67,9 +61,8 @@ export const SETTING_HOMES: Record<string, SettingsCategoryId> = {
   themeMode: "appearance",
   maxColumns: "appearance",
   containerMode: "appearance",
-  // Bookmarks
-  rootFolderId: "bookmarks",
-  nestedFolders: "bookmarks",
+  rootFolderId: "sources",
+  nestedFolders: "sources",
   // Data & Migration
   importBookmarks: "data-migration",
   exportBookmarks: "data-migration",
