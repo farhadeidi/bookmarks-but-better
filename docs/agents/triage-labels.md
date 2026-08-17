@@ -14,4 +14,4 @@ When a skill mentions a role (e.g. "apply the AFK-ready triage label"), use the 
 
 ## Label existence
 
-The five label names above are the approved canonical vocabulary, but they do not necessarily exist in Linear yet — team `BBB` currently defines only `Feature`, `Improvement`, and `Bug`. The five triage labels must be created/configured in Linear before they can be applied. If a skill needs a label that is missing, **stop and ask the coordinator** rather than silently substituting another label.
+The five labels above exist on this repository's GitHub Issues. If a skill needs a label that is missing, **stop and ask the coordinator** rather than silently substituting another label.
