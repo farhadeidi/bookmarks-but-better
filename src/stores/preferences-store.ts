@@ -101,9 +101,13 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
       containerMode === null &&
       folderOrder === null &&
       experimentalCardDrag === null
+    const isFreshSourceState = cardLayouts === null && folderOrder === null
 
     let seedPrefDefaults: Record<string, unknown> | null = null
-    if (import.meta.env.DEV && isFreshState) {
+    if (import.meta.env.DEV && (isFreshState || isFreshSourceState)) {
+      // The marketing preview applies its URL theme before source bootstrap,
+      // so profile-wide state may already be hydrated while source defaults
+      // still need to come from the deterministic development seed.
       const { default: seed } = await import("@/dev/seed-preferences.json")
       seedPrefDefaults = seed as Record<string, unknown>
     }

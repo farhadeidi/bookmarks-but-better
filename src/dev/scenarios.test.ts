@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest"
+import type { BookmarkNode } from "@/browser"
 import { daemonSourceId } from "@/sources/config"
 import seedBookmarks from "./seed-bookmarks.json"
+import seedPreferences from "./seed-preferences.json"
+import { materializeSeed } from "./engine"
 import {
   DEFAULT_SCENARIO_ID,
   DEV_SCENARIOS,
@@ -20,6 +23,13 @@ function countBookmarks(
     }>
     return count + (node.url ? 1 : 0) + countBookmarks(children)
   }, 0)
+}
+
+function folderIdsByTitle(nodes: BookmarkNode[], title: string): string[] {
+  return nodes.flatMap((node) => [
+    ...(node.title === title ? [node.id] : []),
+    ...folderIdsByTitle(node.children ?? [], title),
+  ])
 }
 
 describe("the scenario registry", () => {
@@ -50,6 +60,42 @@ describe("the scenario registry", () => {
 })
 
 describe("initial source configuration", () => {
+  it("keeps the seeded grid folders unique and aligned with their generated ids", () => {
+    const browserTree = getScenario(DEFAULT_SCENARIO_ID).browserTree ?? []
+    const root = materializeSeed(
+      "0",
+      "",
+      "b",
+      [],
+      [
+        { id: "1", title: "Bookmarks Bar", children: browserTree },
+        { id: "2", title: "Other bookmarks", children: [] },
+      ]
+    )
+    const gridTitles = [
+      "Bookmarks Bar",
+      "Social",
+      "Productivity",
+      "Email",
+      "Travel",
+      "Gaming",
+    ]
+    const seededCardLayouts = seedPreferences.cardLayouts as Record<
+      string,
+      string
+    >
+
+    for (const title of gridTitles) {
+      const ids = folderIdsByTitle(root.children ?? [], title)
+      expect(ids).toHaveLength(1)
+      expect(seededCardLayouts[ids[0] ?? ""]).toBe("grid")
+    }
+
+    expect(Object.keys(seedPreferences.cardLayouts).sort()).toEqual(
+      ["1", "b5", "b22", "b173", "b184", "b262"].sort()
+    )
+  })
+
   it("seeds the default Browser Source from the complete development dataset", () => {
     const scenario = getScenario(DEFAULT_SCENARIO_ID)
 

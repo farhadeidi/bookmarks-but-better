@@ -47,6 +47,23 @@ test("mutations persist across reloads, and Reset Scenario restores the seed", a
   await expect(page.getByText("Persisted Work")).toHaveCount(0)
   await expect(page.getByText("MDN Web Docs")).toBeVisible()
 
+  for (const title of [
+    "Bookmarks Bar",
+    "Social",
+    "Productivity",
+    "Email",
+    "Travel",
+    "Gaming",
+  ]) {
+    await expect(
+      page
+        .getByTestId("bookmark-card")
+        .filter({ hasText: title })
+        .first()
+        .locator("div.grid")
+    ).toBeVisible()
+  }
+
   // The reset Vault is its seed again, too.
   await tabs.filter({ hasText: "archive" }).click()
   await expect(page.getByText("State of CSS 2024")).toBeVisible()

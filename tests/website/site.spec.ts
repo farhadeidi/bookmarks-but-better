@@ -34,6 +34,23 @@ test.describe("marketing website artifact", () => {
     const faviconImages = appFrame.locator("img[src*='favicon']")
     await expect(faviconImages.first()).toBeVisible()
     expect(await faviconImages.count()).toBeGreaterThan(0)
+
+    for (const title of [
+      "Bookmarks Bar",
+      "Social",
+      "Productivity",
+      "Email",
+      "Travel",
+      "Gaming",
+    ]) {
+      await expect(
+        appFrame
+          .getByTestId("bookmark-card")
+          .filter({ hasText: title })
+          .first()
+          .locator("div.grid")
+      ).toBeVisible()
+    }
   })
 
   test("has no horizontal overflow on a narrow viewport", async ({ page }) => {
