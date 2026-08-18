@@ -1,0 +1,110 @@
+import { ArticlePage } from "@/components/article-page"
+import { SITE } from "@/lib/site"
+
+function Section({
+  title,
+  children,
+}: {
+  title: string
+  children: React.ReactNode
+}) {
+  return (
+    <section>
+      <h2 className="font-display text-xl font-medium tracking-tight">
+        {title}
+      </h2>
+      <div className="mt-3 space-y-3 text-sm leading-relaxed text-muted-foreground">
+        {children}
+      </div>
+    </section>
+  )
+}
+
+export function Privacy() {
+  return (
+    <ArticlePage
+      title="Privacy"
+      intro="Bookmarks But Better is built for people who do not want their reading habits collected. This page describes, in plain language, what the extension and this website touch."
+    >
+      <Section title="What we never collect">
+        <p>
+          No accounts, no analytics, no tracking, no advertising, and no
+          collection of bookmark content. There is no server that receives your
+          bookmarks, and there is nothing to opt out of.
+        </p>
+      </Section>
+
+      <Section title="Where your data lives">
+        <p>
+          <strong className="text-foreground">Browser source:</strong> bookmarks
+          stay in your browser's own bookmark store and are read or changed only
+          through its built-in APIs.
+        </p>
+        <p>
+          <strong className="text-foreground">Standalone source:</strong> the
+          collection lives in your browser profile's local storage and never
+          leaves it.
+        </p>
+        <p>
+          <strong className="text-foreground">Vault daemon:</strong> bookmarks
+          are Markdown files in a folder you choose on your own disk. The daemon
+          serves them to the extension over{" "}
+          <code className="rounded bg-muted px-1.5 py-0.5 text-xs">
+            127.0.0.1
+          </code>{" "}
+          /{" "}
+          <code className="rounded bg-muted px-1.5 py-0.5 text-xs">
+            localhost
+          </code>{" "}
+          only. Nothing is uploaded.
+        </p>
+      </Section>
+
+      <Section title="Network requests the extension makes">
+        <p>
+          One kind only, by default: favicon lookups against Google's public
+          favicon service. Bookmark origins (the scheme and host) are sent to
+          find site icons; full URL paths are not. Chrome can also fall back to
+          its on-device favicon API. If you connect a local daemon, the
+          extension talks to that loopback address — permission is requested at
+          connect time, never at install time.
+        </p>
+      </Section>
+
+      <Section title="This website">
+        <p>
+          This site is static HTML, CSS and JavaScript served from GitHub Pages.
+          It embeds no analytics, sets no cookies, and loads no third-party
+          scripts. Your dark-mode preference is stored in your browser's{" "}
+          <code className="rounded bg-muted px-1.5 py-0.5 text-xs">
+            localStorage
+          </code>{" "}
+          and nowhere else.
+        </p>
+      </Section>
+
+      <Section title="Permissions, briefly">
+        <p>
+          The extension requests: bookmarks (to display and manage your tree),
+          storage (for your preferences), activeTab (only when you save the
+          current page from the popup), clipboardWrite (only when you copy a
+          link), and favicon access (for the icon fallback). Optional localhost
+          permissions appear only when you connect a daemon.
+        </p>
+      </Section>
+
+      <Section title="Questions">
+        <p>
+          The source code is public — audit it at{" "}
+          <a
+            href={SITE.repository}
+            className="text-foreground underline decoration-border underline-offset-4 hover:text-primary"
+          >
+            {SITE.repository.replace("https://", "")}
+          </a>
+          , and open an issue there if anything here looks wrong.
+        </p>
+      </Section>
+    </ArticlePage>
+  )
+}

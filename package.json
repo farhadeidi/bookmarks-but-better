@@ -6,6 +6,10 @@
   "packageManager": "bun@1.3.14",
   "scripts": {
     "dev": "vite",
+    "site:dev": "bun run --cwd website dev",
+    "site:build": "bun run --cwd website build",
+    "site:preview": "bun run --cwd website preview",
+    "site:typecheck": "bun run --cwd website typecheck",
     "dev:daemon-ui": "VITE_BUILD_TARGET=daemon vite",
     "build:chrome": "VITE_BUILD_TARGET=chrome vite build --outDir dist-chrome && vite build --config vite.background.config.ts --outDir dist-chrome && cp manifests/manifest.chrome.json dist-chrome/manifest.json",
     "build:firefox": "VITE_BUILD_TARGET=firefox vite build --outDir dist-firefox && vite build --config vite.background.config.ts --outDir dist-firefox && cp manifests/manifest.firefox.json dist-firefox/manifest.json",

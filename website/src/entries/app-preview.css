@@ -1,0 +1,8 @@
+/*
+ * The live preview's stylesheet: the app's own index.css, plus an explicit
+ * Tailwind source root. Tailwind v4 auto-detects sources from the build root
+ * (website/), which never sees the app sources in ../src — without this
+ * directive the preview would ship theme tokens without any utilities.
+ */
+@import "../../../src/index.css";
+@source "../../../src";
