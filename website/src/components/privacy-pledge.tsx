@@ -23,28 +23,25 @@ export function PrivacyPledge() {
       title="Private by design, not by policy update"
       id="privacy"
     >
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <dl className="grid gap-x-4 gap-y-8 sm:grid-cols-2 lg:grid-cols-4">
         {PLEDGES.map((pledge) => (
-          <div
-            key={pledge.title}
-            className="rounded-lg border border-border bg-card p-5"
-          >
-            <h3 className="font-display text-base font-medium">
+          <div key={pledge.title} className="border-t-2 border-primary/60 pt-4">
+            <dt className="font-display text-base font-medium">
               {pledge.title}
-            </h3>
-            <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
+            </dt>
+            <dd className="mt-1.5 text-base/7 text-pretty text-muted-foreground sm:text-sm/6">
               {pledge.text}
-            </p>
+            </dd>
           </div>
         ))}
-      </div>
-      <p className="mt-6 text-sm text-muted-foreground">
+      </dl>
+      <p className="mt-10 text-base/7 text-pretty text-muted-foreground sm:text-sm/6">
         The only network calls the extension makes are to a public favicon
         service (origins only, never full URLs) and — only if you connect one —
         to your own local daemon.{" "}
         <a
           href="/privacy/"
-          className="text-foreground underline decoration-border underline-offset-4 transition-colors hover:text-primary"
+          className="text-foreground underline decoration-border underline-offset-4 hover:text-primary"
         >
           Read the full privacy page
         </a>

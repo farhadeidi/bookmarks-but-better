@@ -28,31 +28,32 @@ export function Sources() {
       title="Three sources. Never silently mixed."
       id="sources"
     >
-      <div className="grid gap-4 md:grid-cols-3">
+      <dl className="grid gap-4 md:grid-cols-3">
         {SOURCES.map((source) => (
-          <article
+          <div
             key={source.name}
-            className="rounded-lg border border-border bg-card p-6"
+            className="rounded-lg bg-card p-6 ring-1 ring-border"
           >
-            <span className="inline-block rounded-full border border-primary/30 bg-primary/5 px-2.5 py-0.5 text-[10px] font-medium tracking-wide text-primary uppercase">
-              {source.tag}
-            </span>
-            <h3 className="font-display mt-4 text-lg font-medium tracking-tight">
-              {source.name}
-            </h3>
-            <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+            <dt className="flex flex-wrap items-center gap-3">
+              <span className="font-display text-lg font-medium tracking-tight">
+                {source.name}
+              </span>
+              <span className="rounded-full border border-primary/30 bg-primary/5 px-2.5 py-1 text-sm text-primary">
+                {source.tag}
+              </span>
+            </dt>
+            <dd className="mt-2 text-base/7 text-pretty text-muted-foreground sm:text-sm/6">
               {source.description}
-            </p>
-          </article>
+            </dd>
+          </div>
         ))}
-      </div>
-      <p className="mt-6 flex items-start gap-3 rounded-lg border border-border bg-muted/40 p-4 text-sm text-muted-foreground">
+      </dl>
+      <p className="mt-6 flex items-start gap-3 rounded-lg bg-muted/40 p-4 text-base/7 text-pretty text-muted-foreground ring-1 ring-border sm:text-sm/6">
         <svg
           viewBox="0 0 24 24"
           fill="none"
-          stroke="currentColor"
           strokeWidth="1.8"
-          className="mt-0.5 size-4 shrink-0 text-primary"
+          className="mt-0.5 size-4 shrink-0 stroke-primary"
           aria-hidden
         >
           <path d="M12 3 4 6v5c0 4.4 3.2 8.4 8 10 4.8-1.6 8-5.6 8-10V6l-8-3Z" />

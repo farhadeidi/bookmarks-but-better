@@ -80,10 +80,14 @@ export function AppPreview({
   const src = `/app-preview/?mode=${siteMode()}&theme=amber-minimal`
 
   return (
-    <figure id="demo" className="scroll-mt-24">
+    <figure id="demo" className="relative isolate scroll-mt-24">
+      <div
+        className="pointer-events-none absolute inset-x-8 top-24 bottom-0 -z-10 bg-primary/10 blur-3xl"
+        aria-hidden
+      />
       <div
         className={cn(
-          "overflow-hidden rounded-xl border border-border bg-card shadow-2xl shadow-foreground/10",
+          "relative overflow-hidden rounded-xl bg-card shadow-2xl ring-1 shadow-foreground/10 ring-foreground/10 dark:shadow-none",
           className
         )}
         style={{ "--demo-accent": theme?.accent } as CSSProperties}
@@ -94,7 +98,7 @@ export function AppPreview({
             <span className="size-2.5 rounded-full bg-foreground/15" />
             <span className="size-2.5 rounded-full bg-foreground/15" />
           </div>
-          <div className="flex h-7 max-w-xs flex-1 items-center rounded-md border border-border bg-background px-3 text-xs text-muted-foreground">
+          <div className="flex h-7 max-w-xs flex-1 items-center rounded-md border border-border bg-background px-3 text-sm text-muted-foreground">
             New Tab
           </div>
         </div>
@@ -112,7 +116,7 @@ export function AppPreview({
       </div>
 
       <figcaption className="mt-4 flex flex-wrap items-center justify-center gap-x-4 gap-y-2">
-        <span className="text-xs text-muted-foreground">
+        <span className="text-sm text-muted-foreground">
           This is the real app, live — switch themes:
         </span>
         <div className="flex flex-wrap items-center gap-2">
@@ -128,7 +132,7 @@ export function AppPreview({
                 setActiveTheme(item.id)
               }}
               className={cn(
-                "size-4 rounded-full border border-border transition-transform hover:scale-125",
+                "relative size-4 rounded-full border border-border transition-transform hover:scale-125 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary",
                 item.id === activeTheme &&
                   "ring-2 ring-[var(--demo-accent)] ring-offset-2 ring-offset-background"
               )}
@@ -136,7 +140,7 @@ export function AppPreview({
             />
           ))}
         </div>
-        <span className="font-display text-xs text-muted-foreground italic">
+        <span className="font-display text-sm text-muted-foreground italic">
           {theme?.name}
         </span>
       </figcaption>

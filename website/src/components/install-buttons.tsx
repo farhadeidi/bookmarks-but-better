@@ -14,11 +14,11 @@ export function InstallButtons({
     <div className={cn("flex flex-wrap items-center gap-3", className)}>
       <a
         href={SITE.chromeStore}
-        className="inline-flex h-11 items-center gap-2 rounded-md bg-primary px-5 text-sm font-medium text-primary-foreground shadow-sm transition-opacity hover:opacity-90"
+        className="inline-flex h-11 items-center gap-2 rounded-md bg-primary pr-4 pl-3 text-sm font-medium text-primary-foreground hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
       >
         <svg
           viewBox="0 0 24 24"
-          className="size-4"
+          className="size-4 shrink-0"
           fill="currentColor"
           aria-hidden
         >
@@ -28,11 +28,11 @@ export function InstallButtons({
       </a>
       <a
         href={SITE.firefoxStore}
-        className="inline-flex h-11 items-center gap-2 rounded-md border border-border bg-card px-5 text-sm font-medium text-card-foreground transition-colors hover:bg-muted"
+        className="inline-flex h-11 items-center gap-2 rounded-md border border-border bg-card pr-4 pl-3 text-sm font-medium text-card-foreground hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
       >
         <svg
           viewBox="0 0 24 24"
-          className="size-4"
+          className="size-4 shrink-0"
           fill="currentColor"
           aria-hidden
         >

@@ -14,7 +14,7 @@
   --muted-foreground: oklch(0.5 0.012 80);
   --primary: oklch(0.55 0.12 60);
   --primary-foreground: oklch(0.99 0.003 90);
-  --border: oklch(0.9 0.008 85);
+  --border: oklch(0.24 0.012 80 / 11%);
   --ring: oklch(0.55 0.12 60);
 }
 
@@ -28,12 +28,14 @@
   --muted-foreground: oklch(0.68 0.01 85);
   --primary: oklch(0.72 0.13 70);
   --primary-foreground: oklch(0.16 0.01 80);
-  --border: oklch(1 0 0 / 10%);
+  --border: oklch(1 0 0 / 11%);
   --ring: oklch(0.72 0.13 70);
 }
 
 @theme inline {
   --font-sans: "Inter Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-sans--font-feature-settings: "cv02", "cv03", "cv04", "cv11",
+    "ss01";
   --font-display: "Fraunces Variable", ui-serif, Georgia, serif;
   --color-background: var(--background);
   --color-foreground: var(--foreground);

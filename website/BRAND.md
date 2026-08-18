@@ -40,7 +40,7 @@ Light (paper):
 | Foreground | `oklch(0.205 0.01 80)` — ink |
 | Primary    | `oklch(0.55 0.12 60)` — burnt amber (buttons, links, ribbons) |
 | Muted      | `oklch(0.5 0.01 80)` |
-| Border     | `oklch(0.9 0.008 85)` — hairline |
+| Border     | ink at 11% opacity — hairline that adapts to any surface |
 | Card       | `oklch(1 0 0)` |
 
 Dark (lamplight):
@@ -50,7 +50,7 @@ Dark (lamplight):
 | Background | `oklch(0.17 0.006 80)` — deep ink |
 | Foreground | `oklch(0.94 0.004 90)` |
 | Primary    | `oklch(0.72 0.13 70)` — lamp amber |
-| Border     | `oklch(1 0 0 / 10%)` |
+| Border     | `oklch(1 0 0 / 11%)` |
 
 Amber is the only load-bearing accent. Semantic colors (green/red) appear
 rarely, as small chips only.
@@ -58,9 +58,12 @@ rarely, as small chips only.
 ## Motifs
 
 - **Index numbers** — each landing section opens with `01 —`, `02 —` in
-  Fraunces italic, like catalog entries.
+  Fraunces italic, like catalog entries, with a hairline extending to the
+  right edge.
 - **Hairline rules** — 1px borders divide sections; no drop shadows except on
-  the interactive demo and screenshots.
-- **Ribbon** — the primary CTA carries a small bookmark-ribbon notch.
+  the interactive demo and screenshots (plus a faint amber glow behind the
+  demo).
+- **Ribbon** — retired: the hero title is pure Fraunces typography
+  ("Bookmarks, / *but better*") with no attached mark.
 - **The demo is the hero** — a live, theme-switchable replica of the product
   replaces stock hero imagery.
