@@ -15,6 +15,7 @@ export function Faq() {
                 stroke="currentColor"
                 strokeWidth="1.8"
                 className="size-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-45"
+                aria-hidden
               >
                 <path d="M12 5v14M5 12h14" />
               </svg>

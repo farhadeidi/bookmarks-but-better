@@ -5,9 +5,9 @@ import { ThemeToggle } from "@/components/theme-toggle"
 const NAV = [
   { href: "/#features", label: "Features" },
   { href: "/#themes", label: "Themes" },
-  { href: "/preview", label: "Live preview" },
-  { href: "/daemon", label: "Daemon" },
-  { href: "/privacy", label: "Privacy" },
+  { href: "/preview/", label: "Live preview" },
+  { href: "/daemon/", label: "Daemon" },
+  { href: "/privacy/", label: "Privacy" },
 ]
 
 export function SiteHeader({ className }: { className?: string }) {
@@ -71,6 +71,7 @@ export function SiteHeader({ className }: { className?: string }) {
             stroke="currentColor"
             strokeWidth="1.8"
             className="size-4 transition-transform group-open:rotate-180"
+            aria-hidden
           >
             <path d="m6 9 6 6 6-6" />
           </svg>

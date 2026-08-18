@@ -9,9 +9,9 @@ const SOURCES = [
   },
   {
     name: "Standalone collection",
-    tag: "Private",
+    tag: "Legacy",
     description:
-      "A separate collection that lives only in this browser profile. Your browser bookmarks are never touched.",
+      "A separate collection that lives only in this browser profile. It is retiring over one major version; migration to a vault is an explicit copy.",
   },
   {
     name: "Markdown vault daemon",
@@ -53,6 +53,7 @@ export function Sources() {
           stroke="currentColor"
           strokeWidth="1.8"
           className="mt-0.5 size-4 shrink-0 text-primary"
+          aria-hidden
         >
           <path d="M12 3 4 6v5c0 4.4 3.2 8.4 8 10 4.8-1.6 8-5.6 8-10V6l-8-3Z" />
         </svg>

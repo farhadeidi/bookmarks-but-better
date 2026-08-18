@@ -1,6 +1,8 @@
+import pkg from "../../../package.json"
+
 export const SITE = {
   url: "https://bookmarks.farhadeidi.com",
-  version: "4.1.0",
+  version: pkg.version,
   chromeStore:
     "https://chromewebstore.google.com/detail/nflojekghnganlcjncbepnnnkgakghif?utm_source=website",
   firefoxStore:

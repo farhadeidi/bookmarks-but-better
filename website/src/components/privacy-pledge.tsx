@@ -43,7 +43,7 @@ export function PrivacyPledge() {
         service (origins only, never full URLs) and — only if you connect one —
         to your own local daemon.{" "}
         <a
-          href="/privacy"
+          href="/privacy/"
           className="text-foreground underline decoration-border underline-offset-4 transition-colors hover:text-primary"
         >
           Read the full privacy page

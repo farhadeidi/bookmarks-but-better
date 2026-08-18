@@ -1,0 +1,20 @@
+# Bookmarks But Better
+
+Bookmarks But Better is a private, open-source browser extension that replaces
+the new-tab page with an editable bookmarks dashboard. It has no account,
+analytics, tracking, ads, or bookmark-content collection.
+
+## Important pages
+
+- [Home](https://bookmarks.farhadeidi.com/): product overview and installation links
+- [Live preview](https://bookmarks.farhadeidi.com/preview/): interactive preview with seeded demo data and real site icons
+- [Vault daemon](https://bookmarks.farhadeidi.com/daemon/): local Markdown vault installation and setup
+- [Privacy](https://bookmarks.farhadeidi.com/privacy/): data location, network requests, and permissions
+- [Source code](https://github.com/farhadeidi/bookmarks-but-better): repository and issue tracker
+
+## Product constraints
+
+- Sources are never implicitly merged; operations affect only the active source.
+- The daemon binds to loopback addresses only.
+- Safari uses the daemon source because browser bookmarks are not available to extensions there.
+- The legacy Standalone source is retiring over one major version; migration is an explicit copy.

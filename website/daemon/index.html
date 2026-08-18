@@ -3,12 +3,12 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Privacy — Bookmarks But Better</title>
+    <title>Vault daemon — Bookmarks But Better</title>
     <meta
       name="description"
-      content="No accounts, no analytics, no tracking, no bookmark-content collection. Where your bookmarks live and the only network requests the extension makes — in plain language."
+      content="Serve your bookmarks from a folder of Markdown files with a small local daemon. Checksum-verified install, localhost-only, multiple vaults — and the way to use the dashboard in Safari."
     />
-    <link rel="canonical" href="https://bookmarks.farhadeidi.com/privacy" />
+    <link rel="canonical" href="https://bookmarks.farhadeidi.com/daemon/" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <meta
       name="theme-color"
@@ -22,17 +22,28 @@
     />
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Bookmarks But Better" />
-    <meta property="og:title" content="Privacy — Bookmarks But Better" />
+    <meta property="og:title" content="Vault daemon — Bookmarks But Better" />
     <meta
       property="og:description"
-      content="No accounts, no analytics, no tracking, no bookmark-content collection."
+      content="Your bookmarks as plain Markdown files, served from localhost. Optional everywhere, required on Safari."
     />
-    <meta
-      property="og:url"
-      content="https://bookmarks.farhadeidi.com/privacy"
-    />
+    <meta property="og:url" content="https://bookmarks.farhadeidi.com/daemon/" />
     <meta
       property="og:image"
+      content="https://bookmarks.farhadeidi.com/og.png"
+    />
+    <meta
+      property="og:image:alt"
+      content="Bookmarks But Better dashboard in dark mode"
+    />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Vault daemon — Bookmarks But Better" />
+    <meta
+      name="twitter:description"
+      content="Your bookmarks as plain Markdown files, served from localhost."
+    />
+    <meta
+      name="twitter:image"
       content="https://bookmarks.farhadeidi.com/og.png"
     />
     <script>
@@ -51,6 +62,6 @@
   </head>
   <body class="bg-background text-foreground antialiased">
     <div id="root"></div>
-    <script type="module" src="/src/entries/privacy.tsx"></script>
+    <script type="module" src="/src/entries/daemon.tsx"></script>
   </body>
 </html>

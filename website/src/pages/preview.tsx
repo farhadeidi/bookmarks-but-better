@@ -25,8 +25,9 @@ export function Preview() {
           <AppPreview tall />
         </div>
         <p className="mx-auto mt-6 max-w-xl text-center text-xs text-muted-foreground">
-          The preview runs fully in your browser against seeded demo data — no
-          extension, no daemon, nothing leaves your machine.
+          The preview runs fully in your browser against seeded demo data and
+          public favicon lookups for real site icons — no extension, no daemon,
+          and no user bookmarks are involved.
         </p>
       </main>
       <SiteFooter />

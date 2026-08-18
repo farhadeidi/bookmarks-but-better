@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Live preview — Bookmarks But Better</title>
+    <meta
+      name="description"
+      content="Try the real Bookmarks But Better extension in your browser — a live new tab dashboard with seeded demo data and real site icons. Drag, edit, switch themes and sources."
+    />
+    <meta name="robots" content="noindex" />
+    <link rel="canonical" href="https://bookmarks.farhadeidi.com/preview/" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <meta
+      name="theme-color"
+      media="(prefers-color-scheme: light)"
+      content="#faf9f5"
+    />
+    <meta
+      name="theme-color"
+      media="(prefers-color-scheme: dark)"
+      content="#1b1a17"
+    />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Bookmarks But Better" />
+    <meta property="og:title" content="Live preview — Bookmarks But Better" />
+    <meta
+      property="og:description"
+      content="Try the real extension in your browser — live, private and seeded with demo bookmarks and real site icons."
+    />
+    <meta
+      property="og:url"
+      content="https://bookmarks.farhadeidi.com/preview/"
+    />
+    <meta
+      property="og:image"
+      content="https://bookmarks.farhadeidi.com/og.png"
+    />
+    <meta
+      property="og:image:alt"
+      content="Bookmarks But Better dashboard in dark mode"
+    />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Live preview — Bookmarks But Better" />
+    <meta
+      name="twitter:description"
+      content="Try the real extension with seeded demo bookmarks and real site icons."
+    />
+    <meta
+      name="twitter:image"
+      content="https://bookmarks.farhadeidi.com/og.png"
+    />
+    <script>
+      ;(function () {
+        try {
+          var t = localStorage.getItem("bbb-site-theme")
+          if (
+            t === "dark" ||
+            (!t && matchMedia("(prefers-color-scheme: dark)").matches)
+          ) {
+            document.documentElement.classList.add("dark")
+          }
+        } catch (e) {}
+      })()
+    </script>
+  </head>
+  <body class="bg-background text-foreground antialiased">
+    <div id="root"></div>
+    <script type="module" src="/src/entries/preview.tsx"></script>
+  </body>
+</html>

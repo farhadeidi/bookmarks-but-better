@@ -4,7 +4,11 @@ import { DEMO_THEMES, PICK_THEME_EVENT } from "@/lib/themes"
 export function ThemesGallery() {
   function pick(id: string) {
     window.dispatchEvent(new CustomEvent(PICK_THEME_EVENT, { detail: id }))
-    document.getElementById("demo")?.scrollIntoView({ behavior: "smooth" })
+    const behavior = window.matchMedia("(prefers-reduced-motion: reduce)")
+      .matches
+      ? "auto"
+      : "smooth"
+    document.getElementById("demo")?.scrollIntoView({ behavior })
   }
 
   return (
@@ -13,7 +17,7 @@ export function ThemesGallery() {
         Every theme ships with light, dark and system modes. Tap one to preview
         it on the live dashboard above — or{" "}
         <a
-          href="/preview"
+          href="/preview/"
           className="text-foreground underline decoration-border underline-offset-4 transition-colors hover:text-primary"
         >
           open the full-screen preview

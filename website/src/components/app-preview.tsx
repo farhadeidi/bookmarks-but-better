@@ -77,7 +77,7 @@ export function AppPreview({
   }, [])
 
   const theme = DEMO_THEMES.find((item) => item.id === activeTheme)
-  const src = `/preview/?mode=${siteMode()}&theme=amber-minimal`
+  const src = `/app-preview/?mode=${siteMode()}&theme=amber-minimal`
 
   return (
     <figure id="demo" className="scroll-mt-24">
@@ -102,6 +102,7 @@ export function AppPreview({
           ref={iframeRef}
           src={src}
           title="Bookmarks But Better — live preview of the real extension"
+          loading="eager"
           className={cn(
             "block w-full border-0 bg-background",
             tall ? "h-[75vh] min-h-[560px]" : "h-[540px] md:h-[600px]",

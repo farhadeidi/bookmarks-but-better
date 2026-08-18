@@ -22,7 +22,7 @@ export function Hero() {
       />
       <div className="mx-auto max-w-6xl px-6 pt-20 pb-16 text-center md:pt-28 md:pb-24">
         <p className="text-xs font-medium tracking-[0.2em] text-muted-foreground uppercase">
-          Free &amp; open source — Chrome · Firefox · Safari
+          Free &amp; open source — Chrome · Firefox · Safari via daemon
         </p>
         <h1 className="font-display mx-auto mt-5 max-w-3xl text-5xl leading-[1.05] font-medium tracking-tight text-balance md:text-7xl">
           Bookmarks, but better
@@ -37,7 +37,7 @@ export function Hero() {
           <InstallButtons />
           <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-sm">
             <a
-              href="/preview"
+              href="/preview/"
               className="text-muted-foreground underline decoration-border underline-offset-4 transition-colors hover:text-foreground"
             >
               Try the live full-screen preview

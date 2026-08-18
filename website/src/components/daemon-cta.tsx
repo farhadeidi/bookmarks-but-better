@@ -18,7 +18,7 @@ const COMMANDS = [
 
 const BULLETS = [
   "Bookmarks are plain Markdown files — readable, diffable, backed up by any file sync",
-  "The daemon binds to 127.0.0.1 only; nothing leaves your machine",
+  "The daemon binds to 127.0.0.1 only; it makes no outbound request",
   "Host several vaults in one daemon and switch between them per browser profile",
   "Save the active tab from the popup, or search the vault from the address bar",
 ]
@@ -45,7 +45,7 @@ export function DaemonCta() {
             ))}
           </ul>
           <a
-            href="/daemon"
+            href="/daemon/"
             className="mt-8 inline-flex h-11 items-center rounded-md border border-border bg-card px-5 text-sm font-medium transition-colors hover:bg-muted"
           >
             Full install guide
@@ -55,6 +55,7 @@ export function DaemonCta() {
               stroke="currentColor"
               strokeWidth="1.8"
               className="ml-2 size-4"
+              aria-hidden
             >
               <path d="M5 12h14m-6-6 6 6-6 6" />
             </svg>
@@ -70,7 +71,10 @@ export function DaemonCta() {
                 <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
                   {command.label}
                 </span>
-                <CopyButton text={command.code} />
+                <CopyButton
+                  text={command.code}
+                  label={`${command.label} command`}
+                />
               </div>
               <pre className="overflow-x-auto p-4 text-xs leading-relaxed">
                 <code>{command.code}</code>

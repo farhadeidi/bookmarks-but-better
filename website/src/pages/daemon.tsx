@@ -9,7 +9,7 @@ function CodeBlock({ label, code }: { label: string; code: string }) {
         <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
           {label}
         </span>
-        <CopyButton text={code} />
+        <CopyButton text={code} label={`${label} command`} />
       </div>
       <pre className="overflow-x-auto p-4 text-xs leading-relaxed">
         <code>{code}</code>

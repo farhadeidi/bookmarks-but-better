@@ -6,7 +6,7 @@ const COLUMNS = [
     links: [
       { href: SITE.chromeStore, label: "Chrome Web Store" },
       { href: SITE.firefoxStore, label: "Firefox Add-ons" },
-      { href: "/daemon", label: "Daemon (Safari & vaults)" },
+      { href: "/daemon/", label: "Daemon (Safari & vaults)" },
     ],
   },
   {

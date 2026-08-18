@@ -74,6 +74,9 @@ export function Features() {
                 src={feature.image}
                 alt={feature.alt}
                 loading="lazy"
+                decoding="async"
+                width={1400}
+                height={875}
                 className="w-full border-b border-border object-cover object-top transition-transform duration-500 group-hover:scale-[1.01]"
               />
             ) : (

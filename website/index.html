@@ -37,6 +37,10 @@
       property="og:image"
       content="https://bookmarks.farhadeidi.com/og.png"
     />
+    <meta
+      property="og:image:alt"
+      content="Bookmarks But Better dashboard in dark mode"
+    />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="Bookmarks But Better" />
     <meta
@@ -55,13 +59,17 @@
         "url": "https://bookmarks.farhadeidi.com/",
         "description": "A clean, private bookmarks dashboard that replaces your new tab page. Masonry layout, a full bookmark organizer, ten color themes. No account, no tracking.",
         "applicationCategory": "BrowserApplication",
-        "operatingSystem": "Chrome, Firefox, Safari",
-        "softwareVersion": "4.1.0",
+         "operatingSystem": "Chrome, Firefox, Safari via local daemon",
+         "softwareVersion": "__APP_VERSION__",
         "isAccessibleForFree": true,
         "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
         "license": "https://github.com/farhadeidi/bookmarks-but-better/blob/main/LICENSE",
-        "downloadUrl": "https://chromewebstore.google.com/detail/nflojekghnganlcjncbepnnnkgakghif",
-        "screenshot": "https://bookmarks.farhadeidi.com/og.png",
+         "downloadUrl": [
+           "https://chromewebstore.google.com/detail/nflojekghnganlcjncbepnnnkgakghif",
+           "https://addons.mozilla.org/firefox/addon/bookmarks-but-better/"
+         ],
+         "screenshot": "https://bookmarks.farhadeidi.com/og.png",
+         "sameAs": ["https://github.com/farhadeidi/bookmarks-but-better"],
         "author": { "@type": "Person", "name": "Farhad Eidi" }
       }
     </script>

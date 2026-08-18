@@ -5,7 +5,7 @@ import pkg from "../package.json"
 
 /**
  * Builds the real application — unchanged — as a static "live preview" page
- * embedded in the marketing site's hero iframe.
+ * embedded in the marketing site's hero iframe at /app-preview/.
  *
  * `vite build --mode development` is deliberate: the app's SourceEnvironment
  * seam folds on `import.meta.env.DEV`, so a development-mode build keeps the
@@ -20,9 +20,9 @@ const rootDir = path.resolve(__dirname, "..")
 
 export default defineConfig({
   // Rooted at app-frame/ so the emitted html and assets both land under
-  // public/preview/, matching the /preview/ URLs the site serves.
+  // public/app-preview/, separate from the marketing page at /preview/.
   root: path.resolve(__dirname, "app-frame"),
-  base: "/preview/",
+  base: "/app-preview/",
   // Mode is development (see header comment) — keep the JSX transform on the
   // production runtime so bundles stay lean.
   esbuild: { jsxDev: false },
@@ -75,6 +75,7 @@ export default defineConfig({
   },
   define: {
     __APP_VERSION__: JSON.stringify(pkg.version),
+    __MARKETING_PREVIEW__: JSON.stringify(true),
     // Vite folds `import.meta.env.DEV` to false in every build, which would
     // eliminate the simulated world at the app's environment seam. This build
     // exists to keep it: fold DEV back to true (mode is `development`, never
@@ -87,7 +88,21 @@ export default defineConfig({
   build: {
     minify: "esbuild",
     sourcemap: false,
-    outDir: path.resolve(__dirname, "public/preview"),
+    rollupOptions: {
+      onwarn(warning, warn) {
+        // The app and Base UI both use client-boundary directives. They are
+        // harmless in this static browser bundle, but otherwise flood builds
+        // with warnings because the preview is rooted outside the app source.
+        if (
+          warning.code === "MODULE_LEVEL_DIRECTIVE" ||
+          warning.code === "SOURCEMAP_ERROR"
+        ) {
+          return
+        }
+        warn(warning)
+      },
+    },
+    outDir: path.resolve(__dirname, "public/app-preview"),
     emptyOutDir: true,
   },
 })

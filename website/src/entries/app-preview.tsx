@@ -12,6 +12,7 @@ import "./app-preview.css"
 import App from "@/App"
 import { ThemeProvider, useTheme } from "@/components/theme-provider"
 import { TooltipProvider } from "@/components/ui/tooltip"
+import { COLOR_THEME_IDS } from "@/lib/color-themes"
 import {
   usePreferencesStore,
   type ColorTheme,
@@ -19,21 +20,12 @@ import {
 
 const PREVIEW_MESSAGE = "bbb-preview/appearance"
 const PREVIEW_STATE = "bbb-preview/state"
-const COLOR_THEMES: readonly string[] = [
-  "default",
-  "amber-minimal",
-  "bubblegum",
-  "caffeine",
-  "claude",
-  "claymorphism",
-  "cyberpunk",
-  "solar-dusk",
-  "t3-chat",
-  "vintage-paper",
-]
 
 function isColorTheme(value: unknown): value is ColorTheme {
-  return typeof value === "string" && COLOR_THEMES.includes(value)
+  return (
+    typeof value === "string" &&
+    COLOR_THEME_IDS.includes(value as (typeof COLOR_THEME_IDS)[number])
+  )
 }
 
 function isMode(value: unknown): value is "dark" | "light" {
@@ -48,7 +40,10 @@ function PreviewBridge() {
   // follow the real state — including changes made inside the preview's own
   // settings, and the hydrated preference on a later visit.
   React.useEffect(() => {
-    window.parent?.postMessage({ type: PREVIEW_STATE, colorTheme }, "*")
+    window.parent?.postMessage(
+      { type: PREVIEW_STATE, colorTheme },
+      window.location.origin
+    )
   }, [colorTheme])
 
   React.useEffect(() => {
@@ -64,6 +59,7 @@ function PreviewBridge() {
 
     const onMessage = (event: MessageEvent) => {
       if (event.source !== window.parent) return
+      if (event.origin !== window.location.origin) return
       const data = event.data as {
         type?: unknown
         mode?: unknown

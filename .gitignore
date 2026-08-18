@@ -35,7 +35,7 @@ marketing/output/videos/
 test-results/
 
 # Website live-preview build artifact (the real app, built for the hero iframe)
-website/public/preview/
+website/public/app-preview/
 
 # Rust
 /target

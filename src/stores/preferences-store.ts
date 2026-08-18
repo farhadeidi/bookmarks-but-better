@@ -1,35 +1,15 @@
 import { create } from "zustand"
 import type { BrowserAdapter } from "@/browser"
+import { COLOR_THEME_IDS } from "@/lib/color-themes"
 import {
   ProfileStorageAdapter,
   readProfilePreference,
 } from "@/stores/profile-storage"
 
 type CardLayout = "list" | "grid"
-export type ColorTheme =
-  | "default"
-  | "amber-minimal"
-  | "bubblegum"
-  | "caffeine"
-  | "claude"
-  | "claymorphism"
-  | "cyberpunk"
-  | "solar-dusk"
-  | "t3-chat"
-  | "vintage-paper"
+export type ColorTheme = (typeof COLOR_THEME_IDS)[number]
 
-export const COLOR_THEMES: ColorTheme[] = [
-  "default",
-  "amber-minimal",
-  "bubblegum",
-  "caffeine",
-  "claude",
-  "claymorphism",
-  "cyberpunk",
-  "solar-dusk",
-  "t3-chat",
-  "vintage-paper",
-]
+export const COLOR_THEMES: ColorTheme[] = [...COLOR_THEME_IDS]
 
 interface PreferencesState {
   // Source-scoped: keyed to one source's folder ids, read and written

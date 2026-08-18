@@ -1,7 +1,6 @@
 {
   "name": "bookmarks-but-better-website",
   "private": true,
-  "version": "4.1.0",
   "type": "module",
   "scripts": {
     "dev": "bun run build:preview && vite",
