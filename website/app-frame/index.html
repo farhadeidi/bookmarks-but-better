@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Bookmarks But Better — live preview</title>
+    <meta name="robots" content="noindex" />
+    <style>
+      /* The app fills the iframe; there is no marketing chrome here. */
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+      }
+      #root {
+        height: 100%;
+      }
+      /* The Dev Workbench is the dev-server control surface; in the marketing
+         preview it stays out of sight. */
+      [aria-label="Dev Workbench"],
+      [aria-label="Open Dev Workbench"] {
+        display: none !important;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="../src/entries/app-preview.tsx"></script>
+  </body>
+</html>

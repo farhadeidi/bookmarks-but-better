@@ -20,11 +20,13 @@ import { useAppBootstrap } from "@/hooks/use-app-bootstrap"
 const SettingsDialog = React.lazy(() =>
   import("@/features/settings").then((m) => ({ default: m.SettingsDialog }))
 )
-// The guard's constants fold in every production bundle, so this is `null`
-// there — and the dynamic import, the whole dev chunk and its preload entry
-// are eliminated by dead-branch removal.
+// The guard's constants fold in every production bundle and in the marketing
+// preview, so this is `null` there. The dynamic import, dev chunk and preload
+// entry are eliminated by dead-branch removal.
 const ScenarioWorkbench =
-  import.meta.env.DEV && import.meta.env.MODE !== "test"
+  !__MARKETING_PREVIEW__ &&
+  import.meta.env.DEV &&
+  import.meta.env.MODE !== "test"
     ? React.lazy(() =>
         import("@/dev/workbench").then((m) => ({
           default: m.ScenarioWorkbench,

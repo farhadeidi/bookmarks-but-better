@@ -41,6 +41,10 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      - name: Install website dependencies
+        run: bun install --frozen-lockfile
+        working-directory: website
+
       - name: Quality gates
         run: bun run check
 
@@ -89,6 +93,32 @@ jobs:
       # an isolated dev server on port 5179 — no extension, no real daemon.
       - name: Run Dev Workbench UI tests
         run: bun run test:ui
+
+  website:
+    name: Marketing website
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: package.json
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Install website dependencies
+        run: bun install --frozen-lockfile
+        working-directory: website
+
+      - name: Install Playwright Chromium
+        run: bunx playwright install --with-deps chromium
+
+      - name: Run website smoke tests
+        run: bun run test:website
 
   install-scripts:
     name: Install script checks

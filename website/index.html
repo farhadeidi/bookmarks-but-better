@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>
+      Bookmarks But Better — Your bookmarks, beautiful. Every new tab.
+    </title>
+    <meta
+      name="description"
+      content="A clean, private bookmarks dashboard that replaces your new tab page. Masonry layout, a real organizer, ten themes. No account, no tracking — open source."
+    />
+    <link rel="canonical" href="https://bookmarks.farhadeidi.com/" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <meta
+      name="theme-color"
+      media="(prefers-color-scheme: light)"
+      content="#faf9f5"
+    />
+    <meta
+      name="theme-color"
+      media="(prefers-color-scheme: dark)"
+      content="#1b1a17"
+    />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Bookmarks But Better" />
+    <meta
+      property="og:title"
+      content="Bookmarks But Better — Your bookmarks, beautiful. Every new tab."
+    />
+    <meta
+      property="og:description"
+      content="A clean, private bookmarks dashboard for your new tab page. No account, no tracking — open source."
+    />
+    <meta property="og:url" content="https://bookmarks.farhadeidi.com/" />
+    <meta
+      property="og:image"
+      content="https://bookmarks.farhadeidi.com/og.png"
+    />
+    <meta
+      property="og:image:alt"
+      content="Bookmarks But Better dashboard in dark mode"
+    />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Bookmarks But Better" />
+    <meta
+      name="twitter:description"
+      content="A clean, private bookmarks dashboard for your new tab page. No account, no tracking — open source."
+    />
+    <meta
+      name="twitter:image"
+      content="https://bookmarks.farhadeidi.com/og.png"
+    />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "Bookmarks But Better",
+        "url": "https://bookmarks.farhadeidi.com/",
+        "description": "A clean, private bookmarks dashboard that replaces your new tab page. Masonry layout, a full bookmark organizer, ten color themes. No account, no tracking.",
+        "applicationCategory": "BrowserApplication",
+         "operatingSystem": "Chrome, Firefox, Safari via local daemon",
+         "softwareVersion": "__APP_VERSION__",
+        "isAccessibleForFree": true,
+        "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+        "license": "https://github.com/farhadeidi/bookmarks-but-better/blob/main/LICENSE",
+         "downloadUrl": [
+           "https://chromewebstore.google.com/detail/nflojekghnganlcjncbepnnnkgakghif",
+           "https://addons.mozilla.org/firefox/addon/bookmarks-but-better/"
+         ],
+         "screenshot": "https://bookmarks.farhadeidi.com/og.png",
+         "sameAs": ["https://github.com/farhadeidi/bookmarks-but-better"],
+        "author": { "@type": "Person", "name": "Farhad Eidi" }
+      }
+    </script>
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        "mainEntity": [
+          {
+            "@type": "Question",
+            "name": "Does it change my existing bookmarks?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "It displays and edits the bookmarks you already have, through your browser's built-in bookmark APIs. Nothing is moved, merged or deleted unless you do it yourself in the organizer."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Is it really free?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Yes. It is open source under the MIT license, with no paid tier, no upsell and no account."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "What about Safari?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Safari does not expose browser bookmarks to extensions, so on Safari the dashboard runs on the Markdown vault daemon instead — your bookmarks live as plain files on disk."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Where do my bookmarks actually live?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "In your browser profile, in the profile's local storage, or in a folder of Markdown files you choose. They are never uploaded anywhere."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "What happens to the Standalone source?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "It is retiring over one major version. Migration to a vault is an explicit copy that leaves your legacy data intact — nothing happens automatically."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Do you collect anything at all?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "No accounts, analytics, tracking, ads or bookmark-content collection. The extension contacts only a public favicon service and, if you connect one, your own loopback-only daemon."
+            }
+          }
+        ]
+      }
+    </script>
+    <script>
+      ;(function () {
+        try {
+          var t = localStorage.getItem("bbb-site-theme")
+          if (
+            t === "dark" ||
+            (!t && matchMedia("(prefers-color-scheme: dark)").matches)
+          ) {
+            document.documentElement.classList.add("dark")
+          }
+        } catch (e) {}
+      })()
+    </script>
+  </head>
+  <body class="bg-background text-foreground font-sans antialiased">
+    <div id="root"></div>
+    <script type="module" src="/src/entries/landing.tsx"></script>
+  </body>
+</html>

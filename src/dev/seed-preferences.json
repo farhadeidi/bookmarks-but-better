@@ -1,9 +1,11 @@
 {
   "cardLayouts": {
     "1": "grid",
-    "10": "grid",
-    "12": "grid",
-    "17": "grid"
+    "b5": "grid",
+    "b22": "grid",
+    "b173": "grid",
+    "b184": "grid",
+    "b262": "grid"
   },
   "nestedFolders": false,
   "colorTheme": "default",
