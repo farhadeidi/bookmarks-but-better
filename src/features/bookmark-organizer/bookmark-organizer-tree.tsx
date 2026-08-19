@@ -257,29 +257,17 @@ const BookmarkOrganizerTreeImpl = React.forwardRef<
     // same rule has to be stated as configuration or the drag hotkey would
     // pick up a row the source refuses to move.
     canDrag: (items) => items.every((item) => !item.getItemData()?.readOnly),
-    // Mirrors headless-tree's own default (`target.item.isFolder()`), plus one
-    // rule the daemon enforces anyway: a folder whose child order is frozen
-    // refuses a drop *between* its children, while a drop *onto* it — a plain
-    // reparent, which needs no order file — stays allowed.
-    canDrop: (_items, target) => {
-      const isOrderedTarget = isOrderedDragTarget(target)
-
-      // headless-tree consults `canReorder` only while resolving a *pointer*
-      // target; the keyboard path proposes between-row positions regardless
-      // of it. Restating it here is what keeps an adapter that can reparent
-      // but not order from offering a gesture whose ordering half would be
-      // dropped on the floor.
-      if (isOrderedTarget && !reorderAllowed) {
-        return false
-      }
-
-      return canDropOnTarget({
+    // Every rule about where a drop may land lives in `canDropOnTarget`, for
+    // both the pointer and the keyboard. This stays a thin adapter from
+    // headless-tree's target shape to that function's parameters.
+    canDrop: (_items, target) =>
+      canDropOnTarget({
         isFolder: target.item.isFolder(),
         orderReadOnly: target.item.getItemData()?.orderReadOnly,
-        isOrderedTarget,
+        isOrderedTarget: isOrderedDragTarget(target),
+        reorderAllowed,
         setChildOrderEnabled,
-      })
-    },
+      }),
     indent: 16,
     seperateDragHandle: true,
     // `hotkeysCoreFeature` is what binds any key at all; `selectionFeature`

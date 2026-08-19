@@ -55,19 +55,31 @@ export interface ChildrenChangeDeps {
  *
  * Replaces headless-tree's built-in `canDrop` (which is just
  * `target.item.isFolder()`), so it has to re-assert that rule or drops onto
- * bookmarks become legal. The only thing it adds is the daemon's own: a folder
- * whose child order is frozen refuses a drop *between* its children, while a
- * drop *onto* it — a plain reparent, which needs no order file — stays fine.
+ * bookmarks become legal. It adds two more:
+ *
+ * - The source has to be able to express an order at all. headless-tree has
+ *   its own `canReorder` for this, but consults it only while resolving a
+ *   *pointer* target — `getNextDragTarget`, which the keyboard uses, proposes
+ *   between-row positions regardless. Stating the rule here is what covers
+ *   both paths, rather than leaving the keyboard offering a gesture whose
+ *   ordering half would be dropped on the floor.
+ * - The daemon's own: a folder whose child order is frozen refuses a drop
+ *   *between* its children, while a drop *onto* it — a plain reparent, which
+ *   needs no order file — stays fine.
  */
 export function canDropOnTarget(params: {
   isFolder: boolean
   orderReadOnly: boolean | undefined
   /** True for a drop between children, false for a drop onto the folder. */
   isOrderedTarget: boolean
+  /** `capabilities.reorder || capabilities.setChildOrder`. */
+  reorderAllowed: boolean
   setChildOrderEnabled: boolean
 }): boolean {
   if (!params.isFolder) return false
-  if (!params.setChildOrderEnabled || !params.isOrderedTarget) return true
+  if (!params.isOrderedTarget) return true
+  if (!params.reorderAllowed) return false
+  if (!params.setChildOrderEnabled) return true
   return !params.orderReadOnly
 }
 

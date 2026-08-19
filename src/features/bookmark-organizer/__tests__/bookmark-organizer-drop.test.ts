@@ -287,6 +287,7 @@ describe("canDropOnTarget", () => {
     isFolder: true,
     orderReadOnly: true,
     isOrderedTarget: true,
+    reorderAllowed: true,
     setChildOrderEnabled: true,
   }
 
@@ -309,14 +310,18 @@ describe("canDropOnTarget", () => {
     ).toBe(true)
   })
 
-  it("never allows a drop onto a bookmark, matching headless-tree's built-in rule", () => {
+  // headless-tree's own `canReorder` covers the pointer path only, so this
+  // rule is the sole thing standing between a keyboard drag and an ordered
+  // position the source cannot persist.
+  it("refuses an ordered drop when the source cannot express an order", () => {
     for (const setChildOrderEnabled of [true, false]) {
-      for (const isOrderedTarget of [true, false]) {
+      for (const orderReadOnly of [true, false, undefined]) {
         expect(
           canDropOnTarget({
-            isFolder: false,
-            orderReadOnly: undefined,
-            isOrderedTarget,
+            isFolder: true,
+            orderReadOnly,
+            isOrderedTarget: true,
+            reorderAllowed: false,
             setChildOrderEnabled,
           })
         ).toBe(false)
@@ -324,9 +329,39 @@ describe("canDropOnTarget", () => {
     }
   })
 
+  it("still allows a reparent ONTO a folder when the source cannot order", () => {
+    expect(
+      canDropOnTarget({
+        ...orderedIntoFrozen,
+        isOrderedTarget: false,
+        reorderAllowed: false,
+      })
+    ).toBe(true)
+  })
+
+  it("never allows a drop onto a bookmark, matching headless-tree's built-in rule", () => {
+    for (const setChildOrderEnabled of [true, false]) {
+      for (const isOrderedTarget of [true, false]) {
+        for (const reorderAllowed of [true, false]) {
+          expect(
+            canDropOnTarget({
+              isFolder: false,
+              orderReadOnly: undefined,
+              isOrderedTarget,
+              reorderAllowed,
+              setChildOrderEnabled,
+            })
+          ).toBe(false)
+        }
+      }
+    }
+  })
+
   it("is exactly headless-tree's default (isFolder) for every extension build", () => {
     // The override replaces the built-in, so extension parity has to be
-    // asserted rather than assumed: with ordering off, only isFolder matters.
+    // asserted rather than assumed: Chrome, Firefox and Standalone all report
+    // `reorder: true` and `setChildOrder: false`, and there only isFolder
+    // matters.
     for (const orderReadOnly of [true, false, undefined]) {
       for (const isOrderedTarget of [true, false]) {
         expect(
@@ -334,6 +369,7 @@ describe("canDropOnTarget", () => {
             isFolder: true,
             orderReadOnly,
             isOrderedTarget,
+            reorderAllowed: true,
             setChildOrderEnabled: false,
           })
         ).toBe(true)
