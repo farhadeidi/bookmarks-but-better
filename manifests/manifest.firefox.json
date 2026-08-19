@@ -29,7 +29,7 @@
     "scripts": ["background.js"]
   },
   "omnibox": {
-    "keyword": "bookmarks-but-better"
+    "keyword": "bb"
   },
   "permissions": ["activeTab", "bookmarks", "storage"],
   "host_permissions": ["https://t1.gstatic.com/*"],

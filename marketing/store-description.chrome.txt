@@ -6,7 +6,7 @@ WHAT'S NEW IN VERSION 4
 
 - Optional local-first Markdown vault powered by the Bookmarks But Better daemon
 - Save the active page from the extension popup when connected to a daemon vault
-- Search daemon bookmarks from the address bar: type “bookmarks-but-better”, press Tab, then search by title or URL
+- Search daemon bookmarks from the address bar: type “bb”, press Tab, then search by title or URL
 - Import and export standard browser bookmark HTML files
 - Improved setup flow that preserves completed setup and existing preferences during upgrades
 - Reliable bookmark-root recovery when a previously selected folder was deleted
