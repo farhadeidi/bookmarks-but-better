@@ -28,6 +28,23 @@ export function findNodeById(
   return null
 }
 
+/**
+ * The chain of nodes from a root down to `id`, the node itself last, or
+ * `null` when no tree holds it. Revealing an item needs the folders above it,
+ * not just the item: each one has to be expanded before the next exists.
+ */
+export function findNodePath(
+  nodes: BookmarkNode[],
+  id: string
+): BookmarkNode[] | null {
+  for (const node of nodes) {
+    if (node.id === id) return [node]
+    const found = node.children ? findNodePath(node.children, id) : null
+    if (found) return [node, ...found]
+  }
+  return null
+}
+
 export function getDisplayRoot(
   rootFolder: BookmarkNode | null,
   tree: BookmarkNode[]

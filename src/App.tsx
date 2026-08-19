@@ -14,8 +14,16 @@ import {
   TooltipContent,
 } from "@/components/ui/tooltip"
 import { HugeiconsIcon } from "@hugeicons/react"
-import { Settings03Icon, FolderTreeIcon } from "@hugeicons/core-free-icons"
+import {
+  Settings03Icon,
+  FolderTreeIcon,
+  Search01Icon,
+} from "@hugeicons/core-free-icons"
 import { useAppBootstrap } from "@/hooks/use-app-bootstrap"
+// Imported past the feature's barrel on purpose: the listener has to be
+// mounted before the palette exists, and the barrel would defeat the lazy
+// chunk below.
+import { useSearchTypeAhead } from "@/features/search-palette/use-search-type-ahead"
 
 const SettingsDialog = React.lazy(() =>
   import("@/features/settings").then((m) => ({ default: m.SettingsDialog }))
@@ -53,9 +61,15 @@ const OnboardingWizard = React.lazy(() =>
     default: m.OnboardingWizard,
   }))
 )
+const SearchPaletteDialog = React.lazy(() =>
+  import("@/features/search-palette").then((m) => ({
+    default: m.SearchPaletteDialog,
+  }))
+)
 
 export function App() {
   const { onboardingChecked } = useAppBootstrap()
+  useSearchTypeAhead()
   const onboardingOpen = useUIStore((s) => s.onboardingOpen)
   const closeOnboarding = useUIStore((s) => s.closeOnboarding)
   const openSettings = useUIStore((s) => s.openSettings)
@@ -67,6 +81,7 @@ export function App() {
   const loadError = useBookmarkStore((s) => s.loadError)
   const retry = useBookmarkStore((s) => s.retry)
   const openBookmarkOrganizer = useUIStore((s) => s.openBookmarkOrganizer)
+  const openSearchPalette = useUIStore((s) => s.openSearchPalette)
 
   return (
     <ScrollArea className="h-svh bg-background text-foreground">
@@ -128,7 +143,7 @@ export function App() {
         )}
       </main>
 
-      {/* The two global actions. Appearance and product information live in
+      {/* The three global actions. Appearance and product information live in
           their corresponding Settings categories instead of being duplicated
           here. */}
       <div
@@ -136,6 +151,23 @@ export function App() {
         aria-label="App actions"
         className="fixed right-4 bottom-4 z-10 flex w-fit items-center gap-2 rounded-2xl border border-border/60 bg-background/90 px-2 py-1.5 shadow-sm backdrop-blur-sm sm:right-6 sm:bottom-6 max-sm:[&_button]:size-12"
       >
+        {/* Typing anywhere on the page opens the same palette; this is the
+            way in for a pointer, and the only one on a touch screen. */}
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => openSearchPalette()}
+                aria-label="Search bookmarks"
+              />
+            }
+          >
+            <HugeiconsIcon icon={Search01Icon} />
+          </TooltipTrigger>
+          <TooltipContent side="top">Search bookmarks</TooltipContent>
+        </Tooltip>
         <Tooltip>
           <TooltipTrigger
             render={
@@ -182,6 +214,7 @@ export function App() {
       {/* Dialogs */}
       <React.Suspense fallback={null}>
         <SettingsDialog />
+        <SearchPaletteDialog />
         <BookmarkEditorDialog />
         <DeleteConfirmDialog />
         <BookmarkOrganizerSheet />

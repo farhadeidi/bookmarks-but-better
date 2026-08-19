@@ -94,7 +94,10 @@ test("mobile source and action controls stay contained without overlapping", asy
   await expect(tabs).toBeVisible()
   await expect(toolbar).toBeVisible()
   await expect(workbench).toBeVisible()
-  await expect(toolbar.getByRole("button")).toHaveCount(2)
+  await expect(toolbar.getByRole("button")).toHaveCount(3)
+  await expect(
+    toolbar.getByRole("button", { name: "Search bookmarks" })
+  ).toBeVisible()
   await expect(
     toolbar.getByRole("button", { name: "Bookmark tree" })
   ).toBeVisible()

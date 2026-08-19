@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Search palette** — start typing anywhere on the dashboard and a palette
+  opens on the first character, matching bookmark titles and URLs and folder
+  names across the whole Active Source. There is no shortcut to learn, and a
+  Search action in the toolbar covers pointer and touch. Results carry their
+  folder path, and any result can be revealed in the Bookmark Organizer —
+  including one outside the dashboard's root folder, which widens the
+  organizer for that visit without changing the saved root
+
 ### Changed
 
 - **The omnibox keyword is now `bb`.** Address-bar search previously required
