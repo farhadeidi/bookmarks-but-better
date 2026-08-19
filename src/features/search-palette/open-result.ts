@@ -1,24 +1,11 @@
 /**
- * Where a chosen result is opened, and the two limits on that.
+ * Where a chosen result is opened, and the one limit on that.
  *
- * A bookmark's URL is user data that ends up in `location`, so only http(s)
- * is followed: a `javascript:` bookmark would otherwise run in the extension
- * page's own origin. A *background* tab is only expressible through the
- * extension tabs API, so a plain web client (the daemon web app) gets a
- * foreground tab rather than nothing at all.
+ * A *background* tab is only expressible through the extension tabs API, so a
+ * plain web client (the daemon web app) gets a foreground tab rather than
+ * nothing at all. Which URLs may be followed at all is `navigableUrl`'s rule,
+ * shared with the omnibox.
  */
-
-export function navigableUrl(url: string | undefined): string | null {
-  if (!url) return null
-  try {
-    const parsed = new URL(url)
-    return parsed.protocol === "http:" || parsed.protocol === "https:"
-      ? parsed.href
-      : null
-  } catch {
-    return null
-  }
-}
 
 export function openResultUrl(
   url: string,
