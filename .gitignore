@@ -29,6 +29,10 @@ dist-safari
 *.sw?
 .superpowers/
 .worktrees/
+# Agent worktrees, created inside the repo by Claude Code's `isolation: worktree`.
+# Untracked they are merely noise; unignored by ESLint they are a second copy of
+# the whole tree, which the root config then lints as if it were source.
+.claude/worktrees/
 
 # Marketing automation — videos and tmp dirs (large binary files)
 marketing/output/videos/
