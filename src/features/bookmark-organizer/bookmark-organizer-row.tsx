@@ -57,6 +57,10 @@ export const BookmarkOrganizerRow = React.memo(function BookmarkOrganizerRow({
   const title = itemData?.title ?? item.getItemName()
   const level = item.getItemMeta().level
   const itemProps = item.getProps()
+  // Read back off the props rather than asking the item, so the row styles
+  // exactly the state it announces — and so it keeps rendering when the
+  // selection feature isn't registered at all.
+  const isSelected = itemProps["aria-selected"] === "true"
   const isReadOnly = itemData?.readOnly ?? false
   const canDrag = dragEnabled && !isReadOnly
   // The folder itself stays draggable, renameable and deletable — only the
@@ -67,8 +71,11 @@ export const BookmarkOrganizerRow = React.memo(function BookmarkOrganizerRow({
     <div
       {...itemProps}
       className={cn(
-        "group group/row flex items-center gap-1.5 rounded-md border border-transparent px-1.5 py-1 transition-colors hover:bg-muted/70",
+        "group group/row flex items-center gap-1.5 rounded-md border border-transparent px-1.5 py-1 transition-colors outline-none hover:bg-muted/70 focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50",
         isDragging && "opacity-40",
+        // Selection is what the arrow keys carry and what a keyboard drag
+        // picks up, so it needs a mark of its own that survives losing focus.
+        isSelected && "bg-muted",
         isFolderDropTarget && "border-primary/40 bg-primary/5",
         itemProps.className
       )}
