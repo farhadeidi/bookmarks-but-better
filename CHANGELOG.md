@@ -19,6 +19,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Address-bar search covers whichever source is active**, not only a
+  connected daemon vault. Typing `bb` then Tab searches the Active Source's
+  bookmarks, and the suggestion line names the source being searched. The
+  retiring Standalone Source is the exception — its profiles search from the
+  dashboard palette instead
 - **The omnibox keyword is now `bb`.** Address-bar search previously required
   typing `bookmarks-but-better` before Tab, which was long enough that the one
   search path reachable from a fresh tab went unused. Existing users need to
