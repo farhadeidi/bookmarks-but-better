@@ -114,18 +114,20 @@ jobs:
       - name: Cache cargo artifacts
         uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
 
-      # The browser download is the slow, network-dependent half of the step
-      # below, and the half that has timed out a job before. `--with-deps`
-      # still runs on a hit — the apt packages are not what this caches — but
-      # Chromium itself comes off disk.
       - name: Cache Playwright browsers
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('bun.lock') }}
 
+      # Deliberately without `--with-deps`. Every shared library Chromium needs
+      # is already on the runner image — the only thing apt had left to install
+      # was nine font packages, and fetching those from the Ubuntu mirror is
+      # what killed this workflow three times: 3.5 MB in three minutes, 5.6 MB
+      # in six, then a timeout. The fonts cover CJK and emoji glyphs, which
+      # nothing here asserts on.
       - name: Install Playwright Chromium
-        run: bunx playwright install --with-deps chromium
+        run: bunx playwright install chromium
 
       # Exercises the shipped binary name, vault initialization, daemon startup,
       # health endpoint and browser-facing API against a real local process.
@@ -170,18 +172,20 @@ jobs:
         run: bun install --frozen-lockfile
         working-directory: website
 
-      # The browser download is the slow, network-dependent half of the step
-      # below, and the half that has timed out a job before. `--with-deps`
-      # still runs on a hit — the apt packages are not what this caches — but
-      # Chromium itself comes off disk.
       - name: Cache Playwright browsers
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('bun.lock') }}
 
+      # Deliberately without `--with-deps`. Every shared library Chromium needs
+      # is already on the runner image — the only thing apt had left to install
+      # was nine font packages, and fetching those from the Ubuntu mirror is
+      # what killed this workflow three times: 3.5 MB in three minutes, 5.6 MB
+      # in six, then a timeout. The fonts cover CJK and emoji glyphs, which
+      # nothing here asserts on.
       - name: Install Playwright Chromium
-        run: bunx playwright install --with-deps chromium
+        run: bunx playwright install chromium
 
       - name: Run website smoke tests
         run: bun run test:website
