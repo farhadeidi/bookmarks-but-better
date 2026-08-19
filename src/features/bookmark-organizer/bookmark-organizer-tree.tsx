@@ -1,11 +1,16 @@
 import * as React from "react"
-import { useTree } from "@headless-tree/react"
+import { AssistiveTreeDescription, useTree } from "@headless-tree/react"
 import {
   asyncDataLoaderFeature,
   createOnDropHandler,
   dragAndDropFeature,
+  hotkeysCoreFeature,
   isOrderedDragTarget,
+  keyboardDragAndDropFeature,
   propMemoizationFeature,
+  selectionFeature,
+  type ItemInstance,
+  type TreeInstance,
 } from "@headless-tree/core"
 import { HugeiconsIcon } from "@hugeicons/react"
 import { Bookmark02Icon, Folder01Icon } from "@hugeicons/core-free-icons"
@@ -49,6 +54,68 @@ function createMissingOrganizerItem(
     index: 0,
     childCount: 0,
   }
+}
+
+/**
+ * The hotkeys that move focus towards the top of the list. Everything else
+ * that moves focus moves it downwards, so naming these is enough to keep the
+ * hidden-row correction below travelling the same way the user asked to.
+ */
+const UPWARD_HOTKEYS = new Set([
+  "focusPreviousItem",
+  "focusLastItem",
+  "selectUpwards",
+])
+
+function findFolderFrom(
+  items: ItemInstance<OrganizerItemData>[],
+  start: number,
+  step: number
+): ItemInstance<OrganizerItemData> | undefined {
+  for (let i = start; i >= 0 && i < items.length; i += step) {
+    if (items[i].isFolder()) {
+      return items[i]
+    }
+  }
+
+  return undefined
+}
+
+/**
+ * Pulls focus off a row that "Folders Only" is hiding.
+ *
+ * The toggle hides bookmark rows at render time but leaves them in the
+ * flattened tree, so every focus-moving hotkey can land on a row that draws
+ * nothing: `updateDomFocus` then polls half a second for an element that
+ * never appears and resets focus to the top of the tree. Correcting after the
+ * fact covers the arrows, Home/End and the selection pair in one place,
+ * rather than re-implementing each of the library's handlers.
+ */
+function skipHiddenRows(
+  tree: TreeInstance<OrganizerItemData>,
+  hotkeyName: string
+) {
+  const focused = tree.getFocusedItem()
+  if (!focused || focused.isFolder()) {
+    return
+  }
+
+  const items = tree.getItems()
+  const from = focused.getItemMeta().index
+  const step = UPWARD_HOTKEYS.has(hotkeyName) ? -1 : 1
+  // Falling back to the opposite direction is what keeps the last folder in
+  // the list reachable: pressing Down past it has nowhere else to go, and
+  // leaving focus on the hidden row below would strand it.
+  const next =
+    findFolderFrom(items, from + step, step) ??
+    findFolderFrom(items, from - step, -step)
+
+  if (!next) {
+    return
+  }
+
+  next.setFocused()
+  tree.updateDomFocus()
 }
 
 function toBookmarkNode(node: BookmarkNode) {
@@ -166,6 +233,7 @@ const BookmarkOrganizerTreeImpl = React.forwardRef<
   const moveBookmark = useBookmarkStore((s) => s.moveBookmark)
   const setChildOrder = useBookmarkStore((s) => s.setChildOrder)
   const dragEnabled = moveEnabled || reorderEnabled || setChildOrderEnabled
+  const reorderAllowed = reorderEnabled || setChildOrderEnabled
 
   const hasAutoExpanded = React.useRef(false)
   // `createOnDropHandler` invokes its callback twice per drop — once with the
@@ -183,25 +251,52 @@ const BookmarkOrganizerTreeImpl = React.forwardRef<
     // `canReorder` controls only same-parent sibling repositioning; a drag
     // that reparents onto a different folder is still allowed when it's
     // false, since that's gated separately by `moveEnabled` below.
-    canReorder: reorderEnabled || setChildOrderEnabled,
+    canReorder: reorderAllowed,
+    // The pointer path withholds a drag from a read-only row simply by not
+    // rendering its handle. A keyboard drag has no handle to withhold, so the
+    // same rule has to be stated as configuration or the drag hotkey would
+    // pick up a row the source refuses to move.
+    canDrag: (items) => items.every((item) => !item.getItemData()?.readOnly),
     // Mirrors headless-tree's own default (`target.item.isFolder()`), plus one
     // rule the daemon enforces anyway: a folder whose child order is frozen
     // refuses a drop *between* its children, while a drop *onto* it — a plain
     // reparent, which needs no order file — stays allowed.
-    canDrop: (_items, target) =>
-      canDropOnTarget({
+    canDrop: (_items, target) => {
+      const isOrderedTarget = isOrderedDragTarget(target)
+
+      // headless-tree consults `canReorder` only while resolving a *pointer*
+      // target; the keyboard path proposes between-row positions regardless
+      // of it. Restating it here is what keeps an adapter that can reparent
+      // but not order from offering a gesture whose ordering half would be
+      // dropped on the floor.
+      if (isOrderedTarget && !reorderAllowed) {
+        return false
+      }
+
+      return canDropOnTarget({
         isFolder: target.item.isFolder(),
         orderReadOnly: target.item.getItemData()?.orderReadOnly,
-        isOrderedTarget: isOrderedDragTarget(target),
+        isOrderedTarget,
         setChildOrderEnabled,
-      }),
+      })
+    },
     indent: 16,
     seperateDragHandle: true,
+    // `hotkeysCoreFeature` is what binds any key at all; `selectionFeature`
+    // gives the arrow keys something to carry and supplies the multi-item
+    // set the drag hotkey reads. `keyboardDragAndDropFeature` rides on the
+    // same `canDrag`/`canDrop`/`onDrop` config as the pointer path, so it
+    // stays gated behind the same capabilities.
     features: [
       asyncDataLoaderFeature,
-      ...(dragEnabled ? [dragAndDropFeature] : []),
+      hotkeysCoreFeature,
+      selectionFeature,
+      ...(dragEnabled ? [dragAndDropFeature, keyboardDragAndDropFeature] : []),
       propMemoizationFeature,
     ],
+    onTreeHotkey: showBookmarks
+      ? undefined
+      : (name) => skipHiddenRows(tree, name),
     dataLoader: {
       getItem: async (id) => {
         if (id === BOOKMARK_ORGANIZER_ROOT_ID) {
@@ -320,6 +415,23 @@ const BookmarkOrganizerTreeImpl = React.forwardRef<
     return true
   })
 
+  // headless-tree hands `tabIndex: 0` to the focused row and -1 to every
+  // other, treating the first row as focused while the state is still null.
+  // That first row can be one "Folders Only" hides, or one a refresh has
+  // since removed — either leaves the tree with no tab stop at all. Seeding
+  // focus onto a row that is actually rendered is what keeps Tab able to
+  // reach the tree, and where focus lands after a mutation.
+  React.useEffect(() => {
+    if (visibleItems.length === 0) return
+
+    const focusedId = tree.getState().focusedItem
+    if (focusedId && visibleItems.some((item) => item.getId() === focusedId)) {
+      return
+    }
+
+    visibleItems[0].setFocused()
+  }, [visibleItems, tree])
+
   if (visibleItems.length === 0) {
     return <BookmarkOrganizerEmpty createParentId={createParentId} />
   }
@@ -329,6 +441,11 @@ const BookmarkOrganizerTreeImpl = React.forwardRef<
       {...tree.getContainerProps("Bookmark Organizer")}
       className="relative space-y-1"
     >
+      {/* A keyboard drag has no drag image and no cursor to follow, so the
+          only feedback a screen reader gets is this live region — the
+          library's own, which names the position the next Enter would drop
+          into. */}
+      {dragEnabled && <AssistiveTreeDescription tree={tree} />}
       <div
         className="h-0.5 rounded-full bg-primary"
         style={tree.getDragLineStyle()}
