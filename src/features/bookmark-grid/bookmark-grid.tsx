@@ -6,6 +6,7 @@ import { useSortableFolder, DropIndicator } from "@/features/dnd"
 import type { BookmarkNode } from "@/browser"
 import { cn } from "@/lib/utils"
 import { getVisibleFolders } from "./folder-collection"
+import { distributeToColumns, useMeasuredCardHeights } from "./card-heights"
 import { BookmarkGridEmpty } from "./bookmark-grid-empty"
 
 function getColumnCountForWidth(): number {
@@ -41,58 +42,6 @@ function useColumnCount(maxColumns: number): number {
   }, [maxColumns])
 
   return columnCount
-}
-
-/** Estimate card height based on layout mode and bookmark count */
-function estimateCardHeight(
-  folder: BookmarkNode,
-  cardLayouts: Record<string, string>
-): number {
-  const bookmarks = (folder.children ?? []).filter((c) => c.url !== undefined)
-  const count = bookmarks.length
-  const layout = cardLayouts[folder.id] ?? "list"
-
-  // Header (~40px) + padding (~24px)
-  const chrome = 64
-
-  if (layout === "grid") {
-    // Grid: ~48px cells, ~5 per row in a typical column width, ~52px per row
-    const cols = 5
-    const rows = Math.ceil(count / cols)
-    return chrome + rows * 52
-  }
-
-  // List: ~32px per item
-  return chrome + count * 32
-}
-
-/** Distribute folders into the shortest column based on estimated height */
-function distributeToColumns(
-  folders: BookmarkNode[],
-  columnCount: number,
-  cardLayouts: Record<string, string>
-): BookmarkNode[][] {
-  const columns: BookmarkNode[][] = Array.from(
-    { length: columnCount },
-    () => []
-  )
-  const heights = new Array(columnCount).fill(0)
-
-  for (const folder of folders) {
-    const estimatedHeight = estimateCardHeight(folder, cardLayouts)
-
-    // Find the shortest column
-    let shortest = 0
-    for (let i = 1; i < columnCount; i++) {
-      if (heights[i] < heights[shortest]) shortest = i
-    }
-
-    columns[shortest].push(folder)
-    // Add card height + gap between cards (16px)
-    heights[shortest] += estimatedHeight + 16
-  }
-
-  return columns
 }
 
 function SortableFolderCard({
@@ -158,9 +107,15 @@ export function BookmarkGrid() {
     return map
   }, [folders])
 
+  const { heights, measureRefs } = useMeasuredCardHeights(
+    folders,
+    columnCount,
+    cardLayouts
+  )
+
   const columns = React.useMemo(
-    () => distributeToColumns(folders, columnCount, cardLayouts),
-    [folders, columnCount, cardLayouts]
+    () => distributeToColumns(folders, columnCount, cardLayouts, heights),
+    [folders, columnCount, cardLayouts, heights]
   )
 
   if (isLoading) {
@@ -190,17 +145,24 @@ export function BookmarkGrid() {
       >
         {columns.map((columnFolders, colIndex) => (
           <div key={colIndex} className="flex min-w-0 flex-col gap-4">
-            {columnFolders.map((folder) =>
-              experimentalCardDrag ? (
-                <SortableFolderCard
-                  key={folder.id}
-                  folder={folder}
-                  sortableIndex={folderIndexMap.get(folder.id) ?? 0}
-                />
-              ) : (
-                <BookmarkCard key={folder.id} folder={folder} />
-              )
-            )}
+            {columnFolders.map((folder) => (
+              // The wrapper is what the ResizeObserver watches: it is the only
+              // element that exists in both the draggable and plain variants.
+              <div
+                key={folder.id}
+                ref={measureRefs.get(folder.id)}
+                className="min-w-0"
+              >
+                {experimentalCardDrag ? (
+                  <SortableFolderCard
+                    folder={folder}
+                    sortableIndex={folderIndexMap.get(folder.id) ?? 0}
+                  />
+                ) : (
+                  <BookmarkCard folder={folder} />
+                )}
+              </div>
+            ))}
           </div>
         ))}
       </div>
