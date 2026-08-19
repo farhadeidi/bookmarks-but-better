@@ -40,22 +40,20 @@ import {
 import { useBookmarkStore } from "@/stores/bookmark-store"
 import { useUIStore } from "@/stores/ui-store"
 import { usePreferencesStore } from "@/stores/preferences-store"
+import { findNodePath } from "@/lib/bookmark-utils"
 
 export function BookmarkOrganizerSheet() {
   const bookmarkOrganizerOpen = useUIStore((s) => s.bookmarkOrganizerOpen)
   const closeBookmarkOrganizer = useUIStore((s) => s.closeBookmarkOrganizer)
+  const organizerRevealId = useUIStore((s) => s.organizerRevealId)
+  const clearOrganizerReveal = useUIStore((s) => s.clearOrganizerReveal)
   const rootFolderId = useBookmarkStore((s) => s.rootFolderId)
   const setRootFolderId = useBookmarkStore((s) => s.setRootFolderId)
+  const rootFolder = useBookmarkStore((s) => s.rootFolder)
   const tree = useBookmarkStore((s) => s.tree)
   const adapter = useBookmarkStore((s) => s.adapter)
   const mutationError = useBookmarkStore((s) => s.mutationError)
   const clearMutationError = useBookmarkStore((s) => s.clearMutationError)
-
-  const createParentId = resolveCreateParentId(
-    tree,
-    rootFolderId,
-    adapter?.capabilities.rootIsCreatable ?? false
-  )
 
   const creatingItem = useUIStore((s) => s.creatingItem)
   const openCreateItem = useUIStore((s) => s.openCreateItem)
@@ -65,6 +63,29 @@ export function BookmarkOrganizerSheet() {
   )
   const setFoldersOnly = usePreferencesStore(
     (s) => s.setIsFoldersOnlyEnabledInTreeEditor
+  )
+
+  // Search covers the whole Active Source, so a revealed item can sit outside
+  // the pinned root, or be a bookmark while "Folders Only" is on. Both are
+  // relaxed for the visit rather than written back: the root folder is a
+  // saved preference that also drives the dashboard, and a reveal is not the
+  // user asking to change it.
+  const revealPath = organizerRevealId
+    ? findNodePath(tree, organizerRevealId)
+    : null
+  const revealTarget = revealPath?.[revealPath.length - 1] ?? null
+  const revealNeedsWholeSource =
+    revealPath !== null &&
+    rootFolder !== null &&
+    !revealPath.some((node) => node.id === rootFolder.id)
+  const showBookmarks = !foldersOnly || revealTarget?.url != null
+  // Every header control describes the tree actually on screen, so a widened
+  // visit creates where it is showing rather than where the saved root points.
+  const shownRootFolderId = revealNeedsWholeSource ? null : rootFolderId
+  const createParentId = resolveCreateParentId(
+    tree,
+    shownRootFolderId,
+    adapter?.capabilities.rootIsCreatable ?? false
   )
 
   const treeRef = React.useRef<BookmarkOrganizerTreeHandle>(null)
@@ -112,9 +133,16 @@ export function BookmarkOrganizerSheet() {
             <div className="flex flex-col gap-4 border-b border-border/70 px-6 py-4">
               <RootFolderSelect
                 label="Root folder"
-                description="Changes apply to the selected root subtree."
-                value={rootFolderId}
-                onChange={setRootFolderId}
+                description={
+                  revealNeedsWholeSource
+                    ? "Widened to the whole source to show a search result. Your saved root folder is unchanged."
+                    : "Changes apply to the selected root subtree."
+                }
+                value={shownRootFolderId}
+                onChange={(id) => {
+                  clearOrganizerReveal()
+                  setRootFolderId(id)
+                }}
               />
 
               <div className="flex items-center gap-2">
@@ -123,7 +151,10 @@ export function BookmarkOrganizerSheet() {
                     id="folders-only"
                     size="sm"
                     checked={foldersOnly}
-                    onCheckedChange={setFoldersOnly}
+                    onCheckedChange={(checked) => {
+                      clearOrganizerReveal()
+                      setFoldersOnly(checked)
+                    }}
                   />
                   <Label
                     htmlFor="folders-only"
@@ -228,8 +259,9 @@ export function BookmarkOrganizerSheet() {
 
             <ScrollArea className="min-h-0 flex-1 px-6 py-4">
               <BookmarkOrganizerTree
-                rootFolderId={rootFolderId}
-                showBookmarks={!foldersOnly}
+                rootFolderId={shownRootFolderId}
+                showBookmarks={showBookmarks}
+                revealId={organizerRevealId}
                 treeRef={treeRef}
               />
             </ScrollArea>

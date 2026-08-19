@@ -19,6 +19,7 @@ import type { BookmarkAdapter, BookmarkNode } from "@/browser"
 import { useBookmarkStore } from "@/stores/bookmark-store"
 import { useUIStore } from "@/stores/ui-store"
 import { resolveCreateParentId } from "@/features/root-folder-select"
+import { findNodePath } from "@/lib/bookmark-utils"
 import {
   loadOrganizerChildren,
   loadOrganizerItem,
@@ -210,6 +211,8 @@ const BookmarkOrganizerTreeImpl = React.forwardRef<
     rootOrderReadOnly?: boolean
     bookmarks: Pick<BookmarkAdapter, "getSubTree">
     showBookmarks: boolean
+    /** An item to expand down to and focus, with the folders above it, outermost first. */
+    reveal?: { id: string; ancestorIds: string[] } | null
     moveEnabled: boolean
     reorderEnabled: boolean
     setChildOrderEnabled: boolean
@@ -221,6 +224,7 @@ const BookmarkOrganizerTreeImpl = React.forwardRef<
     rootOrderReadOnly,
     bookmarks,
     showBookmarks,
+    reveal,
     moveEnabled,
     reorderEnabled,
     setChildOrderEnabled,
@@ -236,6 +240,9 @@ const BookmarkOrganizerTreeImpl = React.forwardRef<
   const reorderAllowed = reorderEnabled || setChildOrderEnabled
 
   const hasAutoExpanded = React.useRef(false)
+  // Which item the reveal below has already delivered focus to. Without it,
+  // every later render would drag focus back to the revealed row.
+  const revealedIdRef = React.useRef<string | null>(null)
   // `createOnDropHandler` invokes its callback twice per drop — once with the
   // source parent's children minus the dragged ids, once with the destination
   // parent's children plus them — and neither call says which pass it is.
@@ -393,6 +400,43 @@ const BookmarkOrganizerTreeImpl = React.forwardRef<
     }
   }, [items])
 
+  /**
+   * Walks the tree open one level per render until the revealed item exists,
+   * then focuses and selects it.
+   *
+   * A folder's children only load once it is expanded, so the item to focus
+   * does not exist yet when the reveal arrives. Expanding the outermost
+   * unexpanded ancestor and stopping is what lets the load's own re-render
+   * bring the effect back for the next level — rather than this reaching into
+   * the loader and re-implementing it. Ancestors above the organizer's own
+   * root are not rows at all and are simply skipped.
+   */
+  React.useEffect(() => {
+    if (!reveal) {
+      revealedIdRef.current = null
+      return
+    }
+    if (revealedIdRef.current === reveal.id) return
+
+    const rendered = new Map(items.map((item) => [item.getId(), item]))
+
+    for (const ancestorId of reveal.ancestorIds) {
+      const ancestor = rendered.get(ancestorId)
+      if (ancestor && !ancestor.isExpanded()) {
+        ancestor.expand()
+        return
+      }
+    }
+
+    const target = rendered.get(reveal.id)
+    if (!target) return
+
+    revealedIdRef.current = reveal.id
+    target.select()
+    target.setFocused()
+    tree.updateDomFocus()
+  }, [items, reveal, tree])
+
   const draggedItemIds = new Set(
     tree.getState().dnd?.draggedItems?.map((i) => i.getId()) ?? []
   )
@@ -493,21 +537,40 @@ const BookmarkOrganizerTreeImpl = React.forwardRef<
 export function BookmarkOrganizerTree({
   rootFolderId,
   showBookmarks,
+  revealId,
   treeRef,
 }: {
   rootFolderId: string | null
   showBookmarks: boolean
+  /** An item somewhere in the source to expand down to and focus, if any. */
+  revealId?: string | null
   treeRef: React.Ref<BookmarkOrganizerTreeHandle>
 }) {
   const adapter = useBookmarkStore((s) => s.adapter)
   const tree = useBookmarkStore((s) => s.tree)
   const rootFolder = useBookmarkStore((s) => s.rootFolder)
+
+  // The store's tree already holds every ancestor, so the path costs one walk
+  // here instead of a request per level from the organizer's own loader.
+  const reveal = React.useMemo(() => {
+    if (!revealId) return null
+    const path = findNodePath(tree, revealId)
+    if (!path) return null
+    return {
+      id: revealId,
+      ancestorIds: path.slice(0, -1).map((node) => node.id),
+    }
+  }, [tree, revealId])
+
   // `rootFolder` is the store's own resolution of `rootFolderId` against the
   // tree, so going through it means a saved id whose folder has since been
   // deleted falls back to the tree root instead of asking for a subtree that
   // no longer exists and rendering an empty organizer — which is what the
-  // create actions and import already do.
-  const effectiveRootNode = rootFolder ?? tree[0]
+  // create actions and import already do. The prop still decides which
+  // question is being asked: a caller passing `null` wants the whole source,
+  // and the saved resolution must not put the pinned root back.
+  const effectiveRootNode =
+    (rootFolderId === null ? null : rootFolder) ?? tree[0]
   const effectiveRootId = effectiveRootNode?.id ?? null
 
   if (!adapter) {
@@ -537,6 +600,7 @@ export function BookmarkOrganizerTree({
       }
       bookmarks={adapter.bookmarks}
       showBookmarks={showBookmarks}
+      reveal={reveal}
       moveEnabled={adapter.capabilities.move}
       reorderEnabled={adapter.capabilities.reorder}
       setChildOrderEnabled={setChildOrderEnabled}
