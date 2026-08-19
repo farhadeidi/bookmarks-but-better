@@ -19,7 +19,8 @@ import { cn } from "@/lib/utils"
 import { searchBookmarks, type BookmarkSearchHit } from "@/lib/bookmark-search"
 import { useBookmarkStore } from "@/stores/bookmark-store"
 import { useUIStore } from "@/stores/ui-store"
-import { navigableUrl, openResultUrl } from "./open-result"
+import { navigableUrl } from "@/lib/navigable-url"
+import { openResultUrl } from "./open-result"
 
 /**
  * Enough rows to make refining the query unnecessary at the collection sizes

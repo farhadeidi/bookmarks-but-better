@@ -4,7 +4,6 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 import { installFakeIndexedDB } from "@/browser/__tests__/fake-indexeddb"
 import { saveSourceConfig } from "@/sources/persistence"
 import { daemonSourceId } from "@/sources/config"
-import type { DaemonSearchResponse } from "@/browser/daemon/client"
 import type { BookmarkNode } from "@/browser/types"
 import {
   decodeOpaqueSuggestion,
@@ -14,6 +13,8 @@ import {
   registerOmniboxListeners,
   type OmniboxDisposition,
   type OmniboxFacade,
+  type OmniboxResult,
+  type OmniboxSearchScope,
   type OmniboxSuggestion,
 } from "./omnibox"
 
@@ -36,7 +37,21 @@ function flush() {
   return new Promise((resolve) => setTimeout(resolve, 0))
 }
 
-function fakeFacade() {
+/**
+ * A scope standing in for whichever source is active: the listener logic is
+ * the same code for a Daemon Source and a Browser Source, so the tests below
+ * exercise it once through this and pin the per-source wiring separately
+ * against the real facade.
+ */
+function fakeScope(label = "Browser bookmarks") {
+  return {
+    label,
+    search: vi.fn<OmniboxSearchScope["search"]>().mockResolvedValue([]),
+    lookupUrl: vi.fn<OmniboxSearchScope["lookupUrl"]>(),
+  }
+}
+
+function fakeFacade(scope: OmniboxSearchScope | null = fakeScope()) {
   let changed:
     | ((text: string, suggest: (items: OmniboxSuggestion[]) => void) => void)
     | undefined
@@ -51,13 +66,7 @@ function fakeFacade() {
       entered = listener
     }),
     setDefaultSuggestion: vi.fn(),
-    getDaemonSelection: vi.fn().mockResolvedValue({
-      config: { origin: "http://127.0.0.1:52222" },
-      vaultId: "main",
-    }),
-    hasHostPermission: vi.fn().mockResolvedValue(true),
-    search: vi.fn().mockResolvedValue({ results: [] }),
-    fetchNode: vi.fn(),
+    resolveActiveScope: vi.fn().mockResolvedValue(scope),
     navigate: vi.fn(),
   }
   return {
@@ -77,26 +86,46 @@ describe("omnibox listener registration", () => {
     expect(fake.facade.setDefaultSuggestion).toHaveBeenCalledOnce()
   })
 
-  it("does nothing unless an active daemon source and permission are both present", async () => {
-    const fake = fakeFacade()
-    vi.mocked(fake.facade.getDaemonSelection).mockResolvedValue(null)
+  it("does nothing unless a searchable active source is present", async () => {
+    const fake = fakeFacade(null)
     registerOmniboxListeners(fake.facade)
     const suggest = vi.fn()
 
     fake.changed()("rust", suggest)
     await flush()
 
-    expect(fake.facade.search).not.toHaveBeenCalled()
     expect(suggest).toHaveBeenCalledWith([])
   })
 
+  it("names the source being searched once one resolves", async () => {
+    const scope = fakeScope("Kitchen & <sink>")
+    const fake = fakeFacade(scope)
+    registerOmniboxListeners(fake.facade)
+
+    expect(fake.facade.setDefaultSuggestion).toHaveBeenLastCalledWith(
+      "Search your bookmarks"
+    )
+
+    fake.changed()("rust", vi.fn())
+    await flush()
+    fake.changed()("rustup", vi.fn())
+    await flush()
+
+    // Escaped like any other description, and set once rather than per
+    // keystroke: the source only changes when the user switches it.
+    expect(fake.facade.setDefaultSuggestion).toHaveBeenLastCalledWith(
+      "Search Kitchen &amp; &lt;sink&gt;"
+    )
+    expect(fake.facade.setDefaultSuggestion).toHaveBeenCalledTimes(2)
+  })
+
   it("ignores stale asynchronous results and escapes description text", async () => {
-    const fake = fakeFacade()
-    const first = deferred<DaemonSearchResponse>()
-    const second = deferred<DaemonSearchResponse>()
-    vi.mocked(fake.facade.search)
-      .mockReturnValueOnce(first.promise)
-      .mockReturnValueOnce(second.promise)
+    const scope = fakeScope()
+    const fake = fakeFacade(scope)
+    const first = deferred<OmniboxResult[]>()
+    const second = deferred<OmniboxResult[]>()
+    scope.search.mockReturnValueOnce(first.promise)
+    scope.search.mockReturnValueOnce(second.promise)
     registerOmniboxListeners(fake.facade)
     const oldSuggest = vi.fn()
     const newSuggest = vi.fn()
@@ -105,19 +134,15 @@ describe("omnibox listener registration", () => {
     await flush()
     fake.changed()("new", newSuggest)
     await flush()
-    second.resolve({
-      results: [
-        {
-          id: "opaque/id",
-          title: "<script>& title",
-          url: "https://example.com/?a=<b>",
-        },
-      ],
-    })
+    second.resolve([
+      {
+        id: "opaque/id",
+        title: "<script>& title",
+        url: "https://example.com/?a=<b>",
+      },
+    ])
     await flush()
-    first.resolve({
-      results: [{ id: "old", title: "Old", url: "https://old.example" }],
-    })
+    first.resolve([{ id: "old", title: "Old", url: "https://old.example" }])
     await flush()
 
     expect(oldSuggest).not.toHaveBeenCalled()
@@ -135,54 +160,48 @@ describe("omnibox selection", () => {
   it.each(["currentTab", "newForegroundTab", "newBackgroundTab"] as const)(
     "re-fetches the opaque id before %s navigation",
     async (disposition) => {
-      const fake = fakeFacade()
-      const node: BookmarkNode = {
-        id: "bookmark-1",
-        title: "Example",
-        url: "https://example.com",
-      }
-      vi.mocked(fake.facade.fetchNode).mockResolvedValue(node)
+      const scope = fakeScope()
+      const fake = fakeFacade(scope)
+      scope.lookupUrl.mockResolvedValue("https://example.com")
       registerOmniboxListeners(fake.facade)
 
-      fake.entered()(opaqueSuggestionContent(node.id), disposition)
+      fake.entered()(opaqueSuggestionContent("bookmark-1"), disposition)
       await flush()
 
-      expect(fake.facade.fetchNode).toHaveBeenCalledWith(
-        {
-          config: { origin: "http://127.0.0.1:52222" },
-          vaultId: "main",
-        },
-        node.id
-      )
+      expect(scope.lookupUrl).toHaveBeenCalledWith("bookmark-1")
       expect(fake.facade.navigate).toHaveBeenCalledWith(
-        node.url + "/",
+        "https://example.com/",
         disposition
       )
     }
   )
 
   it("does nothing for free-form unselected input", async () => {
-    const fake = fakeFacade()
+    const scope = fakeScope()
+    const fake = fakeFacade(scope)
     registerOmniboxListeners(fake.facade)
 
     fake.entered()("just some words", "currentTab")
     await flush()
 
-    expect(fake.facade.getDaemonSelection).not.toHaveBeenCalled()
-    expect(fake.facade.fetchNode).not.toHaveBeenCalled()
+    expect(fake.facade.resolveActiveScope).not.toHaveBeenCalled()
+    expect(scope.lookupUrl).not.toHaveBeenCalled()
     expect(fake.facade.navigate).not.toHaveBeenCalled()
   })
 
   it("does not navigate when the selected node became a folder or unsafe URL", async () => {
-    const fake = fakeFacade()
-    vi.mocked(fake.facade.fetchNode).mockResolvedValue({
-      id: "bookmark-1",
-      title: "Changed",
-      url: "javascript:alert(1)",
-    })
+    const scope = fakeScope()
+    const fake = fakeFacade(scope)
+    scope.lookupUrl.mockResolvedValue("javascript:alert(1)")
     registerOmniboxListeners(fake.facade)
 
     fake.entered()(opaqueSuggestionContent("bookmark-1"), "currentTab")
+    await flush()
+
+    expect(fake.facade.navigate).not.toHaveBeenCalled()
+
+    scope.lookupUrl.mockResolvedValue(undefined)
+    fake.entered()(opaqueSuggestionContent("folder-1"), "currentTab")
     await flush()
 
     expect(fake.facade.navigate).not.toHaveBeenCalled()
@@ -203,22 +222,90 @@ describe("omnibox encoding", () => {
   })
 })
 
+const BROWSER_TREE: BookmarkNode[] = [
+  {
+    id: "0",
+    title: "",
+    children: [
+      {
+        id: "bar",
+        title: "Rust things",
+        children: [
+          {
+            id: "book",
+            title: "The Rust Book",
+            url: "https://doc.rust-lang.org",
+          },
+          { id: "crates", title: "Crates", url: "https://crates.io" },
+        ],
+      },
+    ],
+  },
+]
+
+function stubBookmarksApi() {
+  return {
+    getTree: vi.fn().mockResolvedValue(BROWSER_TREE),
+    getSubTree: vi.fn().mockResolvedValue([
+      {
+        id: "book",
+        title: "The Rust Book",
+        url: "https://doc.rust-lang.org",
+      },
+    ]),
+  }
+}
+
 describe("browser omnibox facade", () => {
+  it("searches the Browser Source's own tree when it is active", async () => {
+    const bookmarks = stubBookmarksApi()
+    // `storage` too: the Browser Source only exists where both APIs do.
+    vi.stubGlobal("chrome", { bookmarks, storage: {}, omnibox: {}, tabs: {} })
+    await saveSourceConfig({
+      version: 2,
+      connections: {},
+      sources: { browser: { enabled: true, label: "My bookmarks" } },
+      activeSourceId: "browser",
+    })
+
+    const scope = await createBrowserOmniboxFacade().resolveActiveScope()
+
+    expect(scope?.label).toBe("My bookmarks")
+    // "Rust things" is a folder and matches too; only openable rows survive.
+    await expect(scope?.search("rust", 8)).resolves.toEqual([
+      {
+        id: "book",
+        title: "The Rust Book",
+        url: "https://doc.rust-lang.org",
+      },
+    ])
+    await expect(scope?.lookupUrl("book")).resolves.toBe(
+      "https://doc.rust-lang.org"
+    )
+    expect(bookmarks.getSubTree).toHaveBeenCalledWith("book")
+  })
+
   it("reads the active daemon source from the shared Source Configuration", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: async () => JSON.stringify({ results: [] }),
+    })
+    vi.stubGlobal("fetch", fetchImpl)
     const facade = createBrowserOmniboxFacade()
     const origin = "http://localhost:52222"
 
-    // Browser active: nothing for the omnibox to search.
+    // No source at all: nothing for the omnibox to search.
     await saveSourceConfig({
       version: 2,
       connections: { [origin]: { bearerToken: "secret" } },
-      sources: { browser: { enabled: true } },
-      activeSourceId: "browser",
+      sources: {},
+      activeSourceId: null,
     })
-    await expect(facade.getDaemonSelection()).resolves.toBeNull()
+    await expect(facade.resolveActiveScope()).resolves.toBeNull()
 
-    // The daemon vault active: the selection carries the connection and the
-    // vault scope, canonicalized the same way everywhere.
+    // The daemon vault active: every request carries that connection's
+    // credentials and is scoped to that vault, never another source's.
     const id = daemonSourceId(origin, "reading")
     await saveSourceConfig({
       version: 2,
@@ -229,28 +316,45 @@ describe("browser omnibox facade", () => {
       },
       activeSourceId: id,
     })
-    await expect(facade.getDaemonSelection()).resolves.toEqual({
-      config: { origin, bearerToken: "secret" },
-      vaultId: "reading",
-    })
+
+    const scope = await facade.resolveActiveScope()
+    expect(scope?.label).toBe("reading · localhost:52222")
+    await expect(scope?.search("rust", 8)).resolves.toEqual([])
+
+    const [url, init] = fetchImpl.mock.calls[0] as [
+      string,
+      { headers: Record<string, string> },
+    ]
+    expect(url).toBe(
+      "http://localhost:52222/api/v1/vaults/reading/search?q=rust&limit=8"
+    )
+    expect(init.headers.Authorization).toBe("Bearer secret")
   })
 
-  it("reuses the daemon permission check for both allowed loopback hosts", async () => {
+  it("resolves no scope while the daemon host permission is missing", async () => {
     const contains = vi.fn(
       (
         _permissions: chrome.permissions.Permissions,
         callback: (granted: boolean) => void
-      ) => callback(true)
+      ) => callback(false)
     )
     vi.stubGlobal("chrome", {
       permissions: { contains },
       omnibox: {},
       tabs: {},
     })
+    const origin = "http://127.0.0.1:52222"
+    const id = daemonSourceId(origin, "main")
+    await saveSourceConfig({
+      version: 2,
+      connections: { [origin]: {} },
+      sources: { [id]: { enabled: true, origin, vaultId: "main" } },
+      activeSourceId: id,
+    })
 
     await expect(
-      createBrowserOmniboxFacade().hasHostPermission()
-    ).resolves.toBe(true)
+      createBrowserOmniboxFacade().resolveActiveScope()
+    ).resolves.toBeNull()
     expect(contains).toHaveBeenCalledWith(
       { origins: ["http://127.0.0.1/*", "http://localhost/*"] },
       expect.any(Function)
