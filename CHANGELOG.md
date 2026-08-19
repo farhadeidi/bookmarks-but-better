@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **The omnibox keyword is now `bb`.** Address-bar search previously required
+  typing `bookmarks-but-better` before Tab, which was long enough that the one
+  search path reachable from a fresh tab went unused. Existing users need to
+  type the new keyword; browsers apply it when the extension updates
+
 ## [4.1.0] - 2026-08-17
 
 ### Added
