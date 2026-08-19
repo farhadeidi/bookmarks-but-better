@@ -36,7 +36,7 @@
 - **Import and export** — Standard HTML bookmark files
 - **Smart favicons** — Sharp, high-quality site icons with a clean letter fallback when a site has none
 - **Quick capture** — Save the active tab from the extension popup
-- **Address-bar search** — Search a connected daemon vault with the `bookmarks-but-better` omnibox keyword
+- **Address-bar search** — Search a connected daemon vault with the `bb` omnibox keyword
 - **Three bookmark sources** — Browser bookmarks, a browser-local standalone collection, or an optional Markdown vault daemon
 - **Private by design** — No account, analytics, tracking, ads, or bookmark-content collection
 
