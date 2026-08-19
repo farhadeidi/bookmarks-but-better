@@ -24,6 +24,50 @@ concurrency:
   cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
 
 jobs:
+  # Which of the gates below a pull request can actually affect.
+  #
+  # Only the jobs whose inputs are wholly self-contained are filtered: the Rust
+  # gates and the installer checks. Everything else stays unconditional, because
+  # their inputs are entangled — the marketing site builds the real app out of
+  # `src/`, `bun run check` type-checks and builds that site, and the end-to-end
+  # job drives both the daemon binary and the Dev Workbench UI. Guessing at that
+  # graph would trade a few minutes of waiting for a green pull request that
+  # breaks main.
+  #
+  # Anything that is not a pull request — a push to main, or the `workflow_call`
+  # a release tag makes — runs every gate regardless.
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      rust: ${{ github.event_name != 'pull_request' || steps.filter.outputs.rust == 'true' }}
+      installers: ${{ github.event_name != 'pull_request' || steps.filter.outputs.installers == 'true' }}
+    steps:
+      # No checkout: for a pull request the action reads the changed paths from
+      # the API, and the filters below are inline.
+      - name: Filter changed paths
+        if: github.event_name == 'pull_request'
+        id: filter
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        with:
+          filters: |
+            workflow: &workflow
+              - '.github/workflows/ci.yml'
+            rust:
+              - *workflow
+              - 'crates/**'
+              - 'Cargo.toml'
+              - 'Cargo.lock'
+              - 'rust-toolchain.toml'
+            installers:
+              - *workflow
+              - 'install.sh'
+              - 'install.ps1'
+              - 'tests/install/**'
+              - 'tests/e2e/run-daemon.sh'
+              - 'packages/bookmarks-but-better/**'
+
   check:
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -70,6 +114,16 @@ jobs:
       - name: Cache cargo artifacts
         uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
 
+      # The browser download is the slow, network-dependent half of the step
+      # below, and the half that has timed out a job before. `--with-deps`
+      # still runs on a hit — the apt packages are not what this caches — but
+      # Chromium itself comes off disk.
+      - name: Cache Playwright browsers
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+
       - name: Install Playwright Chromium
         run: bunx playwright install --with-deps chromium
 
@@ -97,7 +151,9 @@ jobs:
   website:
     name: Marketing website
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # Matches the other Bun jobs. At 15 this job has already been killed
+    # mid-`playwright install` on a change it had nothing to do with.
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
@@ -114,6 +170,16 @@ jobs:
         run: bun install --frozen-lockfile
         working-directory: website
 
+      # The browser download is the slow, network-dependent half of the step
+      # below, and the half that has timed out a job before. `--with-deps`
+      # still runs on a hit — the apt packages are not what this caches — but
+      # Chromium itself comes off disk.
+      - name: Cache Playwright browsers
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+
       - name: Install Playwright Chromium
         run: bunx playwright install --with-deps chromium
 
@@ -122,6 +188,8 @@ jobs:
 
   install-scripts:
     name: Install script checks
+    needs: changes
+    if: needs.changes.outputs.installers == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -169,6 +237,8 @@ jobs:
         run: npm pack --dry-run
 
   rust:
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
@@ -211,6 +281,8 @@ jobs:
           cargo check --workspace --all-targets --target x86_64-pc-windows-msvc
 
   rust-macos:
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
     runs-on: macos-latest
     timeout-minutes: 45
     steps:
@@ -236,6 +308,8 @@ jobs:
         run: cargo build --workspace --all-features
 
   rust-windows:
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
     runs-on: windows-latest
     timeout-minutes: 45
     steps:
