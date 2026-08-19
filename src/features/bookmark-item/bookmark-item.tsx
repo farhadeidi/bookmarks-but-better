@@ -22,6 +22,9 @@ import type { BookmarkNode } from "@/browser"
 import { useUIStore } from "@/stores/ui-store"
 import { useBookmarkStore } from "@/stores/bookmark-store"
 import { useSortableBookmark, DropIndicator } from "@/features/dnd"
+// Past the grid's barrel on purpose: importing it would pull `BookmarkGrid`,
+// which renders this row, back into the row's own module graph.
+import { useGridItem } from "@/features/bookmark-grid/use-grid-navigation"
 import { cn } from "@/lib/utils"
 import { describeReadOnly } from "@/lib/bookmark-utils"
 
@@ -64,6 +67,11 @@ export const BookmarkItem = React.memo(function BookmarkItem({
     disabled:
       (!moveEnabled && !reorderEnabled && !setChildOrderEnabled) || isReadOnly,
   })
+
+  // The row's stop in the grid's roving tab order. It rides on the anchor the
+  // hover card already renders, so `Enter` stays the browser's own "follow
+  // this link" rather than something re-implemented here.
+  const gridItem = useGridItem(bookmark.id)
 
   const openEditor = useUIStore((s) => s.openEditor)
   const openDeleteConfirm = useUIStore((s) => s.openDeleteConfirm)
@@ -124,7 +132,8 @@ export const BookmarkItem = React.memo(function BookmarkItem({
               <a
                 href={bookmark.url}
                 draggable="false"
-                className="flex items-center justify-center rounded-lg p-2 transition-colors hover:bg-accent"
+                {...gridItem}
+                className="flex items-center justify-center rounded-lg border border-transparent p-2 transition-colors outline-none hover:bg-accent focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
               />
             }
           >
@@ -164,7 +173,8 @@ export const BookmarkItem = React.memo(function BookmarkItem({
             <a
               href={bookmark.url}
               draggable="false"
-              className="flex min-w-0 items-center gap-2.5 rounded-lg px-2 py-2.5 transition-colors hover:bg-accent sm:py-1.5"
+              {...gridItem}
+              className="flex min-w-0 items-center gap-2.5 rounded-lg border border-transparent px-2 py-2.5 transition-colors outline-none hover:bg-accent focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 sm:py-1.5"
             />
           }
         >

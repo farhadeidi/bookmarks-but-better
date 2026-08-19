@@ -21,6 +21,9 @@ import {
 } from "@hugeicons/core-free-icons"
 import { BookmarkItem } from "@/features/bookmark-item"
 import { useFolderDropTarget } from "@/features/dnd"
+// Past the grid's barrel on purpose: importing it would pull `BookmarkGrid`,
+// which renders this card, back into the card's own module graph.
+import { useGridItem } from "@/features/bookmark-grid/use-grid-navigation"
 import { usePreferencesStore } from "@/stores/preferences-store"
 import { useBookmarkStore } from "@/stores/bookmark-store"
 import { useUIStore } from "@/stores/ui-store"
@@ -180,6 +183,11 @@ export const BookmarkCard = React.memo(function BookmarkCard({
     disabled: !moveEnabled,
   })
 
+  // The card's stop in the grid's roving tab order. The heading carries it
+  // rather than the card: it is the one element that exists whatever the
+  // card holds, and it already names the folder.
+  const gridItem = useGridItem(folder.id)
+
   const children = folder.children ?? []
 
   // Separate direct bookmarks from subfolders
@@ -235,8 +243,9 @@ export const BookmarkCard = React.memo(function BookmarkCard({
           </button>
         )}
         <h3
+          {...gridItem}
           className={cn(
-            "min-w-0 flex-1 truncate font-medium",
+            "min-w-0 flex-1 truncate rounded-md border border-transparent font-medium outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50",
             nested ? "text-base sm:text-xs" : "text-base sm:text-sm"
           )}
         >

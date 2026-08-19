@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **The dashboard is operable from the keyboard.** The bookmark grid is a
+  single tab stop: arrow keys move through it in the order you see rather than
+  the order it is built in, Home and End reach a column's ends, Enter opens the
+  focused bookmark, and Alt with an arrow moves one inside its folder — only
+  where the source can express an order
 - **Search palette** — start typing anywhere on the dashboard and a palette
   opens on the first character, matching bookmark titles and URLs and folder
   names across the whole Active Source. There is no shortcut to learn, and a

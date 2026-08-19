@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils"
 import { getVisibleFolders } from "./folder-collection"
 import { distributeToColumns, useMeasuredCardHeights } from "./card-heights"
 import { BookmarkGridEmpty } from "./bookmark-grid-empty"
+import { GridNavigationContext, useGridNavigation } from "./use-grid-navigation"
 
 function getColumnCountForWidth(): number {
   const w = window.innerWidth
@@ -118,6 +119,14 @@ export function BookmarkGrid() {
     [folders, columnCount, cardLayouts, heights]
   )
 
+  // The grid is one composite widget: `columns` is the visual order the arrow
+  // keys travel, so the keyboard model is derived from the same distribution
+  // the layout is.
+  const { navigation, containerProps } = useGridNavigation({
+    columns,
+    nestedFolders,
+  })
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center p-12 text-muted-foreground">
@@ -137,35 +146,39 @@ export function BookmarkGrid() {
         containerMode === "contained" && "mx-auto max-w-[1440px]"
       )}
     >
-      <div
-        className="grid w-full min-w-0 items-start gap-4"
-        style={{
-          gridTemplateColumns: `repeat(${columnCount}, minmax(0, 1fr))`,
-        }}
-      >
-        {columns.map((columnFolders, colIndex) => (
-          <div key={colIndex} className="flex min-w-0 flex-col gap-4">
-            {columnFolders.map((folder) => (
-              // The wrapper is what the ResizeObserver watches: it is the only
-              // element that exists in both the draggable and plain variants.
-              <div
-                key={folder.id}
-                ref={measureRefs.get(folder.id)}
-                className="min-w-0"
-              >
-                {experimentalCardDrag ? (
-                  <SortableFolderCard
-                    folder={folder}
-                    sortableIndex={folderIndexMap.get(folder.id) ?? 0}
-                  />
-                ) : (
-                  <BookmarkCard folder={folder} />
-                )}
-              </div>
-            ))}
-          </div>
-        ))}
-      </div>
+      <GridNavigationContext value={navigation}>
+        <div
+          {...containerProps}
+          className="grid w-full min-w-0 items-start gap-4"
+          style={{
+            gridTemplateColumns: `repeat(${columnCount}, minmax(0, 1fr))`,
+          }}
+        >
+          {columns.map((columnFolders, colIndex) => (
+            <div key={colIndex} className="flex min-w-0 flex-col gap-4">
+              {columnFolders.map((folder) => (
+                // The wrapper is what the ResizeObserver watches: it is the
+                // only element that exists in both the draggable and plain
+                // variants.
+                <div
+                  key={folder.id}
+                  ref={measureRefs.get(folder.id)}
+                  className="min-w-0"
+                >
+                  {experimentalCardDrag ? (
+                    <SortableFolderCard
+                      folder={folder}
+                      sortableIndex={folderIndexMap.get(folder.id) ?? 0}
+                    />
+                  ) : (
+                    <BookmarkCard folder={folder} />
+                  )}
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+      </GridNavigationContext>
     </div>
   )
 }
