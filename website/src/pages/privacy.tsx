@@ -60,10 +60,21 @@ export function Privacy() {
         <p className={BODY}>
           One kind only, by default: favicon lookups against Google's public
           favicon service. Bookmark origins (the scheme and host) are sent to
-          find site icons; full URL paths are not. Chrome can also fall back to
-          its on-device favicon API. If you connect a local daemon, the
-          extension talks to that loopback address — permission is requested at
-          connect time, never at install time.
+          find site icons; full URL paths are not.
+        </p>
+        <p className={BODY}>
+          Icons are looked up in this order, and each step that answers stops
+          the next from running: a local cache of icon bytes stored on your
+          machine, then the browser's own on-device icon store (Chrome's favicon
+          API — Firefox has no equivalent an extension may read), then Google,
+          then a letter placeholder drawn locally. A successful lookup is cached
+          for 30 days, so a given site is normally asked about once a month
+          rather than on every new tab, and cached icons keep working offline.
+        </p>
+        <p className={BODY}>
+          If you connect a local daemon, the extension talks to that loopback
+          address — permission is requested at connect time, never at install
+          time.
         </p>
       </Section>
 

@@ -125,6 +125,18 @@ export interface FaviconProvider {
   getUrl(pageUrl: string): string
   getFallbackUrl?(pageUrl: string): string
   isAvailable(): boolean
+  /**
+   * A URL that returns this provider's own "I have no icon for that" image,
+   * or `""` when it has no such thing.
+   *
+   * Only a provider the extension serves itself needs this. Its miss is not an
+   * HTTP error and not a distinctive size — it is a perfectly valid placeholder
+   * image — so the only way to tell it apart is to ask the provider about a
+   * site it cannot possibly know and compare the bytes. Implementing this is
+   * what lets the favicon cache store the provider's results at all: without a
+   * sample, a placeholder would be cached as if it were the site's icon.
+   */
+  getPlaceholderProbeUrl?(): string
 }
 
 export interface AdapterCapabilities {

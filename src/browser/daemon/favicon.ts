@@ -16,11 +16,19 @@ const googleFavicon = new GoogleFaviconProvider()
  * to Google, and the set of origins one client asks for is, in aggregate, that
  * user's bookmark host list.
  *
+ * The favicon cache narrows this, but does not close it, and the difference
+ * matters. Where the app runs as an extension, `host_permissions` let the
+ * resolver read Google's response and store the bytes, so an origin is
+ * disclosed roughly once a month rather than on every render. The daemon's own
+ * web app is served over loopback with no such grant: it cannot read the
+ * response, only display it, so its Google requests keep happening — the cache
+ * saves it only the requests for sites nobody has an icon for.
+ *
  * What did *not* change is the daemon itself. It still binds loopback only and
  * still makes no outbound request of its own — the disclosure is made by the
- * browser rendering the UI, not by `bookmarks-but-better`. Restoring the old no-disclosure
- * behaviour means a daemon-side proxy that fetches each site's own icon, not a
- * different third-party service.
+ * browser rendering the UI, not by `bookmarks-but-better`. Closing the gap for
+ * the served web app means a daemon-side proxy that fetches each site's own
+ * icon, not a different third-party service.
  */
 export class DaemonFaviconAdapter implements FaviconProvider {
   getUrl(pageUrl: string): string {

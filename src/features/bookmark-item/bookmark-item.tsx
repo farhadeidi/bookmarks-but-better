@@ -31,8 +31,6 @@ import { describeReadOnly } from "@/lib/bookmark-utils"
 interface BookmarkItemProps {
   bookmark: BookmarkNode
   layout: "list" | "grid"
-  faviconUrl: string
-  faviconFallbackUrl?: string
   sortableIndex: number
   folderId: string
 }
@@ -40,8 +38,6 @@ interface BookmarkItemProps {
 export const BookmarkItem = React.memo(function BookmarkItem({
   bookmark,
   layout,
-  faviconUrl,
-  faviconFallbackUrl,
   sortableIndex,
   folderId,
 }: BookmarkItemProps) {
@@ -139,8 +135,6 @@ export const BookmarkItem = React.memo(function BookmarkItem({
           >
             <Favicon
               url={bookmark.url ?? ""}
-              primarySrc={faviconUrl}
-              fallbackSrc={faviconFallbackUrl}
               title={bookmark.title}
               size={40}
             />
@@ -178,13 +172,7 @@ export const BookmarkItem = React.memo(function BookmarkItem({
             />
           }
         >
-          <Favicon
-            url={bookmark.url ?? ""}
-            primarySrc={faviconUrl}
-            fallbackSrc={faviconFallbackUrl}
-            title={bookmark.title}
-            size={16}
-          />
+          <Favicon url={bookmark.url ?? ""} title={bookmark.title} size={16} />
           <span className="min-w-0 truncate text-base sm:text-sm">
             {bookmark.title}
           </span>

@@ -200,20 +200,6 @@ export const BookmarkCard = React.memo(function BookmarkCard({
     setCardLayout(folder.id, layout === "list" ? "grid" : "list")
   }, [folder.id, layout, setCardLayout])
 
-  const getFaviconUrl = React.useCallback(
-    (pageUrl: string) => {
-      return adapter?.favicon.getUrl(pageUrl) ?? ""
-    },
-    [adapter]
-  )
-
-  const getFallbackFaviconUrl = React.useCallback(
-    (pageUrl: string) => {
-      return adapter?.favicon.getFallbackUrl?.(pageUrl)
-    },
-    [adapter]
-  )
-
   return (
     <div
       ref={dropRef as React.RefObject<HTMLDivElement>}
@@ -273,8 +259,6 @@ export const BookmarkCard = React.memo(function BookmarkCard({
               key={bookmark.id}
               bookmark={bookmark}
               layout={layout}
-              faviconUrl={getFaviconUrl(bookmark.url!)}
-              faviconFallbackUrl={getFallbackFaviconUrl(bookmark.url!)}
               sortableIndex={index}
               folderId={folder.id}
             />

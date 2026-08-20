@@ -8,7 +8,14 @@ const GOOGLE_FAVICON_HOSTS = [
   "https://www.google.com/s2/favicons",
 ]
 
-function isGoogleFaviconUrl(url: string): boolean {
+/**
+ * Whether a URL is one of Google's favicon endpoints.
+ *
+ * Exported because the globe check below is the only reason the resolver ever
+ * decodes an icon's dimensions, and decoding every icon to ask a question that
+ * can only be true for these five prefixes would be waste.
+ */
+export function isGoogleFaviconUrl(url: string): boolean {
   return GOOGLE_FAVICON_HOSTS.some((prefix) => url.startsWith(prefix))
 }
 

@@ -92,12 +92,10 @@ describe("provider matrix", () => {
 
   const pageUrl = "https://example.com/page"
 
-  it("shares the primary Google V2 provider across every build", () => {
-    vi.stubGlobal("chrome", { runtime: { id: "abcdef" } })
+  it("shares the primary Google V2 provider everywhere there is no native one", () => {
     const primaries = [
       adapter.getUrl(pageUrl),
       new StandaloneFaviconAdapter().getUrl(pageUrl),
-      new ChromeFaviconAdapter().getUrl(pageUrl),
       new FirefoxFaviconAdapter().getUrl(pageUrl),
     ]
 
@@ -105,15 +103,25 @@ describe("provider matrix", () => {
     expect(primaries[0]).toContain("https://t1.gstatic.com/faviconV2")
   })
 
-  it("does not share the fallback: daemon goes to Google where Chrome stays on-device", () => {
+  it("does not share the primary: Chrome asks itself before it asks Google", () => {
+    vi.stubGlobal("chrome", { runtime: { id: "abcdef" } })
+
+    const chromePrimary = new ChromeFaviconAdapter().getUrl(pageUrl)
+
+    expect(chromePrimary.startsWith("chrome-extension://")).toBe(true)
+    expect(chromePrimary).not.toBe(adapter.getUrl(pageUrl))
+  })
+
+  it("does not share the fallback: daemon's second try is still Google", () => {
     vi.stubGlobal("chrome", { runtime: { id: "abcdef" } })
 
     const daemonFallback = adapter.getFallbackUrl(pageUrl)
     const chromeFallback = new ChromeFaviconAdapter().getFallbackUrl(pageUrl)
 
-    expect(daemonFallback).not.toBe(chromeFallback)
     expect(new URL(daemonFallback).hostname).toBe("www.google.com")
-    expect(chromeFallback.startsWith("chrome-extension://")).toBe(true)
+    // Chrome's second try is Google's V2 service, the one its first try —
+    // the browser's own icon database — could not answer for.
+    expect(new URL(chromeFallback).hostname).toBe("t1.gstatic.com")
   })
 
   it("does not share the fallback: Firefox makes no second attempt at all", () => {
@@ -126,7 +134,7 @@ describe("provider matrix", () => {
   })
 })
 
-describe("extension favicon behaviour is unchanged", () => {
+describe("extension favicon providers", () => {
   afterEach(() => {
     vi.unstubAllGlobals()
   })
@@ -137,23 +145,46 @@ describe("extension favicon behaviour is unchanged", () => {
     expect(firefox.getUrl("https://example.com")).toContain(
       "https://t1.gstatic.com/faviconV2"
     )
-    // Documented in the adapter: Firefox has no `_favicon` equivalent, so it
-    // deliberately offers no fallback.
+    // Documented in the adapter: Firefox has no `_favicon` equivalent, and the
+    // native source it does have needs the `tabs` permission this extension
+    // deliberately does not request. So there is still no second attempt.
     expect(
       (firefox as FirefoxFaviconAdapter & { getFallbackUrl?: unknown })
         .getFallbackUrl
     ).toBeUndefined()
   })
 
-  it("Chrome still falls back to the extension's own _favicon API", () => {
+  it("Chrome asks its own _favicon API first and Google only after", () => {
     vi.stubGlobal("chrome", { runtime: { id: "abcdef" } })
+    const chromeAdapter = new ChromeFaviconAdapter()
+
+    expect(chromeAdapter.getUrl("https://example.com")).toBe(
+      `chrome-extension://abcdef/_favicon/?pageUrl=${encodeURIComponent("https://example.com")}&size=64`
+    )
+    expect(chromeAdapter.getFallbackUrl("https://example.com")).toContain(
+      "https://t1.gstatic.com/faviconV2"
+    )
+  })
+
+  it("Chrome offers a way to recognize its own placeholder", () => {
+    vi.stubGlobal("chrome", { runtime: { id: "abcdef" } })
+
+    // Without this the cache could not store `_favicon` results at all: its
+    // miss is a valid image, so a site Chrome knows nothing about would be
+    // pinned to a generic icon instead of falling through to Google.
+    expect(new ChromeFaviconAdapter().getPlaceholderProbeUrl()).toBe(
+      `chrome-extension://abcdef/_favicon/?pageUrl=${encodeURIComponent("https://favicon-probe.invalid/")}&size=64`
+    )
+  })
+
+  it("Chrome falls back to Google as its primary when _favicon is unavailable", () => {
+    // A Chrome build loaded unprivileged — the dev server — has no
+    // `chrome.runtime`, so there is nothing on-device to ask.
     const chromeAdapter = new ChromeFaviconAdapter()
 
     expect(chromeAdapter.getUrl("https://example.com")).toContain(
       "https://t1.gstatic.com/faviconV2"
     )
-    expect(chromeAdapter.getFallbackUrl("https://example.com")).toBe(
-      `chrome-extension://abcdef/_favicon/?pageUrl=${encodeURIComponent("https://example.com")}&size=64`
-    )
+    expect(chromeAdapter.getPlaceholderProbeUrl()).toBe("")
   })
 })

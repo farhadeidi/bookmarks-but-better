@@ -34,11 +34,11 @@
 - **Light and dark mode** — Follows system preference or toggle manually
 - **Choose your root folder** — Display bookmarks from any folder
 - **Import and export** — Standard HTML bookmark files
-- **Smart favicons** — Sharp, high-quality site icons with a clean letter fallback when a site has none
+- **Smart favicons** — Sharp, high-quality site icons, cached locally so they load offline, with a clean letter fallback when a site has none
 - **Quick capture** — Save the active tab from the extension popup
 - **Address-bar search** — Search the active source with the `bb` omnibox keyword
 - **Three bookmark sources** — Browser bookmarks, a browser-local standalone collection, or an optional Markdown vault daemon
-- **Private by design** — No account, analytics, tracking, ads, or bookmark-content collection
+- **Private by design** — No account, analytics, tracking, ads, or bookmark-content collection. Favicons are the one thing that leaves your machine; see [Privacy](#privacy)
 
 Existing extension users upgrade in place. Version 4 preserves their selected
 root folder, layouts, themes and completed setup state; the setup wizard is not
@@ -110,6 +110,43 @@ optional localhost access at that moment, not during extension installation.
 <p align="center">
   <img src="marketing/output/04-settings.png" width="700" alt="Settings dialog" />
 </p>
+
+## Privacy
+
+There is no account, no analytics, no tracking and no collection of bookmark
+content. Your bookmarks stay in your browser profile, in your Markdown vault, or
+both — nothing about them is uploaded anywhere.
+
+The one exception is **favicons**, and it is worth being precise about it. Site
+icons are not something a browser extension can generally produce on its own, so
+they come from a short chain of providers, tried in order:
+
+1. **The local cache.** Icon bytes stored in IndexedDB on this machine. A hit
+   contacts nobody at all. Entries live 30 days; "nobody has an icon for this
+   site" is remembered for a day.
+2. **The browser's own icon database**, where it exists. On Chrome that is the
+   `_favicon` API, which answers out of the browser's local store — this is the
+   first thing Chrome tries, and a hit contacts nobody. Firefox exposes no
+   equivalent an extension can read without the `tabs` permission, which this
+   extension deliberately does not request, so it has no native step.
+3. **Google's favicon service** (`t1.gstatic.com`, and `www.google.com/s2` in
+   some builds). This is the step that discloses something: Google is sent the
+   bookmark's **origin** — `https://example.com`, never the path, query or
+   fragment. Over a whole dashboard, the set of origins asked about is
+   effectively your list of bookmarked sites.
+4. **A letter placeholder**, generated locally, when everything above misses.
+
+So: an origin reaches Google only when the cache misses and no local source
+answered. In the Chrome and Firefox extensions the response's bytes are stored
+after the first successful lookup, so a given site is asked about roughly once a
+month rather than on every render. The daemon's own web app, served over
+loopback, is not allowed to read a cross-origin response, so it can display
+Google's icon but not cache it — there, a site with an icon is still fetched from
+Google on each load. Removing that last case needs the daemon to fetch icons
+itself, which is tracked separately.
+
+The daemon binds to `127.0.0.1`/`localhost` and makes no outbound request of its
+own. Every request described above is made by the browser rendering the UI.
 
 ## Development
 
