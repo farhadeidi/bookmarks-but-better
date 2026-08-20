@@ -236,7 +236,11 @@ export const DEV_SCENARIOS: DevScenario[] = [
     label: "Fresh Chrome profile",
     description:
       "A brand-new extension profile: only the empty Browser Source, and onboarding still to do.",
-    capabilities: devCapabilities(),
+    // The one scenario that claims to be an extension in a real Chrome: it is
+    // the only place the wizard's source question and the omnibox keyword the
+    // last step teaches are inspectable at all. Every other scenario runs as
+    // the plain web app the workbench actually is.
+    capabilities: devCapabilities({ isExtension: true, omnibox: true }),
     browserTree: [],
     standaloneTree: null,
     daemons: [],
@@ -326,6 +330,10 @@ export const DEV_SCENARIOS: DevScenario[] = [
       buildTarget: "safari",
       browserSource: false,
       isExtension: true,
+      // Safari's manifest declares no new-tab override; a scenario that
+      // claimed one would let a surface promise a new tab page Safari never
+      // gives it, which is the whole thing this scenario exists to catch.
+      newTabOverride: false,
     }),
     browserTree: null,
     standaloneTree: null,
@@ -347,6 +355,7 @@ export const DEV_SCENARIOS: DevScenario[] = [
       buildTarget: "safari",
       browserSource: false,
       isExtension: true,
+      newTabOverride: false,
     }),
     browserTree: null,
     standaloneTree: null,

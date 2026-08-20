@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **The setup wizard is shorter, and its last step now teaches instead of
+  congratulating.** The welcome and appearance steps are gone — one showed a
+  logo, the other duplicated Settings — and the root-folder step appears only
+  where the tree offers somewhere to point. What replaces "You're all set" is a
+  card naming the things nothing else reveals: that typing anything opens
+  search, that arrow keys move through the grid, and that `bb` searches from
+  the address bar. Each line appears only where the running build actually has
+  that capability, so Safari is never promised a new tab page it does not
+  replace or a keyword it has no omnibox for
+
 ### Added
 
 - **Safari, built from the repository.** An Xcode project and a one-command

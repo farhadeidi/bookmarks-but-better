@@ -55,15 +55,18 @@ async function rootId(): Promise<string> {
 }
 
 /**
- * Past the setup wizard and onto the dashboard. A fresh profile always runs
- * it, and this build's wizard has no source question to answer: there is no
- * Browser Source to choose.
+ * Past the setup wizard and onto the dashboard.
+ *
+ * A fresh profile always runs it, but what the wizard puts on the track is a
+ * capability question — this build has no source to choose and, until a daemon
+ * is connected, no tree to point at — so the way out is the one control that
+ * is always there. Exactly one of these two exists at a time: the skip link on
+ * every step but the last, the finish button only on the last.
  */
 async function completeOnboarding(page: import("@playwright/test").Page) {
-  await page.getByRole("button", { name: "Get Started" }).click()
-  // The wizard slides its steps; let the transition settle before skipping.
-  await page.waitForTimeout(450)
-  await page.getByRole("button", { name: "Skip, use defaults" }).click()
+  await page
+    .getByRole("button", { name: /^(Skip, use defaults|Start Browsing)$/ })
+    .click()
 }
 
 test("the shipped Safari bundle claims no capability Safari does not have", async () => {

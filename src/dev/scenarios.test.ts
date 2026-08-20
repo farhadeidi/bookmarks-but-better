@@ -159,6 +159,18 @@ describe("initial source configuration", () => {
     expect(config.activeSourceId).toBeNull()
   })
 
+  it("no Safari scenario claims a capability the Safari manifest omits", () => {
+    // Every surface asking capability questions sees the scenario's answers,
+    // so a scenario claiming an omnibox or a new-tab override Safari has none
+    // of would hide exactly the bug it exists to expose.
+    for (const scenario of DEV_SCENARIOS) {
+      if (scenario.capabilities.buildTarget !== "safari") continue
+      expect(scenario.capabilities.omnibox).toBe(false)
+      expect(scenario.capabilities.newTabOverride).toBe(false)
+      expect(scenario.capabilities.browserSource).toBe(false)
+    }
+  })
+
   it("the empty scenario has nothing enabled at all", () => {
     const config = initialConfigFor(getScenario("empty"))
     expect(config.sources).toEqual({})
