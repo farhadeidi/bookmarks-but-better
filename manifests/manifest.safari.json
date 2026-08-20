@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Bookmarks But Better",
-  "description": "A clean, beautiful bookmarks dashboard backed by a local daemon, with themes, dark mode, and full bookmark management.",
+  "description": "A bookmarks dashboard backed by a local daemon. Themes, dark mode, full management. Reads the current page only when you click Save.",
   "version": "4.1.0",
   "action": {
     "default_popup": "popup.html",
@@ -11,7 +11,7 @@
     "service_worker": "background.js",
     "type": "module"
   },
-  "permissions": ["activeTab", "storage", "tabs"],
+  "permissions": ["activeTab", "storage"],
   "host_permissions": ["https://t1.gstatic.com/*", "https://www.google.com/*"],
   "optional_host_permissions": ["http://127.0.0.1/*", "http://localhost/*"],
   "icons": {

@@ -16,6 +16,7 @@ const SAFARI_CAPABILITIES = {
   buildTarget: "safari",
   browserSource: false,
   omnibox: false,
+  newTabOverride: false,
   isExtension: true,
   daemonSource: true,
 } as const
@@ -172,6 +173,7 @@ describe("OnboardingWizard source step", () => {
       buildTarget: "firefox",
       browserSource: true,
       omnibox: true,
+      newTabOverride: true,
       isExtension: true,
       daemonSource: false,
     })

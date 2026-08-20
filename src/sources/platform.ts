@@ -19,6 +19,16 @@ export interface PlatformCapabilities {
   browserSource: boolean
   /** Whether the omnibox keyword integration exists. */
   omnibox: boolean
+  /**
+   * Whether this build replaces the browser's new tab page.
+   *
+   * The question behind it is "does the dashboard show up on its own?". Where
+   * it does, installing the extension is enough — the next new tab is the
+   * dashboard and the setup wizard runs there. Where it does not, nothing
+   * happens after an install unless something opens it, which is what the
+   * background worker uses this to decide.
+   */
+  newTabOverride: boolean
   /** Whether this runs as a browser extension (dashboard + popup + worker). */
   isExtension: boolean
   /** Whether daemon sources can be connected from this client. */
@@ -114,6 +124,8 @@ function computedPlatformCapabilities(): PlatformCapabilities {
       buildTarget: target,
       browserSource: false,
       omnibox: false,
+      // The daemon serves this app at a URL; it replaces no new tab page.
+      newTabOverride: false,
       isExtension: false,
       daemonSource: true,
     }
@@ -130,6 +142,11 @@ function computedPlatformCapabilities(): PlatformCapabilities {
     buildTarget: target,
     browserSource,
     omnibox: hasOmniboxApi(),
+    // Safari's WebExtensions implementation supports no new-tab override, so
+    // its manifest declares none — see `manifests/manifest.safari.json` and
+    // the contract test that pins its absence. Chrome and Firefox do, and
+    // their manifests claim it.
+    newTabOverride: target !== "safari",
     isExtension,
     // Firefox for Android cannot reach a same-machine daemon; desktop
     // extension builds and plain web builds can.

@@ -64,6 +64,12 @@ describe("extension build contract", () => {
       type: "module",
     })
     expect(safari.permissions).not.toContain("bookmarks")
+    // `tabs` would hand over the URL and title of every open tab, standing
+    // where Safari already prompts per site. The capture popup reads only the
+    // tab the user invoked it on, which is what `activeTab` grants — Chrome
+    // and Firefox run the same code without `tabs`, so asking for it here
+    // would buy nothing and widen the prompt.
+    expect(safari.permissions).not.toContain("tabs")
     expect(safari.omnibox).toBeUndefined()
     expect(safari.chrome_url_overrides).toBeUndefined()
     expect(safari.chrome_settings_overrides).toBeUndefined()

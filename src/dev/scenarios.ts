@@ -70,6 +70,7 @@ function devCapabilities(
     buildTarget: "chrome",
     browserSource: true,
     omnibox: false,
+    newTabOverride: true,
     isExtension: false,
     daemonSource: true,
     ...overrides,

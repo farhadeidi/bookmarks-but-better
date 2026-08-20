@@ -238,19 +238,24 @@ export function CapturePopup({ dependencies }: CapturePopupProps) {
                 ? "Saved"
                 : "Save bookmark"}
           </Button>
-
-          {canOpenDashboard && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="w-full"
-              onClick={openDashboard}
-            >
-              Open the dashboard
-            </Button>
-          )}
         </form>
+      )}
+
+      {/* Outside the branch above on purpose. Where the popup is the only
+          route to the dashboard, the error state is exactly when this is
+          needed most: "no bookmark source is enabled" tells the user to go and
+          connect one, and rendering this only alongside the form left them
+          with nowhere to go. */}
+      {canOpenDashboard && (
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="w-full"
+          onClick={openDashboard}
+        >
+          Open the dashboard
+        </Button>
       )}
     </main>
   )

@@ -10,10 +10,54 @@
     <script src="../Script.js" defer></script>
 </head>
 <body>
-    <img src="../Icon.png" width="128" height="128" alt="Bookmarks But Better Icon">
+    <img src="../Icon.png" width="96" height="96" alt="Bookmarks But Better Icon">
+
+    <!--
+      Safari does not replace the new tab page, so installing the extension
+      opens nothing and explains nothing. This window is the one screen a user
+      always sees — the app has to be opened for the extension to register at
+      all — so it carries the setup, not just the on/off state.
+
+      The three state-* paragraphs and button.open-preferences are read by
+      Script.js by class name. Keep them.
+    -->
     <p class="state-unknown">You can turn on Bookmarks But Better’s extension in Safari Extensions preferences.</p>
     <p class="state-on">Bookmarks But Better’s extension is currently on. You can turn it off in Safari Extensions preferences.</p>
     <p class="state-off">Bookmarks But Better’s extension is currently off. You can turn it on in Safari Extensions preferences.</p>
     <button class="open-preferences">Quit and Open Safari Extensions Preferences…</button>
+
+    <section class="setup">
+        <h1>Then set up where your bookmarks live</h1>
+        <p class="why">
+            Safari does not share its own bookmarks with extensions — this one
+            never reads or changes them. Your bookmarks live in a folder of
+            Markdown files on this Mac, served by a small local program called
+            the daemon. Put that folder in iCloud Drive and every Mac you use
+            sees the same bookmarks.
+        </p>
+
+        <ol>
+            <li>
+                <p>Install the daemon. In Terminal:</p>
+                <code>curl -fsSL https://github.com/farhadeidi/bookmarks-but-better/releases/latest/download/install.sh | bash</code>
+            </li>
+            <li>
+                <p>Create your vault and start it at login:</p>
+                <code>bookmarks-but-better setup</code>
+                <p class="note">It asks a few questions, then keeps running on its own.</p>
+            </li>
+            <li>
+                <p>
+                    Back in Safari, click the Bookmarks But Better icon in the
+                    toolbar and choose <strong>Open the dashboard</strong>, then
+                    <strong>Connect a daemon</strong>. Safari asks permission for
+                    <code class="inline">127.0.0.1</code> at that moment — that is
+                    the only network access this extension ever requests.
+                </p>
+            </li>
+        </ol>
+
+        <p class="note">The commands above can be selected and copied.</p>
+    </section>
 </body>
 </html>

@@ -120,4 +120,37 @@ describe("CapturePopup", () => {
     )
     expect(dependencies.selectAdapter).not.toHaveBeenCalled()
   })
+
+  /**
+   * Where the popup is the only route to the dashboard — a build with no
+   * new-tab override — the error state is exactly when that route matters:
+   * "no bookmark source is enabled" sends the user to the dashboard to connect
+   * one. Rendering the way out only beside the form left a Safari user with a
+   * message telling them to go somewhere and no way to get there.
+   */
+  it("keeps the route to the dashboard when there is nothing to save into", async () => {
+    vi.stubEnv("VITE_BUILD_TARGET", "safari")
+    vi.stubGlobal("chrome", {
+      storage: {},
+      runtime: { id: "safari-extension", getURL: (path: string) => path },
+      tabs: { create: vi.fn() },
+    })
+
+    const { dependencies } = popupDependencies()
+    vi.mocked(dependencies.getActiveTab).mockResolvedValue({
+      title: "Settings",
+      url: "about:preferences",
+    })
+    render(<CapturePopup dependencies={dependencies} />)
+
+    expect((await screen.findByText("Cannot save this page")).isConnected).toBe(
+      true
+    )
+    expect(
+      screen.getByRole("button", { name: "Open the dashboard" }).isConnected
+    ).toBe(true)
+
+    vi.unstubAllEnvs()
+    vi.unstubAllGlobals()
+  })
 })
