@@ -43,6 +43,7 @@ describe("the scenario registry", () => {
       "slow-daemon",
       "legacy-standalone",
       "safari",
+      "fresh-safari",
       "empty",
       "large-library",
     ])
@@ -148,6 +149,16 @@ describe("initial source configuration", () => {
     expect(config.activeSourceId).toBe(daemonSourceId(ORIGIN, "reading"))
   })
 
+  it("a fresh Safari profile starts with no source and onboarding to do", () => {
+    const scenario = getScenario("fresh-safari")
+    expect(scenario.capabilities.browserSource).toBe(false)
+    expect(scenario.onboardingCompleted).toBe(false)
+
+    const config = initialConfigFor(scenario)
+    expect(config.sources).toEqual({})
+    expect(config.activeSourceId).toBeNull()
+  })
+
   it("the empty scenario has nothing enabled at all", () => {
     const config = initialConfigFor(getScenario("empty"))
     expect(config.sources).toEqual({})
@@ -168,11 +179,10 @@ describe("initial source configuration", () => {
     expect(getScenario("slow-daemon").faults).toEqual({ daemonLatencyMs: 1200 })
   })
 
-  it("only fresh-chrome still has onboarding to do", () => {
+  it("only the fresh-profile scenarios still have onboarding to do", () => {
+    const fresh = new Set(["fresh-chrome", "fresh-safari"])
     for (const scenario of DEV_SCENARIOS) {
-      expect(scenario.onboardingCompleted).toBe(
-        scenario.id === "fresh-chrome" ? false : true
-      )
+      expect(scenario.onboardingCompleted).toBe(!fresh.has(scenario.id))
     }
   })
 })

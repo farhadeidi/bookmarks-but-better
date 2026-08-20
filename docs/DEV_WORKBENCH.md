@@ -21,6 +21,7 @@ The workbench (bottom-left pill) exposes deterministic, URL-addressable scenario
 | `/?scenario=slow-daemon` | Every daemon operation takes 1.2s — loading states on display |
 | `/?scenario=legacy-standalone` | A sunset-cohort profile with the legacy Standalone source active |
 | `/?scenario=safari` | Safari's world: no Browser Source, a daemon Vault is the only way in |
+| `/?scenario=fresh-safari` | Safari's world before setup: no source, and onboarding with no source question |
 | `/?scenario=empty` | Nothing enabled — the dashboard's own empty state |
 | `/?scenario=large-library` | Hundreds of seeded bookmarks |
 

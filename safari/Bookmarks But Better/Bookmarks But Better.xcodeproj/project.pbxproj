@@ -1,0 +1,657 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		872141FD3036815800A48288 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 872141FC3036815800A48288 /* AppDelegate.swift */; };
+		872142013036815800A48288 /* Main.html in Resources */ = {isa = PBXBuildFile; fileRef = 872141FF3036815800A48288 /* Main.html */; };
+		872142033036815800A48288 /* Icon.png in Resources */ = {isa = PBXBuildFile; fileRef = 872142023036815800A48288 /* Icon.png */; };
+		872142053036815800A48288 /* Style.css in Resources */ = {isa = PBXBuildFile; fileRef = 872142043036815800A48288 /* Style.css */; };
+		872142073036815800A48288 /* Script.js in Resources */ = {isa = PBXBuildFile; fileRef = 872142063036815800A48288 /* Script.js */; };
+		872142093036815800A48288 /* ViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 872142083036815800A48288 /* ViewController.swift */; };
+		8721420C3036815800A48288 /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 8721420A3036815800A48288 /* Main.storyboard */; };
+		8721420E3036815800A48288 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 8721420D3036815800A48288 /* Assets.xcassets */; };
+		872142153036815800A48288 /* Bookmarks But Better Extension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 872142143036815800A48288 /* Bookmarks But Better Extension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		8721421A3036815800A48288 /* SafariWebExtensionHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 872142193036815800A48288 /* SafariWebExtensionHandler.swift */; };
+		872142363036815900A48288 /* favicon.ico in Resources */ = {isa = PBXBuildFile; fileRef = 872142263036815900A48288 /* favicon.ico */; };
+		872142373036815900A48288 /* index.html in Resources */ = {isa = PBXBuildFile; fileRef = 872142273036815900A48288 /* index.html */; };
+		872142383036815900A48288 /* apple-touch-icon.png in Resources */ = {isa = PBXBuildFile; fileRef = 872142283036815900A48288 /* apple-touch-icon.png */; };
+		872142393036815900A48288 /* background.js in Resources */ = {isa = PBXBuildFile; fileRef = 872142293036815900A48288 /* background.js */; };
+		8721423A3036815900A48288 /* popup.html in Resources */ = {isa = PBXBuildFile; fileRef = 8721422A3036815900A48288 /* popup.html */; };
+		8721423B3036815900A48288 /* icon-192.png in Resources */ = {isa = PBXBuildFile; fileRef = 8721422B3036815900A48288 /* icon-192.png */; };
+		8721423C3036815900A48288 /* vite.svg in Resources */ = {isa = PBXBuildFile; fileRef = 8721422C3036815900A48288 /* vite.svg */; };
+		8721423D3036815900A48288 /* logo-dark.svg in Resources */ = {isa = PBXBuildFile; fileRef = 8721422D3036815900A48288 /* logo-dark.svg */; };
+		8721423E3036815900A48288 /* icon-512-maskable.png in Resources */ = {isa = PBXBuildFile; fileRef = 8721422E3036815900A48288 /* icon-512-maskable.png */; };
+		8721423F3036815900A48288 /* theme-bootstrap.js in Resources */ = {isa = PBXBuildFile; fileRef = 8721422F3036815900A48288 /* theme-bootstrap.js */; };
+		872142403036815900A48288 /* icons in Resources */ = {isa = PBXBuildFile; fileRef = 872142303036815900A48288 /* icons */; };
+		872142413036815900A48288 /* manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = 872142313036815900A48288 /* manifest.json */; };
+		872142423036815900A48288 /* assets in Resources */ = {isa = PBXBuildFile; fileRef = 872142323036815900A48288 /* assets */; };
+		872142433036815900A48288 /* logo.svg in Resources */ = {isa = PBXBuildFile; fileRef = 872142333036815900A48288 /* logo.svg */; };
+		872142443036815900A48288 /* favicon.svg in Resources */ = {isa = PBXBuildFile; fileRef = 872142343036815900A48288 /* favicon.svg */; };
+		872142453036815900A48288 /* icon-512.png in Resources */ = {isa = PBXBuildFile; fileRef = 872142353036815900A48288 /* icon-512.png */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		872142163036815800A48288 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 872141F13036815800A48288 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 872142133036815800A48288;
+			remoteInfo = "Bookmarks But Better Extension";
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		872142213036815800A48288 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				872142153036815800A48288 /* Bookmarks But Better Extension.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		872141F93036815800A48288 /* Bookmarks But Better.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Bookmarks But Better.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		872141FC3036815800A48288 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
+		872142003036815800A48288 /* Base */ = {isa = PBXFileReference; lastKnownFileType = text.html; name = Base; path = Base.lproj/Main.html; sourceTree = "<group>"; };
+		872142023036815800A48288 /* Icon.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = Icon.png; sourceTree = "<group>"; };
+		872142043036815800A48288 /* Style.css */ = {isa = PBXFileReference; lastKnownFileType = text.css; path = Style.css; sourceTree = "<group>"; };
+		872142063036815800A48288 /* Script.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = Script.js; sourceTree = "<group>"; };
+		872142083036815800A48288 /* ViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ViewController.swift; sourceTree = "<group>"; };
+		8721420B3036815800A48288 /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/Main.storyboard; sourceTree = "<group>"; };
+		8721420D3036815800A48288 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		8721420F3036815800A48288 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		872142143036815800A48288 /* Bookmarks But Better Extension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = "Bookmarks But Better Extension.appex"; sourceTree = BUILT_PRODUCTS_DIR; };
+		872142193036815800A48288 /* SafariWebExtensionHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SafariWebExtensionHandler.swift; sourceTree = "<group>"; };
+		8721421B3036815800A48288 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		872142263036815900A48288 /* favicon.ico */ = {isa = PBXFileReference; lastKnownFileType = image.ico; name = favicon.ico; path = Resources/favicon.ico; sourceTree = "<group>"; };
+		872142273036815900A48288 /* index.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; name = index.html; path = Resources/index.html; sourceTree = "<group>"; };
+		872142283036815900A48288 /* apple-touch-icon.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = "apple-touch-icon.png"; path = "Resources/apple-touch-icon.png"; sourceTree = "<group>"; };
+		872142293036815900A48288 /* background.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = background.js; path = Resources/background.js; sourceTree = "<group>"; };
+		8721422A3036815900A48288 /* popup.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; name = popup.html; path = Resources/popup.html; sourceTree = "<group>"; };
+		8721422B3036815900A48288 /* icon-192.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = "icon-192.png"; path = "Resources/icon-192.png"; sourceTree = "<group>"; };
+		8721422C3036815900A48288 /* vite.svg */ = {isa = PBXFileReference; lastKnownFileType = text; name = vite.svg; path = Resources/vite.svg; sourceTree = "<group>"; };
+		8721422D3036815900A48288 /* logo-dark.svg */ = {isa = PBXFileReference; lastKnownFileType = text; name = "logo-dark.svg"; path = "Resources/logo-dark.svg"; sourceTree = "<group>"; };
+		8721422E3036815900A48288 /* icon-512-maskable.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = "icon-512-maskable.png"; path = "Resources/icon-512-maskable.png"; sourceTree = "<group>"; };
+		8721422F3036815900A48288 /* theme-bootstrap.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = "theme-bootstrap.js"; path = "Resources/theme-bootstrap.js"; sourceTree = "<group>"; };
+		872142303036815900A48288 /* icons */ = {isa = PBXFileReference; lastKnownFileType = folder; name = icons; path = Resources/icons; sourceTree = "<group>"; };
+		872142313036815900A48288 /* manifest.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; name = manifest.json; path = Resources/manifest.json; sourceTree = "<group>"; };
+		872142323036815900A48288 /* assets */ = {isa = PBXFileReference; lastKnownFileType = folder; name = assets; path = Resources/assets; sourceTree = "<group>"; };
+		872142333036815900A48288 /* logo.svg */ = {isa = PBXFileReference; lastKnownFileType = text; name = logo.svg; path = Resources/logo.svg; sourceTree = "<group>"; };
+		872142343036815900A48288 /* favicon.svg */ = {isa = PBXFileReference; lastKnownFileType = text; name = favicon.svg; path = Resources/favicon.svg; sourceTree = "<group>"; };
+		872142353036815900A48288 /* icon-512.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = "icon-512.png"; path = "Resources/icon-512.png"; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		872141F63036815800A48288 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		872142113036815800A48288 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		872141F03036815800A48288 = {
+			isa = PBXGroup;
+			children = (
+				872141FB3036815800A48288 /* Bookmarks But Better */,
+				872142183036815800A48288 /* Bookmarks But Better Extension */,
+				872141FA3036815800A48288 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		872141FA3036815800A48288 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				872141F93036815800A48288 /* Bookmarks But Better.app */,
+				872142143036815800A48288 /* Bookmarks But Better Extension.appex */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		872141FB3036815800A48288 /* Bookmarks But Better */ = {
+			isa = PBXGroup;
+			children = (
+				872141FC3036815800A48288 /* AppDelegate.swift */,
+				872142083036815800A48288 /* ViewController.swift */,
+				8721420A3036815800A48288 /* Main.storyboard */,
+				8721420D3036815800A48288 /* Assets.xcassets */,
+				8721420F3036815800A48288 /* Info.plist */,
+				872141FE3036815800A48288 /* Resources */,
+			);
+			path = "Bookmarks But Better";
+			sourceTree = "<group>";
+		};
+		872141FE3036815800A48288 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				872141FF3036815800A48288 /* Main.html */,
+				872142023036815800A48288 /* Icon.png */,
+				872142043036815800A48288 /* Style.css */,
+				872142063036815800A48288 /* Script.js */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
+		872142183036815800A48288 /* Bookmarks But Better Extension */ = {
+			isa = PBXGroup;
+			children = (
+				872142253036815900A48288 /* Resources */,
+				872142193036815800A48288 /* SafariWebExtensionHandler.swift */,
+				8721421B3036815800A48288 /* Info.plist */,
+			);
+			path = "Bookmarks But Better Extension";
+			sourceTree = "<group>";
+		};
+		872142253036815900A48288 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				872142263036815900A48288 /* favicon.ico */,
+				872142273036815900A48288 /* index.html */,
+				872142283036815900A48288 /* apple-touch-icon.png */,
+				872142293036815900A48288 /* background.js */,
+				8721422A3036815900A48288 /* popup.html */,
+				8721422B3036815900A48288 /* icon-192.png */,
+				8721422C3036815900A48288 /* vite.svg */,
+				8721422D3036815900A48288 /* logo-dark.svg */,
+				8721422E3036815900A48288 /* icon-512-maskable.png */,
+				8721422F3036815900A48288 /* theme-bootstrap.js */,
+				872142303036815900A48288 /* icons */,
+				872142313036815900A48288 /* manifest.json */,
+				872142323036815900A48288 /* assets */,
+				872142333036815900A48288 /* logo.svg */,
+				872142343036815900A48288 /* favicon.svg */,
+				872142353036815900A48288 /* icon-512.png */,
+			);
+			name = Resources;
+			path = "Bookmarks But Better Extension";
+			sourceTree = SOURCE_ROOT;
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		872141F83036815800A48288 /* Bookmarks But Better */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 872142223036815800A48288 /* Build configuration list for PBXNativeTarget "Bookmarks But Better" */;
+			buildPhases = (
+				872141F53036815800A48288 /* Sources */,
+				872141F63036815800A48288 /* Frameworks */,
+				872141F73036815800A48288 /* Resources */,
+				872142213036815800A48288 /* Embed Foundation Extensions */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				872142173036815800A48288 /* PBXTargetDependency */,
+			);
+			name = "Bookmarks But Better";
+			packageProductDependencies = (
+			);
+			productName = "Bookmarks But Better";
+			productReference = 872141F93036815800A48288 /* Bookmarks But Better.app */;
+			productType = "com.apple.product-type.application";
+		};
+		872142133036815800A48288 /* Bookmarks But Better Extension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 8721421E3036815800A48288 /* Build configuration list for PBXNativeTarget "Bookmarks But Better Extension" */;
+			buildPhases = (
+				872142103036815800A48288 /* Sources */,
+				872142113036815800A48288 /* Frameworks */,
+				872142123036815800A48288 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = "Bookmarks But Better Extension";
+			packageProductDependencies = (
+			);
+			productName = "Bookmarks But Better Extension";
+			productReference = 872142143036815800A48288 /* Bookmarks But Better Extension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		872141F13036815800A48288 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 2660;
+				LastUpgradeCheck = 2660;
+				TargetAttributes = {
+					872141F83036815800A48288 = {
+						CreatedOnToolsVersion = 26.6;
+					};
+					872142133036815800A48288 = {
+						CreatedOnToolsVersion = 26.6;
+					};
+				};
+			};
+			buildConfigurationList = 872141F43036815800A48288 /* Build configuration list for PBXProject "Bookmarks But Better" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = 872141F03036815800A48288;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 872141FA3036815800A48288 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				872141F83036815800A48288 /* Bookmarks But Better */,
+				872142133036815800A48288 /* Bookmarks But Better Extension */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		872141F73036815800A48288 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				872142033036815800A48288 /* Icon.png in Resources */,
+				8721420C3036815800A48288 /* Main.storyboard in Resources */,
+				872142073036815800A48288 /* Script.js in Resources */,
+				872142013036815800A48288 /* Main.html in Resources */,
+				8721420E3036815800A48288 /* Assets.xcassets in Resources */,
+				872142053036815800A48288 /* Style.css in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		872142123036815800A48288 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				872142423036815900A48288 /* assets in Resources */,
+				872142403036815900A48288 /* icons in Resources */,
+				872142393036815900A48288 /* background.js in Resources */,
+				8721423A3036815900A48288 /* popup.html in Resources */,
+				8721423E3036815900A48288 /* icon-512-maskable.png in Resources */,
+				872142433036815900A48288 /* logo.svg in Resources */,
+				872142413036815900A48288 /* manifest.json in Resources */,
+				872142363036815900A48288 /* favicon.ico in Resources */,
+				8721423D3036815900A48288 /* logo-dark.svg in Resources */,
+				872142373036815900A48288 /* index.html in Resources */,
+				872142383036815900A48288 /* apple-touch-icon.png in Resources */,
+				8721423C3036815900A48288 /* vite.svg in Resources */,
+				8721423B3036815900A48288 /* icon-192.png in Resources */,
+				872142453036815900A48288 /* icon-512.png in Resources */,
+				8721423F3036815900A48288 /* theme-bootstrap.js in Resources */,
+				872142443036815900A48288 /* favicon.svg in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		872141F53036815800A48288 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				872142093036815800A48288 /* ViewController.swift in Sources */,
+				872141FD3036815800A48288 /* AppDelegate.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		872142103036815800A48288 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				8721421A3036815800A48288 /* SafariWebExtensionHandler.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		872142173036815800A48288 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 872142133036815800A48288 /* Bookmarks But Better Extension */;
+			targetProxy = 872142163036815800A48288 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin PBXVariantGroup section */
+		872141FF3036815800A48288 /* Main.html */ = {
+			isa = PBXVariantGroup;
+			children = (
+				872142003036815800A48288 /* Base */,
+			);
+			name = Main.html;
+			sourceTree = "<group>";
+		};
+		8721420A3036815800A48288 /* Main.storyboard */ = {
+			isa = PBXVariantGroup;
+			children = (
+				8721420B3036815800A48288 /* Base */,
+			);
+			name = Main.storyboard;
+			sourceTree = "<group>";
+		};
+/* End PBXVariantGroup section */
+
+/* Begin XCBuildConfiguration section */
+		8721421C3036815800A48288 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		8721421D3036815800A48288 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SDKROOT = macosx;
+				SWIFT_COMPILATION_MODE = wholemodule;
+			};
+			name = Release;
+		};
+		8721421F3036815800A48288 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_USER_SELECTED_FILES = readonly;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Bookmarks But Better Extension/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "Bookmarks But Better Extension";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 1.0;
+				OTHER_LDFLAGS = (
+					"-framework",
+					SafariServices,
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "com.farhadeidi.bookmarks-but-better.safari.Extension";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		872142203036815800A48288 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_USER_SELECTED_FILES = readonly;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Bookmarks But Better Extension/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "Bookmarks But Better Extension";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 1.0;
+				OTHER_LDFLAGS = (
+					"-framework",
+					SafariServices,
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "com.farhadeidi.bookmarks-but-better.safari.Extension";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		872142233036815800A48288 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
+				ENABLE_USER_SELECTED_FILES = readonly;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Bookmarks But Better/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "Bookmarks But Better";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				INFOPLIST_KEY_NSMainStoryboardFile = Main;
+				INFOPLIST_KEY_NSPrincipalClass = NSApplication;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				OTHER_LDFLAGS = (
+					"-framework",
+					SafariServices,
+					"-framework",
+					WebKit,
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "com.farhadeidi.bookmarks-but-better.safari";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				REGISTER_APP_GROUPS = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		872142243036815800A48288 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
+				ENABLE_USER_SELECTED_FILES = readonly;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Bookmarks But Better/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "Bookmarks But Better";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				INFOPLIST_KEY_NSMainStoryboardFile = Main;
+				INFOPLIST_KEY_NSPrincipalClass = NSApplication;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				OTHER_LDFLAGS = (
+					"-framework",
+					SafariServices,
+					"-framework",
+					WebKit,
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "com.farhadeidi.bookmarks-but-better.safari";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				REGISTER_APP_GROUPS = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		872141F43036815800A48288 /* Build configuration list for PBXProject "Bookmarks But Better" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				8721421C3036815800A48288 /* Debug */,
+				8721421D3036815800A48288 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		8721421E3036815800A48288 /* Build configuration list for PBXNativeTarget "Bookmarks But Better Extension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				8721421F3036815800A48288 /* Debug */,
+				872142203036815800A48288 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		872142223036815800A48288 /* Build configuration list for PBXNativeTarget "Bookmarks But Better" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				872142233036815800A48288 /* Debug */,
+				872142243036815800A48288 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 872141F13036815800A48288 /* Project object */;
+}

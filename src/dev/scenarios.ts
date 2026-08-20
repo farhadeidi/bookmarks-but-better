@@ -338,6 +338,22 @@ export const DEV_SCENARIOS: DevScenario[] = [
     onboardingCompleted: true,
   },
   {
+    id: "fresh-safari",
+    label: "Fresh Safari profile",
+    description:
+      "Safari's world before setup: no source at all, and onboarding with no source question to ask.",
+    capabilities: devCapabilities({
+      buildTarget: "safari",
+      browserSource: false,
+      isExtension: true,
+    }),
+    browserTree: null,
+    standaloneTree: null,
+    daemons: [],
+    activeSource: null,
+    onboardingCompleted: false,
+  },
+  {
     id: "empty",
     label: "No sources",
     description:

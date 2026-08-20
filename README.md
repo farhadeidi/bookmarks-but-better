@@ -68,6 +68,18 @@ Or load manually:
 3. Open `about:debugging#/runtime/this-firefox`
 4. Click **Load Temporary Add-on** and select any file inside `dist-firefox/`
 
+**Safari** (macOS 14+, Safari 17+)
+
+1. Clone this repository
+2. Run `bun install && bash safari/build.sh` — builds and ad-hoc signs the app
+   that carries the extension, with no Apple Developer account
+3. Open the built app once, then enable the extension in **Safari → Settings →
+   Extensions** (unsigned builds need **Develop → Allow Unsigned Extensions**)
+
+Safari is **daemon-only**: its WebExtensions implementation has no bookmarks
+API, so connecting a daemon is the only way in. See
+[docs/SAFARI.md](docs/SAFARI.md).
+
 ### Daemon (optional)
 
 The extension can also point at a local `bookmarks-but-better` daemon — a small
@@ -156,12 +168,15 @@ bun run dev               # Dev Workbench — the full app in a browser, with si
 bun run build             # Build for both Chrome and Firefox
 bun run build:chrome      # Build for Chrome only → dist-chrome/
 bun run build:firefox     # Build for Firefox only → dist-firefox/
+bun run build:safari      # Build for Safari only → dist-safari/
+bash safari/build.sh      # Safari: bundle + ad-hoc signed .app (macOS, Xcode)
 bun run zip:firefox       # Package Firefox build → bookmarks-but-better-firefox.zip
 bun run typecheck         # Type check
 bun run lint              # Lint
 bun run format            # Format code
 bun run test              # Run tests
 bun run test:ui           # Playwright UI tests against the Dev Workbench (isolated dev server)
+bun run test:e2e:safari   # The Safari bundle end to end against a throwaway daemon
 bun run test:npm          # Test the npx launcher in packages/bookmarks-but-better
 ```
 
