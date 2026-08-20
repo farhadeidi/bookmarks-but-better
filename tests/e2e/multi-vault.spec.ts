@@ -121,13 +121,14 @@ test("the served web app switches between the hosted vaults", async ({
 
   await page.goto(baseUrl)
 
-  // A fresh profile runs the setup wizard first; skip it to reach the
+  // A fresh profile runs the setup wizard first; leave it to reach the
   // dashboard. The wizard's own source step is absent in the daemon-served
-  // build — the daemon is the only source there.
-  await page.getByRole("button", { name: "Get Started" }).click()
-  // The wizard slides its steps; let the transition settle before skipping.
-  await page.waitForTimeout(450)
-  await page.getByRole("button", { name: "Skip, use defaults" }).click()
+  // build — the daemon is the only source there — so what is on the track is
+  // a capability question. Exactly one of these two controls exists at a time:
+  // the skip link on every step but the last, the finish button only on it.
+  await page
+    .getByRole("button", { name: /^(Skip, use defaults|Start Browsing)$/ })
+    .click()
 
   // Both vaults appear as switchable sources.
   await expect(page.getByRole("tab", { name: /reading/i })).toBeVisible()

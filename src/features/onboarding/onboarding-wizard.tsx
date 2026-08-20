@@ -1,26 +1,22 @@
 import * as React from "react"
+import type { BookmarkNode } from "@/browser"
 import { useBookmarkStore } from "@/stores/bookmark-store"
-import {
-  usePreferencesStore,
-  type ColorTheme,
-} from "@/stores/preferences-store"
-import { useTheme } from "@/components/theme-provider"
-import { WelcomeStep } from "./steps/welcome-step"
+import { usePreferencesStore } from "@/stores/preferences-store"
 import { SourceStep, type OnboardingSourceChoice } from "./steps/source-step"
 import { DaemonSetupStep } from "./steps/daemon-setup-step"
 import { RootFolderStep } from "./steps/root-folder-step"
-import { AppearanceStep } from "./steps/appearance-step"
-import { DoneStep } from "./steps/done-step"
+import { TipsStep } from "./steps/tips-step"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import {
   platformCapabilities,
   type PlatformCapabilities,
 } from "@/sources/platform"
-import { resolveEffectiveCreateParentId } from "@/features/root-folder-select"
+import {
+  buildRootFolderOptions,
+  resolveEffectiveCreateParentId,
+} from "@/features/root-folder-select"
 import { setOnboardingCompleted } from "@/browser/onboarding-preference"
-
-type ThemeMode = "light" | "dark" | "system"
 
 interface OnboardingWizardProps {
   onComplete: () => void
@@ -51,6 +47,26 @@ function requiresDaemonSetup(caps: PlatformCapabilities): boolean {
 }
 
 /**
+ * Whether pointing the dashboard at a folder is a question at all here.
+ *
+ * It is one only where the tree offers somewhere to point: a folder to select,
+ * or a real parent to create one under. With neither — an empty tree, or the
+ * daemon-only profile that has not connected anything yet — the picker's only
+ * entry is "all bookmarks", which is exactly what choosing nothing already
+ * means, so the step would be a dead end rather than a decision. Connecting a
+ * daemon on the previous step brings a tree with it, and the step appears.
+ */
+function hasRootFolderChoice(
+  tree: BookmarkNode[],
+  rootIsCreatable: boolean
+): boolean {
+  return (
+    buildRootFolderOptions(tree).length > 0 ||
+    resolveEffectiveCreateParentId(tree, rootIsCreatable) !== null
+  )
+}
+
+/**
  * The wizard's source choice, normalized to what this platform offers: the
  * Browser Source when it exists, otherwise the Daemon Source — the only
  * offered source on a capability-only (Safari) platform.
@@ -61,6 +77,16 @@ function initialSourceChoice(
   return caps.browserSource ? "browser" : "daemon"
 }
 
+/**
+ * Setup, reduced to the questions this platform actually has to ask, then one
+ * card that teaches what nothing on screen would.
+ *
+ * There is no welcome step (a logo costs a click and teaches nothing) and no
+ * appearance step: Settings owns theme and color mode, and neither is needed
+ * to see a bookmark. That also means the wizard now writes no appearance
+ * preference at all — re-opening it from Settings and skipping used to reset
+ * the user's theme to the defaults.
+ */
 export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
   const [currentStep, setCurrentStep] = React.useState(0)
 
@@ -77,34 +103,10 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
   const [sourceChoice, setSourceChoice] =
     React.useState<OnboardingSourceChoice>(() => initialSourceChoice(caps))
   const [rootFolderId, setRootFolderId] = React.useState<string | null>(null)
-  const [colorTheme, setColorTheme] = React.useState<ColorTheme>("default")
-  const [themeMode, setThemeMode] = React.useState<ThemeMode>("dark")
 
   // Store actions for persisting on completion
   const setStoreRootFolderId = useBookmarkStore((s) => s.setRootFolderId)
-  const setStoreColorTheme = usePreferencesStore((s) => s.setColorTheme)
   const adapter = usePreferencesStore((s) => s.adapter)
-  const { setTheme } = useTheme()
-
-  // Apply theme changes live as the user selects them
-  const handleColorThemeChange = React.useCallback((theme: ColorTheme) => {
-    setColorTheme(theme)
-    // Apply live so the user sees the change behind the blur
-    usePreferencesStore.getState().setColorTheme(theme)
-  }, [])
-
-  const handleThemeModeChange = React.useCallback(
-    (mode: ThemeMode) => {
-      setThemeMode(mode)
-      setTheme(mode)
-    },
-    [setTheme]
-  )
-
-  // Apply dark mode on mount (wizard defaults to dark)
-  React.useEffect(() => {
-    setTheme("dark")
-  }, [setTheme])
 
   // Start the root-folder step on something meaningful rather than "Browser
   // Root (all bookmarks)", which shows every bookmark the user owns. Seeded
@@ -115,27 +117,26 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
   const hasSeededRootFolder = React.useRef(false)
   const bookmarkTree = useBookmarkStore((s) => s.tree)
   const bookmarkAdapter = useBookmarkStore((s) => s.adapter)
+  const rootIsCreatable = bookmarkAdapter?.capabilities.rootIsCreatable ?? false
   React.useEffect(() => {
     if (hasSeededRootFolder.current || bookmarkTree.length === 0) return
     hasSeededRootFolder.current = true
 
     setRootFolderId(
       useBookmarkStore.getState().rootFolderId ??
-        resolveEffectiveCreateParentId(
-          bookmarkTree,
-          bookmarkAdapter?.capabilities.rootIsCreatable ?? false
-        )
+        resolveEffectiveCreateParentId(bookmarkTree, rootIsCreatable)
     )
-  }, [bookmarkTree, bookmarkAdapter])
+  }, [bookmarkTree, rootIsCreatable])
 
   const showSourceStep = hasSourceChoice(caps)
   // Mandatory where the daemon is the only source: it is on the track whatever
   // the user does, rather than sitting behind a choice they were never given.
   const showDaemonSetupStep =
     requiresDaemonSetup(caps) || (showSourceStep && sourceChoice === "daemon")
+  const showRootFolderStep = hasRootFolderChoice(bookmarkTree, rootIsCreatable)
 
   const steps = React.useMemo(() => {
-    const list: React.ReactNode[] = [<WelcomeStep key="welcome" />]
+    const list: React.ReactNode[] = []
     if (showSourceStep) {
       list.push(
         <SourceStep
@@ -148,38 +149,30 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
     if (showDaemonSetupStep) {
       list.push(<DaemonSetupStep key="daemon-setup" />)
     }
-    list.push(
-      <RootFolderStep
-        key="root-folder"
-        value={rootFolderId}
-        onChange={setRootFolderId}
-      />,
-      <AppearanceStep
-        key="appearance"
-        colorTheme={colorTheme}
-        onColorThemeChange={handleColorThemeChange}
-        themeMode={themeMode}
-        onThemeModeChange={handleThemeModeChange}
-      />,
-      <DoneStep key="done" />
-    )
+    if (showRootFolderStep) {
+      list.push(
+        <RootFolderStep
+          key="root-folder"
+          value={rootFolderId}
+          onChange={setRootFolderId}
+        />
+      )
+    }
+    list.push(<TipsStep key="tips" />)
     return list
   }, [
     sourceChoice,
     showSourceStep,
     showDaemonSetupStep,
+    showRootFolderStep,
     rootFolderId,
-    colorTheme,
-    themeMode,
-    handleColorThemeChange,
-    handleThemeModeChange,
   ])
 
   const TOTAL_STEPS = steps.length
 
-  // Toggling the daemon step in or out of the list can leave `currentStep`
-  // pointing past the end (or, if the user is still ahead of it, at the
-  // wrong step) — clamp it back onto the track rather than rendering blank.
+  // Toggling a step in or out of the list can leave `currentStep` pointing
+  // past the end (or, if the user is still ahead of it, at the wrong step) —
+  // clamp it back onto the track rather than rendering blank.
   React.useEffect(() => {
     setCurrentStep((s) => Math.min(s, TOTAL_STEPS - 1))
   }, [TOTAL_STEPS])
@@ -196,14 +189,16 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
     }
   }
 
-  const handleComplete = async () => {
-    // Persist all selections. The source choice needs no write of its own:
-    // a fresh profile already starts on the source its platform offers, and
-    // choosing the daemon persists through the daemon-setup step's Connect
-    // flow.
+  /**
+   * Finishing and skipping are the same write now that appearance is gone:
+   * the only thing the wizard still persists is the root folder, and skipping
+   * keeps whatever it is already on — the seeded default when the user never
+   * reached the step. The source choice needs no write of its own: a fresh
+   * profile already starts on the source its platform offers, and choosing
+   * the daemon persists through the daemon-setup step's Connect flow.
+   */
+  const finish = async () => {
     setStoreRootFolderId(rootFolderId)
-    setStoreColorTheme(colorTheme)
-    setTheme(themeMode)
 
     // The global value survives adapter changes. Keep the legacy adapter value
     // too so a downgrade to v3 does not show onboarding again.
@@ -215,34 +210,11 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
     onComplete()
   }
 
-  const handleSkip = async () => {
-    // Preserve any root folder choice already made, use defaults for the rest
-    setStoreRootFolderId(rootFolderId)
-    setStoreColorTheme("default")
-    setTheme("dark")
-
-    await Promise.all([
-      setOnboardingCompleted(true),
-      adapter?.storage.set("onboardingCompleted", true),
-    ])
-
-    onComplete()
-  }
-
-  const nextButtonText = (() => {
-    switch (currentStep) {
-      case 0:
-        return "Get Started"
-      case TOTAL_STEPS - 1:
-        return "Start Browsing"
-      default:
-        return "Next"
-    }
-  })()
+  const isLastStep = currentStep === TOTAL_STEPS - 1
 
   const handleNextClick = () => {
-    if (currentStep === TOTAL_STEPS - 1) {
-      handleComplete()
+    if (isLastStep) {
+      finish()
     } else {
       goNext()
     }
@@ -255,10 +227,12 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
       <div className="relative w-full max-w-lg animate-in rounded-xl border border-border bg-card p-6 shadow-2xl duration-200 zoom-in-95 fade-in">
         {/* Skip link — raised above the sliding step content so real-browser
             hit testing reaches it (the steps are plain in-flow blocks that
-            would otherwise intercept the click). */}
-        {currentStep > 0 && currentStep < TOTAL_STEPS - 1 && (
+            would otherwise intercept the click). Offered from the very first
+            step: every step before the last one is now a question, and the
+            last one asks nothing to skip. */}
+        {!isLastStep && (
           <button
-            onClick={handleSkip}
+            onClick={finish}
             className="absolute top-4 right-4 z-10 text-xs text-muted-foreground transition-colors hover:text-foreground"
           >
             Skip, use defaults
@@ -282,28 +256,32 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
         {/* Navigation */}
         <div className="mt-6 flex items-center justify-between">
           <div>
-            {currentStep > 0 && currentStep < TOTAL_STEPS - 1 && (
+            {currentStep > 0 && (
               <Button variant="ghost" onClick={goBack}>
                 Back
               </Button>
             )}
           </div>
 
-          <Button onClick={handleNextClick}>{nextButtonText}</Button>
+          <Button onClick={handleNextClick}>
+            {isLastStep ? "Start Browsing" : "Next"}
+          </Button>
         </div>
 
-        {/* Step dots */}
-        <div className="mt-4 flex justify-center gap-2">
-          {Array.from({ length: TOTAL_STEPS }).map((_, i) => (
-            <div
-              key={i}
-              className={cn(
-                "h-1.5 w-1.5 rounded-full transition-colors",
-                i === currentStep ? "bg-primary" : "bg-muted-foreground/30"
-              )}
-            />
-          ))}
-        </div>
+        {/* Step dots — a single-step wizard is not a track, so it shows none. */}
+        {TOTAL_STEPS > 1 && (
+          <div className="mt-4 flex justify-center gap-2">
+            {Array.from({ length: TOTAL_STEPS }).map((_, i) => (
+              <div
+                key={i}
+                className={cn(
+                  "h-1.5 w-1.5 rounded-full transition-colors",
+                  i === currentStep ? "bg-primary" : "bg-muted-foreground/30"
+                )}
+              />
+            ))}
+          </div>
+        )}
       </div>
     </div>
   )

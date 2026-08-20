@@ -13,7 +13,7 @@ The workbench (bottom-left pill) exposes deterministic, URL-addressable scenario
 
 | URL | Scenario |
 | --- | --- |
-| `/?scenario=fresh-chrome` | A brand-new extension profile: empty Browser Source, onboarding still to do |
+| `/?scenario=fresh-chrome` | A brand-new extension profile: empty Browser Source, onboarding still to do. The one scenario with the extension and omnibox capabilities, so the wizard's source question and its `bb` tip are visible here |
 | `/?scenario=browser-only` | Browser bookmarks, no daemon |
 | `/?scenario=browser-daemon` *(default)* | Browser bookmarks plus a daemon hosting the `reading` and `archive` Vaults |
 | `/?scenario=multi-vault` | One daemon hosting four Vaults, no Browser Source |
