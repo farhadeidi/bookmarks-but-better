@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Favicons are cached on your machine and Chrome now asks itself first.** Icon
+  bytes are stored locally for 30 days, so a site is asked about roughly once a
+  month instead of on every render, and cached icons keep working offline.
+  Bookmarks sharing a site now cause one lookup between them rather than one
+  each. On Chrome the browser's own `_favicon` database is tried before Google —
+  it used to be the other way round — so a hit discloses nothing at all. The
+  README now documents the provider order and exactly when an origin still
+  reaches Google
+
 ### Added
 
 - **The dashboard is operable from the keyboard.** The bookmark grid is a
