@@ -25,6 +25,7 @@
     "test": "vitest run",
     "test:e2e:daemon": "bash tests/e2e/run-daemon.sh",
     "test:e2e:multi-vault": "bash tests/e2e/run-multi-vault.sh",
+    "test:e2e:safari": "bash tests/e2e/run-safari.sh",
     "test:ui": "playwright test --config tests/ui/playwright.config.ts",
     "test:npm": "cd packages/bookmarks-but-better && node --test",
     "test:watch": "vitest",

@@ -27,6 +27,7 @@ const extensionCaps: PlatformCapabilities = {
   buildTarget: "chrome",
   browserSource: true,
   omnibox: true,
+  newTabOverride: true,
   isExtension: true,
   daemonSource: true,
 }
@@ -35,6 +36,7 @@ const safariCaps: PlatformCapabilities = {
   buildTarget: "safari",
   browserSource: false,
   omnibox: false,
+  newTabOverride: false,
   isExtension: true,
   daemonSource: true,
 }
@@ -43,6 +45,7 @@ const servedCaps: PlatformCapabilities = {
   buildTarget: "daemon",
   browserSource: false,
   omnibox: false,
+  newTabOverride: false,
   isExtension: false,
   daemonSource: true,
 }

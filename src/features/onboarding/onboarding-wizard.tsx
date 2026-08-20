@@ -13,7 +13,10 @@ import { AppearanceStep } from "./steps/appearance-step"
 import { DoneStep } from "./steps/done-step"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
-import { platformCapabilities } from "@/sources/platform"
+import {
+  platformCapabilities,
+  type PlatformCapabilities,
+} from "@/sources/platform"
 import { resolveEffectiveCreateParentId } from "@/features/root-folder-select"
 import { setOnboardingCompleted } from "@/browser/onboarding-preference"
 
@@ -23,22 +26,46 @@ interface OnboardingWizardProps {
   onComplete: () => void
 }
 
-// The source step (and its conditional daemon-setup follow-up) is skipped in
-// the daemon-served build, since that build always serves its own
-// same-origin daemon source — there is no choice to make there.
-const SHOW_SOURCE_STEP = import.meta.env.VITE_BUILD_TARGET !== "daemon"
+/**
+ * Whether asking "where do your bookmarks live?" is a question at all here.
+ *
+ * It is one only where this platform offers more than one source: a Browser
+ * Source *and* daemon connections. The daemon-served build serves its own
+ * same-origin Vault, a platform without the bookmarks API has nothing but the
+ * daemon, and a runtime that cannot reach a daemon has nothing but the
+ * browser — in each case there is one answer, so the step is omitted rather
+ * than shown with a single option.
+ */
+function hasSourceChoice(caps: PlatformCapabilities): boolean {
+  return caps.isExtension && caps.browserSource && caps.daemonSource
+}
+
+/**
+ * Whether connecting a daemon is the only way into this profile, which makes
+ * the daemon-setup step part of the track rather than a follow-up to a choice.
+ * This is the Safari shape: an extension with daemon connections and no
+ * Browser Source.
+ */
+function requiresDaemonSetup(caps: PlatformCapabilities): boolean {
+  return caps.isExtension && !caps.browserSource && caps.daemonSource
+}
 
 /**
  * The wizard's source choice, normalized to what this platform offers: the
  * Browser Source when it exists, otherwise the Daemon Source — the only
  * offered source on a capability-only (Safari) platform.
  */
-function initialSourceChoice(): OnboardingSourceChoice {
-  return platformCapabilities().browserSource ? "browser" : "daemon"
+function initialSourceChoice(
+  caps: PlatformCapabilities
+): OnboardingSourceChoice {
+  return caps.browserSource ? "browser" : "daemon"
 }
 
 export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
   const [currentStep, setCurrentStep] = React.useState(0)
+
+  // Resolved once per mount: capabilities do not change under a running page.
+  const [caps] = React.useState(platformCapabilities)
 
   // Local wizard state. There is no source choice to persist: the default
   // profile already has Browser enabled and active, and connecting a
@@ -48,7 +75,7 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
   // not exist here, daemon is already chosen and Next cannot skip the
   // daemon setup.
   const [sourceChoice, setSourceChoice] =
-    React.useState<OnboardingSourceChoice>(initialSourceChoice)
+    React.useState<OnboardingSourceChoice>(() => initialSourceChoice(caps))
   const [rootFolderId, setRootFolderId] = React.useState<string | null>(null)
   const [colorTheme, setColorTheme] = React.useState<ColorTheme>("default")
   const [themeMode, setThemeMode] = React.useState<ThemeMode>("dark")
@@ -101,11 +128,15 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
     )
   }, [bookmarkTree, bookmarkAdapter])
 
-  const showDaemonSetupStep = SHOW_SOURCE_STEP && sourceChoice === "daemon"
+  const showSourceStep = hasSourceChoice(caps)
+  // Mandatory where the daemon is the only source: it is on the track whatever
+  // the user does, rather than sitting behind a choice they were never given.
+  const showDaemonSetupStep =
+    requiresDaemonSetup(caps) || (showSourceStep && sourceChoice === "daemon")
 
   const steps = React.useMemo(() => {
     const list: React.ReactNode[] = [<WelcomeStep key="welcome" />]
-    if (SHOW_SOURCE_STEP) {
+    if (showSourceStep) {
       list.push(
         <SourceStep
           key="source"
@@ -135,6 +166,7 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
     return list
   }, [
     sourceChoice,
+    showSourceStep,
     showDaemonSetupStep,
     rootFolderId,
     colorTheme,

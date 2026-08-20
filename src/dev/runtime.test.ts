@@ -321,6 +321,7 @@ function getScenarioCaps() {
     buildTarget: "chrome" as const,
     browserSource: true,
     omnibox: false,
+    newTabOverride: true,
     isExtension: false,
     daemonSource: true,
   }

@@ -11,6 +11,16 @@ import { OnboardingWizard } from "../onboarding-wizard"
 import { getOnboardingCompleted } from "@/browser/onboarding-preference"
 import { setPlatformCapabilities } from "@/sources/platform"
 
+/** Safari: an extension with daemon connections and no Browser Source. */
+const SAFARI_CAPABILITIES = {
+  buildTarget: "safari",
+  browserSource: false,
+  omnibox: false,
+  newTabOverride: false,
+  isExtension: true,
+  daemonSource: true,
+} as const
+
 class StubResizeObserver {
   observe() {}
   unobserve() {}
@@ -130,28 +140,50 @@ describe("OnboardingWizard source step", () => {
     void user
   })
 
-  it("on a daemon-only platform, the choice starts on daemon so Next cannot skip daemon setup", async () => {
-    // Safari's capabilities: no Browser Source, so the Daemon Source is the
-    // only one offered.
+  it("on a daemon-only platform there is no source step, and daemon setup is on the track", async () => {
+    // Safari's capabilities: no Browser Source, so a daemon Vault is the only
+    // way in and there is no question to ask.
+    setPlatformCapabilities(SAFARI_CAPABILITIES)
+    const user = userEvent.setup()
+    renderWizard()
+
+    await user.click(screen.getByRole("button", { name: "Get Started" }))
+
+    expect(screen.queryByText("Where do your bookmarks live?")).toBeNull()
+    expect(screen.getByText("Set up the daemon")).toBeTruthy()
+  })
+
+  it("on a daemon-only platform, the daemon step says the browser's own bookmarks are not used", async () => {
+    setPlatformCapabilities(SAFARI_CAPABILITIES)
+    const user = userEvent.setup()
+    renderWizard()
+
+    await user.click(screen.getByRole("button", { name: "Get Started" }))
+
+    expect(
+      screen.getByText(/does not share its own bookmarks with extensions/)
+    ).toBeTruthy()
+    expect(screen.getByText(/iCloud Drive/)).toBeTruthy()
+  })
+
+  it("skips the source step where a daemon cannot be reached at all", async () => {
+    // Firefox for Android: a Browser Source and nothing else, so the question
+    // has one answer and is not asked.
     setPlatformCapabilities({
-      buildTarget: "safari",
-      browserSource: false,
-      omnibox: false,
+      buildTarget: "firefox",
+      browserSource: true,
+      omnibox: true,
+      newTabOverride: true,
       isExtension: true,
-      daemonSource: true,
+      daemonSource: false,
     })
     const user = userEvent.setup()
     renderWizard()
 
     await user.click(screen.getByRole("button", { name: "Get Started" }))
-    expect(screen.getByText("Where do your bookmarks live?")).toBeTruthy()
-    // Only the daemon is offered; the browser option does not exist.
-    expect(screen.queryByRole("button", { name: /Browser/ })).toBeNull()
 
-    // Without clicking anything, the choice is already daemon, so the
-    // daemon-setup step is next — not skipped in favor of the root folder.
-    await user.click(screen.getByRole("button", { name: "Next" }))
-    expect(screen.getByText("Set up the daemon")).toBeTruthy()
+    expect(screen.queryByText("Where do your bookmarks live?")).toBeNull()
+    expect(screen.getByText("Choose your bookmark folder")).toBeTruthy()
   })
 
   it("completing with Daemon selected but not connected still marks onboarding done", async () => {

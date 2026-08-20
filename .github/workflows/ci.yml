@@ -66,6 +66,8 @@ jobs:
               - 'install.ps1'
               - 'tests/install/**'
               - 'tests/e2e/run-daemon.sh'
+              - 'tests/e2e/run-safari.sh'
+              - 'safari/*.sh'
               - 'packages/bookmarks-but-better/**'
 
   check:
@@ -144,6 +146,16 @@ jobs:
           BOOKMARKS_BUT_BETTER_E2E_MULTIVAULT_PORT: 52226
         run: bun run test:e2e:multi-vault
 
+      # The Safari bundle is daemon-only, so this is the only place it runs
+      # end to end: a throwaway daemon serves the built bundle as its origin
+      # and the tests prove the build carries no bookmarks API and that a
+      # change made by another client reaches the page over the change
+      # stream. Chromium drives it — Safari itself is manual QA.
+      - name: Run Safari daemon-only end-to-end test
+        env:
+          BOOKMARKS_BUT_BETTER_E2E_SAFARI_PORT: 52228
+        run: bun run test:e2e:safari
+
       # The Dev Workbench UI flows (default scenario, source switching,
       # offline recovery, deterministic reset, Safari capabilities) against
       # an isolated dev server on port 5179 — no extension, no real daemon.
@@ -202,7 +214,10 @@ jobs:
 
       # Preinstalled on the ubuntu-latest runner image.
       - name: Shellcheck install.sh
-        run: shellcheck install.sh tests/install/smoke-test.sh tests/e2e/run-daemon.sh
+        run: |
+          shellcheck install.sh tests/install/smoke-test.sh \
+            tests/e2e/run-daemon.sh tests/e2e/run-safari.sh \
+            safari/build.sh safari/sync-resources.sh
 
       # pwsh is preinstalled on every GitHub-hosted runner image, including
       # ubuntu-latest, so this parses install.ps1 without needing Windows.

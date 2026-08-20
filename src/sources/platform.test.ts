@@ -26,6 +26,7 @@ describe("platformCapabilities", () => {
     expect(caps.buildTarget).toBe("chrome")
     expect(caps.browserSource).toBe(true)
     expect(caps.omnibox).toBe(true)
+    expect(caps.newTabOverride).toBe(true)
     expect(caps.isExtension).toBe(true)
     expect(caps.daemonSource).toBe(true)
   })
@@ -43,6 +44,10 @@ describe("platformCapabilities", () => {
     expect(caps.buildTarget).toBe("safari")
     expect(caps.browserSource).toBe(false)
     expect(caps.omnibox).toBe(false)
+    // The manifest declares no new-tab override, so nothing opens the
+    // dashboard on its own here — the background worker reads this to decide
+    // whether an install has to.
+    expect(caps.newTabOverride).toBe(false)
     expect(caps.isExtension).toBe(true)
     expect(caps.daemonSource).toBe(true)
   })

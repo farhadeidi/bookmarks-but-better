@@ -69,3 +69,4 @@ Single-context: root `CONTEXT.md` plus `docs/adr/`. See `docs/agents/domain.md`.
 - Before publishing a release, read `docs/RELEASING.md` in full.
 - Daemon install and configuration: `docs/DAEMON.md`.
 - Dev Workbench scenarios: `docs/DEV_WORKBENCH.md`.
+- Safari build, signing and manual QA: `docs/SAFARI.md`.

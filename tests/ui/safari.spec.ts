@@ -34,6 +34,25 @@ test("a profile with nothing connected shows the daemon-only empty state", async
   await expect(page.getByRole("tab")).toHaveCount(0)
 })
 
+test("a fresh Safari profile is onboarded straight into connecting a daemon", async ({
+  page,
+}) => {
+  await page.goto("/?scenario=fresh-safari")
+
+  await page.getByRole("button", { name: "Get Started" }).click()
+
+  // No source question: there is only one source here, so the wizard goes
+  // straight to setting it up — and says what Safari does and does not do.
+  await expect(page.getByText("Where do your bookmarks live?")).toHaveCount(0)
+  await expect(
+    page.getByRole("heading", { level: 2, name: "Set up the daemon" })
+  ).toBeVisible()
+  await expect(
+    page.getByText(/does not share its own bookmarks with extensions/)
+  ).toBeVisible()
+  await expect(page.getByText(/iCloud Drive/)).toBeVisible()
+})
+
 test("the fresh-chrome scenario still has onboarding to do", async ({
   page,
 }) => {

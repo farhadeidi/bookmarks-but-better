@@ -1,0 +1,105 @@
+* {
+    -webkit-user-select: none;
+    -webkit-user-drag: none;
+    cursor: default;
+}
+
+:root {
+    color-scheme: light dark;
+
+    --spacing: 20px;
+}
+
+html {
+    height: 100%;
+}
+
+body {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+
+    gap: var(--spacing);
+    margin: var(--spacing) calc(var(--spacing) * 2);
+
+    font: -apple-system-short-body;
+    text-align: center;
+}
+
+body:not(.state-on, .state-off) :is(.state-on, .state-off) {
+    display: none;
+}
+
+body.state-on :is(.state-off, .state-unknown) {
+    display: none;
+}
+
+body.state-off :is(.state-on, .state-unknown) {
+    display: none;
+}
+
+button {
+    font-size: 1em;
+}
+
+/* The setup half. Everything above is the converter's on/off state; this is
+   the part that tells a first-time user what to actually do, because Safari
+   opens nothing on install. */
+
+.setup {
+    border-top: 1px solid color-mix(in srgb, currentColor 15%, transparent);
+    padding-top: var(--spacing);
+    max-width: 46em;
+    text-align: left;
+}
+
+.setup h1 {
+    font: -apple-system-headline;
+    margin: 0 0 0.5em;
+    text-align: center;
+}
+
+.setup p {
+    margin: 0 0 0.5em;
+}
+
+.setup .why {
+    margin-bottom: var(--spacing);
+}
+
+.setup ol {
+    margin: 0;
+    padding-left: 1.4em;
+}
+
+.setup li {
+    margin-bottom: 1em;
+}
+
+.setup .note {
+    opacity: 0.6;
+}
+
+/* Selectable on purpose: the `*` rule above turns selection off everywhere,
+   which would leave a command the user is told to run impossible to copy. */
+.setup code {
+    display: block;
+    -webkit-user-select: text;
+    user-select: text;
+    cursor: text;
+
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.9em;
+    line-height: 1.5;
+
+    padding: 0.5em 0.7em;
+    border-radius: 6px;
+    background: color-mix(in srgb, currentColor 8%, transparent);
+    overflow-wrap: anywhere;
+}
+
+.setup code.inline {
+    display: inline;
+    padding: 0.1em 0.3em;
+}

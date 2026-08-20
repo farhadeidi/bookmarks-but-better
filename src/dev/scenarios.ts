@@ -70,6 +70,7 @@ function devCapabilities(
     buildTarget: "chrome",
     browserSource: true,
     omnibox: false,
+    newTabOverride: true,
     isExtension: false,
     daemonSource: true,
     ...overrides,
@@ -336,6 +337,22 @@ export const DEV_SCENARIOS: DevScenario[] = [
     ],
     activeSource: daemonSourceId(ORIGIN, "reading"),
     onboardingCompleted: true,
+  },
+  {
+    id: "fresh-safari",
+    label: "Fresh Safari profile",
+    description:
+      "Safari's world before setup: no source at all, and onboarding with no source question to ask.",
+    capabilities: devCapabilities({
+      buildTarget: "safari",
+      browserSource: false,
+      isExtension: true,
+    }),
+    browserTree: null,
+    standaloneTree: null,
+    daemons: [],
+    activeSource: null,
+    onboardingCompleted: false,
   },
   {
     id: "empty",

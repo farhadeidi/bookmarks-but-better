@@ -43,3 +43,13 @@ website/public/app-preview/
 
 # Rust
 /target
+
+# Safari Xcode project. The extension's Resources directory is `dist-safari/`
+# mirrored in by safari/sync-resources.sh — a build product living where Xcode
+# copies it from — and safari/build/ is where safari/build.sh puts the app.
+# The app target's own Resources/ (Main.html, Script.js, Style.css) is source
+# and stays tracked.
+safari/build/
+safari/Bookmarks But Better/Bookmarks But Better Extension/Resources/
+xcuserdata/
+*.xcuserstate
