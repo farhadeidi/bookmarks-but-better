@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Safari, built from the repository.** An Xcode project and a one-command
+  ad-hoc build produce a signed macOS app carrying the extension, with no Apple
+  Developer account needed to run it locally. Safari has no bookmarks API, so
+  the build is daemon-only by capability rather than by branching on the browser
+  name, and its setup wizard says so instead of offering a choice that does not
+  exist. An end-to-end test drives the shipped bundle against a real daemon
+
 ### Changed
 
 - **Favicons are cached on your machine and Chrome now asks itself first.** Icon
