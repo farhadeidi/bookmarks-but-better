@@ -13,22 +13,22 @@
 
     1. Resolves which release to install: the latest *stable* release by
        default, the latest prerelease with -Beta, or an exact tag with
-       -Version. A stable release that carries no daemon build — every stable
-       release up to and including v3.2.0 was extension-only — falls back to
+       -Version. A stable release that carries no daemon build -- every stable
+       release up to and including v3.2.0 was extension-only -- falls back to
        the latest prerelease that does have a Windows build, and says so.
     2. Downloads that archive and its .sha256 sidecar from the GitHub
        Release, and refuses to install unless the archive's hash matches it.
     3. Unpacks into a versioned directory under $InstallRoot and only then
        repoints a `current` directory junction at it (junctions need no
-       elevated privilege, unlike an NTFS symlink) — so a failed download or
+       elevated privilege, unlike an NTFS symlink) -- so a failed download or
        a binary that will not even run leaves whatever was already installed
        completely untouched, and this install, once it gets that far, can
        always be rolled back to the version `current` pointed at before.
     4. Adds `current` to the user's PATH (once), and finally runs
        `bookmarks-but-better.exe setup`.
 
-  Everything it fetches is a GitHub Release URL — the release download
-  endpoint and the releases Atom feed — so it never calls the GitHub JSON API.
+  Everything it fetches is a GitHub Release URL -- the release download
+  endpoint and the releases Atom feed -- so it never calls the GitHub JSON API.
   install.sh resolves releases exactly the same way, so both platforms pick
   the same release for the same flags.
 
@@ -73,7 +73,12 @@ $Exe = "bookmarks-but-better"
 $Target = "x86_64-pc-windows-msvc"
 $InstallRoot = $InstallDir
 $CurrentLink = Join-Path $InstallRoot "current"
-# Overridable only for this script's own test suite — there is no supported
+# Attempts for a filesystem step an antivirus handle can transiently block, at
+# 100ms doubling each time: ~6.3s of waiting in total, which is far longer than
+# a real-time scan of a file this size takes and still short enough that a
+# genuine lock reports quickly.
+$LockRetryAttempts = 7
+# Overridable only for this script's own test suite -- there is no supported
 # reason to point it anywhere but github.com in normal use.
 $GitHubBase = if ($env:BOOKMARKS_BUT_BETTER_INSTALL_GITHUB_BASE) {
   $env:BOOKMARKS_BUT_BETTER_INSTALL_GITHUB_BASE
@@ -83,7 +88,7 @@ $GitHubBase = if ($env:BOOKMARKS_BUT_BETTER_INSTALL_GITHUB_BASE) {
 $ReleasesBase = "$GitHubBase/$Repo/releases"
 
 # The archive this platform needs from a given release. Every release names it
-# after its own version, so this can only be computed per release — which is
+# after its own version, so this can only be computed per release -- which is
 # exactly why the fallback below has to probe each candidate rather than just
 # taking the newest thing it finds.
 function Get-ArchiveName {
@@ -96,8 +101,8 @@ function Get-AssetUrl {
   "$ReleasesBase/download/$Tag/$Name"
 }
 
-# A release tag here is either vX.Y.Z or vX.Y.Z-beta.N — release.yml accepts no
-# other shape — so "is this a prerelease" is a property of the tag and needs no
+# A release tag here is either vX.Y.Z or vX.Y.Z-beta.N -- release.yml accepts no
+# other shape -- so "is this a prerelease" is a property of the tag and needs no
 # API lookup to answer.
 function Test-PrereleaseTag {
   param([string]$Tag)
@@ -119,7 +124,7 @@ function Test-ReleaseHasDaemon {
   }
 }
 
-# The tag /releases/latest redirects to — GitHub's "latest" is by definition
+# The tag /releases/latest redirects to -- GitHub's "latest" is by definition
 # the newest non-draft, non-prerelease release, so this needs no filtering.
 function Get-LatestStableTag {
   $response = Invoke-WebRequest -Uri "$ReleasesBase/latest" -Method Head -UseBasicParsing
@@ -154,6 +159,52 @@ function Get-LatestBetaTagWithDaemon {
   return $null
 }
 
+# Real-time antivirus scans an executable the moment it is written or run, and
+# releases the handle it takes asynchronously -- some time after the process it
+# scanned has already exited. That handle permits reading but denies the delete
+# access a rename or a delete needs, so a filesystem step right after this
+# script runs an exe can fail on a file that nothing in `Get-Process` is
+# holding. Steps that only read their way around it are written to do that (see
+# the copy below); the ones that genuinely need delete access -- swapping the
+# `current` junction -- can only wait. The scan is over in well under a second,
+# so retrying briefly turns a hard install failure into a pause nobody notices,
+# and a lock that outlives every attempt is a real one and says so.
+function Invoke-WithLockRetry {
+  param(
+    [Parameter(Mandatory = $true)][string]$What,
+    [Parameter(Mandatory = $true)][scriptblock]$Action
+  )
+  $delayMs = 100
+  for ($attempt = 1; $attempt -le $LockRetryAttempts; $attempt++) {
+    try {
+      & $Action
+      return
+    } catch [System.IO.IOException], [System.UnauthorizedAccessException] {
+      if ($attempt -eq $LockRetryAttempts) {
+        throw ("could not $What after $attempt attempts: $($_.Exception.Message) " +
+          "Something is holding it open -- antivirus real-time scanning is the " +
+          "usual cause. Retrying the install normally clears it.")
+      }
+      Start-Sleep -Milliseconds $delayMs
+      $delayMs = $delayMs * 2
+    }
+  }
+}
+
+# `Remove-Item -Force` cannot delete a directory junction in Windows
+# PowerShell 5.1: it sees the target's children through the link and asks to
+# confirm a recursive delete, which hangs an interactive install waiting for an
+# answer and fails a non-interactive one outright. Passing -Recurse would
+# answer that question the dangerous way, since recursing through a reparse
+# point is how a link deletion turns into a deletion of what it points at.
+# Deleting the directory entry itself is both the safe operation and the one
+# actually meant here: it removes the junction and never touches the version
+# directory on the other side of it.
+function Remove-Junction {
+  param([Parameter(Mandatory = $true)][string]$Path)
+  [System.IO.Directory]::Delete($Path)
+}
+
 Write-Host "platform: $Target"
 
 # ---------------------------------------------------------------------------
@@ -176,15 +227,15 @@ if ($Version) {
   $tag = Get-LatestStableTag
   if (-not $tag) { throw "could not resolve the latest release" }
 
-  # A stable release that carries no daemon build is how `irm … | iex` ends in
-  # "release vX has no asset named bookmarks-but-better-…" — every stable
+  # A stable release that carries no daemon build is how `irm ... | iex` ends in
+  # "release vX has no asset named bookmarks-but-better-..." -- every stable
   # release up to and including v3.2.0 was extension-only. Fall back to the
   # newest prerelease that does carry a Windows build, loudly: a prerelease is
   # normally something you have to ask for, and this is the one case where the
   # alternative is not installing at all.
   if (-not (Test-ReleaseHasDaemon $tag)) {
     Write-Host "the latest stable release ($tag) ships no $Exe daemon build for $Target"
-    Write-Host "falling back to the latest prerelease — pass -Version <tag> to pin a specific release"
+    Write-Host "falling back to the latest prerelease; pass -Version <tag> to pin a specific release"
     $tag = Get-LatestBetaTagWithDaemon
     if (-not $tag) {
       throw "no stable or prerelease release has a $Exe build for $Target yet"
@@ -228,7 +279,7 @@ try {
   $expected = ((Get-Content $checksumPath -Raw).Trim() -split '\s+')[0].ToLowerInvariant()
   $actual = (Get-FileHash -Path $archivePath -Algorithm SHA256).Hash.ToLowerInvariant()
   if ($expected -ne $actual) {
-    throw "checksum verification failed for $archiveName (expected $expected, got $actual) — refusing to install a corrupted or tampered download"
+    throw "checksum verification failed for $archiveName (expected $expected, got $actual); refusing to install a corrupted or tampered download"
   }
 
   # -------------------------------------------------------------------------
@@ -242,7 +293,7 @@ try {
   $staged = Join-Path $extractDir "$Exe-$version-$Target"
   $stagedExe = Join-Path $staged "$Exe.exe"
   if (-not (Test-Path $stagedExe)) {
-    throw "the archive did not contain $Exe.exe — this is a packaging bug, not a local problem"
+    throw "the archive did not contain $Exe.exe; this is a packaging bug, not a local problem"
   }
 
   $null = & $stagedExe --version 2>&1
@@ -259,18 +310,35 @@ try {
   }
 
   $versionDir = Join-Path (Join-Path $InstallRoot "versions") $version
-  if (Test-Path $versionDir) { Remove-Item -Recurse -Force $versionDir }
   New-Item -ItemType Directory -Path (Split-Path -Parent $versionDir) -Force | Out-Null
-  Move-Item -Path $staged -Destination $versionDir
+  # Copy rather than move, because the staged exe was run for its --version
+  # check moments ago and an antivirus handle may still be on it. That handle
+  # permits reading, so a copy goes through while a move -- which needs delete
+  # access on the source -- does not. Moving is also unsafe to retry here: when
+  # $workDir and $InstallRoot sit on different volumes (a redirected %TEMP% is
+  # enough), Move-Item is a per-file operation that deletes each source file as
+  # it goes, so a move that fails part-way has already consumed part of the
+  # staged directory and no second attempt can complete it. A copy never
+  # touches the source, so clearing the destination makes every attempt start
+  # from the same state. What is left in $workDir is temporary either way, and
+  # the cleanup below already tolerates failing to delete it.
+  Invoke-WithLockRetry "unpack the new version into place" {
+    if (Test-Path $versionDir) { Remove-Item -Recurse -Force $versionDir }
+    Copy-Item -Path $staged -Destination $versionDir -Recurse
+  }
 
   # -----------------------------------------------------------------------
-  # 4. Repoint `current` — the one step that changes what a running
+  # 4. Repoint `current` -- the one step that changes what a running
   #    `bookmarks-but-better` on PATH resolves to. A directory junction, not a
   #    symlink: junctions need no elevated privilege on Windows, unlike NTFS
   #    symlinks.
   # -----------------------------------------------------------------------
-  if (Test-Path $CurrentLink) { Remove-Item -Force $CurrentLink }
-  New-Item -ItemType Junction -Path $CurrentLink -Target $versionDir | Out-Null
+  if (Test-Path $CurrentLink) {
+    Invoke-WithLockRetry "remove the old current link" { Remove-Junction $CurrentLink }
+  }
+  Invoke-WithLockRetry "point current at $version" {
+    New-Item -ItemType Junction -Path $CurrentLink -Target $versionDir | Out-Null
+  }
 
   $currentExe = Join-Path $CurrentLink "$Exe.exe"
   $null = & $currentExe --version 2>&1
@@ -279,12 +347,18 @@ try {
   if (-not $postSwapOk) {
     if ($previousVersion) {
       Write-Host "the new version failed its post-install check; rolling back to $previousVersion"
-      Remove-Item -Force $CurrentLink
+      # This branch is reached straight after running $currentExe, so the same
+      # antivirus handle that can block the swap can block the rollback -- and
+      # a rollback that fails is the one outcome that leaves a user worse off
+      # than not having run this script at all.
+      Invoke-WithLockRetry "roll back to $previousVersion" { Remove-Junction $CurrentLink }
       $previousDir = Join-Path (Join-Path $InstallRoot "versions") $previousVersion
-      New-Item -ItemType Junction -Path $CurrentLink -Target $previousDir | Out-Null
+      Invoke-WithLockRetry "point current back at $previousVersion" {
+        New-Item -ItemType Junction -Path $CurrentLink -Target $previousDir | Out-Null
+      }
     } else {
       Write-Host "the new version failed its post-install check; removing the incomplete install"
-      Remove-Item -Force $CurrentLink
+      Invoke-WithLockRetry "remove the incomplete install" { Remove-Junction $CurrentLink }
     }
     throw "install of $tag did not pass its post-install check"
   }
