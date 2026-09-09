@@ -69,4 +69,4 @@ curl --fail --silent "http://127.0.0.1:${port}/api/v1/health" >/dev/null
 curl --fail --silent "http://127.0.0.1:${port}/manifest.json" >/dev/null
 
 BOOKMARKS_BUT_BETTER_E2E_SAFARI_BASE_URL="http://127.0.0.1:${port}" \
-  bunx playwright test tests/e2e/safari.spec.ts --reporter=line
+  bunx playwright test --config tests/e2e/playwright.config.ts safari.spec.ts

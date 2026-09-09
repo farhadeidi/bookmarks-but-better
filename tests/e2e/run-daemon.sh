@@ -37,4 +37,4 @@ done
 
 curl --fail --silent "http://127.0.0.1:${port}/api/v1/health" >/dev/null
 BOOKMARKS_BUT_BETTER_E2E_BASE_URL="http://127.0.0.1:${port}" \
-  bunx playwright test tests/e2e/daemon.spec.ts --reporter=line
+  bunx playwright test --config tests/e2e/playwright.config.ts daemon.spec.ts

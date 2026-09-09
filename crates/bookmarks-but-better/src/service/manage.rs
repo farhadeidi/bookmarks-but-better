@@ -613,9 +613,49 @@ mod tests {
     /// macOS, where the daemon actually installs a `LaunchAgent`. Gated so
     /// they neither run nor need to compile a launchd-shaped assumption on
     /// any other CI runner.
+    ///
+    /// Both of them address the product's own [`SERVICE_LABEL`], which is a
+    /// *global* name in the user's launchd domain — the plist lives under a
+    /// throwaway [`ServiceLayout`], but `bootstrap`, `bootout` and `print`
+    /// all resolve to the one label. Two consequences are handled here rather
+    /// than hoped away:
+    ///
+    /// - They cannot run concurrently with each other. One bootstraps the
+    ///   label while the other asserts nothing is loaded under it, so
+    ///   Playwright-style parallelism turns them into a coin flip.
+    /// - They must not run at all on a machine where that agent is really
+    ///   installed and loaded. `bootout` there stops the developer's own
+    ///   daemon, and `launchd_state()` reports *its* state instead of the
+    ///   fixture's.
+    ///
+    /// [`SERVICE_LABEL`]: super::super::SERVICE_LABEL
     #[cfg(target_os = "macos")]
     mod launchd_integration {
+        use std::sync::Mutex;
+
         use super::*;
+
+        /// Serializes the two tests below against the one global label.
+        static LABEL: Mutex<()> = Mutex::new(());
+
+        /// Takes the label, tolerating a lock poisoned by an earlier panic:
+        /// the guard exists to order these tests, not to protect data that a
+        /// failed test could have left inconsistent.
+        fn hold_the_label() -> std::sync::MutexGuard<'static, ()> {
+            LABEL
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+        }
+
+        /// Whether a real agent is already loaded under the product's label —
+        /// a developer running their own daemon from `service install`.
+        ///
+        /// Checked while holding [`LABEL`], so the other test's fixture can
+        /// never be mistaken for one. CI runners have no such install, which
+        /// is where these tests are relied on.
+        fn a_real_agent_is_loaded() -> bool {
+            matches!(launchd_state(), Ok(ServiceState::Running))
+        }
 
         fn spec(vault: &std::path::Path) -> crate::service::ServiceSpec {
             // `/usr/bin/true` is a real, harmless, always-present executable —
@@ -626,6 +666,10 @@ mod tests {
 
         #[test]
         fn a_freshly_registered_agent_that_was_never_started_reports_stopped() {
+            let _label = hold_the_label();
+            if a_real_agent_is_loaded() {
+                return;
+            }
             let home = tempfile::tempdir().expect("temp dir");
             let layout = ServiceLayout::rooted_at(home.path());
             let vault = home.path().join("Vault");
@@ -641,6 +685,10 @@ mod tests {
 
         #[test]
         fn bootstrapping_then_booting_out_round_trips_without_error() {
+            let _label = hold_the_label();
+            if a_real_agent_is_loaded() {
+                return;
+            }
             let home = tempfile::tempdir().expect("temp dir");
             let layout = ServiceLayout::rooted_at(home.path());
             let vault = home.path().join("Vault");
