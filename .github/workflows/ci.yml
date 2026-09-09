@@ -255,6 +255,31 @@ jobs:
         working-directory: packages/bookmarks-but-better
         run: npm pack --dry-run
 
+  # The job above parses install.ps1 with pwsh on Linux, which is fast and
+  # catches most mistakes but cannot catch the ones that only exist on Windows.
+  # Two of them shipped in v4.0.0: pwsh reads a file with no byte-order mark as
+  # UTF-8 while Windows PowerShell 5.1 reads it in the machine's ANSI codepage,
+  # so a script that parses perfectly here fails to parse there; and a parse is
+  # not an execution, so nothing ever exercised the unpack and the junction
+  # swap. This job runs install.ps1 for real, on Windows, under 5.1.
+  install-scripts-windows:
+    name: Install script checks (Windows)
+    needs: changes
+    if: needs.changes.outputs.installers == 'true'
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      # `shell: powershell` is Windows PowerShell 5.1, which is what ships with
+      # Windows and what most people installing this will actually be running.
+      # `shell: pwsh` would be PowerShell 7 and would miss the encoding class of
+      # bug entirely.
+      - name: Install script smoke test (Windows PowerShell 5.1)
+        shell: powershell
+        run: .\tests\install\smoke-test.ps1
+
   rust:
     needs: changes
     if: needs.changes.outputs.rust == 'true'

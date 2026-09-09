@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **The Windows installer no longer fails against antivirus, and now survives
+  its own second run.** Three separate faults made `install.ps1` unreliable on
+  Windows, all of them invisible to a CI that only ever parsed the script on
+  Linux. It carried em dashes but no byte-order mark, and Windows PowerShell
+  5.1 reads such a file in the machine's ANSI codepage, so a dash inside a
+  quoted string closed it early and the whole script failed to parse for anyone
+  who downloaded it and ran it rather than piping it to `iex`. It moved the
+  unpacked files into place directly after running the new binary, and
+  real-time scanning holds a read-only handle on a just-executed file, which
+  blocks a move but not a copy; where `%TEMP%` and the install directory sit on
+  different volumes that move was also per-file, so a failure part-way had
+  already consumed part of the staged directory and no retry could finish it.
+  And it removed the `current` junction with `Remove-Item -Force`, which in 5.1
+  asks whether to delete the target's contents too, hanging an interactive
+  upgrade and failing a non-interactive one. Unpacking is now a copy that
+  leaves the source intact, the junction is removed as a directory entry so
+  what it points at is never at risk, and the steps that genuinely need delete
+  access retry briefly before giving up with an error that names the cause.
+  Thanks to @jfpaccini for the report and the diagnosis
+  ([#66](https://github.com/farhadeidi/bookmarks-but-better/issues/66))
+
 ### Changed
 
 - **The setup wizard is shorter, and its last step now teaches instead of
