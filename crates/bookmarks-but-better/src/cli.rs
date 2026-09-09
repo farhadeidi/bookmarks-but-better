@@ -1,20 +1,23 @@
 //! The `bookmarks-but-better` command line.
 //!
-//! Every subcommand takes `--vault` explicitly. There is no discovery, no
-//! search of parent directories and no configured default: the one directory
-//! the daemon may touch is the one the user named on the command line, and
-//! making that impossible to get wrong by accident is worth the extra typing.
+//! Every subcommand names its vault explicitly: as a path, or — since
+//! ADR-0005 — as the id of a vault already in the Vault Registry. There is
+//! still no discovery and no search of parent directories, and a command that
+//! does not say `--from-config` (or name a configured id) cannot reach a
+//! directory the command line did not name. What the registry changes is only
+//! *when* the naming happened, and `vault list` is what makes it auditable.
 
 use std::io::{self, IsTerminal as _, Write as _};
 use std::net::IpAddr;
 use std::path::PathBuf;
 use std::process::ExitCode;
 
-use clap::{Parser, Subcommand};
+use clap::{ArgGroup, Parser, Subcommand};
 
+use crate::config::{self, Config, ConfigError, ConfigLocation, VaultEntry};
 use crate::doctor;
 use crate::init::{self, InitOutcome};
-use crate::registry::VaultSpec;
+use crate::registry::{self, VaultSpec};
 use crate::server::{self, DEFAULT_BIND, DEFAULT_PORT, Daemon, ServeOptions};
 use crate::service;
 use crate::setup;
@@ -50,6 +53,7 @@ pub struct Cli {
 #[derive(Debug, Subcommand)]
 pub enum Command {
     /// Serve the vaults and, optionally, the web UI.
+    #[command(group(ArgGroup::new("vault-source").required(true).args(["vaults", "from_config"])))]
     Serve {
         /// A vault to serve, as `PATH` for one vault or `ID=PATH` to name it.
         ///
@@ -58,16 +62,25 @@ pub enum Command {
         /// routes under `/api/v1/vaults/{id}/…`. Ids are unique and their
         /// directories must not overlap; a plain `PATH` claims the id
         /// `default`, so two of them collide.
-        #[arg(long = "vault", value_name = "PATH | ID=PATH", required = true)]
+        #[arg(long = "vault", value_name = "PATH | ID=PATH", group = "vault-source")]
         vaults: Vec<String>,
 
-        /// The loopback address to bind.
-        #[arg(long, default_value_t = DEFAULT_BIND, value_name = "ADDR")]
-        bind: IpAddr,
+        /// Serve every vault in the configuration instead of naming them here.
+        ///
+        /// The configuration also supplies the port, the bind address and the
+        /// UI directory; passing any of those explicitly overrides what it
+        /// says, for this run only.
+        #[arg(long, group = "vault-source")]
+        from_config: bool,
+
+        /// The loopback address to bind. Default: 127.0.0.1.
+        #[arg(long, value_name = "ADDR")]
+        bind: Option<IpAddr>,
 
         /// The port to bind; 0 asks the operating system for a free one.
-        #[arg(long, default_value_t = DEFAULT_PORT)]
-        port: u16,
+        /// Default: 52222.
+        #[arg(long)]
+        port: Option<u16>,
 
         /// A directory holding the built web UI to serve.
         #[arg(long, value_name = "PATH")]
@@ -91,30 +104,116 @@ pub enum Command {
     },
 
     /// Report on a vault without writing anything.
+    #[command(group(ArgGroup::new("doctor-target").required(true).args(["vault", "id"])))]
     Doctor {
         /// The vault directory.
-        #[arg(long, value_name = "PATH")]
-        vault: PathBuf,
+        #[arg(long, value_name = "PATH", group = "doctor-target")]
+        vault: Option<PathBuf>,
+
+        /// A configured vault's id, instead of its path.
+        #[arg(value_name = "ID", group = "doctor-target")]
+        id: Option<String>,
     },
 
     /// Rescan a vault and report what it holds.
     ///
     /// This is the offline form, for a vault no daemon is serving. A running
     /// daemon is refreshed with `POST /api/v1/rescan` instead.
+    #[command(group(ArgGroup::new("rescan-target").required(true).args(["vault", "id"])))]
     Rescan {
         /// The vault directory.
-        #[arg(long, value_name = "PATH")]
-        vault: PathBuf,
+        #[arg(long, value_name = "PATH", group = "rescan-target")]
+        vault: Option<PathBuf>,
+
+        /// A configured vault's id, instead of its path.
+        #[arg(value_name = "ID", group = "rescan-target")]
+        id: Option<String>,
     },
 
     /// Set up a vault and a background service, answering a few questions.
     Setup,
+
+    /// Manage the Vault Registry: what this machine is configured to serve.
+    ///
+    /// Nothing here starts, stops or reconfigures a running daemon. The
+    /// registry says what the *next* daemon will host, and `vault list` shows
+    /// where the two disagree.
+    Vault {
+        /// What to do with the configured vaults.
+        #[command(subcommand)]
+        command: VaultCommand,
+    },
 
     /// Manage the background service that serves a vault at login.
     Service {
         /// What to do with the service.
         #[command(subcommand)]
         command: ServiceCommand,
+    },
+}
+
+/// `bookmarks-but-better vault` subcommands.
+#[derive(Debug, Subcommand)]
+pub enum VaultCommand {
+    /// List the configured vaults, and what is true of each one now.
+    List {
+        /// Emit the configuration as JSON rather than as a table.
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// Add a vault to the configuration.
+    ///
+    /// The path is stored absolute, so the entry means the same thing from any
+    /// working directory. The set is validated exactly as a daemon would
+    /// validate it at startup, so an id or an overlap `serve` would refuse is
+    /// refused here — against the command that made the mistake.
+    Add {
+        /// The vault's id: 1–64 lowercase letters, digits and hyphens.
+        #[arg(value_name = "ID")]
+        id: String,
+
+        /// The vault's root directory.
+        #[arg(value_name = "PATH")]
+        path: PathBuf,
+
+        /// Initialize the directory first when it is not already a vault.
+        #[arg(long)]
+        init: bool,
+    },
+
+    /// Remove a vault from the configuration.
+    ///
+    /// The directory and everything in it are left exactly as they are: this
+    /// removes one line from one file.
+    Remove {
+        /// The vault's id.
+        #[arg(value_name = "ID")]
+        id: String,
+    },
+
+    /// Give a configured vault a different id.
+    ///
+    /// The id is what clients address the vault by, so a rename is a change
+    /// clients see: an extension pointed at the old id finds it gone.
+    Rename {
+        /// The id it has now.
+        #[arg(value_name = "ID")]
+        id: String,
+
+        /// The id it should have.
+        #[arg(value_name = "NEW-ID")]
+        new_id: String,
+    },
+
+    /// Print one configured vault's root directory, and nothing else.
+    ///
+    /// For scripting: no label, no decoration, one line, and a non-zero exit
+    /// when the id is not configured.
+    Path {
+        /// The vault's id.
+        #[arg(value_name = "ID")]
+        id: String,
     },
 }
 
@@ -126,11 +225,26 @@ pub enum ServiceCommand {
     /// User-level throughout: a systemd *user* unit, a macOS `LaunchAgent` or a
     /// Scheduled Task at logon. None of them needs an administrator, because
     /// none of them needs to touch anything but one person's own files.
+    #[command(group(ArgGroup::new("service-vaults").required(true).args(["vaults", "from_config"])))]
     Install {
-        /// The vault directory. Mandatory, and embedded verbatim in the
-        /// service definition.
-        #[arg(long, value_name = "PATH")]
-        vault: PathBuf,
+        /// A vault to serve, as `PATH` for one vault or `ID=PATH` to name it.
+        ///
+        /// Repeat the flag to install a service that hosts several. Every path
+        /// is embedded verbatim in the service definition.
+        #[arg(
+            long = "vault",
+            value_name = "PATH | ID=PATH",
+            group = "service-vaults"
+        )]
+        vaults: Vec<String>,
+
+        /// Install a service for every vault in the configuration.
+        ///
+        /// The configuration is read once, here: what it says is expanded into
+        /// the definition, so editing it later does not silently change what an
+        /// installed service starts. Re-run this to apply such a change.
+        #[arg(long, group = "service-vaults")]
+        from_config: bool,
 
         /// The port to serve on.
         ///
@@ -176,15 +290,23 @@ impl Cli {
         match self.command {
             Command::Serve {
                 vaults,
+                from_config,
                 bind,
                 port,
                 ui_dir,
                 init,
-            } => run_serve(&vaults, bind, port, ui_dir, init),
+            } => run_serve(&vaults, from_config, bind, port, ui_dir, init),
             Command::Init { vault } => run_init(&vault),
-            Command::Doctor { vault } => run_doctor(&vault),
-            Command::Rescan { vault } => run_rescan(&vault),
+            Command::Doctor { vault, id } => match resolve_vault_argument(vault, id) {
+                Ok(vault) => run_doctor(&vault),
+                Err(message) => fail(format_args!("{message}")),
+            },
+            Command::Rescan { vault, id } => match resolve_vault_argument(vault, id) {
+                Ok(vault) => run_rescan(&vault),
+                Err(message) => fail(format_args!("{message}")),
+            },
             Command::Setup => run_setup(),
+            Command::Vault { command } => run_vault(command),
             Command::Service { command } => run_service(command),
         }
     }
@@ -202,39 +324,75 @@ impl Cli {
     }
 }
 
+/// The vaults `serve` was asked to host, from the configuration or the command
+/// line — never both, which the argument group already guarantees.
+///
+/// Split out of [`run_serve`] because resolving *what* to host is a separable
+/// question from binding a socket and opening it, and because the paths that
+/// can fail here all fail the same way: a message and no daemon.
+fn resolve_serve_vaults(
+    vault_arguments: &[String],
+    configured: &Config,
+    from_config: bool,
+) -> Result<Vec<VaultSpec>, String> {
+    if from_config {
+        if configured.vaults.is_empty() {
+            return Err(
+                "the configuration lists no vault to serve; add one with `bookmarks-but-better vault add <ID> <PATH>`"
+                    .to_owned(),
+            );
+        }
+        return Ok(configured.specs());
+    }
+
+    let mut specs = Vec::with_capacity(vault_arguments.len());
+    for argument in vault_arguments {
+        let spec = VaultSpec::parse(argument).map_err(|bad| {
+            format!("--vault {bad} carries no path; use --vault PATH or --vault ID=PATH")
+        })?;
+        let path = server::resolve_vault_path(&spec.path)
+            .map_err(|error| format!("the vault path could not be resolved: {error}"))?;
+        specs.push(VaultSpec::new(spec.id, path));
+    }
+    Ok(specs)
+}
+
 fn run_serve(
     vault_arguments: &[String],
-    bind: IpAddr,
-    port: u16,
+    from_config: bool,
+    bind: Option<IpAddr>,
+    port: Option<u16>,
     ui_dir: Option<PathBuf>,
     allow_init: bool,
 ) -> ExitCode {
+    // Read first, so a configuration that cannot be parsed is reported before
+    // anything is bound, opened or locked.
+    let configured = if from_config {
+        match load_config() {
+            Ok(config) => config,
+            Err(message) => return fail(format_args!("{message}")),
+        }
+    } else {
+        Config::default()
+    };
+
+    // An explicit flag beats the configuration, which beats the default. That
+    // ordering is what lets `--from-config --port 0` be a one-off without
+    // editing the file.
+    let bind = bind.or(configured.bind).unwrap_or(DEFAULT_BIND);
+    let port = port.or(configured.port).unwrap_or(DEFAULT_PORT);
+    let ui_dir = ui_dir.or_else(|| configured.ui_dir.clone());
+
     if !bind.is_loopback() {
         return fail(format_args!(
             "--bind {bind} is not a loopback address; this milestone serves loopback clients only"
         ));
     }
 
-    let mut specs = Vec::with_capacity(vault_arguments.len());
-    for argument in vault_arguments {
-        let spec = match VaultSpec::parse(argument) {
-            Ok(spec) => spec,
-            Err(bad) => {
-                return fail(format_args!(
-                    "--vault {bad} carries no path; use --vault PATH or --vault ID=PATH"
-                ));
-            }
-        };
-        let path = match server::resolve_vault_path(&spec.path) {
-            Ok(path) => path,
-            Err(error) => {
-                return fail(format_args!(
-                    "the vault path could not be resolved: {error}"
-                ));
-            }
-        };
-        specs.push(VaultSpec::new(spec.id, path));
-    }
+    let specs = match resolve_serve_vaults(vault_arguments, &configured, from_config) {
+        Ok(specs) => specs,
+        Err(message) => return fail(format_args!("{message}")),
+    };
 
     if allow_init {
         for spec in &specs {
@@ -344,6 +502,267 @@ async fn shutdown_signal() {
     }
 }
 
+/// The configuration, or the message to print instead.
+///
+/// Every caller here treats a configuration problem the same way — say what is
+/// wrong with which file and stop — so the mapping to a message lives once.
+fn load_config() -> Result<Config, ConfigError> {
+    config::load(&ConfigLocation::from_env()?)
+}
+
+/// Resolves the vault a command was pointed at: a path, or a configured id.
+///
+/// The argument parser has already guaranteed exactly one of the two is
+/// present, so the "neither" arm is unreachable in practice and is still
+/// answered rather than panicked on.
+fn resolve_vault_argument(
+    vault: Option<PathBuf>,
+    id: Option<String>,
+) -> Result<PathBuf, ConfigError> {
+    if let Some(vault) = vault {
+        return Ok(vault);
+    }
+    let id = id.unwrap_or_default();
+    let config = load_config()?;
+    config
+        .vaults
+        .get(&id)
+        .map(|entry| entry.path.clone())
+        .ok_or_else(|| ConfigError::UnknownVault {
+            known: config.vaults.keys().cloned().collect(),
+            id,
+        })
+}
+
+fn run_vault(command: VaultCommand) -> ExitCode {
+    let location = match ConfigLocation::from_env() {
+        Ok(location) => location,
+        Err(error) => return fail(format_args!("{error}")),
+    };
+    let config = match config::load(&location) {
+        Ok(config) => config,
+        Err(error) => return fail(format_args!("{error}")),
+    };
+
+    match command {
+        VaultCommand::List { json } => run_vault_list(&location, &config, json),
+        VaultCommand::Add { id, path, init } => run_vault_add(&location, config, &id, &path, init),
+        VaultCommand::Remove { id } => run_vault_remove(&location, config, &id),
+        VaultCommand::Rename { id, new_id } => run_vault_rename(&location, config, &id, &new_id),
+        VaultCommand::Path { id } => run_vault_path(&config, &id),
+    }
+}
+
+/// What is true of a configured vault's directory right now.
+///
+/// Deliberately cheap: three `stat`-shaped questions and the advisory lock, not
+/// a scan. `vault list` runs this once per vault and must stay instant however
+/// large the vaults are; `doctor` is the command that reads their contents.
+fn describe_vault_state(path: &std::path::Path) -> &'static str {
+    if !path.exists() {
+        return "directory missing";
+    }
+    if !path.is_dir() {
+        return "not a directory";
+    }
+    if !path
+        .join(bookmarks_but_better_vault_core::FOLDER_FILE_NAME)
+        .exists()
+    {
+        return "not initialized";
+    }
+    if doctor::daemon_is_running(path) {
+        return "served now";
+    }
+    "ok"
+}
+
+fn run_vault_list(location: &ConfigLocation, config: &Config, json: bool) -> ExitCode {
+    if json {
+        let vaults: Vec<_> = config
+            .vaults
+            .iter()
+            .map(|(id, entry)| {
+                serde_json::json!({
+                    "id": id,
+                    "path": entry.path,
+                    "state": describe_vault_state(&entry.path),
+                })
+            })
+            .collect();
+        let document = serde_json::json!({
+            "configuration": location.path(),
+            "bind": config.bind.unwrap_or(DEFAULT_BIND).to_string(),
+            "port": config.port.unwrap_or(DEFAULT_PORT),
+            "uiDir": config.ui_dir,
+            "vaults": vaults,
+        });
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&document).unwrap_or_default()
+        );
+        return ExitCode::SUCCESS;
+    }
+
+    println!("configuration {}", location.path().display());
+    println!(
+        "serving       http://{}:{}",
+        config.bind.unwrap_or(DEFAULT_BIND),
+        config.port.unwrap_or(DEFAULT_PORT)
+    );
+    if let Some(ui_dir) = &config.ui_dir {
+        println!("web UI        {}", ui_dir.display());
+    }
+
+    if config.vaults.is_empty() {
+        println!();
+        println!("no vault is configured yet");
+        println!("  add one: bookmarks-but-better vault add <ID> <PATH>");
+        return ExitCode::SUCCESS;
+    }
+
+    // Padded to the widest id so the paths line up; ids are capped at 64
+    // characters, so this cannot run away.
+    let width = config.vaults.keys().map(String::len).max().unwrap_or(2);
+    println!();
+    for (id, entry) in &config.vaults {
+        println!(
+            "{id:<width$}  {}  ({})",
+            entry.path.display(),
+            describe_vault_state(&entry.path)
+        );
+    }
+    ExitCode::SUCCESS
+}
+
+fn run_vault_add(
+    location: &ConfigLocation,
+    mut config: Config,
+    id: &str,
+    path: &std::path::Path,
+    allow_init: bool,
+) -> ExitCode {
+    let path = match server::resolve_vault_path(path) {
+        Ok(path) => path,
+        Err(error) => {
+            return fail(format_args!(
+                "the vault path could not be resolved: {error}"
+            ));
+        }
+    };
+
+    if let Some(existing) = config.vaults.get(id) {
+        return fail(format_args!(
+            "a vault `{id}` is already configured at {}; remove it first, or choose another id",
+            existing.path.display()
+        ));
+    }
+
+    if allow_init {
+        match init::initialize(&path) {
+            Ok(InitOutcome::Created { id: vault_id }) => {
+                println!("initialized {} (id {vault_id})", path.display());
+            }
+            Ok(InitOutcome::AlreadyInitialized { .. }) => {}
+            Err(error) => return fail(format_args!("{error}")),
+        }
+    }
+
+    config
+        .vaults
+        .insert(id.to_owned(), VaultEntry { path: path.clone() });
+    if let Err(error) = config::save(location, &config) {
+        return fail(format_args!("{error}"));
+    }
+
+    println!("added `{id}` -> {}", path.display());
+    // Only when a daemon is actually holding one of these vaults. Adding a
+    // vault on a machine that is serving nothing has nothing to restart, and
+    // saying so anyway would make the first `vault add` anyone runs read like
+    // a warning.
+    if config
+        .vaults
+        .values()
+        .any(|entry| doctor::daemon_is_running(&entry.path))
+    {
+        println!("the running daemon does not pick this up until it restarts (ADR-0001)");
+    }
+    if !allow_init
+        && !path
+            .join(bookmarks_but_better_vault_core::FOLDER_FILE_NAME)
+            .exists()
+    {
+        println!(
+            "note: {} is not an initialized vault yet — run `bookmarks-but-better init --vault {}`",
+            path.display(),
+            path.display()
+        );
+    }
+    ExitCode::SUCCESS
+}
+
+fn run_vault_remove(location: &ConfigLocation, mut config: Config, id: &str) -> ExitCode {
+    let Some(entry) = config.vaults.remove(id) else {
+        return fail(format_args!(
+            "{}",
+            ConfigError::UnknownVault {
+                id: id.to_owned(),
+                known: config.vaults.keys().cloned().collect(),
+            }
+        ));
+    };
+    if let Err(error) = config::save(location, &config) {
+        return fail(format_args!("{error}"));
+    }
+    println!("removed `{id}` from the configuration");
+    println!("{} was not touched", entry.path.display());
+    ExitCode::SUCCESS
+}
+
+fn run_vault_rename(
+    location: &ConfigLocation,
+    mut config: Config,
+    id: &str,
+    new_id: &str,
+) -> ExitCode {
+    if config.vaults.contains_key(new_id) {
+        return fail(format_args!("a vault `{new_id}` is already configured"));
+    }
+    let Some(entry) = config.vaults.remove(id) else {
+        return fail(format_args!(
+            "{}",
+            ConfigError::UnknownVault {
+                id: id.to_owned(),
+                known: config.vaults.keys().cloned().collect(),
+            }
+        ));
+    };
+    config.vaults.insert(new_id.to_owned(), entry);
+    if let Err(error) = config::save(location, &config) {
+        return fail(format_args!("{error}"));
+    }
+    println!("renamed `{id}` to `{new_id}`");
+    println!("clients addressing the old id will not find it; update them too");
+    ExitCode::SUCCESS
+}
+
+fn run_vault_path(config: &Config, id: &str) -> ExitCode {
+    match config.vaults.get(id) {
+        // Deliberately bare: this is what a script substitutes.
+        Some(entry) => {
+            println!("{}", entry.path.display());
+            ExitCode::SUCCESS
+        }
+        None => fail(format_args!(
+            "{}",
+            ConfigError::UnknownVault {
+                id: id.to_owned(),
+                known: config.vaults.keys().cloned().collect(),
+            }
+        )),
+    }
+}
+
 fn run_init(vault: &std::path::Path) -> ExitCode {
     match init::initialize(vault) {
         Ok(outcome) => {
@@ -447,7 +866,7 @@ fn run_rescan(vault: &std::path::Path) -> ExitCode {
 /// definition outlives the shell that created it, so `bookmarks-but-better` on a `PATH` is not
 /// good enough — the file has to name the exact program.
 fn service_spec(
-    vault: &std::path::Path,
+    vaults: &[VaultSpec],
     port: Option<u16>,
     ui_dir: Option<PathBuf>,
     layout: &service::ServiceLayout,
@@ -455,10 +874,20 @@ fn service_spec(
 ) -> Result<service::ServiceSpec, String> {
     let exe = std::env::current_exe()
         .map_err(|error| format!("this program's own path is unknown: {error}"))?;
-    let vault = server::resolve_vault_path(vault)
-        .map_err(|error| format!("the vault path could not be resolved: {error}"))?;
 
-    let mut spec = service::ServiceSpec::new(exe, vault).map_err(|error| error.to_string())?;
+    let mut resolved = Vec::with_capacity(vaults.len());
+    for vault in vaults {
+        let path = server::resolve_vault_path(&vault.path)
+            .map_err(|error| format!("the vault path could not be resolved: {error}"))?;
+        resolved.push(VaultSpec::new(vault.id.clone(), path));
+    }
+    // The same validation `serve` does at startup, done now: an unusable id or
+    // an overlap installed into a service definition would fail at every login
+    // instead of at the command that wrote it.
+    registry::validate(&resolved).map_err(|error| error.to_string())?;
+
+    let mut spec =
+        service::ServiceSpec::with_vaults(exe, resolved).map_err(|error| error.to_string())?;
     spec = spec
         .with_port(service::resolve_port(layout, kind, port))
         .map_err(|error| error.to_string())?;
@@ -472,10 +901,61 @@ fn service_spec(
     Ok(spec)
 }
 
+/// The vaults, port and UI directory a `service install` was asked for.
+///
+/// A struct rather than a tuple because two of the three are `Option`s of
+/// different meaning and would be trivially swappable at the call site.
+#[derive(Debug)]
+struct ServiceInstallInputs {
+    vaults: Vec<VaultSpec>,
+    port: Option<u16>,
+    ui_dir: Option<PathBuf>,
+}
+
+/// Resolves what a `service install` should record.
+///
+/// `--from-config` expands the Vault Registry here and now (ADR-0005): the
+/// definition records paths, never a reference to a file that could later say
+/// something else.
+fn service_install_inputs(
+    vault_arguments: &[String],
+    from_config: bool,
+    port: Option<u16>,
+    ui_dir: Option<PathBuf>,
+) -> Result<ServiceInstallInputs, String> {
+    if !from_config {
+        let mut vaults = Vec::with_capacity(vault_arguments.len());
+        for argument in vault_arguments {
+            vaults.push(VaultSpec::parse(argument).map_err(|bad| {
+                format!("--vault {bad} carries no path; use --vault PATH or --vault ID=PATH")
+            })?);
+        }
+        return Ok(ServiceInstallInputs {
+            vaults,
+            port,
+            ui_dir,
+        });
+    }
+
+    let configured = load_config().map_err(|error| error.to_string())?;
+    if configured.vaults.is_empty() {
+        return Err(
+            "the configuration lists no vault to serve; add one with `bookmarks-but-better vault add <ID> <PATH>`"
+                .to_owned(),
+        );
+    }
+    Ok(ServiceInstallInputs {
+        vaults: configured.specs(),
+        port: port.or(configured.port),
+        ui_dir: ui_dir.or(configured.ui_dir),
+    })
+}
+
 fn run_service_install(
     layout: &service::ServiceLayout,
     kind: service::ServiceKind,
-    vault: &std::path::Path,
+    vault_arguments: &[String],
+    from_config: bool,
     port: Option<u16>,
     ui_dir: Option<PathBuf>,
     no_start: bool,
@@ -484,7 +964,12 @@ fn run_service_install(
     let existing_port = service::resolve_port(layout, kind, None);
     let was_installed = service::is_installed(layout, kind);
 
-    let spec = match service_spec(vault, port, ui_dir, layout, kind) {
+    let inputs = match service_install_inputs(vault_arguments, from_config, port, ui_dir) {
+        Ok(inputs) => inputs,
+        Err(message) => return fail(format_args!("{message}")),
+    };
+
+    let spec = match service_spec(&inputs.vaults, inputs.port, inputs.ui_dir, layout, kind) {
         Ok(spec) => spec,
         Err(message) => return fail(format_args!("{message}")),
     };
@@ -502,7 +987,9 @@ fn run_service_install(
         "unchanged"
     };
     println!("{verb} {} ({})", outcome.path().display(), kind.describe());
-    println!("  vault  {}", spec.vault.display());
+    for vault in &spec.vaults {
+        println!("  vault  {} ({})", vault.path.display(), vault.id);
+    }
     println!("  serving http://{}:{}", spec.bind, spec.port);
 
     if let Err(error) = service::reload(layout, kind) {
@@ -546,8 +1033,8 @@ fn run_service_status(layout: &service::ServiceLayout, kind: service::ServiceKin
         }
     );
 
-    if let Some(vault) = service::installed_vault(layout, kind) {
-        println!("vault      {}", vault.display());
+    for vault in service::installed_vaults(layout, kind) {
+        println!("vault      {} ({})", vault.path.display(), vault.id);
     }
     if let Some(port) = service::installed_command_line(layout, kind)
         .as_deref()
@@ -567,11 +1054,12 @@ fn run_service(command: ServiceCommand) -> ExitCode {
 
     match command {
         ServiceCommand::Install {
-            vault,
+            vaults,
+            from_config,
             port,
             ui_dir,
             no_start,
-        } => run_service_install(&layout, kind, &vault, port, ui_dir, no_start),
+        } => run_service_install(&layout, kind, &vaults, from_config, port, ui_dir, no_start),
 
         ServiceCommand::Status => run_service_status(&layout, kind),
 

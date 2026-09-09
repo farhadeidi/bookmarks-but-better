@@ -3,6 +3,7 @@
 use std::net::IpAddr;
 use std::path::{Path, PathBuf};
 
+use crate::registry::{DEFAULT_VAULT_ID, VaultSpec};
 use crate::server::{DEFAULT_BIND, DEFAULT_PORT};
 
 /// The reverse-DNS identifier the macOS agent uses, and the stem every other
@@ -17,18 +18,24 @@ pub const SERVICE_DESCRIPTION: &str = "Bookmarks But Better daemon";
 
 /// Everything a service definition needs in order to start the daemon.
 ///
-/// The vault path is stored *absolute and verbatim*. A service is started by
+/// Vault paths are stored *absolute and verbatim*. A service is started by
 /// the system with no shell, no working directory the user chose and no
 /// environment they set, so a relative path or one relying on `~` would
 /// resolve somewhere they never intended — which for a daemon that writes
 /// files is the difference between "did not start" and "wrote into the wrong
 /// directory".
+///
+/// The vaults are the *expansion* of whatever named them, not a reference to
+/// it: `service install --from-config` reads the Vault Registry once and
+/// embeds what it found. A definition therefore keeps starting the same daemon
+/// after the registry is edited, and `service status` can say what is actually
+/// installed rather than what the registry currently says.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ServiceSpec {
     /// The absolute path of the `bookmarks-but-better` binary to run.
     pub exe: PathBuf,
-    /// The absolute path of the vault to serve.
-    pub vault: PathBuf,
+    /// The vaults to serve, in the order they were configured. Never empty.
+    pub vaults: Vec<VaultSpec>,
     /// The address to bind. Loopback only, enforced at construction.
     pub bind: IpAddr,
     /// The port to bind.
@@ -55,6 +62,8 @@ pub enum SpecError {
     },
     /// Port 0 asks the OS for a free port, which a service definition cannot use.
     EphemeralPort,
+    /// No vault was given, so there would be nothing to serve.
+    NoVault,
 }
 
 impl core::fmt::Display for SpecError {
@@ -72,6 +81,9 @@ impl core::fmt::Display for SpecError {
             Self::EphemeralPort => f.write_str(
                 "--port 0 asks the operating system for any free port, so a service installed with it would move every restart and no browser could find it",
             ),
+            Self::NoVault => f.write_str(
+                "no vault was given, so the installed service would have nothing to serve and would be restarted forever",
+            ),
         }
     }
 }
@@ -79,21 +91,43 @@ impl core::fmt::Display for SpecError {
 impl core::error::Error for SpecError {}
 
 impl ServiceSpec {
-    /// Builds a spec, refusing anything a service manager could not honour.
+    /// Builds a spec serving one vault under the id `default` — the shape
+    /// every definition had before vaults carried ids, and what a plain
+    /// `--vault PATH` still means.
     ///
     /// # Errors
     ///
-    /// [`SpecError::RelativePath`] for a non-absolute path,
-    /// [`SpecError::NotLoopback`] for a bind address that is not loopback, and
-    /// [`SpecError::EphemeralPort`] for port 0.
+    /// [`SpecError::RelativePath`] for a non-absolute path. The bind address
+    /// and port are refused by [`Self::with_bind`] and [`Self::with_port`],
+    /// which are the only things that set them.
     pub fn new(exe: impl Into<PathBuf>, vault: impl Into<PathBuf>) -> Result<Self, SpecError> {
+        Self::with_vaults(exe, [VaultSpec::new(DEFAULT_VAULT_ID, vault.into())])
+    }
+
+    /// Builds a spec serving several vaults.
+    ///
+    /// # Errors
+    ///
+    /// [`SpecError::RelativePath`] for a non-absolute path, and
+    /// [`SpecError::NoVault`] for an empty set — a service that hosts nothing
+    /// would start, fail, and be restarted forever by the platform's own
+    /// supervisor.
+    pub fn with_vaults(
+        exe: impl Into<PathBuf>,
+        vaults: impl IntoIterator<Item = VaultSpec>,
+    ) -> Result<Self, SpecError> {
         let exe = exe.into();
-        let vault = vault.into();
         require_absolute("executable", &exe)?;
-        require_absolute("vault", &vault)?;
+        let vaults: Vec<VaultSpec> = vaults.into_iter().collect();
+        if vaults.is_empty() {
+            return Err(SpecError::NoVault);
+        }
+        for vault in &vaults {
+            require_absolute("vault", &vault.path)?;
+        }
         Ok(Self {
             exe,
-            vault,
+            vaults,
             bind: DEFAULT_BIND,
             port: DEFAULT_PORT,
             ui_dir: None,
@@ -149,16 +183,25 @@ impl ServiceSpec {
     /// drift apart in what they actually start.
     #[must_use]
     pub fn command_line(&self) -> Vec<String> {
-        let mut args = vec![
-            self.exe.to_string_lossy().into_owned(),
-            "serve".to_owned(),
-            "--vault".to_owned(),
-            self.vault.to_string_lossy().into_owned(),
+        let mut args = vec![self.exe.to_string_lossy().into_owned(), "serve".to_owned()];
+        for vault in &self.vaults {
+            args.push("--vault".to_owned());
+            // The plain `PATH` spelling for the one shape that had no ids to
+            // write: a single vault under the default id. That keeps every
+            // definition installed before vaults had ids byte-identical, so an
+            // upgrade compares equal and rewrites nothing.
+            args.push(if self.vaults.len() == 1 && vault.id == DEFAULT_VAULT_ID {
+                vault.path.to_string_lossy().into_owned()
+            } else {
+                format!("{}={}", vault.id, vault.path.display())
+            });
+        }
+        args.extend([
             "--bind".to_owned(),
             self.bind.to_string(),
             "--port".to_owned(),
             self.port.to_string(),
-        ];
+        ]);
         if let Some(ui_dir) = &self.ui_dir {
             args.push("--ui-dir".to_owned());
             args.push(ui_dir.to_string_lossy().into_owned());
@@ -185,7 +228,7 @@ impl ServiceSpec {
     pub(crate) fn unchecked(exe: &str, vault: &str) -> Self {
         Self {
             exe: PathBuf::from(exe),
-            vault: PathBuf::from(vault),
+            vaults: vec![VaultSpec::new(DEFAULT_VAULT_ID, vault)],
             bind: DEFAULT_BIND,
             port: DEFAULT_PORT,
             ui_dir: None,
@@ -214,17 +257,47 @@ pub fn port_in(arguments: &[String]) -> Option<u16> {
     value_of(arguments, "--port").and_then(|text| text.parse().ok())
 }
 
-/// The vault named by `--vault` in a parsed command line.
+/// Every vault named by a `--vault` in a parsed command line, in order.
+///
+/// This is how `service status` reports what is installed and how an upgrade
+/// reads back what it is replacing: the definition is the record, and it is
+/// parsed rather than remembered.
 #[must_use]
-pub fn vault_in(arguments: &[String]) -> Option<PathBuf> {
-    value_of(arguments, "--vault").map(PathBuf::from)
+pub fn vaults_in(arguments: &[String]) -> Vec<VaultSpec> {
+    values_of(arguments, "--vault")
+        .filter_map(|value| VaultSpec::parse(value).ok())
+        .collect()
+}
+
+/// The one vault a single-vault definition names.
+///
+/// Test-only, and deliberately so: the generators are asserted against
+/// definitions that serve exactly one vault — the shape every installed
+/// definition had before ids existed — and reading it back as one path is what
+/// makes "the path survived this format's escaping" the claim under test.
+#[cfg(test)]
+pub(crate) fn vault_in(arguments: &[String]) -> Option<PathBuf> {
+    let vaults = vaults_in(arguments);
+    match vaults.as_slice() {
+        [only] => Some(only.path.clone()),
+        _ => None,
+    }
 }
 
 fn value_of<'a>(arguments: &'a [String], flag: &str) -> Option<&'a str> {
+    values_of(arguments, flag).next()
+}
+
+/// Every value of a repeatable flag, in the order they appear.
+fn values_of<'a>(arguments: &'a [String], flag: &str) -> impl Iterator<Item = &'a str> {
     arguments
         .iter()
-        .position(|argument| argument == flag)
-        .and_then(|index| arguments.get(index + 1))
+        .enumerate()
+        .filter({
+            let flag = flag.to_owned();
+            move |(_, argument)| **argument == flag
+        })
+        .filter_map(|(index, _)| arguments.get(index + 1))
         .map(String::as_str)
 }
 

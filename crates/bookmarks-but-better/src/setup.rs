@@ -329,6 +329,14 @@ mod tests {
     }
 
     /// A free port to offer setup, found the same way setup checks one.
+    ///
+    /// The port is free at the moment this returns and not necessarily a
+    /// moment later — the socket is closed so that setup's own check can
+    /// succeed, and the operating system may hand the number to anything in
+    /// between. Every script that answers with one of these therefore ends
+    /// with `"n"`: "no, do not choose a different port", which is only ever
+    /// read if the race was lost, and which keeps the resulting plan on the
+    /// port the test asked for either way.
     fn free_port() -> u16 {
         TcpListener::bind(SocketAddr::from((Ipv4Addr::LOCALHOST, 0)))
             .expect("bind an ephemeral port")
@@ -343,7 +351,8 @@ mod tests {
         let vault = directory.path().join("Bookmarks");
         let port = free_port();
 
-        let mut prompt = Scripted::with(&["n", &vault.to_string_lossy(), "y", &port.to_string()]);
+        let mut prompt =
+            Scripted::with(&["n", &vault.to_string_lossy(), "y", &port.to_string(), "n"]);
         let plan = plan(&mut prompt).expect("a confirmed plan");
 
         assert_eq!(plan.vault, vault);
@@ -390,8 +399,12 @@ mod tests {
         crate::initialize(directory.path()).expect("initialize");
         let port = free_port();
 
-        let mut prompt =
-            Scripted::with(&["e", &directory.path().to_string_lossy(), &port.to_string()]);
+        let mut prompt = Scripted::with(&[
+            "e",
+            &directory.path().to_string_lossy(),
+            &port.to_string(),
+            "n",
+        ]);
         let plan = plan(&mut prompt).expect("an existing vault plan");
 
         assert!(
@@ -416,6 +429,7 @@ mod tests {
             &directory.path().to_string_lossy(),
             "y",
             &port.to_string(),
+            "n",
         ]);
         let accepted = plan(&mut prompt).expect("plan");
 
@@ -458,6 +472,7 @@ mod tests {
             &directory.path().to_string_lossy(),
             "y",
             &port.to_string(),
+            "n",
         ]);
         assert!(plan(&mut accepting).is_ok(), "the user may override");
     }
@@ -472,7 +487,7 @@ mod tests {
             return;
         }
 
-        let mut prompt = Scripted::with(&["e", &directory.path().to_string_lossy(), ""]);
+        let mut prompt = Scripted::with(&["e", &directory.path().to_string_lossy(), "", "n"]);
         assert_eq!(plan(&mut prompt).expect("plan").port, DEFAULT_PORT);
     }
 
@@ -492,6 +507,7 @@ mod tests {
             &taken.to_string(),
             "y",
             &free.to_string(),
+            "n",
         ]);
         let plan = plan(&mut prompt).expect("plan");
 
@@ -533,6 +549,7 @@ mod tests {
             "relative/path",
             &directory.path().to_string_lossy(),
             &port.to_string(),
+            "n",
         ]);
         assert_eq!(plan(&mut prompt).expect("plan").vault, directory.path());
         assert!(
@@ -553,6 +570,7 @@ mod tests {
             "e",
             &directory.path().to_string_lossy(),
             &port.to_string(),
+            "n",
         ]);
         assert!(plan(&mut prompt).is_ok());
         assert_eq!(

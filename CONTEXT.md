@@ -24,6 +24,10 @@ _Avoid_: Remote bookmarks, vault mode
 An independent local authority over one or more Vaults. It exposes them to clients and does not depend on a user interface to run.
 _Avoid_: Daemon mode, daemon UI
 
+**Vault Registry**:
+The set of Vaults a user has configured on one machine, recorded in one file the `vault` commands write. It says what a daemon will host when asked to read it, which is not necessarily what a running daemon hosts now.
+_Avoid_: Config, vault list, discovery
+
 **Daemon Connection**:
 A client's relationship with one daemon. A connection can make multiple Daemon Sources available without combining their bookmarks.
 _Avoid_: Daemon Source, Active Source

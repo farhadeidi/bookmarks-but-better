@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **A Vault Registry, and the `vault` commands that manage it.** Multiple
+  vaults per daemon existed only as `--vault ID=PATH` typed out on every
+  `serve`, and `service install` took one vault and no ids at all — so the
+  feature had no background-service story and nothing on the machine recorded
+  which vaults existed. `bookmarks-but-better vault add|remove|rename|list|path`
+  now keeps that set in one file, `serve --from-config` and
+  `service install --from-config` read it, and `doctor` and `rescan` accept a
+  configured id in place of a path. `vault list` says what is configured and,
+  per vault, what is true of its directory right now — including `served now`
+  when a daemon holds it, which is where the difference between configured and
+  hosted becomes visible. `vault list --json` is the machine-readable form.
+
+  This narrows the rule that no command may touch a directory the user did not
+  name on that command line, and keeps what mattered about it: `vault add` is
+  the only thing that writes the file, `vault list` is the audit, and a command
+  that does not say `--from-config` still cannot reach a vault the command line
+  did not name. `vault remove` takes an entry out of the file and never touches
+  the directory. Adding or removing a vault still takes a daemon restart. See
+  [ADR-0005](docs/adr/0005-record-configured-vaults-in-one-explicitly-written-file.md)
+
+- **The background service can host several vaults.**
+  `service install --vault ID=PATH` is repeatable, and `--from-config` installs
+  what the registry holds. A definition serving exactly one vault under the id
+  `default` still spells it as a bare `--vault PATH`, so an installation made
+  before vaults had ids compares equal on upgrade and is not rewritten
+
 ### Fixed
 
 - **The Windows installer no longer fails against antivirus, and now survives

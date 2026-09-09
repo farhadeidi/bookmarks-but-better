@@ -167,7 +167,13 @@ fn staged_findings(root: &Path) -> Vec<Finding> {
 ///
 /// Reported so that a person reading `doctor` output knows whether what they
 /// are looking at can change underneath them.
-fn daemon_is_running(root: &Path) -> bool {
+/// Whether a daemon currently holds this vault.
+///
+/// The advisory lock is the only honest answer available without asking a
+/// daemon: it is held for as long as one is running and released by the
+/// operating system when it stops, however it stopped.
+#[must_use]
+pub fn daemon_is_running(root: &Path) -> bool {
     let Ok(handle) = std::fs::File::options()
         .read(true)
         .write(true)

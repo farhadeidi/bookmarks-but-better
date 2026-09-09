@@ -125,6 +125,30 @@ directories must not overlap; startup fails atomically otherwise. A plain
 `--vault PATH` claims the id `default`, which is what a single-vault daemon
 has always served.
 
+Typing that out every time is optional. `bookmarks-but-better vault add`
+records a vault in one configuration file, and `serve --from-config` hosts
+everything in it:
+
+```bash
+bookmarks-but-better vault add reading ~/vaults/reading
+bookmarks-but-better vault add archive ~/vaults/archive
+bookmarks-but-better vault list
+bookmarks-but-better serve --from-config
+```
+
+The file is at `~/.config/bookmarks-but-better/config.toml` and carries the
+port, the bind address and the UI directory alongside the vaults. Nothing reads
+it unless you ask: `serve --vault …` ignores it entirely, and `vault list` is
+what makes the configured set auditable. `vault remove` takes an entry out of
+the file and never touches the directory. See
+[ADR-0005](adr/0005-record-configured-vaults-in-one-explicitly-written-file.md).
+
+The background service can host several vaults too — repeat
+`bookmarks-but-better service install --vault ID=PATH`, or install what the
+configuration holds with `service install --from-config`. The definition
+records the paths it was given, so editing the configuration afterwards does
+not change what an installed service starts until you install again.
+
 Each Vault is a separate source with vault-scoped routes under
 `/api/v1/vaults/{id}/…` (tree, search, bookmarks, folders, events, health).
 `GET /api/v1/vaults` lists what is hosted. The legacy unscoped routes (`/tree`
