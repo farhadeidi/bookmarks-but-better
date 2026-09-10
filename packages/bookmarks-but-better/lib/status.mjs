@@ -5,8 +5,8 @@
 
 import { contractHome } from "./layout.mjs";
 
-export const DEFAULT_PORT = 52222;
-export const DEFAULT_BIND = "127.0.0.1";
+const DEFAULT_PORT = 52222;
+const DEFAULT_BIND = "127.0.0.1";
 
 const INSTALL = "npx bookmarks-but-better install";
 

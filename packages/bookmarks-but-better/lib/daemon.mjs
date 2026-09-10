@@ -39,7 +39,7 @@ export function runVisible(command, args, { env = process.env } = {}) {
 }
 
 /** Runs a `--json` command and parses its answer. */
-export async function readJson(binary, args) {
+async function readJson(binary, args) {
   const result = await runQuiet(binary, args);
   if (!result.ok) {
     return { value: null, error: result.stderr.trim() || `exit code ${result.code}` };
@@ -51,7 +51,7 @@ export async function readJson(binary, args) {
   }
 }
 
-export async function readVersion(binary) {
+async function readVersion(binary) {
   const result = await runQuiet(binary, ["--version"]);
   return result.ok ? parseVersionOutput(result.stdout) : null;
 }
@@ -65,7 +65,7 @@ export async function readService(binary) {
 }
 
 /** `GET /api/v1/health`, with a short timeout: loopback answers at once or not at all. */
-export async function fetchHealth(origin, { timeoutMs = 2000 } = {}) {
+async function fetchHealth(origin, { timeoutMs = 2000 } = {}) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
@@ -137,20 +137,6 @@ export async function registryHasVaults(binary) {
 export async function serviceIsInstalled(binary) {
   const { value } = await readService(binary);
   return value ? value.state !== "not-installed" : null;
-}
-
-/**
- * Installs (or reinstalls) the service from the registry, which also restarts
- * it: this is how a new binary, port or vault set is applied.
- */
-export function applyService(layout) {
-  return runVisible(layout.binary, [
-    "service",
-    "install",
-    "--from-config",
-    "--ui-dir",
-    layout.uiDir,
-  ]);
 }
 
 /**

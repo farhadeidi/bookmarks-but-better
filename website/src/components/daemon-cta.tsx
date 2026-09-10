@@ -3,16 +3,16 @@ import { CopyButton } from "@/components/copy-button"
 
 const COMMANDS = [
   {
-    label: "macOS / Linux",
-    code: "curl -fsSL https://github.com/farhadeidi/bookmarks-but-better/releases/latest/download/install.sh | bash",
-  },
-  {
-    label: "Windows (PowerShell)",
-    code: "irm https://github.com/farhadeidi/bookmarks-but-better/releases/latest/download/install.ps1 | iex",
-  },
-  {
     label: "Any platform with Node.js",
     code: "npx bookmarks-but-better@latest",
+  },
+  {
+    label: "macOS / Linux, without Node.js",
+    code: "curl -fsSL https://github.com/farhadeidi/bookmarks-but-better/releases/latest/download/install.sh | bash -s -- --vault ~/Bookmarks",
+  },
+  {
+    label: "Windows (PowerShell), without Node.js",
+    code: '& ([scriptblock]::Create((irm https://github.com/farhadeidi/bookmarks-but-better/releases/latest/download/install.ps1))) -Vault "$env:USERPROFILE\\Bookmarks"',
   },
 ]
 
