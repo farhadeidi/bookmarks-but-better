@@ -40,6 +40,10 @@ _Avoid_: Source, daemon
 A client for the Daemon Sources exposed by its daemon. It may be served alongside the daemon interface, but remains optional.
 _Avoid_: Daemon, Daemon Source
 
+**Daemon Manager**:
+The command-line tool, delivered through npm, that installs, inspects and removes a Daemon on one machine and edits its Vault Registry on the user's behalf. It is not a Client: it never reads or changes bookmarks.
+_Avoid_: CLI, launcher, installer, TUI
+
 **Enabled Source**:
 A bookmark source the user has made available in the current browser profile. More than one source can be enabled at once.
 _Avoid_: Active mode, connected source
