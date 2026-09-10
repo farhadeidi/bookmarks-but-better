@@ -29,13 +29,14 @@ test("the Settings shell is visually distinct and stays the same size across cat
   ])
   expect(dialogBackground).not.toBe(pageBackground)
 
+  // Sources is the tab the dialog opens on, so it is the last one clicked.
   for (const category of [
-    "Sources",
+    "General",
     "Appearance",
     "Data & Migration",
     "Advanced",
     "About",
-    "General",
+    "Sources",
   ]) {
     await test.step(category, async () => {
       await dialog.getByRole("tab", { name: category }).click()

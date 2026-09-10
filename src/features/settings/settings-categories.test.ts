@@ -14,8 +14,8 @@ import {
 describe("settings categorization", () => {
   it("has exactly the agreed categories, in order", () => {
     expect(SETTINGS_CATEGORIES.map((c) => c.id)).toEqual([
-      "general",
       "sources",
+      "general",
       "appearance",
       "data-migration",
       "advanced",

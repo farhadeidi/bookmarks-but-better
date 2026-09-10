@@ -63,6 +63,8 @@ describe("SettingsDialog setup wizard", () => {
 
     render(<SettingsDialog />)
 
+    // Settings opens on Sources; the wizard lives under General.
+    fireEvent.click(screen.getByRole("tab", { name: "General" }))
     fireEvent.click(screen.getByRole("button", { name: "Show setup wizard" }))
 
     expect(storageSet).toHaveBeenCalledWith("onboardingCompleted", false)
