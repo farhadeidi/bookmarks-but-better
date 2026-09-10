@@ -91,7 +91,6 @@ pub mod problem;
 pub mod registry;
 pub mod server;
 pub mod service;
-pub mod setup;
 pub mod vault;
 pub mod watch;
 

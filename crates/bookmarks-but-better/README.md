@@ -15,7 +15,6 @@ bookmarks-but-better rescan --vault <path> | <id>   # offline rescan and summary
 bookmarks-but-better serve  --vault <path> | --vault <id>=<path> … | --from-config \
                      [--bind 127.0.0.1] [--port 52222] \
                      [--ui-dir <path>] [--init]
-bookmarks-but-better setup                   # guided first run: vault, port, next steps
 
 # the Vault Registry: what this machine is configured to serve
 bookmarks-but-better vault list [--json]

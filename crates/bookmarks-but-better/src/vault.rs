@@ -219,6 +219,15 @@ impl Vault {
         self.changes.subscribe()
     }
 
+    /// How many event streams are open on this Vault right now.
+    ///
+    /// The channel's only receivers are the `/events` streams, so this is the
+    /// number of clients currently listening — a count, never who they are.
+    #[must_use]
+    pub fn subscribers(&self) -> usize {
+        self.changes.receiver_count()
+    }
+
     /// Rescans and publishes, returning the new snapshot and whether anything
     /// actually changed.
     ///

@@ -200,9 +200,7 @@ fn the_help_text_documents_every_subcommand() {
     let output = bookmarks_but_better(&["--help"]);
     assert!(output.status.success(), "{}", stderr(&output));
     let help = stdout(&output);
-    for command in [
-        "serve", "init", "doctor", "rescan", "vault", "setup", "service",
-    ] {
+    for command in ["serve", "init", "doctor", "rescan", "vault", "service"] {
         assert!(
             help.contains(command),
             "`{command}` is missing from: {help}"
@@ -467,14 +465,15 @@ fn service_install_quotes_a_vault_path_with_spaces_and_unicode() {
 }
 
 #[test]
-fn the_help_text_documents_setup_and_service() {
+fn the_help_text_documents_the_service_commands_and_never_a_setup() {
     let help = stdout(&bookmarks_but_better(&["--help"]));
-    for command in ["setup", "service"] {
-        assert!(
-            help.contains(command),
-            "`{command}` is missing from: {help}"
-        );
-    }
+    assert!(
+        help.contains("service"),
+        "`service` is missing from: {help}"
+    );
+    // The guided first run lives in the Daemon Manager (ADR-0006); this binary
+    // asks no questions.
+    assert!(!help.contains("setup"), "a `setup` command is back: {help}");
 
     let service = stdout(&bookmarks_but_better(&["service", "--help"]));
     for command in ["install", "start", "stop", "status", "uninstall"] {

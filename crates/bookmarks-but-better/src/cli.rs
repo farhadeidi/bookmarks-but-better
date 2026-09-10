@@ -20,7 +20,6 @@ use crate::init::{self, InitOutcome};
 use crate::registry::{self, VaultSpec};
 use crate::server::{self, DEFAULT_BIND, DEFAULT_PORT, Daemon, ServeOptions};
 use crate::service;
-use crate::setup;
 use crate::vault::Vault;
 use crate::watch::WatchOptions;
 
@@ -129,9 +128,6 @@ pub enum Command {
         #[arg(value_name = "ID", group = "rescan-target")]
         id: Option<String>,
     },
-
-    /// Set up a vault and a background service, answering a few questions.
-    Setup,
 
     /// Manage the Vault Registry: what this machine is configured to serve.
     ///
@@ -270,7 +266,11 @@ pub enum ServiceCommand {
     Stop,
 
     /// Report whether the service is installed and running.
-    Status,
+    Status {
+        /// Emit the report as JSON rather than as lines.
+        #[arg(long)]
+        json: bool,
+    },
 
     /// Remove the service definition.
     ///
@@ -305,7 +305,6 @@ impl Cli {
                 Ok(vault) => run_rescan(&vault),
                 Err(message) => fail(format_args!("{message}")),
             },
-            Command::Setup => run_setup(),
             Command::Vault { command } => run_vault(command),
             Command::Service { command } => run_service(command),
         }
@@ -1014,11 +1013,42 @@ fn run_service_install(
     }
 }
 
-fn run_service_status(layout: &service::ServiceLayout, kind: service::ServiceKind) -> ExitCode {
+fn run_service_status(
+    layout: &service::ServiceLayout,
+    kind: service::ServiceKind,
+    json: bool,
+) -> ExitCode {
     let state = match service::state(layout, kind) {
         Ok(state) => state,
         Err(error) => return fail(format_args!("{error}")),
     };
+    let vaults = service::installed_vaults(layout, kind);
+    let port = service::installed_command_line(layout, kind)
+        .as_deref()
+        .and_then(service::port_in);
+
+    if json {
+        let document = serde_json::json!({
+            "kind": kind.describe(),
+            "definition": layout.definition_path(kind),
+            "state": match state {
+                service::ServiceState::NotInstalled => "not-installed",
+                service::ServiceState::Running => "running",
+                service::ServiceState::Stopped => "stopped",
+                service::ServiceState::InstalledUnsupervised => "installed-unsupervised",
+            },
+            "vaults": vaults
+                .iter()
+                .map(|vault| serde_json::json!({ "id": vault.id, "path": vault.path }))
+                .collect::<Vec<_>>(),
+            "port": port,
+        });
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&document).unwrap_or_default()
+        );
+        return ExitCode::SUCCESS;
+    }
 
     println!("kind       {}", kind.describe());
     println!("definition {}", layout.definition_path(kind).display());
@@ -1033,13 +1063,10 @@ fn run_service_status(layout: &service::ServiceLayout, kind: service::ServiceKin
         }
     );
 
-    for vault in service::installed_vaults(layout, kind) {
+    for vault in &vaults {
         println!("vault      {} ({})", vault.path.display(), vault.id);
     }
-    if let Some(port) = service::installed_command_line(layout, kind)
-        .as_deref()
-        .and_then(service::port_in)
-    {
+    if let Some(port) = port {
         println!("port       {port}");
     }
     ExitCode::SUCCESS
@@ -1061,7 +1088,7 @@ fn run_service(command: ServiceCommand) -> ExitCode {
             no_start,
         } => run_service_install(&layout, kind, &vaults, from_config, port, ui_dir, no_start),
 
-        ServiceCommand::Status => run_service_status(&layout, kind),
+        ServiceCommand::Status { json } => run_service_status(&layout, kind, json),
 
         ServiceCommand::Start => match service::start(&layout, kind) {
             Ok(()) => {
@@ -1097,35 +1124,6 @@ fn run_service(command: ServiceCommand) -> ExitCode {
             }
         }
     }
-}
-
-fn run_setup() -> ExitCode {
-    let mut prompt = setup::Terminal;
-    let plan = match setup::plan(&mut prompt) {
-        Ok(plan) => plan,
-        Err(error) => return fail(format_args!("{error}")),
-    };
-
-    if plan.initialize {
-        match init::initialize(&plan.vault) {
-            Ok(outcome) => println!(
-                "initialized vault {} (id {})",
-                plan.vault.display(),
-                outcome.id()
-            ),
-            Err(error) => return fail(format_args!("{error}")),
-        }
-    }
-
-    println!();
-    println!("Next: install the background service with");
-    println!(
-        "  bookmarks-but-better service install --vault {} --port {}",
-        plan.vault.display(),
-        plan.port
-    );
-    println!("Then point the extension at http://127.0.0.1:{}", plan.port);
-    ExitCode::SUCCESS
 }
 
 fn fail(message: std::fmt::Arguments<'_>) -> ExitCode {

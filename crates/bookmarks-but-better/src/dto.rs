@@ -196,6 +196,10 @@ pub struct HealthResponse {
     pub status: &'static str,
     /// The daemon's crate version.
     pub version: &'static str,
+    /// How many event streams are open across every hosted Vault: the number
+    /// of clients listening right now, so a status report can say whether a
+    /// browser is connected. A count and nothing more.
+    pub clients: usize,
     /// Every hosted Vault.
     pub vaults: Vec<VaultSummaryDto>,
     /// The current vault generation; present only in the single-Vault legacy

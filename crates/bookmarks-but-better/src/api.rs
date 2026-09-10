@@ -181,6 +181,11 @@ fn daemon_health(state: &ApiState) -> HealthResponse {
             name: hosted.name(),
         })
         .collect();
+    let clients = state
+        .registry
+        .all()
+        .map(|hosted| hosted.vault.subscribers())
+        .sum();
 
     // The legacy fields ride along only in the single-Vault shape, so a
     // single-Vault client — including every pre-Vault-id client — reads
@@ -193,6 +198,7 @@ fn daemon_health(state: &ApiState) -> HealthResponse {
             HealthResponse {
                 status: "ok",
                 version: env!("CARGO_PKG_VERSION"),
+                clients,
                 vaults,
                 generation: Some(snapshot.generation),
                 warnings: Some(warnings),
@@ -201,6 +207,7 @@ fn daemon_health(state: &ApiState) -> HealthResponse {
         None => HealthResponse {
             status: "ok",
             version: env!("CARGO_PKG_VERSION"),
+            clients,
             vaults,
             generation: None,
             warnings: None,
@@ -218,6 +225,7 @@ fn vault_health(vault: &Vault) -> HealthResponse {
     HealthResponse {
         status: "ok",
         version: env!("CARGO_PKG_VERSION"),
+        clients: vault.subscribers(),
         vaults: Vec::new(),
         generation: Some(snapshot.generation),
         warnings: Some(warnings),
