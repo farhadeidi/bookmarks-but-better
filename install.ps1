@@ -2,8 +2,11 @@
 <#
 .SYNOPSIS
   Installs (or upgrades) the `bookmarks-but-better` daemon for the current
-  Windows user, then runs `bookmarks-but-better setup`. No administrator rights
-  are used or required.
+  Windows user. With -Vault it also records that directory as the first vault
+  and installs the background service, which is the whole first run; without
+  it, it installs the binary and says what to do next. No administrator rights
+  are used or required. `npx bookmarks-but-better` is the guided way in
+  (ADR-0006) and drives this same script.
 
 .DESCRIPTION
   Every release is a GitHub Release built by .github/workflows/release.yml,
@@ -24,18 +27,22 @@
        a binary that will not even run leaves whatever was already installed
        completely untouched, and this install, once it gets that far, can
        always be rolled back to the version `current` pointed at before.
-    4. Adds `current` to the user's PATH (once), and finally runs
-       `bookmarks-but-better.exe setup`.
+    4. Adds `current` to the user's PATH (once).
+    5. With -Vault: adds that directory to the Vault Registry (initializing
+       it when it is not a vault yet) and installs and starts the background
+       service. Without it, but with a service already installed and a
+       registry to serve: reinstalls the service so it runs the new binary.
 
   Everything it fetches is a GitHub Release URL -- the release download
   endpoint and the releases Atom feed -- so it never calls the GitHub JSON API.
   install.sh resolves releases exactly the same way, so both platforms pick
   the same release for the same flags.
 
-  Nothing here touches a vault. Uninstalling is: delete $InstallRoot and
-  remove it from PATH; your vault, wherever `bookmarks-but-better setup`
-  pointed it at, is a directory of Markdown files this script has never heard
-  of.
+  Nothing here writes into a vault beyond the root metadata file -Vault asks
+  for. Uninstalling is `npx bookmarks-but-better uninstall`, or by hand:
+  `bookmarks-but-better service uninstall`, then delete $InstallRoot and
+  remove it from PATH. Your vault is a directory of Markdown files that stays
+  exactly where it is.
 
 .PARAMETER Beta
   Install the latest prerelease instead of the latest stable release.
@@ -47,8 +54,10 @@
 .PARAMETER InstallDir
   Where versions are unpacked. Default: $env:LOCALAPPDATA\bookmarks-but-better.
 
-.PARAMETER SkipSetup
-  Install the binary but do not run `bookmarks-but-better setup` afterward.
+.PARAMETER Vault
+  Record this directory as the vault to serve (initializing it if needed),
+  then install and start the background service. Without it, only the binary
+  is installed and the next steps are printed.
 
 .EXAMPLE
   irm https://github.com/farhadeidi/bookmarks-but-better/releases/latest/download/install.ps1 | iex
@@ -62,7 +71,7 @@ param(
   [switch]$Beta,
   [string]$Version = "",
   [string]$InstallDir = "$env:LOCALAPPDATA\bookmarks-but-better",
-  [switch]$SkipSetup
+  [string]$Vault = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -374,9 +383,8 @@ try {
     [Environment]::SetEnvironmentVariable("Path", $newPath, "User")
     Write-Host "added $CurrentLink to your user PATH (restart your shell to pick it up)"
   }
-  # Also make it available for the rest of *this* process, so the `setup`
-  # call below (and this session) can use `bookmarks-but-better` without a new
-  # shell.
+  # Also make it available for the rest of *this* process, so this session
+  # can use `bookmarks-but-better` without a new shell.
   if (($env:Path -split ";") -notcontains $CurrentLink) {
     $env:Path = "$env:Path;$CurrentLink"
   }
@@ -391,15 +399,71 @@ try {
   Write-Host "  binary:  $currentExe"
   Write-Host "  version: $versionDir"
 
-  if ($SkipSetup) {
+  # -----------------------------------------------------------------------
+  # 6. The vault and the service. Every command below is the daemon binary's
+  #    own, non-interactive one; this script never asks a question, so it
+  #    behaves the same under `irm ... | iex`, in CI, and when
+  #    `npx bookmarks-but-better` drives it.
+  # -----------------------------------------------------------------------
+  $uiDir = Join-Path $CurrentLink "ui"
+
+  # Whether the Vault Registry lists anything. A binary too old to answer (or
+  # a registry that cannot be read) counts as "nothing", which only ever means
+  # the next steps are printed instead of a service being installed.
+  function Test-RegistryHasVaults {
+    try {
+      $listing = & $currentExe vault list --json 2>$null
+      return ($LASTEXITCODE -eq 0) -and (($listing -join "`n") -match '"id"')
+    } catch { return $false }
+  }
+
+  # Whether a background service definition is installed, however it is doing.
+  function Test-ServiceIsInstalled {
+    try {
+      $status = & $currentExe service status --json 2>$null
+      return ($LASTEXITCODE -eq 0) -and
+        (($status -join "`n") -match '"state":\s*"(running|stopped|installed-unsupervised)"')
+    } catch { return $false }
+  }
+
+  function Install-Service {
     Write-Host ""
-    Write-Host "Skipping setup (-SkipSetup). Run `"$currentExe`" setup when ready."
+    Write-Host "installing the background service"
+    & $currentExe service install --from-config --ui-dir $uiDir
+    if ($LASTEXITCODE -ne 0) {
+      throw "the service could not be installed; run `"$currentExe`" service install --from-config --ui-dir `"$uiDir`" to retry"
+    }
+  }
+
+  if ($Vault) {
+    if (Test-RegistryHasVaults) {
+      Write-Host ""
+      Write-Host "a vault is already configured, so -Vault $Vault was not added; use `"$currentExe`" vault add <ID> <PATH> --init for another"
+    } else {
+      Write-Host ""
+      & $currentExe vault add default $Vault --init
+      if ($LASTEXITCODE -ne 0) { throw "$Vault could not be recorded as the vault" }
+    }
+    Install-Service
+    Write-Host ""
+    Write-Host "done. Open a new tab, or point the extension at the address the service reports above."
+    exit 0
+  }
+
+  if ((Test-ServiceIsInstalled) -and (Test-RegistryHasVaults)) {
+    # An upgrade under a running service: the definition names the exact
+    # binary it runs, so it has to be rewritten to run the one just installed.
+    Install-Service
     exit 0
   }
 
   Write-Host ""
-  & $currentExe setup
-  exit $LASTEXITCODE
+  Write-Host "Next: choose where your bookmarks live and start the service. The guided way:"
+  Write-Host "  npx bookmarks-but-better"
+  Write-Host "Or by hand:"
+  Write-Host "  $currentExe vault add default `"$env:USERPROFILE\Bookmarks`" --init"
+  Write-Host "  $currentExe service install --from-config --ui-dir `"$uiDir`""
+  exit 0
 } finally {
   Remove-Item -Recurse -Force $workDir -ErrorAction SilentlyContinue
 }

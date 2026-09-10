@@ -295,7 +295,13 @@ pub fn reload(layout: &ServiceLayout, kind: ServiceKind) -> Result<(), ServiceEr
     }
 }
 
-/// Enables the service at login and starts it now.
+/// Enables the service at login and (re)starts it now, so that what runs is
+/// the definition just installed.
+///
+/// A restart rather than a start: `service install` is how a new binary, a new
+/// port or a changed set of vaults is applied, and every one of those is a
+/// change the already-running process cannot pick up. A service that was not
+/// running is simply started.
 ///
 /// # Errors
 ///
@@ -303,14 +309,24 @@ pub fn reload(layout: &ServiceLayout, kind: ServiceKind) -> Result<(), ServiceEr
 /// [`ServiceError::Unwired`] for [`ServiceKind::XdgAutostart`].
 pub fn enable_and_start(layout: &ServiceLayout, kind: ServiceKind) -> Result<(), ServiceError> {
     match kind {
-        ServiceKind::Systemd => systemctl(&["enable", "--now", UNIT]).map(|_| ()),
+        // `enable --now` would leave a running unit on its old command line;
+        // `restart` starts a stopped unit and replaces a running one.
+        ServiceKind::Systemd => {
+            systemctl(&["enable", UNIT])?;
+            systemctl(&["restart", UNIT]).map(|_| ())
+        }
         // "Enabled at login" is already true the moment the plist sits in
         // `~/Library/LaunchAgents` — a real login session reloads everything
-        // there on its own. Bootstrapping now is the "start it" half.
+        // there on its own. Bootstrapping (after a bootout of whatever was
+        // loaded) is the "run this definition now" half.
         ServiceKind::LaunchAgent => launchd_bootstrap(&layout.definition_path(kind)),
-        // Likewise: the logon trigger already covers "enabled"; running it
-        // now is the only thing left to do.
-        ServiceKind::ScheduledTask => schtasks_run(),
+        // Likewise: the logon trigger already covers "enabled". A task that is
+        // still running the old command line is ended first; ending one that
+        // is not running is not an error worth stopping for.
+        ServiceKind::ScheduledTask => {
+            let _ = schtasks_end();
+            schtasks_run()
+        }
         ServiceKind::XdgAutostart => Err(xdg_autostart_unwired()),
     }
 }

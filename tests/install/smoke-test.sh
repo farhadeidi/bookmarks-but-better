@@ -107,7 +107,6 @@ build_daemon_release() {
   cat > "$staging/$exe" <<EOF
 #!/usr/bin/env bash
 if [ "\$1" = "--version" ]; then echo "$exe $version ($label)"; exit 0; fi
-if [ "\$1" = "setup" ]; then echo "fake setup ran"; exit 0; fi
 exit 1
 EOF
   chmod +x "$staging/$exe"
@@ -211,7 +210,7 @@ run_install() {
   BOOKMARKS_BUT_BETTER_INSTALL_GITHUB_BASE="http://127.0.0.1:$port" \
   BOOKMARKS_BUT_BETTER_INSTALL_ROOT="$install_root" \
   BOOKMARKS_BUT_BETTER_BIN_DIR="$bin_dir" \
-  bash "$install_sh" --skip-setup "$@"
+  bash "$install_sh" "$@"
 }
 
 # ---------------------------------------------------------------------------

@@ -70,10 +70,6 @@ public class FakeDaemon {
       System.Console.WriteLine("bookmarks-but-better $version (smoke test)");
       return 0;
     }
-    if (args.Length > 0 && args[0] == "setup") {
-      System.Console.WriteLine("fake setup ran");
-      return 0;
-    }
     return 1;
   }
 }
@@ -153,7 +149,7 @@ public class FakeDaemon {
     $psi = [Diagnostics.ProcessStartInfo]::new()
     $psi.FileName = (Get-Process -Id $PID).Path
     $psi.Arguments = "-NoProfile -ExecutionPolicy Bypass -File `"$installPs1`" " +
-      "-Version $tag -SkipSetup -InstallDir `"$InstallDir`""
+      "-Version $tag -InstallDir `"$InstallDir`""
     $psi.UseShellExecute = $false
     $psi.RedirectStandardOutput = $true
     $psi.RedirectStandardError = $true
