@@ -17,16 +17,18 @@ export interface SettingsCategory {
   description: string
 }
 
+// Sources first: it is the one category that decides what the dashboard shows
+// at all, and the one a person opens Settings for most often.
 export const SETTINGS_CATEGORIES: readonly SettingsCategory[] = [
-  {
-    id: "general",
-    label: "General",
-    description: "Setup and first-run basics.",
-  },
   {
     id: "sources",
     label: "Sources",
     description: "Where your bookmarks come from.",
+  },
+  {
+    id: "general",
+    label: "General",
+    description: "Setup and first-run basics.",
   },
   {
     id: "appearance",

@@ -128,6 +128,7 @@ jobs:
           # version on purpose, and the check below is an equality against
           # `base` rather than against `version`.
           pkg=$(jq -r '.version' package.json)
+          manager=$(jq -r '.version' packages/bookmarks-but-better/package.json)
           chrome=$(jq -r '.version' manifests/manifest.chrome.json)
           firefox=$(jq -r '.version' manifests/manifest.firefox.json)
           safari=$(jq -r '.version' manifests/manifest.safari.json)
@@ -141,7 +142,10 @@ jobs:
           failed=0
           note() { echo "::error::$*"; failed=1; }
 
+          # The Daemon Manager installs its own version of the daemon, so its
+          # package.json is a version file too (ADR-0006).
           for pair in "package.json:$pkg" \
+                      "packages/bookmarks-but-better/package.json:$manager" \
                       "manifest.chrome.json:$chrome" \
                       "manifest.firefox.json:$firefox" \
                       "manifest.safari.json:$safari" "Cargo.toml:$cargo"; do

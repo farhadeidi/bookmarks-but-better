@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 # Installs (or upgrades) the `bookmarks-but-better` daemon for the current user
-# — no sudo, no system-wide anything — then runs `bookmarks-but-better setup`.
+# — no sudo, no system-wide anything. With `--vault <dir>` it also records that
+# directory as the first vault and installs the background service, which is
+# the whole first run; without it, it installs the binary and says what to do
+# next. `npx bookmarks-but-better` is the guided way in (ADR-0006) and drives
+# this same script.
 #
 # Usage — `bash`, not `sh`: `set -o pipefail` below is a bash builtin option,
 # and /bin/sh is dash on Debian and Ubuntu, where piping this into `sh` dies on
@@ -30,18 +34,22 @@
 #      leaves whatever was already installed completely untouched, and an
 #      install that got this far can always be rolled back to the version the
 #      symlink pointed at before.
-#   4. Symlinks `bookmarks-but-better` on $BOOKMARKS_BUT_BETTER_BIN_DIR, and
-#      finally runs `bookmarks-but-better setup`.
+#   4. Symlinks `bookmarks-but-better` on $BOOKMARKS_BUT_BETTER_BIN_DIR.
+#   5. With --vault: adds that directory to the Vault Registry (initializing
+#      it when it is not a vault yet) and installs and starts the background
+#      service. Without it, but with a service already installed and a
+#      registry to serve: reinstalls the service so it runs the new binary.
 #
 # Everything it fetches is a GitHub Release URL — the release download endpoint
 # and the releases Atom feed — so there is no dependency on the GitHub JSON API
 # and none on `jq`. curl, tar and a SHA-256 tool are the whole toolchain.
 #
-# Nothing here touches a vault. Uninstalling is: remove
+# Nothing here writes into a vault beyond the root metadata file `--vault`
+# asks for. Uninstalling is `npx bookmarks-but-better uninstall`, or by hand:
+# `bookmarks-but-better service uninstall`, then remove
 # $BOOKMARKS_BUT_BETTER_INSTALL_ROOT and
-# $BOOKMARKS_BUT_BETTER_BIN_DIR/bookmarks-but-better; your vault, wherever you
-# pointed `bookmarks-but-better setup` at, is a directory of Markdown files
-# this script has never heard of.
+# $BOOKMARKS_BUT_BETTER_BIN_DIR/bookmarks-but-better. Your vault is a
+# directory of Markdown files that stays exactly where it is.
 set -euo pipefail
 
 REPO="farhadeidi/bookmarks-but-better"
@@ -54,7 +62,7 @@ INSTALL_ROOT="${BOOKMARKS_BUT_BETTER_INSTALL_ROOT:-$HOME/.local/share/bookmarks-
 BIN_DIR="${BOOKMARKS_BUT_BETTER_BIN_DIR:-$HOME/.local/bin}"
 CHANNEL="stable"
 EXPLICIT_VERSION=""
-SKIP_SETUP=0
+VAULT_DIR=""
 
 log()  { printf '%s\n' "$*" >&2; }
 die()  { log "error: $*"; exit 1; }
@@ -75,8 +83,10 @@ Options:
   --bin-dir <dir>       Where the `bookmarks-but-better` symlink is created.
                         Default: ~/.local/bin (or
                         $BOOKMARKS_BUT_BETTER_BIN_DIR).
-  --skip-setup          Install the binary but do not run
-                        `bookmarks-but-better setup` afterward.
+  --vault <dir>         Record this directory as the vault to serve
+                        (initializing it if needed), then install and start
+                        the background service. Without it, only the binary
+                        is installed and the next steps are printed.
   -h, --help            Show this help.
 USAGE
 }
@@ -99,7 +109,11 @@ while [ $# -gt 0 ]; do
       BIN_DIR="$2"
       shift 2
       ;;
-    --skip-setup) SKIP_SETUP=1; shift ;;
+    --vault)
+      [ $# -ge 2 ] || die "--vault needs an argument"
+      VAULT_DIR="$2"
+      shift 2
+      ;;
     -h|--help) usage; exit 0 ;;
     *) die "unrecognized argument: $1 (see --help)" ;;
   esac
@@ -252,8 +266,7 @@ checksum_url=$(asset_url_for "$tag" "$archive_name.sha256")
 #    hash matches.
 # ---------------------------------------------------------------------------
 work_dir=$(mktemp -d)
-cleanup() { rm -rf "$work_dir"; }
-trap cleanup EXIT
+trap 'rm -rf "$work_dir"' EXIT
 
 log "downloading $archive_name"
 curl -fsSL -o "$work_dir/$archive_name" "$archive_url" \
@@ -332,30 +345,78 @@ case ":$PATH:" in
     ;;
 esac
 
-if [ "$SKIP_SETUP" -eq 1 ]; then
+# ---------------------------------------------------------------------------
+# 6. The vault and the service. Every command below is the daemon binary's own,
+#    non-interactive one; this script never asks a question, so it behaves the
+#    same under `curl … | bash`, in CI, and when `npx bookmarks-but-better`
+#    drives it.
+# ---------------------------------------------------------------------------
+BIN="$INSTALL_ROOT/current/$EXE"
+UI_DIR="$INSTALL_ROOT/current/ui"
+
+# Whether the Vault Registry lists anything. A binary too old to answer (or a
+# registry that cannot be read) counts as "nothing", which only ever means the
+# next steps are printed instead of a service being installed.
+registry_has_vaults() {
+  "$BIN" vault list --json 2>/dev/null | grep -q '"id"'
+}
+
+# Whether a background service definition is installed, however it is doing.
+service_is_installed() {
+  "$BIN" service status --json 2>/dev/null | grep -q '"state": *"\(running\|stopped\|installed-unsupervised\)"'
+}
+
+install_service() {
   log ""
-  log "Skipping setup (--skip-setup). Run \"$BIN_DIR/$EXE\" setup when ready."
+  log "installing the background service"
+  "$BIN" service install --from-config --ui-dir "$UI_DIR" \
+    || die "the service could not be installed; run \"$BIN_DIR/$EXE\" service install --from-config --ui-dir \"$UI_DIR\" to retry"
+  log ""
+  log "done. Open a new tab, or point the extension at $("$BIN" vault list 2>/dev/null | sed -n 's/^serving *//p')"
+}
+
+# A service installed before the Vault Registry existed (4.0.0) names its
+# vaults only in its own definition. Recording them is what lets the service
+# be reinstalled from the registry, here and by every later upgrade.
+adopt_service_vaults() {
+  log ""
+  log "recording the vaults the installed service serves"
+  "$BIN" service status 2>/dev/null \
+    | sed -n 's/^vault      \(.*\) (\([a-z0-9-]*\))$/\2	\1/p' \
+    | while IFS='	' read -r id path; do
+        [ -n "$id" ] || continue
+        "$BIN" vault add "$id" "$path" || log "  $path could not be recorded as $id"
+      done
+}
+
+if [ -n "$VAULT_DIR" ]; then
+  if registry_has_vaults; then
+    log ""
+    log "a vault is already configured, so --vault $VAULT_DIR was not added; use \"$BIN_DIR/$EXE\" vault add <ID> <PATH> --init for another"
+  else
+    log ""
+    "$BIN" vault add default "$VAULT_DIR" --init \
+      || die "$VAULT_DIR could not be recorded as the vault"
+  fi
+  install_service
+  exit 0
+fi
+
+if service_is_installed && ! registry_has_vaults; then
+  adopt_service_vaults
+fi
+
+# Anything configured is served: a fresh definition names the binary just
+# installed, and a machine with vaults recorded but no service yet gets one.
+if registry_has_vaults; then
+  install_service
   exit 0
 fi
 
 log ""
-
-# `bookmarks-but-better setup` is a conversation: it reads answers from
-# standard input. Under `curl … | bash` standard input is the pipe curl wrote
-# this script into, which bash has already read to the end, so setup would be
-# handed an immediate EOF and die with "setup needs answers, and standard input
-# ended" the moment it asked its first question. Reconnect it to the terminal
-# instead — and when there is no terminal at all (CI, a container, a
-# `bash < install.sh`), say so and stop rather than starting a conversation
-# nobody can answer. The install itself is finished and correct either way.
-if [ -t 0 ]; then
-  exec "$BIN_DIR/$EXE" setup
-elif (exec 3</dev/tty) 2>/dev/null; then
-  # An open, not a `test -r`: in a container /dev/tty exists and looks readable
-  # right up until opening it fails with ENXIO because no terminal is attached.
-  exec "$BIN_DIR/$EXE" setup </dev/tty
-else
-  log "No terminal is attached, so setup — which asks questions — was not started."
-  log "Run \"$BIN_DIR/$EXE\" setup from a terminal to finish."
-  exit 0
-fi
+log "Next: choose where your bookmarks live and start the service. The guided way:"
+log "  npx bookmarks-but-better"
+log "Or by hand:"
+log "  $BIN_DIR/$EXE vault add default ~/Bookmarks --init"
+log "  $BIN_DIR/$EXE service install --from-config --ui-dir \"$UI_DIR\""
+exit 0

@@ -7,42 +7,52 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Fixed
-
-- **The Windows installer no longer fails against antivirus, and now survives
-  its own second run.** Three separate faults made `install.ps1` unreliable on
-  Windows, all of them invisible to a CI that only ever parsed the script on
-  Linux. It carried em dashes but no byte-order mark, and Windows PowerShell
-  5.1 reads such a file in the machine's ANSI codepage, so a dash inside a
-  quoted string closed it early and the whole script failed to parse for anyone
-  who downloaded it and ran it rather than piping it to `iex`. It moved the
-  unpacked files into place directly after running the new binary, and
-  real-time scanning holds a read-only handle on a just-executed file, which
-  blocks a move but not a copy; where `%TEMP%` and the install directory sit on
-  different volumes that move was also per-file, so a failure part-way had
-  already consumed part of the staged directory and no retry could finish it.
-  And it removed the `current` junction with `Remove-Item -Force`, which in 5.1
-  asks whether to delete the target's contents too, hanging an interactive
-  upgrade and failing a non-interactive one. Unpacking is now a copy that
-  leaves the source intact, the junction is removed as a directory entry so
-  what it points at is never at risk, and the steps that genuinely need delete
-  access retry briefly before giving up with an error that names the cause.
-  Thanks to @jfpaccini for the report and the diagnosis
-  ([#66](https://github.com/farhadeidi/bookmarks-but-better/issues/66))
-
-### Changed
-
-- **The setup wizard is shorter, and its last step now teaches instead of
-  congratulating.** The welcome and appearance steps are gone — one showed a
-  logo, the other duplicated Settings — and the root-folder step appears only
-  where the tree offers somewhere to point. What replaces "You're all set" is a
-  card naming the things nothing else reveals: that typing anything opens
-  search, that arrow keys move through the grid, and that `bb` searches from
-  the address bar. Each line appears only where the running build actually has
-  that capability, so Safari is never promised a new tab page it does not
-  replace or a keyword it has no omnibox for
+## [4.1.0] - 2026-09-11
 
 ### Added
+
+- **`npx bookmarks-but-better` looks after the daemon.** The npm package was
+  a launcher that fetched the installer and ran it; it is now the Daemon
+  Manager: `status` says what is installed, configured, running and connected
+  and names the one command that fixes anything that is not; `install` installs
+  or updates the daemon, asks the one question a first run has (where your
+  bookmarks live), and installs and starts the background service; `uninstall`
+  removes the service and the daemon and never a vault; `vault add|remove|list`
+  edit the Vault Registry and restart the service so the running daemon
+  matches it. Run with no command it installs when nothing is installed, and
+  otherwise shows the status and a menu of what can be done about it; every
+  command asks for what it was not given, so nothing has to be typed, and
+  `--yes` answers with the defaults for scripts. It reads no bookmarks, and by default installs its
+  own version of the daemon so the two never drift apart. The daemon's
+  `/health` now carries `clients`, the number of open event streams, which is
+  how `status` knows whether a browser is connected. See
+  [ADR-0006](docs/adr/0006-manage-the-daemon-from-an-npm-tool-and-keep-management-out-of-its-api.md)
+
+- **A Vault Registry, and the `vault` commands that manage it.** Multiple
+  vaults per daemon existed only as `--vault ID=PATH` typed out on every
+  `serve`, and `service install` took one vault and no ids at all — so the
+  feature had no background-service story and nothing on the machine recorded
+  which vaults existed. `bookmarks-but-better vault add|remove|rename|list|path`
+  now keeps that set in one file, `serve --from-config` and
+  `service install --from-config` read it, and `doctor` and `rescan` accept a
+  configured id in place of a path. `vault list` says what is configured and,
+  per vault, what is true of its directory right now — including `served now`
+  when a daemon holds it, which is where the difference between configured and
+  hosted becomes visible. `vault list --json` is the machine-readable form.
+
+  This narrows the rule that no command may touch a directory the user did not
+  name on that command line, and keeps what mattered about it: `vault add` is
+  the only thing that writes the file, `vault list` is the audit, and a command
+  that does not say `--from-config` still cannot reach a vault the command line
+  did not name. `vault remove` takes an entry out of the file and never touches
+  the directory. Adding or removing a vault still takes a daemon restart. See
+  [ADR-0005](docs/adr/0005-record-configured-vaults-in-one-explicitly-written-file.md)
+
+- **The background service can host several vaults.**
+  `service install --vault ID=PATH` is repeatable, and `--from-config` installs
+  what the registry holds. A definition serving exactly one vault under the id
+  `default` still spells it as a bare `--vault PATH`, so an installation made
+  before vaults had ids compares equal on upgrade and is not rewritten
 
 - **Safari, built from the repository.** An Xcode project and a one-command
   ad-hoc build produce a signed macOS app carrying the extension, with no Apple
@@ -50,19 +60,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the build is daemon-only by capability rather than by branching on the browser
   name, and its setup wizard says so instead of offering a choice that does not
   exist. An end-to-end test drives the shipped bundle against a real daemon
-
-### Changed
-
-- **Favicons are cached on your machine and Chrome now asks itself first.** Icon
-  bytes are stored locally for 30 days, so a site is asked about roughly once a
-  month instead of on every render, and cached icons keep working offline.
-  Bookmarks sharing a site now cause one lookup between them rather than one
-  each. On Chrome the browser's own `_favicon` database is tried before Google —
-  it used to be the other way round — so a hit discloses nothing at all. The
-  README now documents the provider order and exactly when an origin still
-  reaches Google
-
-### Added
 
 - **The dashboard is operable from the keyboard.** The bookmark grid is a
   single tab stop: arrow keys move through it in the order you see rather than
@@ -76,22 +73,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   folder path, and any result can be revealed in the Bookmark Organizer —
   including one outside the dashboard's root folder, which widens the
   organizer for that visit without changing the saved root
-
-### Changed
-
-- **Address-bar search covers whichever source is active**, not only a
-  connected daemon vault. Typing `bb` then Tab searches the Active Source's
-  bookmarks, and the suggestion line names the source being searched. The
-  retiring Standalone Source is the exception — its profiles search from the
-  dashboard palette instead
-- **The omnibox keyword is now `bb`.** Address-bar search previously required
-  typing `bookmarks-but-better` before Tab, which was long enough that the one
-  search path reachable from a fresh tab went unused. Existing users need to
-  type the new keyword; browsers apply it when the extension updates
-
-## [4.1.0] - 2026-08-17
-
-### Added
 
 - **Source Configuration** — enabled sources plus one Active Source per browser
   profile, persisted locally and never synced. Browser Sources and Daemon
@@ -137,6 +118,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **The setup wizard is shorter, and its last step now teaches instead of
+  congratulating.** The welcome and appearance steps are gone — one showed a
+  logo, the other duplicated Settings — and the root-folder step appears only
+  where the tree offers somewhere to point. What replaces "You're all set" is a
+  card naming the things nothing else reveals: that typing anything opens
+  search, that arrow keys move through the grid, and that `bb` searches from
+  the address bar. Each line appears only where the running build actually has
+  that capability, so Safari is never promised a new tab page it does not
+  replace or a keyword it has no omnibox for
+
+- **Favicons are cached on your machine and Chrome now asks itself first.** Icon
+  bytes are stored locally for 30 days, so a site is asked about roughly once a
+  month instead of on every render, and cached icons keep working offline.
+  Bookmarks sharing a site now cause one lookup between them rather than one
+  each. On Chrome the browser's own `_favicon` database is tried before Google —
+  it used to be the other way round — so a hit discloses nothing at all. The
+  README now documents the provider order and exactly when an origin still
+  reaches Google
+
+- **Address-bar search covers whichever source is active**, not only a
+  connected daemon vault. Typing `bb` then Tab searches the Active Source's
+  bookmarks, and the suggestion line names the source being searched. The
+  retiring Standalone Source is the exception — its profiles search from the
+  dashboard palette instead
+- **The omnibox keyword is now `bb`.** Address-bar search previously required
+  typing `bookmarks-but-better` before Tab, which was long enough that the one
+  search path reachable from a fresh tab went unused. Existing users need to
+  type the new keyword; browsers apply it when the extension updates
+
 - **The Standalone Source is in its sunset period**: new users cannot select
   it anywhere, existing profiles that were using it keep access with a
   deprecation notice, and an explicit copy-based migration (preview, conflict
@@ -153,7 +163,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The floating action toolbar now contains only Bookmark Tree and Settings;
   appearance and product information remain available inside Settings
 
+### Removed
+
+- **`bookmarks-but-better setup`.** The daemon binary no longer asks anything:
+  the guided first run is `npx bookmarks-but-better`, and every command the
+  binary keeps can be driven by a program — `service status --json` joins
+  `vault list --json`. The install scripts follow: `--skip-setup`/`-SkipSetup`
+  are gone, and `--vault <dir>`/`-Vault <dir>` do the whole first run without a
+  terminal — record the vault, initialize it, install and start the service.
+  Without it they install the binary and print the next steps. An install over
+  a running service now reinstalls the service so it runs the new binary — a
+  service installed by 4.0.0, before the registry existed, first has its vaults
+  recorded in the registry — and `service install` restarts a running service
+  on every platform rather than leaving it on its old command line
+
 ### Fixed
+
+- **The Windows installer no longer fails against antivirus, and now survives
+  its own second run.** Three separate faults made `install.ps1` unreliable on
+  Windows, all of them invisible to a CI that only ever parsed the script on
+  Linux. It carried em dashes but no byte-order mark, and Windows PowerShell
+  5.1 reads such a file in the machine's ANSI codepage, so a dash inside a
+  quoted string closed it early and the whole script failed to parse for anyone
+  who downloaded it and ran it rather than piping it to `iex`. It moved the
+  unpacked files into place directly after running the new binary, and
+  real-time scanning holds a read-only handle on a just-executed file, which
+  blocks a move but not a copy; where `%TEMP%` and the install directory sit on
+  different volumes that move was also per-file, so a failure part-way had
+  already consumed part of the staged directory and no retry could finish it.
+  And it removed the `current` junction with `Remove-Item -Force`, which in 5.1
+  asks whether to delete the target's contents too, hanging an interactive
+  upgrade and failing a non-interactive one. Unpacking is now a copy that
+  leaves the source intact, the junction is removed as a directory entry so
+  what it points at is never at risk, and the steps that genuinely need delete
+  access retry briefly before giving up with an error that names the cause.
+  Thanks to @jfpaccini for the report and the diagnosis
+  ([#66](https://github.com/farhadeidi/bookmarks-but-better/issues/66))
 
 - Daemon discovery now keeps Source Configuration and the live Source Session
   synchronized when an Active Vault disappears or changes protocol, without

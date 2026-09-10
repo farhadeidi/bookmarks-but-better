@@ -33,7 +33,7 @@ export function SettingsDialog() {
   const closeSettings = useUIStore((s) => s.closeSettings)
   const wide = useMediaQuery("(min-width: 640px)")
 
-  const [category, setCategory] = React.useState<SettingsCategoryId>("general")
+  const [category, setCategory] = React.useState<SettingsCategoryId>("sources")
   const [migrationOpen, setMigrationOpen] = React.useState(false)
 
   const standaloneLegacy = useSourceStore(

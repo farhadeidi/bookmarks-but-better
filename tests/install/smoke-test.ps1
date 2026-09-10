@@ -70,10 +70,6 @@ public class FakeDaemon {
       System.Console.WriteLine("bookmarks-but-better $version (smoke test)");
       return 0;
     }
-    if (args.Length > 0 && args[0] == "setup") {
-      System.Console.WriteLine("fake setup ran");
-      return 0;
-    }
     return 1;
   }
 }
@@ -153,7 +149,7 @@ public class FakeDaemon {
     $psi = [Diagnostics.ProcessStartInfo]::new()
     $psi.FileName = (Get-Process -Id $PID).Path
     $psi.Arguments = "-NoProfile -ExecutionPolicy Bypass -File `"$installPs1`" " +
-      "-Version $tag -SkipSetup -InstallDir `"$InstallDir`""
+      "-Version $tag -InstallDir `"$InstallDir`""
     $psi.UseShellExecute = $false
     $psi.RedirectStandardOutput = $true
     $psi.RedirectStandardError = $true
@@ -234,13 +230,20 @@ public class FakeDaemon {
     New-Item -ItemType Directory -Path $tempDir2 -Force | Out-Null
     $installDir2 = Join-Path $work "install-locked"
 
-    $watcher = Start-Job -ArgumentList $tempDir2, $exe -ScriptBlock {
-      param($TempDir, $Exe)
+    # A background job is a second PowerShell process, and on a cold runner
+    # it can take longer to start than the whole install takes to finish --
+    # in which case the watcher begins polling after the staged exe is
+    # already gone and reports it never saw one. So the job says when it is
+    # polling, and the install waits for that.
+    $watcherReady = Join-Path $tempDir2 "watcher-ready"
+    $watcher = Start-Job -ArgumentList $tempDir2, $exe, $watcherReady -ScriptBlock {
+      param($TempDir, $Exe, $Ready)
       # Poll rather than use FileSystemWatcher: the window between the exe
       # being extracted and install.ps1 moving it is what has to be caught,
       # and a poll that misses it simply makes the test a weaker one rather
       # than a flaky one.
       $deadline = (Get-Date).AddSeconds(90)
+      New-Item -ItemType File -Path $Ready -Force | Out-Null
       while ((Get-Date) -lt $deadline) {
         $candidate = Get-ChildItem -Path $TempDir -Recurse -Filter "$Exe.exe" -ErrorAction SilentlyContinue |
           Select-Object -First 1
@@ -258,6 +261,12 @@ public class FakeDaemon {
       }
       return "never saw the staged exe"
     }
+
+    foreach ($attempt in 1..600) {
+      if (Test-Path $watcherReady) { break }
+      Start-Sleep -Milliseconds 100
+    }
+    Assert-That (Test-Path $watcherReady) "watcher is polling before the locked install starts"
 
     $result3 = Invoke-Install -InstallDir $installDir2 -TempDir $tempDir2
     $watcherResult = (Receive-Job -Job $watcher -Wait -ErrorAction SilentlyContinue) -join ""

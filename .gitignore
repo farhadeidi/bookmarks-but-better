@@ -33,6 +33,7 @@ dist-safari
 # Untracked they are merely noise; unignored by ESLint they are a second copy of
 # the whole tree, which the root config then lints as if it were source.
 .claude/worktrees/
+.delta/
 
 # Marketing automation — videos and tmp dirs (large binary files)
 marketing/output/videos/

@@ -27,8 +27,11 @@ private: there is no account, analytics, tracking, or bookmark-content collectio
   state in `src/stores/`.
 - **Daemon** (Rust workspace): `crates/bookmarks-but-better` (server, CLI,
   service) and `crates/bookmarks-but-better-vault-core` (vault domain library).
-- **Distribution:** extension builds (`dist-*`), npm launcher
-  (`packages/bookmarks-but-better`), install scripts (`install.sh`, `install.ps1`).
+- **Distribution:** extension builds (`dist-*`), the npm **Daemon Manager**
+  (`packages/bookmarks-but-better`: `npx bookmarks-but-better` — status,
+  install, uninstall, vault add/remove/list; never bookmarks), install scripts
+  (`install.sh`, `install.ps1`). The daemon binary asks no questions and answers
+  in JSON; the manager is where every question lives (ADR-0006).
 - **Dev Workbench** (`bun run dev`) runs the full app with URL-addressable
   scenarios and no extension or daemon.
 

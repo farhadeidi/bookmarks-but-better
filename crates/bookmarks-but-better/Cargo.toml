@@ -40,6 +40,11 @@ notify = "8.2.0"
 mime_guess = "2.0.5"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.151"
+# The Vault Registry file (ADR-0005), and only that. TOML rather than the
+# `serde_json` already here because it is the one file in the product a person
+# opens in an editor, and a Windows vault path in a JSON string is
+# `"C:\\Users\\me\\Vault"`.
+toml = "0.9.8"
 # RFC 3339 parsing (for `dateAdded`) and formatting (for new timestamps).
 time = { version = "0.3.54", features = ["formatting", "parsing"] }
 tokio = { version = "1.53.1", features = [

@@ -107,7 +107,6 @@ build_daemon_release() {
   cat > "$staging/$exe" <<EOF
 #!/usr/bin/env bash
 if [ "\$1" = "--version" ]; then echo "$exe $version ($label)"; exit 0; fi
-if [ "\$1" = "setup" ]; then echo "fake setup ran"; exit 0; fi
 exit 1
 EOF
   chmod +x "$staging/$exe"
@@ -211,7 +210,7 @@ run_install() {
   BOOKMARKS_BUT_BETTER_INSTALL_GITHUB_BASE="http://127.0.0.1:$port" \
   BOOKMARKS_BUT_BETTER_INSTALL_ROOT="$install_root" \
   BOOKMARKS_BUT_BETTER_BIN_DIR="$bin_dir" \
-  bash "$install_sh" --skip-setup "$@"
+  bash "$install_sh" "$@"
 }
 
 # ---------------------------------------------------------------------------
@@ -378,8 +377,8 @@ fi
 # happens to hold rather than what was released and checksummed.
 # ---------------------------------------------------------------------------
 #
-# The launcher's own test suite is excluded: it asserts these strings are
-# absent, so its source necessarily contains them.
+# The Daemon Manager's own test suite is excluded: it asserts these strings
+# are absent, so its source necessarily contains them.
 off_release=$(grep -rn -e 'raw\.githubusercontent\.com' -e 'bookmarks\.farhadeidi\.com/install' \
   "$repo_root/README.md" \
   "$repo_root/docs" \

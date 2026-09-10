@@ -6,12 +6,12 @@ import tseslint from 'typescript-eslint'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
 export default defineConfig([
-  // `.claude/worktrees` and `.worktrees` hold agent worktrees: whole checkouts
+  // `.claude/worktrees`, `.delta` and `.worktrees` hold agent worktrees: whole checkouts
   // of this repo nested inside it. Linting them means linting a second copy of
   // every file, under the root config rather than the config that copy would
   // use — `website/src/entries/**` overrides, for one, are relative and stop
   // matching once the path is prefixed.
-  globalIgnores(['dist', 'dist-*', 'target', '.claude', '.worktrees']),
+  globalIgnores(['dist', 'dist-*', 'target', '.claude', '.delta', '.worktrees']),
   {
     files: ['**/*.{ts,tsx}'],
     extends: [

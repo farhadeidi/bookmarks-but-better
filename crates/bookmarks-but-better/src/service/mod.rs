@@ -47,7 +47,7 @@ pub use self::manage::{
     systemd_is_usable,
 };
 pub use self::spec::{
-    SERVICE_DESCRIPTION, SERVICE_LABEL, SERVICE_NAME, ServiceSpec, SpecError, port_in, vault_in,
+    SERVICE_DESCRIPTION, SERVICE_LABEL, SERVICE_NAME, ServiceSpec, SpecError, port_in, vaults_in,
 };
 pub use self::windows::TASK_NAME;
 
@@ -186,11 +186,8 @@ impl ServiceLayout {
     /// which is the one case where guessing would put a definition file
     /// somewhere the user never looks.
     pub fn from_env() -> Result<Self, ServiceError> {
-        let home = home_directory().ok_or(ServiceError::NoHome)?;
-        let config_home = std::env::var_os("XDG_CONFIG_HOME")
-            .map(PathBuf::from)
-            .filter(|path| path.is_absolute())
-            .unwrap_or_else(|| home.join(".config"));
+        let home = crate::home::home_directory().ok_or(ServiceError::NoHome)?;
+        let config_home = crate::home::config_home().ok_or(ServiceError::NoHome)?;
         Ok(Self { home, config_home })
     }
 
@@ -218,18 +215,6 @@ impl ServiceLayout {
                 .join(kind.file_name()),
         }
     }
-}
-
-fn home_directory() -> Option<PathBuf> {
-    if let Some(home) = std::env::var_os("HOME").map(PathBuf::from)
-        && home.is_absolute()
-    {
-        return Some(home);
-    }
-    // Windows has no HOME; USERPROFILE is the equivalent.
-    std::env::var_os("USERPROFILE")
-        .map(PathBuf::from)
-        .filter(|path| path.is_absolute())
 }
 
 /// What an install did.
@@ -434,16 +419,20 @@ pub fn resolve_port(layout: &ServiceLayout, kind: ServiceKind, requested: Option
         .unwrap_or(crate::server::DEFAULT_PORT)
 }
 
-/// The vault an installed definition serves, if one is installed.
+/// The vaults an installed definition serves, empty when none is installed.
 ///
-/// `bookmarks-but-better service install` requires `--vault` explicitly, exactly as every other
-/// subcommand does. This exists so that `status` can *report* which vault is
+/// `bookmarks-but-better service install` requires its vaults explicitly, exactly as every
+/// other subcommand does. This exists so that `status` can *report* what is
 /// being served — never so that a command can default to it.
 #[must_use]
-pub fn installed_vault(layout: &ServiceLayout, kind: ServiceKind) -> Option<PathBuf> {
+pub fn installed_vaults(
+    layout: &ServiceLayout,
+    kind: ServiceKind,
+) -> Vec<crate::registry::VaultSpec> {
     installed_command_line(layout, kind)
         .as_deref()
-        .and_then(vault_in)
+        .map(vaults_in)
+        .unwrap_or_default()
 }
 
 /// Removes the definition file, and nothing else.
@@ -502,9 +491,11 @@ mod tests {
             let parsed = installed_command_line(&layout, kind).expect("read back");
             assert_eq!(parsed, spec.command_line(), "{kind:?}");
             assert_eq!(port_in(&parsed), Some(47321), "{kind:?}");
+            let installed = installed_vaults(&layout, kind);
+            assert_eq!(installed.len(), 1, "{kind:?}");
             assert_eq!(
-                installed_vault(&layout, kind),
-                Some(PathBuf::from("/home/user/My Bookmarks 书签")),
+                installed[0].path,
+                PathBuf::from("/home/user/My Bookmarks 书签"),
                 "{kind:?}"
             );
         }
@@ -681,7 +672,7 @@ mod tests {
         for &kind in KINDS {
             assert!(!is_installed(&layout, kind), "{kind:?}");
             assert_eq!(installed_command_line(&layout, kind), None, "{kind:?}");
-            assert_eq!(installed_vault(&layout, kind), None, "{kind:?}");
+            assert!(installed_vaults(&layout, kind).is_empty(), "{kind:?}");
         }
     }
 }

@@ -37,6 +37,7 @@
 //!
 //! ```text
 //! cli      the subcommands
+//! config   the Vault Registry file: what this machine is configured to serve
 //! server   registry + router + watchers + shutdown
 //! registry the hosted set of vaults: validation, atomic open, discovery ids
 //! api      the /api/v1 routes, unscoped and vault-scoped
@@ -72,6 +73,7 @@
 mod clock;
 mod extract;
 mod fsx;
+mod home;
 mod host;
 mod staging;
 mod subtree;
@@ -79,6 +81,7 @@ mod ui;
 
 pub mod api;
 pub mod cli;
+pub mod config;
 pub mod doctor;
 pub mod dto;
 pub mod entry;
@@ -88,7 +91,6 @@ pub mod problem;
 pub mod registry;
 pub mod server;
 pub mod service;
-pub mod setup;
 pub mod vault;
 pub mod watch;
 

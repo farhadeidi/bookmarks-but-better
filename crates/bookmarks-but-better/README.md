@@ -10,25 +10,75 @@ mutation, watching, and the HTTP contract.
 ```sh
 # write the root .bookmarks-but-better-folder.md and .bookmarks-but-better-state.json
 bookmarks-but-better init   --vault <path>
-bookmarks-but-better doctor --vault <path>   # read-only report; non-zero if unhealthy
-bookmarks-but-better rescan --vault <path>   # offline rescan and summary
-bookmarks-but-better serve  --vault <path> \
+bookmarks-but-better doctor --vault <path> | <id>   # read-only report; non-zero if unhealthy
+bookmarks-but-better rescan --vault <path> | <id>   # offline rescan and summary
+bookmarks-but-better serve  --vault <path> | --vault <id>=<path> … | --from-config \
                      [--bind 127.0.0.1] [--port 52222] \
                      [--ui-dir <path>] [--init]
-bookmarks-but-better setup                   # guided first run: vault, port, next steps
-bookmarks-but-better service install --vault <path> [--port 52222] [--ui-dir <path>] [--no-start]
+
+# the Vault Registry: what this machine is configured to serve
+bookmarks-but-better vault list [--json]
+bookmarks-but-better vault add <id> <path> [--init]
+bookmarks-but-better vault remove <id>       # the entry, never the directory
+bookmarks-but-better vault rename <id> <new-id>
+bookmarks-but-better vault path <id>         # one line, for scripts
+
+bookmarks-but-better service install --vault <path> | --vault <id>=<path> … | --from-config \
+                     [--port 52222] [--ui-dir <path>] [--no-start]
 bookmarks-but-better service start | stop | status | uninstall
 ```
 
-Every command names its vault explicitly. There is no discovery and no default
-path: the only directory `bookmarks-but-better` reads, writes or watches is the one on the
-command line. That includes `service install`, whose definition embeds the exact
-path it was given — which is why `serve` still has no vault discovery to fall
-back on.
+Every command names its vault explicitly: as a path, or as the id of a vault
+already in the registry. There is no discovery and no search of parent
+directories, and a command that does not say `--from-config` (or name a
+configured id) cannot reach a directory the command line did not name. That
+includes `service install`, whose definition embeds the exact paths it was
+given — `--from-config` expands the registry once, at install time, so editing
+the registry afterwards does not silently change what an installed service
+starts.
 
 `serve` refuses a directory that is not already a vault and prints the two ways
 to fix it. `--init` is the opt-in that lets `serve` write the root metadata file
 itself — convenient for tests and first runs, never implicit.
+
+## The Vault Registry
+
+One file, at `$XDG_CONFIG_HOME/bookmarks-but-better/config.toml`
+(`~/.config/…` when that is unset), listing the vaults this user has configured
+and the settings a daemon needs to serve them. `bookmarks-but-better vault …`
+writes it; `serve --from-config` and `service install --from-config` read it;
+nothing else does. See
+[ADR-0005](../../docs/adr/0005-record-configured-vaults-in-one-explicitly-written-file.md).
+
+```toml
+port = 52222
+bind = "127.0.0.1"
+ui-dir = "/home/user/.local/share/bookmarks-but-better/current/ui"
+
+[vaults.reading]
+path = "/home/user/vaults/reading"
+
+[vaults.archive]
+path = "/home/user/vaults/archive"
+```
+
+Every key above the tables is optional and means "the daemon's own default"; a
+file that lists vaults and nothing else is complete. An explicit `--port`,
+`--bind` or `--ui-dir` on the command line overrides what the file says, for
+that run only. An unknown key is an error naming it rather than a setting that
+silently never applied.
+
+`vault add` validates the set exactly as a daemon validates it at startup — id
+slugs, and roots that must not contain one another — so a mistake is reported
+against the command that made it rather than at the next daemon start. It
+stores the path absolute, and writes through a temporary file so an interrupted
+write leaves the previous configuration intact.
+
+`vault list` annotates each vault with what is true of its directory right now:
+`ok`, `not initialized`, `directory missing`, `not a directory`, or `served
+now` when a daemon holds its lock. Adding or removing a vault takes a daemon
+restart (ADR-0001); the listing is where the difference between "configured"
+and "hosted" is visible.
 
 ## The background service
 
@@ -55,6 +105,11 @@ Properties that hold on every platform:
 - **An explicit port survives an upgrade.** `install` with no `--port` reads the
   installed definition's own command line and keeps its port, so an
   installation configured on the previous default (47321) is not moved.
+- **Several vaults, or one.** Repeat `--vault <id>=<path>`, or install what the
+  registry holds with `--from-config`. A definition serving exactly one vault
+  under the id `default` still spells it as a bare `--vault <path>` — the shape
+  every definition had before vaults carried ids — so an upgrade compares equal
+  and rewrites nothing.
 - **Uninstall never deletes your vault.** It removes one generated file.
 - **No bookmark content in logs.** A definition is a command line and a log
   level; the daemon logs counts, identities, codes and paths only.

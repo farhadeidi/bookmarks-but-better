@@ -55,25 +55,26 @@ export function Daemon() {
       <section className="space-y-4">
         <H2 title="Install" />
         <CodeBlock
-          label="macOS / Linux"
-          code={`curl -fsSL ${SITE.installSh} | bash`}
-        />
-        <CodeBlock
-          label="Windows (PowerShell)"
-          code={`irm ${SITE.installPs1} | iex`}
-        />
-        <CodeBlock
           label="Any platform with Node.js"
           code="npx bookmarks-but-better@latest"
+        />
+        <CodeBlock
+          label="macOS / Linux, without Node.js"
+          code={`curl -fsSL ${SITE.installSh} | bash -s -- --vault ~/Bookmarks`}
+        />
+        <CodeBlock
+          label="Windows (PowerShell), without Node.js"
+          code={`& ([scriptblock]::Create((irm ${SITE.installPs1}))) -Vault "$env:USERPROFILE\\Bookmarks"`}
         />
         <p className={BODY}>
           All three install the same release artifact, verified against its
           published SHA-256 checksum, into a user-local directory — no{" "}
-          <code className={CODE}>sudo</code>, nothing system-wide. Pipe into{" "}
-          <code className={CODE}>bash</code>, not{" "}
-          <code className={CODE}>sh</code>. The installer finishes by running{" "}
-          <code className={CODE}>setup</code>, which asks where your vault
-          should live and which port to serve.
+          <code className={CODE}>sudo</code>, nothing system-wide — and start
+          the background service. <code className={CODE}>npx</code> asks where
+          your vault should live and is a menu afterwards: status, add or remove
+          a vault, update, uninstall. The scripts take the vault on the command
+          line and never ask. Pipe into <code className={CODE}>bash</code>, not{" "}
+          <code className={CODE}>sh</code>.
         </p>
       </section>
 
@@ -103,13 +104,13 @@ export function Daemon() {
         <H2 title="Several vaults, one daemon" />
         <CodeBlock
           label="Terminal"
-          code={`bookmarks-but-better serve \\
-  --vault reading=~/vaults/reading \\
-  --vault archive=~/vaults/archive`}
+          code={`npx bookmarks-but-better vault add reading ~/vaults/reading
+npx bookmarks-but-better vault add archive ~/vaults/archive`}
         />
         <p className={BODY}>
           Each vault id is a unique slug with its own directory; they must not
-          overlap. Every vault is a separate source in the extension, with its
+          overlap. Adding one restarts the background service so it hosts the
+          new set. Every vault is a separate source in the extension, with its
           own tree, search and events under{" "}
           <code className={CODE}>/api/v1/vaults/&#123;id&#125;/…</code>.
         </p>
@@ -118,10 +119,10 @@ export function Daemon() {
       <section className="space-y-3">
         <H2 title="Uninstall" />
         <p className={BODY}>
-          Delete the install directory and the{" "}
-          <code className={CODE}>bookmarks-but-better</code> symlink. Your vault
-          is a directory of Markdown files the installer has never heard of — it
-          stays exactly where you put it.
+          <code className={CODE}>npx bookmarks-but-better uninstall</code> stops
+          and removes the background service and the daemon. Your vault is a
+          directory of Markdown files — it stays exactly where you put it, and
+          so does the configuration unless you say otherwise.
         </p>
         <p className={BODY}>
           The complete guide — release pinning, the HTTP API, background

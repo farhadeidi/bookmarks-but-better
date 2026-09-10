@@ -39,12 +39,12 @@
         <ol>
             <li>
                 <p>Install the daemon. In Terminal:</p>
-                <code>curl -fsSL https://github.com/farhadeidi/bookmarks-but-better/releases/latest/download/install.sh | bash</code>
+                <code>npx bookmarks-but-better</code>
+                <p class="note">It asks where your bookmarks should live, then keeps running on its own at login.</p>
             </li>
             <li>
-                <p>Create your vault and start it at login:</p>
-                <code>bookmarks-but-better setup</code>
-                <p class="note">It asks a few questions, then keeps running on its own.</p>
+                <p>Without Node.js, the same in one line:</p>
+                <code>curl -fsSL https://github.com/farhadeidi/bookmarks-but-better/releases/latest/download/install.sh | bash -s -- --vault ~/Bookmarks</code>
             </li>
             <li>
                 <p>

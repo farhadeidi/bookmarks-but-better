@@ -200,7 +200,7 @@ fn the_help_text_documents_every_subcommand() {
     let output = bookmarks_but_better(&["--help"]);
     assert!(output.status.success(), "{}", stderr(&output));
     let help = stdout(&output);
-    for command in ["serve", "init", "doctor", "rescan"] {
+    for command in ["serve", "init", "doctor", "rescan", "vault", "service"] {
         assert!(
             help.contains(command),
             "`{command}` is missing from: {help}"
@@ -465,14 +465,15 @@ fn service_install_quotes_a_vault_path_with_spaces_and_unicode() {
 }
 
 #[test]
-fn the_help_text_documents_setup_and_service() {
+fn the_help_text_documents_the_service_commands_and_never_a_setup() {
     let help = stdout(&bookmarks_but_better(&["--help"]));
-    for command in ["setup", "service"] {
-        assert!(
-            help.contains(command),
-            "`{command}` is missing from: {help}"
-        );
-    }
+    assert!(
+        help.contains("service"),
+        "`service` is missing from: {help}"
+    );
+    // The guided first run lives in the Daemon Manager (ADR-0006); this binary
+    // asks no questions.
+    assert!(!help.contains("setup"), "a `setup` command is back: {help}");
 
     let service = stdout(&bookmarks_but_better(&["service", "--help"]));
     for command in ["install", "start", "stop", "status", "uninstall"] {
@@ -481,4 +482,523 @@ fn the_help_text_documents_setup_and_service() {
             "`{command}` is missing from: {service}"
         );
     }
+}
+
+// ---------------------------------------------------------------------------
+// The Vault Registry (ADR-0005)
+// ---------------------------------------------------------------------------
+
+/// Where `vault add` writes.
+fn config_path(home: &Path) -> std::path::PathBuf {
+    home.join(".config")
+        .join("bookmarks-but-better")
+        .join("config.toml")
+}
+
+#[test]
+fn a_machine_with_no_configuration_is_told_how_to_make_one() {
+    let home = tempfile::tempdir().expect("temp dir");
+    let output = bookmarks_but_better_in_home(home.path(), &["vault", "list"]);
+
+    assert!(output.status.success(), "{}", stderr(&output));
+    let listing = stdout(&output);
+    assert!(listing.contains("no vault is configured yet"), "{listing}");
+    assert!(listing.contains("vault add"), "{listing}");
+    // Listing is a read: it must not bring the file into existence.
+    assert!(!config_path(home.path()).exists());
+}
+
+#[test]
+fn vault_add_stores_an_absolute_path_and_list_shows_its_state() {
+    let home = tempfile::tempdir().expect("temp dir");
+    let vault_dir = tempfile::tempdir().expect("temp dir");
+    let vault = vault_arg(vault_dir.path());
+
+    let added =
+        bookmarks_but_better_in_home(home.path(), &["vault", "add", "reading", &vault, "--init"]);
+    assert!(added.status.success(), "{}", stderr(&added));
+    assert!(
+        stdout(&added).contains("added `reading`"),
+        "{}",
+        stdout(&added)
+    );
+    // Nothing is serving here, so there is nothing to restart and nothing said.
+    assert!(!stdout(&added).contains("restart"), "{}", stdout(&added));
+
+    let text = std::fs::read_to_string(config_path(home.path())).expect("config");
+    assert!(text.contains("[vaults.reading]"), "{text}");
+    assert!(text.contains(&vault), "{text}");
+
+    let listing = stdout(&bookmarks_but_better_in_home(
+        home.path(),
+        &["vault", "list"],
+    ));
+    assert!(listing.contains("reading"), "{listing}");
+    assert!(listing.contains("(ok)"), "{listing}");
+}
+
+#[test]
+fn a_vault_that_was_never_initialized_is_listed_and_says_so() {
+    let home = tempfile::tempdir().expect("temp dir");
+    let vault_dir = tempfile::tempdir().expect("temp dir");
+    let vault = vault_arg(vault_dir.path());
+
+    // No `--init`: the directory is real but is not a vault.
+    let added = bookmarks_but_better_in_home(home.path(), &["vault", "add", "notes", &vault]);
+    assert!(added.status.success(), "{}", stderr(&added));
+    assert!(
+        stdout(&added).contains("not an initialized vault"),
+        "{}",
+        stdout(&added)
+    );
+
+    let listing = stdout(&bookmarks_but_better_in_home(
+        home.path(),
+        &["vault", "list"],
+    ));
+    assert!(listing.contains("(not initialized)"), "{listing}");
+}
+
+#[test]
+fn vault_add_refuses_what_the_daemon_would_refuse_at_startup() {
+    let home = tempfile::tempdir().expect("temp dir");
+    let vault_dir = tempfile::tempdir().expect("temp dir");
+    let vault = vault_arg(vault_dir.path());
+
+    let bad_id = bookmarks_but_better_in_home(home.path(), &["vault", "add", "Not A Slug", &vault]);
+    assert!(!bad_id.status.success());
+    assert!(
+        stderr(&bad_id).contains("lowercase letters"),
+        "{}",
+        stderr(&bad_id)
+    );
+    assert!(!config_path(home.path()).exists(), "nothing was written");
+
+    // Overlapping roots: one vault inside another.
+    assert!(
+        bookmarks_but_better_in_home(home.path(), &["vault", "add", "outer", &vault])
+            .status
+            .success()
+    );
+    let nested = vault_arg(&vault_dir.path().join("nested"));
+    let overlap = bookmarks_but_better_in_home(home.path(), &["vault", "add", "inner", &nested]);
+    assert!(!overlap.status.success());
+    assert!(stderr(&overlap).contains("overlap"), "{}", stderr(&overlap));
+
+    // The refused entry did not land.
+    let text = std::fs::read_to_string(config_path(home.path())).expect("config");
+    assert!(!text.contains("inner"), "{text}");
+}
+
+#[test]
+fn a_second_vault_cannot_quietly_take_an_id_that_is_taken() {
+    let home = tempfile::tempdir().expect("temp dir");
+    let first = tempfile::tempdir().expect("temp dir");
+    let second = tempfile::tempdir().expect("temp dir");
+
+    assert!(
+        bookmarks_but_better_in_home(
+            home.path(),
+            &["vault", "add", "reading", &vault_arg(first.path())]
+        )
+        .status
+        .success()
+    );
+    let clash = bookmarks_but_better_in_home(
+        home.path(),
+        &["vault", "add", "reading", &vault_arg(second.path())],
+    );
+    assert!(!clash.status.success());
+    assert!(
+        stderr(&clash).contains("already configured"),
+        "{}",
+        stderr(&clash)
+    );
+
+    // The original entry still points where it did.
+    let text = std::fs::read_to_string(config_path(home.path())).expect("config");
+    assert!(text.contains(&vault_arg(first.path())), "{text}");
+    assert!(!text.contains(&vault_arg(second.path())), "{text}");
+}
+
+#[test]
+fn vault_remove_takes_the_entry_and_never_the_directory() {
+    let home = tempfile::tempdir().expect("temp dir");
+    let vault_dir = tempfile::tempdir().expect("temp dir");
+    let vault = vault_arg(vault_dir.path());
+    assert!(
+        bookmarks_but_better_in_home(home.path(), &["vault", "add", "reading", &vault, "--init"])
+            .status
+            .success()
+    );
+
+    let removed = bookmarks_but_better_in_home(home.path(), &["vault", "remove", "reading"]);
+    assert!(removed.status.success(), "{}", stderr(&removed));
+    assert!(
+        stdout(&removed).contains("was not touched"),
+        "{}",
+        stdout(&removed)
+    );
+
+    // The bookmarks are still there; only the line in the file went.
+    assert!(
+        vault_dir
+            .path()
+            .join(".bookmarks-but-better-folder.md")
+            .is_file()
+    );
+    let text = std::fs::read_to_string(config_path(home.path())).expect("config");
+    assert!(!text.contains("reading"), "{text}");
+
+    // And removing what is not there names what is.
+    let missing = bookmarks_but_better_in_home(home.path(), &["vault", "remove", "reading"]);
+    assert!(!missing.status.success());
+    assert!(
+        stderr(&missing).contains("no vault `reading`"),
+        "{}",
+        stderr(&missing)
+    );
+}
+
+#[test]
+fn vault_rename_moves_the_entry_and_warns_that_clients_address_the_id() {
+    let home = tempfile::tempdir().expect("temp dir");
+    let vault_dir = tempfile::tempdir().expect("temp dir");
+    let vault = vault_arg(vault_dir.path());
+    assert!(
+        bookmarks_but_better_in_home(home.path(), &["vault", "add", "reading", &vault, "--init"])
+            .status
+            .success()
+    );
+
+    let renamed =
+        bookmarks_but_better_in_home(home.path(), &["vault", "rename", "reading", "library"]);
+    assert!(renamed.status.success(), "{}", stderr(&renamed));
+    assert!(
+        stdout(&renamed).contains("update them too"),
+        "{}",
+        stdout(&renamed)
+    );
+
+    let text = std::fs::read_to_string(config_path(home.path())).expect("config");
+    assert!(text.contains("[vaults.library]"), "{text}");
+    assert!(!text.contains("[vaults.reading]"), "{text}");
+}
+
+#[test]
+fn vault_path_prints_one_line_for_a_script_and_fails_on_an_unknown_id() {
+    let home = tempfile::tempdir().expect("temp dir");
+    let vault_dir = tempfile::tempdir().expect("temp dir");
+    let vault = vault_arg(vault_dir.path());
+    assert!(
+        bookmarks_but_better_in_home(home.path(), &["vault", "add", "reading", &vault, "--init"])
+            .status
+            .success()
+    );
+
+    let printed = bookmarks_but_better_in_home(home.path(), &["vault", "path", "reading"]);
+    assert!(printed.status.success(), "{}", stderr(&printed));
+    assert_eq!(stdout(&printed).trim_end(), vault);
+
+    let unknown = bookmarks_but_better_in_home(home.path(), &["vault", "path", "nope"]);
+    assert!(!unknown.status.success());
+    assert!(stderr(&unknown).contains("reading"), "{}", stderr(&unknown));
+}
+
+#[test]
+fn vault_list_json_carries_the_whole_configuration() {
+    let home = tempfile::tempdir().expect("temp dir");
+    let vault_dir = tempfile::tempdir().expect("temp dir");
+    let vault = vault_arg(vault_dir.path());
+    assert!(
+        bookmarks_but_better_in_home(home.path(), &["vault", "add", "reading", &vault, "--init"])
+            .status
+            .success()
+    );
+
+    let output = bookmarks_but_better_in_home(home.path(), &["vault", "list", "--json"]);
+    assert!(output.status.success(), "{}", stderr(&output));
+    let document: serde_json::Value = serde_json::from_str(&stdout(&output)).expect("JSON");
+
+    assert_eq!(document["port"], 52222);
+    assert_eq!(document["bind"], "127.0.0.1");
+    let vaults = document["vaults"].as_array().expect("vaults");
+    assert_eq!(vaults.len(), 1);
+    assert_eq!(vaults[0]["id"], "reading");
+    assert_eq!(vaults[0]["state"], "ok");
+}
+
+#[test]
+fn doctor_and_rescan_accept_a_configured_id_instead_of_a_path() {
+    let home = tempfile::tempdir().expect("temp dir");
+    let vault_dir = tempfile::tempdir().expect("temp dir");
+    let vault = vault_arg(vault_dir.path());
+    assert!(
+        bookmarks_but_better_in_home(home.path(), &["vault", "add", "reading", &vault, "--init"])
+            .status
+            .success()
+    );
+
+    let examined = bookmarks_but_better_in_home(home.path(), &["doctor", "reading"]);
+    assert!(examined.status.success(), "{}", stderr(&examined));
+    assert!(stdout(&examined).contains(&vault), "{}", stdout(&examined));
+
+    let rescanned = bookmarks_but_better_in_home(home.path(), &["rescan", "reading"]);
+    assert!(rescanned.status.success(), "{}", stderr(&rescanned));
+
+    // An id nothing configured names the ids that are.
+    let unknown = bookmarks_but_better_in_home(home.path(), &["doctor", "nope"]);
+    assert!(!unknown.status.success());
+    assert!(stderr(&unknown).contains("reading"), "{}", stderr(&unknown));
+}
+
+#[test]
+fn serve_takes_its_vaults_from_the_command_line_or_the_configuration_but_not_both() {
+    let home = tempfile::tempdir().expect("temp dir");
+    let vault_dir = tempfile::tempdir().expect("temp dir");
+    let vault = vault_arg(vault_dir.path());
+
+    // Neither: the argument parser refuses rather than serving nothing.
+    let neither = bookmarks_but_better_in_home(home.path(), &["serve"]);
+    assert!(!neither.status.success());
+
+    // Both: they are alternatives, not layers.
+    let both =
+        bookmarks_but_better_in_home(home.path(), &["serve", "--from-config", "--vault", &vault]);
+    assert!(!both.status.success());
+    assert!(
+        stderr(&both).contains("cannot be used with"),
+        "{}",
+        stderr(&both)
+    );
+}
+
+#[test]
+fn serve_from_config_says_so_when_nothing_is_configured() {
+    let home = tempfile::tempdir().expect("temp dir");
+    let output = bookmarks_but_better_in_home(home.path(), &["serve", "--from-config"]);
+
+    assert!(!output.status.success());
+    assert!(stderr(&output).contains("vault add"), "{}", stderr(&output));
+}
+
+#[test]
+fn serve_from_config_hosts_what_the_configuration_names() {
+    let home = tempfile::tempdir().expect("temp dir");
+    let vault_dir = tempfile::tempdir().expect("temp dir");
+    let vault = vault_arg(vault_dir.path());
+    // Configured but never initialized, so the daemon refuses it by name —
+    // which is the proof that the configured path is the one it opened.
+    assert!(
+        bookmarks_but_better_in_home(home.path(), &["vault", "add", "reading", &vault])
+            .status
+            .success()
+    );
+
+    let output = bookmarks_but_better_in_home(home.path(), &["serve", "--from-config"]);
+    assert!(!output.status.success());
+    let message = stderr(&output);
+    assert!(message.contains("`reading`"), "{message}");
+    assert!(message.contains(&vault), "{message}");
+}
+
+#[test]
+fn a_single_vault_definition_still_spells_the_vault_as_a_bare_path() {
+    // The shape every definition had before vaults carried ids. Writing
+    // `--vault default=/path` instead would be equivalent to the daemon and
+    // would still rewrite every installed definition on upgrade, for nothing.
+    let home = tempfile::tempdir().expect("temp dir");
+    let vault_dir = tempfile::tempdir().expect("temp dir");
+    let vault = vault_arg(vault_dir.path());
+
+    let installed = bookmarks_but_better_in_home(
+        home.path(),
+        &["service", "install", "--vault", &vault, "--no-start"],
+    );
+    assert!(installed.status.success(), "{}", stderr(&installed));
+
+    let text = definition_text(&definition_path(home.path()));
+    assert!(text.contains(&vault), "{text}");
+    assert!(!text.contains(&format!("default={vault}")), "{text}");
+}
+
+#[test]
+fn service_install_can_host_several_vaults() {
+    let home = tempfile::tempdir().expect("temp dir");
+    let reading = tempfile::tempdir().expect("temp dir");
+    let archive = tempfile::tempdir().expect("temp dir");
+    let reading_arg = format!("reading={}", vault_arg(reading.path()));
+    let archive_arg = format!("archive={}", vault_arg(archive.path()));
+
+    let installed = bookmarks_but_better_in_home(
+        home.path(),
+        &[
+            "service",
+            "install",
+            "--vault",
+            &reading_arg,
+            "--vault",
+            &archive_arg,
+            "--no-start",
+        ],
+    );
+    assert!(installed.status.success(), "{}", stderr(&installed));
+
+    let text = definition_text(&definition_path(home.path()));
+    assert!(text.contains(&vault_arg(reading.path())), "{text}");
+    assert!(text.contains(&vault_arg(archive.path())), "{text}");
+
+    let status = stdout(&bookmarks_but_better_in_home(
+        home.path(),
+        &["service", "status"],
+    ));
+    assert!(status.contains("(reading)"), "{status}");
+    assert!(status.contains("(archive)"), "{status}");
+}
+
+#[test]
+fn service_install_refuses_a_set_the_daemon_would_refuse() {
+    let home = tempfile::tempdir().expect("temp dir");
+    let vault_dir = tempfile::tempdir().expect("temp dir");
+    let nested = vault_arg(&vault_dir.path().join("nested"));
+    let outer = format!("outer={}", vault_arg(vault_dir.path()));
+    let inner = format!("inner={nested}");
+
+    let output = bookmarks_but_better_in_home(
+        home.path(),
+        &[
+            "service",
+            "install",
+            "--vault",
+            &outer,
+            "--vault",
+            &inner,
+            "--no-start",
+        ],
+    );
+    assert!(!output.status.success());
+    assert!(stderr(&output).contains("overlap"), "{}", stderr(&output));
+    assert!(
+        !definition_path(home.path()).exists(),
+        "nothing was installed"
+    );
+}
+
+#[test]
+fn service_install_from_config_expands_the_registry_into_the_definition() {
+    let home = tempfile::tempdir().expect("temp dir");
+    let reading = tempfile::tempdir().expect("temp dir");
+    let archive = tempfile::tempdir().expect("temp dir");
+
+    for (id, directory) in [("reading", &reading), ("archive", &archive)] {
+        assert!(
+            bookmarks_but_better_in_home(
+                home.path(),
+                &["vault", "add", id, &vault_arg(directory.path()), "--init"]
+            )
+            .status
+            .success()
+        );
+    }
+
+    let installed = bookmarks_but_better_in_home(
+        home.path(),
+        &["service", "install", "--from-config", "--no-start"],
+    );
+    assert!(installed.status.success(), "{}", stderr(&installed));
+
+    let text = definition_text(&definition_path(home.path()));
+    assert!(text.contains(&vault_arg(reading.path())), "{text}");
+    assert!(text.contains(&vault_arg(archive.path())), "{text}");
+
+    // The definition is the expansion, not a reference: removing a vault from
+    // the configuration leaves the installed service alone until it is
+    // installed again.
+    assert!(
+        bookmarks_but_better_in_home(home.path(), &["vault", "remove", "archive"])
+            .status
+            .success()
+    );
+    let unchanged = definition_text(&definition_path(home.path()));
+    assert_eq!(unchanged, text);
+
+    let reinstalled = bookmarks_but_better_in_home(
+        home.path(),
+        &["service", "install", "--from-config", "--no-start"],
+    );
+    assert!(reinstalled.status.success(), "{}", stderr(&reinstalled));
+    let after = definition_text(&definition_path(home.path()));
+    assert!(!after.contains(&vault_arg(archive.path())), "{after}");
+}
+
+#[test]
+fn service_install_takes_its_vaults_from_one_place_or_the_other() {
+    let home = tempfile::tempdir().expect("temp dir");
+    let vault_dir = tempfile::tempdir().expect("temp dir");
+    let vault = vault_arg(vault_dir.path());
+
+    let neither = bookmarks_but_better_in_home(home.path(), &["service", "install", "--no-start"]);
+    assert!(!neither.status.success());
+
+    let both = bookmarks_but_better_in_home(
+        home.path(),
+        &[
+            "service",
+            "install",
+            "--from-config",
+            "--vault",
+            &vault,
+            "--no-start",
+        ],
+    );
+    assert!(!both.status.success());
+    assert!(
+        stderr(&both).contains("cannot be used with"),
+        "{}",
+        stderr(&both)
+    );
+
+    let empty = bookmarks_but_better_in_home(
+        home.path(),
+        &["service", "install", "--from-config", "--no-start"],
+    );
+    assert!(!empty.status.success());
+    assert!(stderr(&empty).contains("vault add"), "{}", stderr(&empty));
+}
+
+#[test]
+fn a_configured_port_reaches_the_installed_service() {
+    let home = tempfile::tempdir().expect("temp dir");
+    let vault_dir = tempfile::tempdir().expect("temp dir");
+    assert!(
+        bookmarks_but_better_in_home(
+            home.path(),
+            &[
+                "vault",
+                "add",
+                "reading",
+                &vault_arg(vault_dir.path()),
+                "--init"
+            ]
+        )
+        .status
+        .success()
+    );
+
+    // Written by hand rather than through a command, because setting the port
+    // is exactly the edit the file exists to allow.
+    let config = config_path(home.path());
+    let text = std::fs::read_to_string(&config).expect("config");
+    std::fs::write(&config, format!("port = 52299\n{text}")).expect("write");
+
+    assert!(
+        bookmarks_but_better_in_home(
+            home.path(),
+            &["service", "install", "--from-config", "--no-start"]
+        )
+        .status
+        .success()
+    );
+    let definition = definition_text(&definition_path(home.path()));
+    assert!(definition.contains("52299"), "{definition}");
 }

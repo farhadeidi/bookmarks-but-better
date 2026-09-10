@@ -29,11 +29,9 @@ function guessPlatform(): Platform {
  * `sh` dies on line 1 with `set: Illegal option -o pipefail` — before the
  * script can say anything useful about what went wrong.
  *
- * No flag selects the prerelease here even though the daemon only exists as
- * one: both scripts resolve the latest stable release, notice it carries no
- * daemon build, and fall back to the newest prerelease that does — so this
- * plain command keeps working unchanged the day a stable release ships the
- * daemon. See docs/DAEMON.md.
+ * Both scripts resolve the latest stable release, which carries daemon builds
+ * since 4.0.0. Without `--vault` they install the binary and print the next
+ * steps, which the paragraph below names. See docs/DAEMON.md.
  */
 const INSTALL_COMMANDS: Record<Platform, string> = {
   macos: "curl -fsSL https://bookmarks-but-better.dev/install.sh | bash",
@@ -77,14 +75,11 @@ function InstallGuide() {
         {INSTALL_COMMANDS[platform]}
       </code>
       <p className="text-xs text-muted-foreground">
-        The daemon is still in beta: there is no stable release of it yet, so
-        this installs the latest prerelease.
-      </p>
-      <p className="text-xs text-muted-foreground">
-        Then run <code>bookmarks-but-better setup</code> to create a vault and{" "}
-        <code>bookmarks-but-better service install --vault &lt;path&gt;</code>{" "}
-        to run it in the background. The extension connects over loopback only —
-        nothing here ever leaves this machine.
+        Then run <code>npx bookmarks-but-better</code>: it asks where your vault
+        should live and starts the background service. Without Node.js, add{" "}
+        <code>--vault &lt;path&gt;</code> to the install command above to do the
+        same. The extension connects over loopback only — nothing here ever
+        leaves this machine.
       </p>
     </div>
   )

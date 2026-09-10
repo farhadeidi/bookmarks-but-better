@@ -88,23 +88,24 @@ instead of the browser's own bookmark store, over `127.0.0.1`/`localhost` only.
 This is entirely optional; browser and standalone modes need nothing from it.
 
 ```sh
-# macOS / Linux
-curl -fsSL https://github.com/farhadeidi/bookmarks-but-better/releases/latest/download/install.sh | bash
-```
-
-```powershell
-# Windows (PowerShell)
-irm https://github.com/farhadeidi/bookmarks-but-better/releases/latest/download/install.ps1 | iex
-```
-
-```sh
-# Any platform, if you already have Node.js
+# Any platform, with Node.js: installs, asks where your bookmarks live, starts the service
 npx bookmarks-but-better@latest
 ```
 
+```sh
+# macOS / Linux, without Node.js
+curl -fsSL https://github.com/farhadeidi/bookmarks-but-better/releases/latest/download/install.sh | bash -s -- --vault ~/Bookmarks
+```
+
+```powershell
+# Windows (PowerShell), without Node.js
+& ([scriptblock]::Create((irm https://github.com/farhadeidi/bookmarks-but-better/releases/latest/download/install.ps1))) -Vault "$env:USERPROFILE\Bookmarks"
+```
+
 All three install the same thing, from the same GitHub Release, checksum-verified.
-See [docs/DAEMON.md](docs/DAEMON.md) for what the install scripts do, and how to
-point the extension at the daemon.
+`npx bookmarks-but-better` is also how you check on it later — `status`,
+`vault add`, `uninstall`. See [docs/DAEMON.md](docs/DAEMON.md) for what the
+install scripts do, and how to point the extension at the daemon.
 
 The daemon binds to loopback only. Connecting from the extension requests
 optional localhost access at that moment, not during extension installation.
@@ -177,7 +178,9 @@ bun run format            # Format code
 bun run test              # Run tests
 bun run test:ui           # Playwright UI tests against the Dev Workbench (isolated dev server)
 bun run test:e2e:safari   # The Safari bundle end to end against a throwaway daemon
-bun run test:npm          # Test the npx launcher in packages/bookmarks-but-better
+bun run test:npm          # Unit-test the Daemon Manager (npx bookmarks-but-better) in packages/bookmarks-but-better
+bun run test:e2e:manager  # The manager's whole first run against this checkout's daemon, in a throwaway home
+bun run try:manager       # The same setup, then a shell where `bbb` is the manager — poke at it by hand
 ```
 
 `bun run dev` needs no extension and no daemon: it opens the complete

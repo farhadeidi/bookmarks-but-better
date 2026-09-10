@@ -1,9 +1,9 @@
 # Releasing
 
-One product version covers the app, all three extension manifests and the Cargo
-workspace, and a tag is what turns that version into a release. The small `npx`
-launcher has an independent version and is published only when its own code
-changes.
+One product version covers the app, all three extension manifests, the Cargo
+workspace and the npm Daemon Manager, and a tag is what turns that version into
+a release. The manager installs its own version of the daemon, so it is
+published for every release, after the GitHub release exists.
 
 Two commands do the whole job:
 
@@ -13,8 +13,8 @@ git push origin v4.1.0          # the real thing: stores, after an approval
 ```
 
 No product artifact is published another way. Merging to `main` runs
-[`ci.yml`](../.github/workflows/ci.yml) and stops there. The npm launcher remains
-the separately versioned, manual publishing step documented below.
+[`ci.yml`](../.github/workflows/ci.yml) and stops there. The npm Daemon Manager
+is the one manual publishing step, documented below.
 
 ## What each tag does
 
@@ -30,8 +30,9 @@ from it. A beta is a real build; the only thing it does not do is publish.
 ## Cutting a beta
 
 1. Reconcile the product version everywhere. For `4.1.0` that means `4.1.0` —
-   exactly this string — in these seven places:
+   exactly this string — in these eight places:
    - `package.json`
+   - `packages/bookmarks-but-better/package.json` (the Daemon Manager)
    - `manifests/manifest.chrome.json`
    - `manifests/manifest.firefox.json`
    - `manifests/manifest.safari.json`
@@ -365,14 +366,16 @@ third tag shape to `on.push.tags` would need both of them updated.
 
 ### `npx bookmarks-but-better@latest`
 
-`packages/bookmarks-but-better` is a third entry point into those same two
-scripts, for people who have Node.js and not much else. It has its own semantic
-version, independent of the daemon and extensions: bump it only when the
-launcher itself changes. It ships **no
+`packages/bookmarks-but-better` is the Daemon Manager
+([ADR-0006](adr/0006-manage-the-daemon-from-an-npm-tool-and-keep-management-out-of-its-api.md)):
+`status`, `install`, `uninstall` and `vault add|remove|list`, for people who
+have Node.js. It carries the product version — the `validate` job checks it
+with the other version files — because by default it installs **its own
+version** of the daemon, whose `--json` output it reads. It ships **no
 binaries**: it downloads the installer for the platform it is running on,
-verifies it against the `.sha256` sidecar published next to it, and runs it,
-forwarding the installer's own flags. `--version <tag>` pins both halves to the
-same release.
+verifies it against the `.sha256` sidecar published next to it, runs it with
+`--version v<its own version>`, and afterwards drives the installed binary's
+own commands.
 
 Publishing it is a **manual step** — the release pipeline holds no npm
 credential:
@@ -382,25 +385,26 @@ cd packages/bookmarks-but-better
 npm publish   # after the GitHub release for the tag exists
 ```
 
-Publish a new launcher version after the GitHub release that needs it, never
-before: by default the package resolves `/releases/latest/download/install.sh`,
-so publishing ahead of the corresponding release could bootstrap from the
-previous one. A daemon-only release does not require another npm publish.
+Publish it **after** the stable GitHub release for that version exists, never
+before: a published manager pins its own version, so ahead of the release it
+would ask for an archive that is not there yet. Betas are not published to
+npm; `npx bookmarks-but-better install --beta` reaches a prerelease from the
+previous stable manager.
 
 The root `package.json` stays `"private": true` and is never published; the
-name `bookmarks-but-better` on npm belongs to this launcher.
+name `bookmarks-but-better` on npm belongs to the manager.
 
 ### What CI proves about them
 
 `.github/workflows/ci.yml`'s `install-scripts` job guards all three —
 `shellcheck`, a syntax check of `install.ps1`, `tests/install/smoke-test.sh`,
-and the launcher's own tests and a `npm pack --dry-run`.
+and the manager's own tests and a `npm pack --dry-run`.
 
 The smoke test runs `install.sh` end to end (release resolution, download,
 checksum verification, unpack, symlink swap, upgrade, rollback-on-tamper)
 against a locally served fake release that speaks the same three GitHub
-endpoints. The launcher tests cover its platform, argument and URL decisions,
-which are pure functions, so neither touches the network. Neither runs on a
+endpoints. The manager tests cover its platform, argument, URL and status
+decisions, which are pure functions, so neither touches the network. Neither runs on a
 tag, so together they do not prove the scripts work against a _real_ published
 release — only that they still do exactly what they did the last time this
 suite ran.
