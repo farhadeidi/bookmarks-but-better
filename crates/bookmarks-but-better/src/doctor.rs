@@ -163,11 +163,10 @@ fn staged_findings(root: &Path) -> Vec<Finding> {
         .collect()
 }
 
-/// Whether another process currently holds this vault.
+/// Whether a daemon currently holds this vault.
 ///
 /// Reported so that a person reading `doctor` output knows whether what they
 /// are looking at can change underneath them.
-/// Whether a daemon currently holds this vault.
 ///
 /// The advisory lock is the only honest answer available without asking a
 /// daemon: it is held for as long as one is running and released by the

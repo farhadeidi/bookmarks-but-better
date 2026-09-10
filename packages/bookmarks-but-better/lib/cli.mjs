@@ -25,7 +25,8 @@ Commands:
   vault add [<id> <path>]
                          Configure another vault and restart the service.
   vault remove [<id>]    Drop a vault from the configuration (the directory
-                         stays) and restart the service.
+                         stays) and restart the service. Removing the last
+                         one removes the service too, until a vault is added.
 
 Options:
   -y, --yes              Never ask; take every default. For scripts.

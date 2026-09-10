@@ -112,9 +112,11 @@ curl -fsSL https://github.com/farhadeidi/bookmarks-but-better/releases/latest/do
   Registry (initializing it when it is not a vault yet), then install and
   start the background service, serving the web UI from the archive's `ui/`.
   Without it: print those two commands as the next steps. An install over a
-  running service reinstalls the service so it runs the new binary. Neither
-  script ever asks a question, so both behave the same in a terminal, in CI
-  and under `npx bookmarks-but-better`.
+  configured machine reinstalls the service so it runs the new binary; a
+  service installed by 4.0.0, before the registry existed, first has its
+  vaults recorded in the registry. Neither script ever asks a question, so
+  both behave the same in a terminal, in CI and under
+  `npx bookmarks-but-better`.
 
 Uninstalling is `npx bookmarks-but-better uninstall`, or by hand:
 `bookmarks-but-better service uninstall`, then delete the install directory

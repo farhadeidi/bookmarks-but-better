@@ -13,7 +13,9 @@
 // verified against its published SHA-256. The questions live here; the daemon
 // asks none.
 //
-// Every decision is in ../lib, which is pure and tested. This file is the I/O.
+// Every decision is in ../lib — cli, release, layout and status are pure and
+// tested; daemon and prompt are the two modules that touch the machine and
+// the terminal. This file is the flow between them.
 
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
@@ -49,7 +51,8 @@ const packageJson = JSON.parse(await readFile(new URL("../package.json", import.
 const TOOL_VERSION = packageJson.version;
 
 const out = (text) => process.stdout.write(`${text}\n`);
-const home = (value) => contractHome(value, HOME);
+/** A path for display: `~/…` where it is under the home directory. */
+const shortHome = (value) => contractHome(value, HOME);
 const tail = (text, lines = 12) => text.trim().split("\n").slice(-lines).join("\n");
 
 class Failure extends Error {}
@@ -170,7 +173,13 @@ async function install({ layout, options, prompter }) {
   const installed = existsSync(layout.binary);
   let needsVault = !installed;
   if (installed) {
-    needsVault = (await daemon.registryHasVaults(layout.binary)) === false;
+    // A registry with nothing in it next to an installed service is a 4.0.0
+    // install: the installer records that service's vaults itself, so the
+    // question is only for a machine where nothing names a vault at all. An
+    // older binary answers neither question (null); the installer sorts it out.
+    const hasVaults = await daemon.registryHasVaults(layout.binary);
+    const hasService = await daemon.serviceIsInstalled(layout.binary);
+    needsVault = hasVaults === false && hasService === false;
   }
 
   let vault = options.vault ? expandHome(options.vault, HOME) : null;
@@ -191,8 +200,8 @@ async function install({ layout, options, prompter }) {
   if (vault) vault = path.resolve(vault);
 
   const plan = [
-    installed ? `update the daemon to ${TOOL_VERSION}` : `install the daemon ${TOOL_VERSION} under ${home(layout.installRoot)}`,
-    vault ? `use ${home(vault)} as the vault` : null,
+    installed ? `update the daemon to ${TOOL_VERSION}` : `install the daemon ${TOOL_VERSION} under ${shortHome(layout.installRoot)}`,
+    vault ? `use ${shortHome(vault)} as the vault` : null,
     "install and start the background service",
   ].filter(Boolean);
   if (!(await prompter.confirm(`This will ${plan.join(", ")}. Continue?`, { fallback: true }))) {
@@ -214,10 +223,10 @@ async function uninstall({ layout, options, prompter }) {
   const fallbackConfig = configPath({ platform: process.platform, env: process.env, homedir: HOME });
 
   if (!existsSync(layout.binary)) {
-    p.log.info(`Nothing is installed under ${home(layout.installRoot)}.`);
+    p.log.info(`Nothing is installed under ${shortHome(layout.installRoot)}.`);
     if (options.purgeConfig && existsSync(fallbackConfig)) {
       await rm(fallbackConfig, { force: true });
-      p.log.success(`Removed ${home(fallbackConfig)}`);
+      p.log.success(`Removed ${shortHome(fallbackConfig)}`);
     }
     return 0;
   }
@@ -236,23 +245,23 @@ async function uninstall({ layout, options, prompter }) {
   await rm(layout.installRoot, { recursive: true, force: true });
   if (layout.binLink) await rm(layout.binLink, { force: true });
   if (process.platform === "win32") await daemon.removeFromUserPath(layout.current);
-  p.log.success(`Removed ${home(layout.installRoot)}${layout.binLink ? ` and ${home(layout.binLink)}` : ""}`);
+  p.log.success(`Removed ${shortHome(layout.installRoot)}${layout.binLink ? ` and ${shortHome(layout.binLink)}` : ""}`);
 
   let purge = Boolean(options.purgeConfig);
   if (!purge && existsSync(config)) {
-    purge = await prompter.confirm(`Also remove the configuration at ${home(config)}?`, {
+    purge = await prompter.confirm(`Also remove the configuration at ${shortHome(config)}?`, {
       fallback: false,
       whenYes: false,
     });
   }
   if (purge) {
     await rm(config, { force: true });
-    p.log.success(`Removed ${home(config)}`);
+    p.log.success(`Removed ${shortHome(config)}`);
   } else if (existsSync(config)) {
-    p.log.info(`Kept ${home(config)}; a later install picks it up again.`);
+    p.log.info(`Kept ${shortHome(config)}; a later install picks it up again.`);
   }
   for (const vault of vaults) {
-    p.log.info(`Untouched: ${vault.id}  ${home(vault.path)}`);
+    p.log.info(`Untouched: ${vault.id}  ${shortHome(vault.path)}`);
   }
   return 0;
 }
@@ -322,13 +331,13 @@ async function vaultAdd({ layout, args, prompter }) {
   // implied.
   let init = false;
   if (!existsSync(path.join(directory, VAULT_MARKER))) {
-    init = await prompter.confirm(`${home(directory)} is not a vault yet. Create one there?`, {
+    init = await prompter.confirm(`${shortHome(directory)} is not a vault yet. Create one there?`, {
       fallback: true,
     });
     if (!init) throw new Cancelled();
   }
 
-  const ok = await step(`Adding \`${id}\` at ${home(directory)}`, layout.binary, [
+  const ok = await step(`Adding \`${id}\` at ${shortHome(directory)}`, layout.binary, [
     "vault",
     "add",
     id,
@@ -351,7 +360,7 @@ async function vaultRemove({ layout, args, prompter }) {
     }
     id = await prompter.select(
       "Which vault should leave the configuration? Its directory stays.",
-      vaults.map((vault) => ({ value: vault.id, label: vault.id, hint: home(vault.path) })),
+      vaults.map((vault) => ({ value: vault.id, label: vault.id, hint: shortHome(vault.path) })),
     );
   }
 
@@ -387,6 +396,12 @@ async function menu(context) {
   }
 
   const report = await gather(layout);
+  // A menu needs someone to choose from it: with --yes, or no terminal, the
+  // status is the whole answer.
+  if (!prompter.interactive) {
+    p.note(render(report, { homedir: HOME }), "Status");
+    return 0;
+  }
   p.note(render(report, { homedir: HOME }), "Status");
   const { problems } = assess(report);
   const vaults = report.registry?.vaults ?? [];
@@ -450,8 +465,15 @@ async function main() {
   const context = { layout, options, args: parsed.args, prompter };
 
   // The plain, scriptable readings print without decoration.
-  if (parsed.command === "status") return status(context);
-  if (parsed.command === "vault" && parsed.subcommand === "list") return vaultList(context);
+  const plain = parsed.command === "status" || (parsed.command === "vault" && parsed.subcommand === "list");
+  if (plain) {
+    try {
+      return parsed.command === "status" ? await status(context) : await vaultList(context);
+    } catch (error) {
+      process.stderr.write(`error: ${error.message}\n`);
+      return 1;
+    }
+  }
 
   p.intro(`Bookmarks But Better ${TOOL_VERSION}`);
   try {

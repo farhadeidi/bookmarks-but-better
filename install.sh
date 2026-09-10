@@ -371,6 +371,22 @@ install_service() {
   log "installing the background service"
   "$BIN" service install --from-config --ui-dir "$UI_DIR" \
     || die "the service could not be installed; run \"$BIN_DIR/$EXE\" service install --from-config --ui-dir \"$UI_DIR\" to retry"
+  log ""
+  log "done. Open a new tab, or point the extension at $("$BIN" vault list 2>/dev/null | sed -n 's/^serving *//p')"
+}
+
+# A service installed before the Vault Registry existed (4.0.0) names its
+# vaults only in its own definition. Recording them is what lets the service
+# be reinstalled from the registry, here and by every later upgrade.
+adopt_service_vaults() {
+  log ""
+  log "recording the vaults the installed service serves"
+  "$BIN" service status 2>/dev/null \
+    | sed -n 's/^vault      \(.*\) (\([a-z0-9-]*\))$/\2	\1/p' \
+    | while IFS='	' read -r id path; do
+        [ -n "$id" ] || continue
+        "$BIN" vault add "$id" "$path" || log "  $path could not be recorded as $id"
+      done
 }
 
 if [ -n "$VAULT_DIR" ]; then
@@ -383,14 +399,16 @@ if [ -n "$VAULT_DIR" ]; then
       || die "$VAULT_DIR could not be recorded as the vault"
   fi
   install_service
-  log ""
-  log "done. Open a new tab, or point the extension at http://127.0.0.1:$("$BIN" vault list --json 2>/dev/null | sed -n 's/.*"port": *\([0-9]*\).*/\1/p' | head -n 1)"
   exit 0
 fi
 
-if service_is_installed && registry_has_vaults; then
-  # An upgrade under a running service: the definition names the exact binary
-  # it runs, so it has to be rewritten to run the one just installed.
+if service_is_installed && ! registry_has_vaults; then
+  adopt_service_vaults
+fi
+
+# Anything configured is served: a fresh definition names the binary just
+# installed, and a machine with vaults recorded but no service yet gets one.
+if registry_has_vaults; then
   install_service
   exit 0
 fi

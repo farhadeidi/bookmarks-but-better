@@ -433,6 +433,23 @@ try {
     if ($LASTEXITCODE -ne 0) {
       throw "the service could not be installed; run `"$currentExe`" service install --from-config --ui-dir `"$uiDir`" to retry"
     }
+    Write-Host ""
+    Write-Host "done. Open a new tab, or point the extension at the address the service reports above."
+  }
+
+  # A service installed before the Vault Registry existed (4.0.0) names its
+  # vaults only in its own definition. Recording them is what lets the service
+  # be reinstalled from the registry, here and by every later upgrade.
+  function Add-ServiceVaultsToRegistry {
+    Write-Host ""
+    Write-Host "recording the vaults the installed service serves"
+    try {
+      $status = (& $currentExe service status --json 2>$null | Out-String | ConvertFrom-Json)
+    } catch { return }
+    foreach ($vault in @($status.vaults)) {
+      & $currentExe vault add $vault.id $vault.path
+      if ($LASTEXITCODE -ne 0) { Write-Host "  $($vault.path) could not be recorded as $($vault.id)" }
+    }
   }
 
   if ($Vault) {
@@ -445,14 +462,16 @@ try {
       if ($LASTEXITCODE -ne 0) { throw "$Vault could not be recorded as the vault" }
     }
     Install-Service
-    Write-Host ""
-    Write-Host "done. Open a new tab, or point the extension at the address the service reports above."
     exit 0
   }
 
-  if ((Test-ServiceIsInstalled) -and (Test-RegistryHasVaults)) {
-    # An upgrade under a running service: the definition names the exact
-    # binary it runs, so it has to be rewritten to run the one just installed.
+  if ((Test-ServiceIsInstalled) -and -not (Test-RegistryHasVaults)) {
+    Add-ServiceVaultsToRegistry
+  }
+
+  # Anything configured is served: a fresh definition names the binary just
+  # installed, and a machine with vaults recorded but no service yet gets one.
+  if (Test-RegistryHasVaults) {
     Install-Service
     exit 0
   }

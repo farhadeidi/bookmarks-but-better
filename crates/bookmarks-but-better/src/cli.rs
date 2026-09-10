@@ -501,10 +501,11 @@ async fn shutdown_signal() {
     }
 }
 
-/// The configuration, or the message to print instead.
+/// The configuration, or why it could not be read.
 ///
 /// Every caller here treats a configuration problem the same way — say what is
-/// wrong with which file and stop — so the mapping to a message lives once.
+/// wrong with which file and stop — so the error carries the message and the
+/// lookup of the file lives once.
 fn load_config() -> Result<Config, ConfigError> {
     config::load(&ConfigLocation::from_env()?)
 }
