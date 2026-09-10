@@ -11,35 +11,56 @@ browser bookmarks to extensions.
 ## Install
 
 ```bash
+# Any platform, with Node.js
+npx bookmarks-but-better@latest
+```
+
+That is the guided way in: it installs the daemon, asks the one question a
+first run has — where your bookmarks should live — and installs and starts the
+background service. The same command is how you look after the daemon
+afterwards:
+
+```bash
+npx bookmarks-but-better@latest status              # what is installed, running and connected, and what fixes it
+npx bookmarks-but-better@latest install             # update; keeps every vault
+npx bookmarks-but-better@latest vault add work ~/Work/bookmarks
+npx bookmarks-but-better@latest vault remove work
+npx bookmarks-but-better@latest uninstall
+```
+
+It reads no bookmarks and ships no binaries: it downloads the installer for
+your platform from the GitHub Release, verifies it against its published
+SHA-256, runs it, and afterwards drives the daemon binary's own commands. See
+[ADR-0006](adr/0006-manage-the-daemon-from-an-npm-tool-and-keep-management-out-of-its-api.md).
+
+Without Node.js, the installers do the same first run when told where the
+vault lives, and never ask anything:
+
+```bash
 # macOS / Linux
-curl -fsSL https://github.com/farhadeidi/bookmarks-but-better/releases/latest/download/install.sh | bash
+curl -fsSL https://github.com/farhadeidi/bookmarks-but-better/releases/latest/download/install.sh | bash -s -- --vault ~/Bookmarks
 ```
 
 ```powershell
 # Windows (PowerShell)
-irm https://github.com/farhadeidi/bookmarks-but-better/releases/latest/download/install.ps1 | iex
+& ([scriptblock]::Create((irm https://github.com/farhadeidi/bookmarks-but-better/releases/latest/download/install.ps1))) -Vault "$env:USERPROFILE\Bookmarks"
 ```
 
-```bash
-# Any platform, if you already have Node.js
-npx bookmarks-but-better@latest
-```
-
-All three do the same thing. `install.sh` and `install.ps1` are release assets
+Left without `--vault`/`-Vault`, they install the binary and print the two
+commands that finish the job. `install.sh` and `install.ps1` are release assets
 under those exact names, so the script that runs is the one published alongside
-the archives it installs — not whatever `main` happens to hold. The `npx`
-package ships no binaries at all: it downloads the installer for your platform
-from the release, verifies it against its published SHA-256, and runs it. The
-install it performs is persistent either way; `npx` is only how the installer
-got there.
+the archives it installs — not whatever `main` happens to hold. The install is
+persistent either way; `npx` is only how the installer got there.
 
 Pipe into `bash`, not `sh`: the script uses `set -o pipefail`, which is a bash
 builtin option, and `/bin/sh` is dash on Debian and Ubuntu.
 
 ### Choosing a release
 
-Each installer resolves the latest **stable** release by default. Version 4 is
-the first stable release that carries daemon builds, so a normal install now
+Each installer resolves the latest **stable** release by default; `npx
+bookmarks-but-better` pins the daemon to its own version instead, so the tool
+and the daemon it manages never drift apart on one machine. Version 4 is the
+first stable release that carries daemon builds, so a normal install now
 resolves the stable archive directly.
 
 For historical or pinned extension-only releases up to `v3.2.0`, the installer
@@ -60,18 +81,18 @@ To choose explicitly rather than rely on the fallback:
 
 | What you want | macOS / Linux | Windows | npx |
 | --- | --- | --- | --- |
-| The latest prerelease | `bash -s -- --beta` | `-Beta` | `--beta` |
-| One exact release | `bash -s -- --version v4.0.0` | `-Version v4.0.0` | `--version v4.0.0` |
-| Install without running setup | `bash -s -- --skip-setup` | `-SkipSetup` | `--skip-setup` |
+| The latest prerelease | `bash -s -- --beta` | `-Beta` | `install --beta` |
+| One exact release | `bash -s -- --version v4.0.0` | `-Version v4.0.0` | `install --version v4.0.0` |
+| The first vault and the service too | `bash -s -- --vault ~/Bookmarks` | `-Vault …` | asked, or `install --vault …` |
 
 With `curl … | bash`, arguments go after `-s --`:
 
 ```bash
-curl -fsSL https://github.com/farhadeidi/bookmarks-but-better/releases/latest/download/install.sh | bash -s -- --beta
+curl -fsSL https://github.com/farhadeidi/bookmarks-but-better/releases/latest/download/install.sh | bash -s -- --beta --vault ~/Bookmarks
 ```
 
-`npx bookmarks-but-better@latest --version v4.0.0` also pins the *installer* to
-that release, so both halves come from the same place.
+`npx bookmarks-but-better@latest install --version v4.0.0` also pins the
+*installer* to that release, so both halves come from the same place.
 
 ## What the install scripts do
 
@@ -87,14 +108,19 @@ that release, so both halves come from the same place.
 - Unpack into a versioned directory and only then repoint `current` at it, so a
   failed download or a binary that will not run leaves the previous install
   untouched and rollback-able.
-- Finish by running `bookmarks-but-better setup`, which asks where your vault
-  should live and which port to serve it on. Setup is a conversation, so it
-  needs a terminal; if there is none (CI, a container), the install still
-  completes and tells you to run `bookmarks-but-better setup` yourself.
+- With `--vault <dir>` / `-Vault <dir>`: record that directory in the Vault
+  Registry (initializing it when it is not a vault yet), then install and
+  start the background service, serving the web UI from the archive's `ui/`.
+  Without it: print those two commands as the next steps. An install over a
+  running service reinstalls the service so it runs the new binary. Neither
+  script ever asks a question, so both behave the same in a terminal, in CI
+  and under `npx bookmarks-but-better`.
 
-Uninstalling is deleting the install directory and the `bookmarks-but-better`
-symlink. Your vault is a directory of Markdown files that neither script has
-ever heard of.
+Uninstalling is `npx bookmarks-but-better uninstall`, or by hand:
+`bookmarks-but-better service uninstall`, then delete the install directory
+and the `bookmarks-but-better` symlink. Your vault is a directory of Markdown
+files that stays exactly where it is; the configuration file is kept too
+unless you say `--purge-config`.
 
 ## Connecting the extension
 
@@ -136,6 +162,15 @@ bookmarks-but-better vault list
 bookmarks-but-better serve --from-config
 ```
 
+The everyday form is the manager's, which does the same and then reinstalls
+the background service so the running daemon hosts the new set:
+
+```bash
+npx bookmarks-but-better vault add reading ~/vaults/reading
+npx bookmarks-but-better vault remove archive
+npx bookmarks-but-better vault list
+```
+
 The file is at `~/.config/bookmarks-but-better/config.toml` and carries the
 port, the bind address and the UI directory alongside the vaults. Nothing reads
 it unless you ask: `serve --vault …` ignores it entirely, and `vault list` is
@@ -147,14 +182,18 @@ The background service can host several vaults too — repeat
 `bookmarks-but-better service install --vault ID=PATH`, or install what the
 configuration holds with `service install --from-config`. The definition
 records the paths it was given, so editing the configuration afterwards does
-not change what an installed service starts until you install again.
+not change what an installed service starts until you install again — which
+restarts a running service, and is what `npx bookmarks-but-better vault
+add|remove` do for you.
 
 Each Vault is a separate source with vault-scoped routes under
 `/api/v1/vaults/{id}/…` (tree, search, bookmarks, folders, events, health).
 `GET /api/v1/vaults` lists what is hosted. The legacy unscoped routes (`/tree`
 and friends) keep working only while exactly one Vault is hosted; with more
 than one they answer a stable `vault_required` error rather than picking a
-hidden default. Adding or removing Vaults is a restart, by design for now.
+hidden default. Adding or removing Vaults is a restart, by design (ADR-0001);
+the daemon has no endpoint that changes what it hosts, and
+`npx bookmarks-but-better vault add|remove` perform the restart.
 
 Settings → **Sources** groups discovered Vaults under their daemon connection.
 After changing the daemon's `--vault` configuration and restarting it, use

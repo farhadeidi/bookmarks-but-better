@@ -219,8 +219,9 @@ fails is a bug worth filing before the build is called good.
 8. **Onboarding shape.** On a fresh profile the setup wizard runs first. Check
    it never asks "Where do your bookmarks live?" and that its daemon step says
    the browser does not share its own bookmarks and mentions iCloud Drive.
-9. **Start a daemon.** In a terminal:
-   `bookmarks-but-better setup` (or `init --vault <path>`) and then
+9. **Start a daemon.** In a terminal: `npx bookmarks-but-better`, which asks
+   where the vault should live and starts the background service — or, without
+   a service, `bookmarks-but-better init --vault <path>` and then
    `bookmarks-but-better serve --vault <path>` — see
    [docs/DAEMON.md](DAEMON.md). Note the port it prints (52222 by default).
 10. **The loopback permission prompt.** In the dashboard, click **"Connect a

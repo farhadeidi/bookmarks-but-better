@@ -1,62 +1,80 @@
 # bookmarks-but-better
 
-Installs the [Bookmarks But Better](https://bookmarks.farhadeidi.com) daemon.
+Installs and looks after the [Bookmarks But Better](https://bookmarks.farhadeidi.com)
+daemon on your machine.
 
 ```sh
 npx bookmarks-but-better@latest
 ```
 
-That is the whole thing. It installs the daemon into a user-local directory —
-no `sudo`, no administrator prompt — and then runs `bookmarks-but-better setup`,
-which asks where your vault should live and which port to serve it on.
+That is the whole first run. It downloads the official installer for your
+platform from the project's GitHub Release, verifies it against its published
+SHA-256, installs the daemon into a user-local directory (no `sudo`, no
+administrator prompt), asks one question — where your bookmarks should live —
+and installs and starts the background service. Run it again later and it
+reports status instead.
 
-## What this package is, and is not
+## Commands
 
-This package ships **no binaries**. It downloads the official installer for your
-platform from the project's GitHub Release — `install.sh` on macOS and Linux,
-`install.ps1` on Windows, both fixed-name release assets — verifies it against
-its published SHA-256 sidecar, and runs it.
+| Command                 | What it does                                                                                                   |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------- |
+| _(none)_                | Installs when nothing is installed; reports status otherwise.                                                  |
+| `status`                | What is installed, configured, running and connected, and the one command that fixes anything that is not.     |
+| `install`               | Install or update the daemon, configure the first vault, install and start the service. Updates keep every vault. |
+| `uninstall`             | Stop and remove the service and the daemon. Vaults are never touched; the configuration is kept unless you say otherwise. |
+| `vault list`            | The configured vaults and what is true of each.                                                                |
+| `vault add <id> <path>` | Configure another vault and restart the service so it hosts it.                                                |
+| `vault remove <id>`     | Drop a vault from the configuration (the directory stays) and restart the service.                             |
 
-That installer is the same script the documented `curl … | bash` command runs.
-It downloads the versioned daemon archive for your platform, verifies *that*
-against its own checksum, unpacks it into a versioned directory and points a
-`current` symlink at it.
-
-So the install is **persistent**. `npx` is only how the installer got to your
-machine; the daemon it installs lives on afterwards, on your `PATH`, and
-upgrades in place the next time you run this.
+```sh
+npx bookmarks-but-better@latest status
+npx bookmarks-but-better@latest vault add work ~/Work/bookmarks
+npx bookmarks-but-better@latest uninstall --purge-config
+```
 
 ## Options
 
-Every option is passed straight through to the installer, which is where they
-are implemented. There are no options of this package's own.
-
-| Option | What it does |
-| --- | --- |
-| `--beta` | Install the latest prerelease instead of the latest stable release. |
-| `--version <tag>` | Install exactly this release, e.g. `v4.0.0`. The installer is taken from that same release. |
-| `--install-dir <dir>` | Where versions are unpacked. |
-| `--bin-dir <dir>` | Where the `bookmarks-but-better` symlink is created. macOS and Linux only. |
-| `--skip-setup` | Install the daemon but do not run setup afterward. |
-| `-h`, `--help` | Show help. |
-
-```sh
-npx bookmarks-but-better@latest --beta
-npx bookmarks-but-better@latest --version v4.0.0 --skip-setup
-```
+| Option                | Applies to  | What it does                                                            |
+| --------------------- | ----------- | ----------------------------------------------------------------------- |
+| `-y`, `--yes`         | everything  | Never ask; take every default. For scripts.                             |
+| `--json`              | status, vault list | Machine-readable output.                                         |
+| `--vault <dir>`       | install     | Where the first vault lives. Asked when left out; `~/Bookmarks` with `--yes`. |
+| `--beta`              | install     | The latest prerelease instead of this tool's own version.               |
+| `--version <tag>`     | install     | Exactly this release, e.g. `v4.1.0`.                                    |
+| `--install-dir <dir>` | install     | Where daemon versions are unpacked.                                     |
+| `--bin-dir <dir>`     | install     | Where the `bookmarks-but-better` symlink goes. macOS and Linux only.    |
+| `--purge-config`      | uninstall   | Also remove the configuration file.                                     |
 
 An option this platform has no equivalent for is refused before anything is
 downloaded, rather than silently dropped.
 
+## How it works
+
+This package ships **no binaries** and reads **no bookmarks**. It does two
+things: run the daemon binary's own non-interactive commands and read their
+`--json` answers, and run the official `install.sh` or `install.ps1` from the
+GitHub Release. The questions live here; the daemon asks none.
+
+By default it installs **its own version** of the daemon — the one it was
+written against — so the two never drift apart on one machine. `--beta` and
+`--version` are the explicit ways to choose otherwise.
+
+The install is **persistent**: the daemon lives on afterwards in a user-local
+directory, on your `PATH`, run by a login service (a `LaunchAgent`, a systemd
+user unit, or a Scheduled Task). `npx` is only how this tool got to your
+machine.
+
 ## Where things end up
 
-| | macOS / Linux | Windows |
-| --- | --- | --- |
-| Versions | `~/.local/share/bookmarks-but-better` | `%LOCALAPPDATA%\bookmarks-but-better` |
-| On `PATH` | `~/.local/bin/bookmarks-but-better` | the install root's `current` directory |
+|            | macOS / Linux                                         | Windows                                 |
+| ---------- | ----------------------------------------------------- | --------------------------------------- |
+| Versions   | `~/.local/share/bookmarks-but-better`                 | `%LOCALAPPDATA%\bookmarks-but-better`   |
+| On `PATH`  | `~/.local/bin/bookmarks-but-better`                   | the install root's `current` directory  |
+| Configured | `~/.config/bookmarks-but-better/config.toml`          | `%USERPROFILE%\.config\bookmarks-but-better\config.toml` |
 
-Uninstalling is deleting the install directory and the symlink. Your vault is a
-directory of Markdown files that nothing here has ever heard of.
+Your vaults are directories of Markdown files that this tool never writes into
+beyond the one root metadata file that makes a directory a vault, and never
+deletes.
 
 ## Not using npm?
 
@@ -64,12 +82,12 @@ You do not need Node.js for any of this — it is one way in, not the way in:
 
 ```sh
 # macOS / Linux
-curl -fsSL https://github.com/farhadeidi/bookmarks-but-better/releases/latest/download/install.sh | bash
+curl -fsSL https://github.com/farhadeidi/bookmarks-but-better/releases/latest/download/install.sh | bash -s -- --vault ~/Bookmarks
 ```
 
 ```powershell
 # Windows
-irm https://github.com/farhadeidi/bookmarks-but-better/releases/latest/download/install.ps1 | iex
+& ([scriptblock]::Create((irm https://github.com/farhadeidi/bookmarks-but-better/releases/latest/download/install.ps1))) -Vault "$env:USERPROFILE\Bookmarks"
 ```
 
 See [docs/DAEMON.md](https://github.com/farhadeidi/bookmarks-but-better/blob/main/docs/DAEMON.md).

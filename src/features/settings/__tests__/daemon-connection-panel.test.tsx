@@ -103,7 +103,7 @@ describe("DaemonConnectionPanel", () => {
     expect(screen.queryByLabelText("Daemon bearer token")).toBeNull()
     fireEvent.click(screen.getByRole("button", { name: "Advanced" }))
     expect(screen.getByLabelText("Daemon bearer token")).toBeTruthy()
-    expect(screen.getByText(/bookmarks-but-better setup/)).toBeTruthy()
+    expect(screen.getByText(/npx bookmarks-but-better/)).toBeTruthy()
   })
 
   /**

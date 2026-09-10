@@ -18,6 +18,7 @@ The daemon binary keeps its non-interactive commands (`serve`, `init`, `doctor`,
 ## Consequences
 
 - The npm package joins the one-version rule and installs exactly its own daemon version, so the daemon binary's JSON output is a contract versioned with it and needs no separate compatibility story.
-- `curl … | bash` remains the headless install: it takes a Vault path (default `~/Bookmarks`), runs `init`, `vault add` and `service install`, and points at `npx` for the guided path. The daemon binary's interactive `setup` goes away with it.
+- `curl … | bash` remains the headless install, and the manager drives that same script. Given `--vault <dir>` it records the Vault (initializing it), installs the service and starts it; given nothing it installs the binary and prints the next steps, naming `npx`. It never asks. The daemon binary's interactive `setup` goes away with it.
 - Reading and changing bookmarks from a terminal is out of scope. If it is ever wanted it is a Client over the HTTP API, not a manager command, and not a daemon command.
-- The daemon's health response may gain a connected-client count, so `status` can say whether a browser is connected. It never gains a management endpoint.
+- The daemon's health response carries `clients`, the number of open event streams, so `status` can say whether a browser is connected. It never gains a management endpoint.
+- `service install` is the one way a change is applied — a new binary, a new port, a different set of Vaults — so it restarts a running service rather than leaving it on its old command line.

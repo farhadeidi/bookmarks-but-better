@@ -240,18 +240,19 @@ jobs:
       - name: Install script smoke test
         run: bash tests/install/smoke-test.sh
 
-      # `npx bookmarks-but-better@latest` is a third entry point into the same
-      # two installers, so it is checked in the same job. Every decision it
-      # makes — which installer this platform needs, which GitHub Release URL
-      # it comes from, how flags reach it — is a pure function, so this runs
-      # without a network and without installing anything.
-      - name: npm launcher tests
+      # `npx bookmarks-but-better` — the Daemon Manager (ADR-0006) — drives the
+      # same two installers, so it is checked in the same job. Every decision
+      # it makes — which installer this platform needs, which GitHub Release
+      # URL it comes from, how flags reach it, what a status report means — is
+      # a pure function, so this runs without a network and without installing
+      # anything.
+      - name: Daemon Manager tests
         working-directory: packages/bookmarks-but-better
         run: node --test
 
-      # Proves the package is publishable and carries no binaries: four files,
-      # no dependencies, no postinstall.
-      - name: npm launcher pack
+      # Proves the package is publishable and carries no binaries: a handful
+      # of files, no dependencies, no postinstall.
+      - name: Daemon Manager pack
         working-directory: packages/bookmarks-but-better
         run: npm pack --dry-run
 

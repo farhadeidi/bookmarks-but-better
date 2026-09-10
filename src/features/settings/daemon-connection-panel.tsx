@@ -81,10 +81,11 @@ function InstallGuide() {
         this installs the latest prerelease.
       </p>
       <p className="text-xs text-muted-foreground">
-        Then run <code>bookmarks-but-better setup</code> to create a vault and{" "}
-        <code>bookmarks-but-better service install --vault &lt;path&gt;</code>{" "}
-        to run it in the background. The extension connects over loopback only —
-        nothing here ever leaves this machine.
+        Then run <code>npx bookmarks-but-better</code>: it asks where your vault
+        should live and starts the background service. Without Node.js, add{" "}
+        <code>--vault &lt;path&gt;</code> to the install command above to do the
+        same. The extension connects over loopback only — nothing here ever
+        leaves this machine.
       </p>
     </div>
   )

@@ -9,6 +9,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`npx bookmarks-but-better` looks after the daemon.** The npm package was
+  a launcher that fetched the installer and ran it; it is now the Daemon
+  Manager: `status` says what is installed, configured, running and connected
+  and names the one command that fixes anything that is not; `install` installs
+  or updates the daemon, asks the one question a first run has (where your
+  bookmarks live), and installs and starts the background service; `uninstall`
+  removes the service and the daemon and never a vault; `vault add|remove|list`
+  edit the Vault Registry and restart the service so the running daemon
+  matches it. Run with no command it installs when nothing is installed and
+  reports status otherwise. It reads no bookmarks, and by default installs its
+  own version of the daemon so the two never drift apart. The daemon's
+  `/health` now carries `clients`, the number of open event streams, which is
+  how `status` knows whether a browser is connected. See
+  [ADR-0006](docs/adr/0006-manage-the-daemon-from-an-npm-tool-and-keep-management-out-of-its-api.md)
+
 - **A Vault Registry, and the `vault` commands that manage it.** Multiple
   vaults per daemon existed only as `--vault ID=PATH` typed out on every
   `serve`, and `service install` took one vault and no ids at all — so the
@@ -34,6 +49,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   what the registry holds. A definition serving exactly one vault under the id
   `default` still spells it as a bare `--vault PATH`, so an installation made
   before vaults had ids compares equal on upgrade and is not rewritten
+
+### Removed
+
+- **`bookmarks-but-better setup`.** The daemon binary no longer asks anything:
+  the guided first run is `npx bookmarks-but-better`, and every command the
+  binary keeps can be driven by a program — `service status --json` joins
+  `vault list --json`. The install scripts follow: `--skip-setup`/`-SkipSetup`
+  are gone, and `--vault <dir>`/`-Vault <dir>` do the whole first run without a
+  terminal — record the vault, initialize it, install and start the service.
+  Without it they install the binary and print the next steps. An install over
+  a running service now reinstalls the service so it runs the new binary, and
+  `service install` restarts a running service on every platform rather than
+  leaving it on its old command line
 
 ### Fixed
 
