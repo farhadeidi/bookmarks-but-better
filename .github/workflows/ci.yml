@@ -216,7 +216,7 @@ jobs:
       - name: Shellcheck install.sh
         run: |
           shellcheck install.sh tests/install/smoke-test.sh \
-            tests/e2e/run-daemon.sh tests/e2e/run-safari.sh \
+            tests/e2e/run-daemon.sh tests/e2e/run-safari.sh tests/e2e/run-manager.sh \
             safari/build.sh safari/sync-resources.sh
 
       # pwsh is preinstalled on every GitHub-hosted runner image, including

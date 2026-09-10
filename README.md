@@ -178,7 +178,9 @@ bun run format            # Format code
 bun run test              # Run tests
 bun run test:ui           # Playwright UI tests against the Dev Workbench (isolated dev server)
 bun run test:e2e:safari   # The Safari bundle end to end against a throwaway daemon
-bun run test:npm          # Test the Daemon Manager (npx bookmarks-but-better) in packages/bookmarks-but-better
+bun run test:npm          # Unit-test the Daemon Manager (npx bookmarks-but-better) in packages/bookmarks-but-better
+bun run test:e2e:manager  # The manager's whole first run against this checkout's daemon, in a throwaway home
+bun run try:manager       # The same setup, then a shell where `bbb` is the manager — poke at it by hand
 ```
 
 `bun run dev` needs no extension and no daemon: it opens the complete
