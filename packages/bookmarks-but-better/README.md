@@ -11,20 +11,24 @@ That is the whole first run. It downloads the official installer for your
 platform from the project's GitHub Release, verifies it against its published
 SHA-256, installs the daemon into a user-local directory (no `sudo`, no
 administrator prompt), asks one question — where your bookmarks should live —
-and installs and starts the background service. Run it again later and it
-reports status instead.
+and installs and starts the background service. Run it again later and it is a
+menu: the status, then whatever can be done about it — each problem's fix
+first, then add or remove a vault, update, uninstall.
 
 ## Commands
 
-| Command                 | What it does                                                                                                   |
-| ----------------------- | -------------------------------------------------------------------------------------------------------------- |
-| _(none)_                | Installs when nothing is installed; reports status otherwise.                                                  |
-| `status`                | What is installed, configured, running and connected, and the one command that fixes anything that is not.     |
-| `install`               | Install or update the daemon, configure the first vault, install and start the service. Updates keep every vault. |
-| `uninstall`             | Stop and remove the service and the daemon. Vaults are never touched; the configuration is kept unless you say otherwise. |
-| `vault list`            | The configured vaults and what is true of each.                                                                |
-| `vault add <id> <path>` | Configure another vault and restart the service so it hosts it.                                                |
-| `vault remove <id>`     | Drop a vault from the configuration (the directory stays) and restart the service.                             |
+Every command asks for what it was not given, so none of the arguments below
+has to be typed; `--yes` answers every question with its default, for scripts.
+
+| Command                   | What it does                                                                                                   |
+| ------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| _(none)_                  | Installs when nothing is installed; otherwise the status and a menu of what to do.                             |
+| `status`                  | What is installed, configured, running and connected, and the one command that fixes anything that is not.     |
+| `install`                 | Install or update the daemon, configure the first vault, install and start the service. Updates keep every vault. |
+| `uninstall`               | Stop and remove the service and the daemon. Vaults are never touched; the configuration is kept unless you say otherwise. |
+| `vault list`              | The configured vaults and what is true of each.                                                                |
+| `vault add [<id> <path>]` | Configure another vault and restart the service so it hosts it.                                                |
+| `vault remove [<id>]`     | Drop a vault from the configuration (the directory stays) and restart the service.                             |
 
 ```sh
 npx bookmarks-but-better@latest status
@@ -53,7 +57,9 @@ downloaded, rather than silently dropped.
 This package ships **no binaries** and reads **no bookmarks**. It does two
 things: run the daemon binary's own non-interactive commands and read their
 `--json` answers, and run the official `install.sh` or `install.ps1` from the
-GitHub Release. The questions live here; the daemon asks none.
+GitHub Release. The questions live here, drawn with
+[`@clack/prompts`](https://github.com/bombshell-dev/clack); the daemon asks
+none.
 
 By default it installs **its own version** of the daemon — the one it was
 written against — so the two never drift apart on one machine. `--beta` and

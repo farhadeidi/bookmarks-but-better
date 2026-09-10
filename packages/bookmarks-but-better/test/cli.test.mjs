@@ -39,9 +39,12 @@ test("vault subcommands carry exactly the arguments they need", () => {
   assert.deepEqual(add.args, ["work", "~/Work"]);
   assert.deepEqual(parseArgs(["vault", "remove", "work"]).args, ["work"]);
 
+  // Nothing at all is fine: the command asks. Half of it is not.
+  assert.deepEqual(parseArgs(["vault", "add"]).errors, []);
+  assert.deepEqual(parseArgs(["vault", "remove"]).errors, []);
   assert.ok(parseArgs(["vault"]).errors[0].includes("vault needs one of"));
   assert.ok(parseArgs(["vault", "add", "work"]).errors[0].includes("an id and a path"));
-  assert.ok(parseArgs(["vault", "remove"]).errors[0].includes("exactly an id"));
+  assert.ok(parseArgs(["vault", "remove", "a", "b"]).errors[0].includes("one id"));
   assert.ok(parseArgs(["vault", "list", "extra"]).errors[0].includes("takes no arguments"));
   assert.ok(parseArgs(["vault", "rename", "a", "b"]).errors[0].includes("vault needs one of"));
 });

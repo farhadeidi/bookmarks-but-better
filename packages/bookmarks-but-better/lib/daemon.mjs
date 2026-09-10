@@ -11,11 +11,12 @@ import { emptyReport, formatOrigin, parseVersionOutput } from "./status.mjs";
 const execFileAsync = promisify(execFile);
 
 /** Runs `binary args…` and returns what it printed, never throwing. */
-export async function runQuiet(binary, args) {
+export async function runQuiet(binary, args, { env = process.env } = {}) {
   try {
     const { stdout, stderr } = await execFileAsync(binary, args, {
       encoding: "utf8",
       maxBuffer: 8 * 1024 * 1024,
+      env,
     });
     return { ok: true, code: 0, stdout, stderr };
   } catch (error) {

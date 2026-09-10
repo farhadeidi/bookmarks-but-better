@@ -18,9 +18,12 @@
   },
   "files": ["bin", "lib", "README.md"],
   "engines": {
-    "node": ">=18.17"
+    "node": ">=20.12"
   },
   "scripts": {
     "test": "node --test"
+  },
+  "dependencies": {
+    "@clack/prompts": "^1.8.0"
   }
 }

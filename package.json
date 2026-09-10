@@ -4,6 +4,7 @@
   "version": "4.1.0",
   "type": "module",
   "packageManager": "bun@1.3.14",
+  "workspaces": ["packages/bookmarks-but-better"],
   "scripts": {
     "dev": "vite",
     "site:dev": "bun run --cwd website dev",

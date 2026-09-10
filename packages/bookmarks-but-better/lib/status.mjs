@@ -43,13 +43,16 @@ const ids = (list) => new Set((list ?? []).map((entry) => entry.id));
 const sameSet = (a, b) => a.size === b.size && [...a].every((id) => b.has(id));
 
 /**
- * Every problem in `report`, each with the command that fixes it. Order is
- * the order a person should read them in: nothing later is worth fixing
- * while something earlier is wrong.
+ * Every problem in `report`, each with the command that fixes it — `fix` is
+ * that command as text, `action` the same thing the interactive menu can
+ * perform: `{ kind: "install" }`, `{ kind: "vault-remove", id }`, or
+ * `{ kind: "manual" }` for something only a person can do. Order is the order
+ * a person should read them in: nothing later is worth fixing while something
+ * earlier is wrong.
  */
 export function assess(report) {
   const problems = [];
-  const add = (summary, fix) => problems.push({ summary, fix });
+  const add = (summary, fix, action = { kind: "install" }) => problems.push({ summary, fix, action });
 
   if (!report.binary.installed) {
     add("the daemon is not installed", INSTALL);
@@ -76,16 +79,19 @@ export function assess(report) {
         add(
           `vault \`${vault.id}\`: ${vault.path} does not exist`,
           `restore that folder, or: npx bookmarks-but-better vault remove ${vault.id}`,
+          { kind: "vault-remove", id: vault.id },
         );
       } else if (vault.state === "not a directory") {
         add(
           `vault \`${vault.id}\`: ${vault.path} is not a directory`,
           `npx bookmarks-but-better vault remove ${vault.id}`,
+          { kind: "vault-remove", id: vault.id },
         );
       } else if (vault.state === "not initialized") {
         add(
           `vault \`${vault.id}\`: ${vault.path} is not a vault yet`,
           `npx bookmarks-but-better vault remove ${vault.id}, then vault add ${vault.id} ${vault.path}`,
+          { kind: "vault-remove", id: vault.id },
         );
       }
     }

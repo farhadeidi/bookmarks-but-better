@@ -251,7 +251,9 @@ jobs:
         run: node --test
 
       # Proves the package is publishable and carries no binaries: a handful
-      # of files, no dependencies, no postinstall.
+      # of files, one dependency (the prompts it draws with), no postinstall.
+      # The tests above need no install: they cover the pure modules, which
+      # import nothing outside node:.
       - name: Daemon Manager pack
         working-directory: packages/bookmarks-but-better
         run: npm pack --dry-run

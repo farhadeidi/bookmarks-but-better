@@ -45,7 +45,9 @@ test("nothing installed is exactly one problem, and it says install", () => {
   const report = emptyReport({ toolVersion: "4.1.0", binaryPath: "/x/bookmarks-but-better" });
   const { ok, problems } = assess(report);
   assert.equal(ok, false);
-  assert.deepEqual(problems, [{ summary: "the daemon is not installed", fix: INSTALL }]);
+  assert.deepEqual(problems, [
+    { summary: "the daemon is not installed", fix: INSTALL, action: { kind: "install" } },
+  ]);
   const text = render(report);
   assert.ok(text.includes("not installed"), text);
   assert.ok(text.includes(INSTALL), text);
@@ -85,6 +87,8 @@ test("a vault whose directory is gone names the vault and the way out", () => {
   const missing = problems.find((problem) => problem.summary.includes("`old`"));
   assert.ok(missing, JSON.stringify(problems));
   assert.ok(missing.fix.includes("vault remove old"));
+  // The menu can perform that fix without the user typing the id.
+  assert.deepEqual(missing.action, { kind: "vault-remove", id: "old" });
   // The daemon does not host it either; that is the same root cause and is
   // still reported, because the fix differs (restart versus remove).
   assert.ok(problems.some((problem) => problem.summary.includes("does not host")));
