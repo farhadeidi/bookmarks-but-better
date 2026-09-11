@@ -15,6 +15,8 @@ and installs and starts the background service. Run it again later and it is a
 menu: the status, then whatever can be done about it — each problem's fix
 first, then add or remove a vault, update, uninstall.
 
+Needs Node.js 20.12 or newer. The daemon it installs does not.
+
 ## Commands
 
 Every command asks for what it was not given, so none of the arguments below
