@@ -85,7 +85,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   without a reload. An unreachable daemon stays selected with recovery
   controls; there is never a silent fallback to browser bookmarks
 - **A compact source switcher** above the bookmarks — tab-style with several
-  enabled sources, a name/health badge with one. The capture popup labels its
+  enabled sources, and nothing at all with one, since there is nothing to
+  switch to. The capture popup labels its
   destination and offers a quick change; the omnibox follows the same Active
   Source
 - **Multiple Vaults per daemon** — repeatable `--vault ID=PATH`, atomic

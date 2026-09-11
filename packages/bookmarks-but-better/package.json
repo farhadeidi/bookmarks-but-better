@@ -27,7 +27,8 @@
   "files": [
     "bin",
     "lib",
-    "README.md"
+    "README.md",
+    "LICENSE"
   ],
   "engines": {
     "node": ">=20.12"

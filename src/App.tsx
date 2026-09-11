@@ -87,9 +87,9 @@ export function App() {
     <ScrollArea className="h-svh bg-background text-foreground">
       {/* Main content */}
       <main className="flex flex-col gap-5 px-4 pt-8 pb-24">
-        {/* The compact source control: tab switcher with several enabled
-            sources, name/health badge with one. Sits above the bookmarks so
-            the destination of every operation below it is visible. */}
+        {/* The tab switcher, drawn only with several enabled sources: it sits
+            above the bookmarks so the destination of every operation below it
+            is visible. With one source there is no choice, and nothing. */}
         {sourceStatus === "ready" && <SourceSwitcher />}
         {sourceStatus === "ready" && <StandaloneDeprecationBanner />}
 

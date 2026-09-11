@@ -74,14 +74,22 @@ test("scenario selection is stable through URL navigation", async ({
   page,
 }) => {
   await page.goto("/?scenario=safari")
-  const badge = page.getByRole("button", { name: /Source is healthy.*reading/ })
-  await expect(badge).toBeVisible()
+  // The safari scenario is the reading Vault as the only source: that Vault's
+  // bookmark on screen with no switcher above it is its fingerprint. The
+  // scenarios that also show this bookmark (multi-vault, slow-daemon) do so
+  // behind a tab strip, and the default scenario opens on Browser bookmarks.
+  const fingerprint = page.getByText("SQLite is not a toy database")
+  const switcher = page.getByRole("tablist", { name: "Bookmark source" })
+  await expect(fingerprint).toBeVisible()
+  await expect(switcher).toHaveCount(0)
 
   // A plain reload of the same URL is the same world.
   await page.reload()
-  await expect(badge).toBeVisible()
+  await expect(fingerprint).toBeVisible()
+  await expect(switcher).toHaveCount(0)
 
   // Navigating without the parameter keeps the persisted scenario.
   await page.goto("/")
-  await expect(badge).toBeVisible()
+  await expect(fingerprint).toBeVisible()
+  await expect(switcher).toHaveCount(0)
 })
