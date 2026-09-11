@@ -13,6 +13,16 @@
  * 3. **A verdict.** "Nobody has an icon for this site" is remembered, so the
  *    failed request is not repeated on every render.
  *
+ * And one thing the provider order cannot express on its own: how large the
+ * icon will be drawn. A browser's own icon store holds the small sizes the
+ * browser draws itself — desktop Chrome keeps 16 and 32 pixels — and fills a
+ * larger request by scaling those up, in visible blocks when the size divides
+ * evenly, as 64 does. That is fine for a list row and not for a grid tile, and
+ * nothing in the response says which it was. So a lookup carries a *demand*:
+ * a sharp one asks every other provider before the native store, and a record
+ * that came from the native store without that demand does not satisfy it.
+ * See `FaviconDemand`.
+ *
  * Whether a provider's bytes can be read is a Platform Capability discovered at
  * runtime, not a browser name. A `fetch` that *rejects* means this build has no
  * CORS grant for that origin — true for Google from the daemon web app, false
@@ -44,6 +54,16 @@ export interface FaviconResolution {
 }
 
 const NO_SOURCES: FaviconResolution = { sources: [] }
+
+export interface FaviconDemand {
+  /**
+   * Whether the icon will be drawn larger than a browser's own icon store can
+   * fill. A sharp lookup tries the native store last, and is not answered by a
+   * cached icon that a plain lookup took from it; its own result is final for
+   * both kinds, since it already asked everyone in the best order.
+   */
+  sharp?: boolean
+}
 
 interface ImageSize {
   width: number
@@ -126,7 +146,11 @@ export class FaviconResolver {
   ) => Promise<ImageSize | null>
   private readonly pageOrigin: string
 
-  /** One in-flight resolution per site key — the deduplication itself. */
+  /**
+   * One in-flight resolution per site key and demand — the deduplication
+   * itself. A sharp lookup and a plain one for the same site are different
+   * questions with possibly different answers, so they do not share a flight.
+   */
   private readonly inFlight = new Map<string, Promise<FaviconResolution>>()
 
   /** Origins this build turned out not to be allowed to read bytes from. */
@@ -151,20 +175,28 @@ export class FaviconResolver {
    */
   resolve(
     pageUrl: string,
-    provider: FaviconProvider
+    provider: FaviconProvider,
+    demand: FaviconDemand = {}
   ): Promise<FaviconResolution> {
     const key = normalizeFaviconKey(pageUrl)
     if (!key) return Promise.resolve(NO_SOURCES)
 
-    const existing = this.inFlight.get(key)
+    // A sharp demand only means something where there is a native store to
+    // put last. Elsewhere every icon is already as sharp as it gets, and
+    // reading the demand as plain spares a record from before the flag a
+    // pointless re-resolve.
+    const sharp =
+      demand.sharp === true && Boolean(provider.getPlaceholderProbeUrl?.())
+    const flight = `${sharp ? "sharp" : "any"} ${key}`
+    const existing = this.inFlight.get(flight)
     if (existing) return existing
 
-    const pending = this.run(key, pageUrl, provider)
+    const pending = this.run(key, pageUrl, provider, sharp)
       .catch(() => NO_SOURCES)
       .finally(() => {
-        this.inFlight.delete(key)
+        this.inFlight.delete(flight)
       })
-    this.inFlight.set(key, pending)
+    this.inFlight.set(flight, pending)
     return pending
   }
 
@@ -189,16 +221,20 @@ export class FaviconResolver {
   private async run(
     key: string,
     pageUrl: string,
-    provider: FaviconProvider
+    provider: FaviconProvider,
+    sharp: boolean
   ): Promise<FaviconResolution> {
     const cached = await this.read(key)
-    if (cached) {
+    // A miss answers every demand; an icon answers a sharp demand only if it
+    // was stored as sharp. Anything else is re-resolved, and the result
+    // replaces the record for both demands.
+    if (cached && (!cached.bytes || cached.sharp || !sharp)) {
       return { sources: cached.bytes ? [this.cache.materialize(cached)] : [] }
     }
 
     const remote: string[] = []
-    for (const url of candidateUrls(pageUrl, provider)) {
-      const outcome = await this.attempt(key, url, provider)
+    for (const url of this.candidates(pageUrl, provider, sharp)) {
+      const outcome = await this.attempt(key, url, provider, sharp)
       if (outcome.verdict === "icon") return { sources: [outcome.src] }
       if (outcome.verdict === "remote") remote.push(url)
     }
@@ -218,10 +254,45 @@ export class FaviconResolver {
     }
   }
 
+  /**
+   * The provider's URLs in the order to try them for this demand.
+   *
+   * The platform's own order, except that a sharp lookup moves the native
+   * store — the provider served on this page's own origin — behind everything
+   * else. See the module comment for why the bytes cannot be judged instead.
+   */
+  private candidates(
+    pageUrl: string,
+    provider: FaviconProvider,
+    sharp: boolean
+  ): string[] {
+    const urls = candidateUrls(pageUrl, provider)
+    if (!sharp) return urls
+    return [
+      ...urls.filter((url) => !this.isNative(url, provider)),
+      ...urls.filter((url) => this.isNative(url, provider)),
+    ]
+  }
+
+  /**
+   * Whether a URL is the browser's own icon store, served on this page's
+   * origin. Such a provider is the only one whose miss is a valid image, which
+   * is why it is also the only one that offers a placeholder probe.
+   */
+  private isNative(url: string, provider: FaviconProvider): boolean {
+    if (!provider.getPlaceholderProbeUrl?.()) return false
+    try {
+      return originOf(url) === this.pageOrigin
+    } catch {
+      return false
+    }
+  }
+
   private async attempt(
     key: string,
     url: string,
-    provider: FaviconProvider
+    provider: FaviconProvider,
+    sharp: boolean
   ): Promise<{ verdict: Verdict; src: string }> {
     let origin: string
     try {
@@ -234,13 +305,12 @@ export class FaviconResolver {
      * A provider whose miss is only recognizable from its bytes must never be
      * handed to the `<img>` unread: its placeholder loads perfectly well and
      * would sit there looking like the site's icon, with no error to fall
-     * forward from. So for a guarded candidate, anything short of a verified
+     * forward from. So for a native candidate, anything short of a verified
      * icon is "none" — skip it and let the next provider answer, which is the
      * order the UI had before this cache existed.
      */
-    const guarded =
-      Boolean(provider.getPlaceholderProbeUrl?.()) && origin === this.pageOrigin
-    const unreadable: Verdict = guarded ? "none" : "remote"
+    const native = this.isNative(url, provider)
+    const unreadable: Verdict = native ? "none" : "remote"
 
     if (this.opaqueOrigins.has(origin)) return { verdict: unreadable, src: "" }
 
@@ -270,10 +340,10 @@ export class FaviconResolver {
     const verdict = await this.classify(url, bytes, mime, provider, unreadable)
     if (verdict !== "icon") return { verdict, src: "" }
 
-    return {
-      verdict: "icon",
-      src: this.cache.materialize(await this.store(key, bytes, mime)),
-    }
+    // An icon from anywhere but the native store is as sharp as it gets, and
+    // so is whatever a sharp lookup ends up with, having asked everyone.
+    const record = await this.store(key, bytes, mime, sharp || !native)
+    return { verdict: "icon", src: this.cache.materialize(record) }
   }
 
   /**
@@ -284,12 +354,13 @@ export class FaviconResolver {
   private async store(
     key: string,
     bytes: ArrayBuffer,
-    mime: string
+    mime: string,
+    sharp: boolean
   ): Promise<FaviconRecord> {
     try {
-      return await this.cache.putIcon(key, bytes, mime)
+      return await this.cache.putIcon(key, bytes, mime, sharp)
     } catch {
-      return { key, storedAt: Date.now(), bytes, mime }
+      return { key, storedAt: Date.now(), bytes, mime, sharp }
     }
   }
 

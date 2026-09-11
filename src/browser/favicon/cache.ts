@@ -73,6 +73,19 @@ export interface FaviconRecord {
   /** Absent on a negative entry: nobody could answer for this site. */
   bytes?: ArrayBuffer
   mime?: string
+  /**
+   * Whether these bytes are good enough for the largest size the UI draws.
+   *
+   * False only for an icon taken from the browser's own store by a lookup that
+   * did not need more. A browser keeps its icons at the small sizes it draws
+   * itself, and scaled up they show as blocks. A sharp lookup (see
+   * `FaviconResolver`) treats such a record as a miss and replaces it with
+   * whatever the other providers have; its own result is always marked sharp,
+   * because it already asked everyone. Absent on records from before the flag
+   * existed, which reads as false: they are re-resolved once, only where it
+   * matters.
+   */
+  sharp?: boolean
 }
 
 /**
@@ -170,9 +183,16 @@ export class FaviconCache {
   async putIcon(
     key: string,
     bytes: ArrayBuffer,
-    mime: string
+    mime: string,
+    sharp = false
   ): Promise<FaviconRecord> {
-    const record: FaviconRecord = { key, storedAt: this.now(), bytes, mime }
+    const record: FaviconRecord = {
+      key,
+      storedAt: this.now(),
+      bytes,
+      mime,
+      sharp,
+    }
     await this.write(record)
     return record
   }

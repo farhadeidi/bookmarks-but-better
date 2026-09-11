@@ -390,6 +390,194 @@ describe("a native provider the extension serves itself", () => {
   })
 })
 
+describe("the sharp demand", () => {
+  beforeEach(() => {
+    vi.stubGlobal("chrome", { runtime: { id: "extid" } })
+  })
+
+  const chrome = new ChromeFaviconAdapter()
+  const sharp = { sharp: true }
+
+  /** Lookups against one provider, not counting the placeholder sample. */
+  function lookups(fetchImpl: ReturnType<typeof router>, prefix: string) {
+    return fetchImpl.mock.calls.filter(
+      ([url]) => String(url).startsWith(prefix) && String(url) !== PROBE
+    ).length
+  }
+
+  it("asks Google before the native source, and leaves it alone when Google answers", async () => {
+    const fetchImpl = router([
+      [PROBE, () => icon(9, 9, 9)],
+      [NATIVE_HOST, () => icon(64, 1, 2)],
+      [V2_HOST, () => icon(64)],
+    ])
+    const { cache, resolver } = build(fetchImpl, EXTENSION_ORIGIN)
+
+    const { sources } = await resolver.resolve(
+      "https://example.com/",
+      chrome,
+      sharp
+    )
+
+    expect(sources[0].startsWith("blob:")).toBe(true)
+    expect(lookups(fetchImpl, NATIVE_HOST)).toBe(0)
+    const record = await cache.get("https://example.com")
+    expect(new Uint8Array(record?.bytes as ArrayBuffer)).toEqual(
+      new Uint8Array([64])
+    )
+    expect(record?.sharp).toBe(true)
+  })
+
+  it("falls back to the native source when Google has nothing, and does not ask again", async () => {
+    const fetchImpl = router([
+      [PROBE, () => icon(9, 9, 9)],
+      [NATIVE_HOST, () => icon(64, 1, 2)],
+      [V2_HOST, () => missing()],
+    ])
+    const { cache, resolver } = build(fetchImpl, EXTENSION_ORIGIN)
+
+    const first = await resolver.resolve(
+      "https://visited.example/",
+      chrome,
+      sharp
+    )
+    const again = await resolver.resolve(
+      "https://visited.example/",
+      chrome,
+      sharp
+    )
+
+    expect(first.sources[0].startsWith("blob:")).toBe(true)
+    expect(again.sources).toEqual(first.sources)
+    // Google was asked once. The native icon was the best anyone had, and
+    // that answer is final for tiles too — not a retry on every render.
+    expect(lookups(fetchImpl, V2_HOST)).toBe(1)
+    expect((await cache.get("https://visited.example"))?.sharp).toBe(true)
+  })
+
+  it("falls back to the native source when Google only has its globe, and marks that final", async () => {
+    const fetchImpl = router([
+      [PROBE, () => icon(9, 9, 9)],
+      [NATIVE_HOST, () => icon(64, 1, 2)],
+      [V2_HOST, () => icon(16)],
+    ])
+    const { cache, resolver } = build(fetchImpl, EXTENSION_ORIGIN)
+
+    await resolver.resolve("https://globe.example/", chrome, sharp)
+    await resolver.resolve("https://globe.example/", chrome, sharp)
+
+    const record = await cache.get("https://globe.example")
+    // The globe was not stored; the native icon was, as the sharpest available.
+    expect(new Uint8Array(record?.bytes as ArrayBuffer)).toEqual(
+      new Uint8Array([64, 1, 2])
+    )
+    expect(record?.sharp).toBe(true)
+    expect(lookups(fetchImpl, V2_HOST)).toBe(1)
+  })
+
+  it("replaces a native icon cached by a row the first time a tile needs it", async () => {
+    const fetchImpl = router([
+      [PROBE, () => icon(9, 9, 9)],
+      [NATIVE_HOST, () => icon(64, 1, 2)],
+      [V2_HOST, () => icon(64)],
+    ])
+    const { cache, resolver } = build(fetchImpl, EXTENSION_ORIGIN)
+
+    await resolver.resolve("https://example.com/", chrome)
+    expect((await cache.get("https://example.com"))?.sharp).toBe(false)
+    expect(lookups(fetchImpl, V2_HOST)).toBe(0)
+
+    const tile = await resolver.resolve("https://example.com/", chrome, sharp)
+    const record = await cache.get("https://example.com")
+    expect(tile.sources[0].startsWith("blob:")).toBe(true)
+    expect(new Uint8Array(record?.bytes as ArrayBuffer)).toEqual(
+      new Uint8Array([64])
+    )
+    expect(record?.sharp).toBe(true)
+
+    // The sharper icon now serves rows as well, with no further request.
+    await resolver.resolve("https://example.com/other", chrome)
+    expect(lookups(fetchImpl, V2_HOST)).toBe(1)
+    expect(lookups(fetchImpl, NATIVE_HOST)).toBe(1)
+  })
+
+  it("is satisfied by a Google icon a row already cached", async () => {
+    const fetchImpl = router([
+      [PROBE, () => icon(9, 9, 9)],
+      [NATIVE_HOST, () => icon(9, 9, 9)],
+      [V2_HOST, () => icon(64)],
+    ])
+    const { resolver } = build(fetchImpl, EXTENSION_ORIGIN)
+
+    await resolver.resolve("https://unknown.example/", chrome)
+    const before = fetchImpl.mock.calls.length
+    await resolver.resolve("https://unknown.example/", chrome, sharp)
+
+    expect(fetchImpl.mock.calls.length).toBe(before)
+  })
+
+  it("is satisfied by a remembered miss", async () => {
+    const fetchImpl = router([])
+    const { cache, resolver } = build(fetchImpl, EXTENSION_ORIGIN)
+    await cache.putMiss("https://nothing.example")
+
+    expect(
+      (await resolver.resolve("https://nothing.example/", chrome, sharp))
+        .sources
+    ).toEqual([])
+    expect(fetchImpl).not.toHaveBeenCalled()
+  })
+
+  it("does not merge a tile's lookup into a row's for the same site", async () => {
+    const fetchImpl = router([
+      [PROBE, () => icon(9, 9, 9)],
+      [NATIVE_HOST, () => icon(64, 1, 2)],
+      [V2_HOST, () => icon(64)],
+    ])
+    const { resolver } = build(fetchImpl, EXTENSION_ORIGIN)
+
+    await Promise.all([
+      resolver.resolve("https://example.com/", chrome),
+      resolver.resolve("https://example.com/", chrome, sharp),
+    ])
+
+    expect(lookups(fetchImpl, V2_HOST)).toBe(1)
+    expect(lookups(fetchImpl, NATIVE_HOST)).toBe(1)
+  })
+
+  it("changes nothing where there is no native source", async () => {
+    const fetchImpl = router([[V2_HOST, () => icon(64)]])
+    const { cache, resolver } = build(fetchImpl)
+
+    await resolver.resolve("https://example.com/", google)
+    expect((await cache.get("https://example.com"))?.sharp).toBe(true)
+
+    await resolver.resolve("https://example.com/", google, sharp)
+    expect(fetchImpl).toHaveBeenCalledTimes(1)
+  })
+
+  it("does not re-resolve a record from before the flag where no native source exists", async () => {
+    const fetchImpl = router([[V2_HOST, () => icon(64)]])
+    const { cache, resolver } = build(fetchImpl)
+    // A record written by 4.1.0: Google's bytes, no `sharp` field at all.
+    await cache.putIcon(
+      "https://example.com",
+      new Uint8Array([64]).buffer,
+      "image/png"
+    )
+    expect((await cache.get("https://example.com"))?.sharp).toBe(false)
+
+    const { sources } = await resolver.resolve(
+      "https://example.com/",
+      google,
+      sharp
+    )
+
+    expect(sources[0].startsWith("blob:")).toBe(true)
+    expect(fetchImpl).not.toHaveBeenCalled()
+  })
+})
+
 describe("misses reported by the UI", () => {
   it("remembers a source that only failed once the browser rendered it", async () => {
     const fetchImpl = router([])

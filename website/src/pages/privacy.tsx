@@ -67,9 +67,11 @@ export function Privacy() {
           the next from running: a local cache of icon bytes stored on your
           machine, then the browser's own on-device icon store (Chrome's favicon
           API — Firefox has no equivalent an extension may read), then Google,
-          then a letter placeholder drawn locally. A successful lookup is cached
-          for 30 days, so a given site is normally asked about once a month
-          rather than on every new tab, and cached icons keep working offline.
+          then a letter placeholder drawn locally. The one exception is the grid
+          view: the browser's store only holds small icons, so a grid tile asks
+          Google before the browser's store. A successful lookup is cached for
+          30 days, so a given site is normally asked about once a month rather
+          than on every new tab, and cached icons keep working offline.
         </p>
         <p className={BODY}>
           If you connect a local daemon, the extension talks to that loopback

@@ -67,6 +67,15 @@ describe("FaviconCache storage", () => {
     expect(record).not.toBeNull()
     expect(record?.bytes).toBeUndefined()
   })
+
+  it("remembers whether an icon is sharp", async () => {
+    const cache = makeCache()
+    await cache.putIcon("https://a.example", bytes(1), "image/png", true)
+    await cache.putIcon("https://b.example", bytes(1), "image/png")
+
+    expect((await cache.get("https://a.example"))?.sharp).toBe(true)
+    expect((await cache.get("https://b.example"))?.sharp).toBe(false)
+  })
 })
 
 describe("FaviconCache expiry", () => {

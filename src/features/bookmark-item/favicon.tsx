@@ -12,6 +12,16 @@ interface FaviconProps {
 }
 
 /**
+ * Above this many CSS pixels an icon is asked for sharp (see `FaviconDemand`).
+ *
+ * The browser's own icon store holds at most 32 pixels — desktop Chrome keeps
+ * 16 and 32 — which a 16- or 20-pixel row draws at close to 1:1 even on a 2x
+ * display. A 40-pixel grid tile would draw the same icon at 2.5x, in visible
+ * blocks, so it goes to a provider that has the site's larger icons.
+ */
+const SHARP_ABOVE_PX = 24
+
+/**
  * A bookmark's icon: whatever the resolver offers, then the letter placeholder.
  *
  * The component used to be handed a primary and a fallback URL by its parent
@@ -28,7 +38,7 @@ interface FaviconProps {
  * the letter win for sites Google has nothing for.
  */
 export function Favicon({ url, title, className, size = 20 }: FaviconProps) {
-  const { sources, pending } = useFaviconSources(url)
+  const { sources, pending } = useFaviconSources(url, size > SHARP_ABOVE_PX)
   // How far into *this* list of sources the walk has got. Carrying the list
   // itself in the state is what makes a new list start over at zero without a
   // reset effect, and without a frame where an old index points past the end.
