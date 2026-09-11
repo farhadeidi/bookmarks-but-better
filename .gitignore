@@ -56,6 +56,6 @@ xcuserdata/
 *.xcuserstate
 
 # Bun owns the lockfile (bun.lock). npm is used only to publish the Daemon
-# Manager, and even a dry-run writes a root lockfile here because the root
-# package.json lists that package as a workspace.
+# Manager; the root .npmrc stops it writing a lockfile, and this catches one
+# written by an npm that did not read it.
 package-lock.json

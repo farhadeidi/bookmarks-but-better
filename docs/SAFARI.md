@@ -230,10 +230,10 @@ fails is a bug worth filing before the build is called good.
     prompt for `127.0.0.1` — allow it. This prompt appearing *at Connect*, and
     not at install, is the point: the extension asks for nothing until you
     connect.
-11. **The Vault is the source.** After allowing, the Vault appears as the only
-    source (a name-and-health badge, not a tab switcher) and its bookmarks
-    render. Denying the prompt instead must produce a clear error, never a
-    silent fallback to another source.
+11. **The Vault is the source.** After allowing, the Vault's bookmarks render
+    with no source control above them: it is the only source, so there is no
+    tab switcher and no badge. Denying the prompt instead must produce a clear
+    error, never a silent fallback to another source.
 12. **Capture flow.** Navigate to any page, click the extension icon, and
     click **Save bookmark**. The popup names the destination Vault, reports
     "Bookmark saved", and the bookmark appears in the dashboard tab without a

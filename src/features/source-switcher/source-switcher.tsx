@@ -24,9 +24,9 @@ const MAX_TABS = 6
  *
  * It exists only when there is a choice to make. With a single enabled
  * source there is nothing to switch to, so nothing is drawn: a control that
- * cannot change anything is noise above every bookmark, and the source's
- * health is already reported where it matters — the recovery state when a
- * daemon is unreachable, and Settings → Sources.
+ * cannot change anything is noise above every bookmark, and an unreachable
+ * source is already reported by the dashboard's own recovery state, which
+ * appears in exactly the cases the old badge turned red.
  */
 export function SourceSwitcher() {
   // Derived from the config reference (which changes only when the config
