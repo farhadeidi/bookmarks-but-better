@@ -22,8 +22,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   matches it. Run with no command it installs when nothing is installed, and
   otherwise shows the status and a menu of what can be done about it; every
   command asks for what it was not given, so nothing has to be typed, and
-  `--yes` answers with the defaults for scripts. It reads no bookmarks, and by default installs its
-  own version of the daemon so the two never drift apart. The daemon's
+  `--yes` answers with the defaults for scripts. It reads no bookmarks, has a
+  version of its own, and by default installs the daemon release it was
+  published for so the two never drift apart. The daemon's
   `/health` now carries `clients`, the number of open event streams, which is
   how `status` knows whether a browser is connected. See
   [ADR-0006](docs/adr/0006-manage-the-daemon-from-an-npm-tool-and-keep-management-out-of-its-api.md)

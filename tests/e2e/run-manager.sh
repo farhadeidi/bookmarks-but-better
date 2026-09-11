@@ -7,7 +7,7 @@
 #   bun run try:manager          # the same setup, then a shell with `bbb` on PATH
 #
 # What it sets up: a debug build of the daemon packed as a fake release under
-# the manager's own version, served by a local HTTP server; and a throwaway
+# the daemon release the manager installs, served by a local HTTP server; and a throwaway
 # HOME, so the registry, the service definition and the vault all land in a
 # temp directory that is removed on exit. One thing is real: the background
 # service is loaded under the product's own label for the duration, because a
@@ -49,7 +49,7 @@ fi
 # Built before HOME moves: cargo keeps its registry under the real one.
 cd "$repo_root"
 "$cargo" build --locked --package bookmarks-but-better --bin bookmarks-but-better
-version=$(node -p 'require("./packages/bookmarks-but-better/package.json").version')
+version=$(node -p 'require("./packages/bookmarks-but-better/package.json").daemon.version')
 tag="v$version"
 
 root=$(mktemp -d)
@@ -133,12 +133,53 @@ EOF
 fi
 
 # ---------------------------------------------------------------------------
-# The scripted first run.
+# The scripted runs.
 # ---------------------------------------------------------------------------
 fail() { echo "NOT OK - $*" >&2; exit 1; }
 step() { printf '\n== %s\n' "$*"; }
 health() { curl -fsS "http://127.0.0.1:$port/api/v1/health" 2>/dev/null || true; }
+# A service just bootstrapped answers once it has opened its vaults, not the
+# instant `service install` returns; the manager waits the same way.
+wait_for_health() {
+  for _ in $(seq 1 100); do
+    [[ -n "$(health)" ]] && return 0
+    sleep 0.1
+  done
+  return 1
+}
 
+# --- The upgrade from 4.0.0 -------------------------------------------------
+# A 4.0.0 machine has a binary under the install root, a service whose
+# definition is the only thing that names its one vault (a bare `--vault
+# PATH`, so the id `default`), and no Vault Registry at all. The upgrade must
+# keep serving that vault, from the new binary, without asking anything.
+step "a 4.0.0-shaped machine: a service on a bare --vault, no registry"
+old_vault="$HOME/Documents/Bookmarks"
+mkdir -p "$old_vault" "$root/install/versions/4.0.0"
+# The debug binary stands in for 4.0.0; what matters is the shape it leaves.
+ln -s "$repo_root/target/debug/bookmarks-but-better" "$root/install/versions/4.0.0/bookmarks-but-better"
+ln -sfn "$root/install/versions/4.0.0" "$root/install/current"
+rm -f "$XDG_CONFIG_HOME/bookmarks-but-better/config.toml"
+"$root/install/current/bookmarks-but-better" init --vault "$old_vault" >/dev/null
+"$root/install/current/bookmarks-but-better" service install --vault "$old_vault" --port "$port" >/dev/null
+wait_for_health || fail "the 4.0.0-shaped service did not start"
+
+step "install --yes over it: adopt the vault, reinstall the service, ask nothing"
+bbb install --yes
+"$root/install/current/bookmarks-but-better" vault list --json | tee "$root/registry.json" >/dev/null
+grep -q '"id": "default"' "$root/registry.json" || fail "the service's vault was not recorded in the registry"
+grep -q "$old_vault" "$root/registry.json" || fail "the registry does not name the old vault's path"
+[[ "$(health)" == *'"id":"default"'* ]] || fail "the upgraded daemon does not host the old vault: $(health)"
+[[ -f "$old_vault/.bookmarks-but-better-folder.md" ]] || fail "the old vault was touched"
+bbb status | tee "$root/status.txt"
+grep -q "everything is in place" "$root/status.txt" || fail "status reports a problem after the upgrade"
+
+step "uninstall --purge-config, back to a bare machine"
+bbb uninstall --yes --purge-config
+[[ ! -e "$root/install" ]] || fail "the install directory remains"
+printf 'port = %s\n' "$port" > "$XDG_CONFIG_HOME/bookmarks-but-better/config.toml"
+
+# --- The first run ----------------------------------------------------------
 step "no command, nothing installed, --yes: install, ask nothing, start the service"
 bbb --yes
 [[ "$(health)" == *'"id":"default"'* ]] || fail "the daemon does not host the default vault: $(health)"
@@ -167,4 +208,4 @@ if [[ "$os" == "apple-darwin" ]] && launchctl print "gui/$(id -u)/$label" >/dev/
 fi
 
 echo
-echo "ok - the manager installed, reported, changed vaults and uninstalled cleanly"
+echo "ok - the manager upgraded a 4.0.0 machine, then installed, reported, changed vaults and uninstalled cleanly"

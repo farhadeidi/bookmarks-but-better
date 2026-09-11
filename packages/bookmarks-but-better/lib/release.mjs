@@ -47,12 +47,12 @@ export function parseChecksumSidecar(text) {
 
 /**
  * The release whose installer to fetch: the one named by `--version`, so the
- * script that runs is the one published alongside the archive it installs;
- * the latest otherwise.
+ * script that runs is the one published alongside the archive it installs.
+ * The manager always names one.
  */
 export function releaseTagFor(flags) {
   const index = flags.indexOf("--version");
-  if (index === -1) return null;
+  if (index === -1) throw new Error("the installer flags name no --version");
   const version = flags[index + 1];
   return version.startsWith("v") ? version : `v${version}`;
 }
@@ -60,7 +60,6 @@ export function releaseTagFor(flags) {
 // Every flag forwarded to the installers, and what install.ps1 calls it.
 // `null` marks a flag install.ps1 has no equivalent for.
 const FLAGS = new Map([
-  ["--beta", { takesValue: false, windows: "-Beta" }],
   ["--version", { takesValue: true, windows: "-Version" }],
   ["--install-dir", { takesValue: true, windows: "-InstallDir" }],
   ["--bin-dir", { takesValue: true, windows: null }],

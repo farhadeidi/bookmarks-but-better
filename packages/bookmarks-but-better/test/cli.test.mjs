@@ -55,13 +55,12 @@ test("a command that takes no arguments refuses them", () => {
 });
 
 test("options parse wherever they appear, with their values", () => {
-  const parsed = parseArgs(["--yes", "install", "--vault", "~/Bookmarks", "--beta", "--install-dir", "/opt/bbb"]);
+  const parsed = parseArgs(["--yes", "install", "--vault", "~/Bookmarks", "--install-dir", "/opt/bbb"]);
   assert.deepEqual(parsed.errors, []);
   assert.equal(parsed.command, "install");
   assert.deepEqual(parsed.options, {
     yes: true,
     vault: "~/Bookmarks",
-    beta: true,
     installDir: "/opt/bbb",
   });
   assert.equal(parseArgs(["-y", "uninstall", "--purge-config"]).options.purgeConfig, true);
@@ -72,9 +71,9 @@ test("an unknown option and a value-taking option without a value are both refus
   assert.deepEqual(parseArgs(["--make-coffee"]).errors, ["unrecognized option: --make-coffee"]);
   assert.deepEqual(parseArgs(["install", "--version"]).errors, ["--version needs an argument"]);
   // The next option is not swallowed as if it were the value.
-  const parsed = parseArgs(["install", "--version", "--beta"]);
+  const parsed = parseArgs(["install", "--version", "--json"]);
   assert.deepEqual(parsed.errors, ["--version needs an argument"]);
-  assert.equal(parsed.options.beta, true);
+  assert.equal(parsed.options.json, true);
   // Two mistakes are two messages, not one.
   assert.equal(parseArgs(["fly", "--fast"]).errors.length, 2);
 });
@@ -87,12 +86,11 @@ test("-h and --help ask for help without complaint", () => {
   }
 });
 
-test("install pins the daemon to this tool's own version unless told otherwise", () => {
-  assert.deepEqual(installerFlags({ options: {}, toolVersion: "4.1.0" }), ["--version", "v4.1.0"]);
-  assert.deepEqual(installerFlags({ options: { beta: true }, toolVersion: "4.1.0" }), ["--beta"]);
-  assert.deepEqual(installerFlags({ options: { version: "v4.0.0", beta: true }, toolVersion: "4.1.0" }), [
+test("install pins the daemon to the release this tool was published for unless told otherwise", () => {
+  assert.deepEqual(installerFlags({ options: {}, daemonVersion: "4.1.0" }), ["--version", "v4.1.0"]);
+  assert.deepEqual(installerFlags({ options: { version: "v4.2.0-beta.1" }, daemonVersion: "4.1.0" }), [
     "--version",
-    "v4.0.0",
+    "v4.2.0-beta.1",
   ]);
 });
 
@@ -100,9 +98,19 @@ test("install forwards the directories and the first vault", () => {
   assert.deepEqual(
     installerFlags({
       options: { installDir: "/opt/bbb", binDir: "/opt/bin" },
-      toolVersion: "4.1.0",
+      daemonVersion: "4.1.0",
       vault: "/home/me/Bookmarks",
     }),
     ["--version", "v4.1.0", "--install-dir", "/opt/bbb", "--bin-dir", "/opt/bin", "--vault", "/home/me/Bookmarks"],
   );
+});
+
+test("the package names a plain daemon release, and its own version is independent of it", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const pkg = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
+  // A prerelease here would make every default install ask for an archive a
+  // stable release does not carry; the release workflow's validate job checks
+  // this field against the tag, not the package's own version.
+  assert.match(pkg.daemon.version, /^\d+\.\d+\.\d+$/);
+  assert.match(pkg.version, /^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$/);
 });

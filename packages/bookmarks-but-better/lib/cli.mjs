@@ -33,9 +33,9 @@ Options:
   --json                 Machine-readable output (status, vault list).
   --vault <dir>          install: where the first vault lives. Asked when left
                          out; ~/Bookmarks with --yes.
-  --beta                 install: the latest prerelease instead of this tool's
-                         own version.
-  --version <tag>        install: exactly this release, e.g. v4.1.0.
+  --version <tag>        install: exactly this daemon release, e.g.
+                         v4.2.0-beta.1, instead of the one this tool was
+                         released for.
   --install-dir <dir>    install: where daemon versions are unpacked.
   --bin-dir <dir>        install: where the bookmarks-but-better symlink goes.
                          macOS and Linux only.
@@ -46,7 +46,6 @@ const OPTIONS = new Map([
   ["-y", { key: "yes" }],
   ["--yes", { key: "yes" }],
   ["--json", { key: "json" }],
-  ["--beta", { key: "beta" }],
   ["--purge-config", { key: "purgeConfig" }],
   ["--version", { key: "version", takesValue: true }],
   ["--install-dir", { key: "installDir", takesValue: true }],
@@ -122,19 +121,12 @@ export function parseArgs(argv) {
 
 /**
  * The flags `install` hands the installer script. Left to itself the tool
- * installs its own version — the daemon it was written against, whose
- * `--json` output it reads — so the two never drift apart on one machine.
- * `--version` and `--beta` are the explicit ways to choose otherwise.
+ * installs `daemonVersion` — the daemon release it was published for, whose
+ * `--json` output it reads (package.json's `daemon.version`). `--version` is
+ * the explicit way to choose otherwise, for trying a prerelease.
  */
-export function installerFlags({ options, toolVersion, vault = null }) {
-  const flags = [];
-  if (options.version) {
-    flags.push("--version", options.version);
-  } else if (options.beta) {
-    flags.push("--beta");
-  } else {
-    flags.push("--version", `v${toolVersion}`);
-  }
+export function installerFlags({ options, daemonVersion, vault = null }) {
+  const flags = ["--version", options.version || `v${daemonVersion}`];
   if (options.installDir) flags.push("--install-dir", options.installDir);
   if (options.binDir) flags.push("--bin-dir", options.binDir);
   if (vault) flags.push("--vault", vault);

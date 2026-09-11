@@ -3,12 +3,16 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { assess, emptyReport, formatOrigin, parseVersionOutput, render } from "../lib/status.mjs";
+import { assess, compareBase, emptyReport, formatOrigin, parseVersionOutput, render } from "../lib/status.mjs";
 
 const INSTALL = "npx bookmarks-but-better install";
 
 function healthy(overrides = {}) {
-  const report = emptyReport({ toolVersion: "4.1.0", binaryPath: "/home/me/.local/share/bookmarks-but-better/current/bookmarks-but-better" });
+  const report = emptyReport({
+    toolVersion: "1.0.0",
+    daemonVersion: "4.1.0",
+    binaryPath: "/home/me/.local/share/bookmarks-but-better/current/bookmarks-but-better",
+  });
   report.binary.installed = true;
   report.binary.version = "4.1.0";
   report.registry = {
@@ -42,7 +46,7 @@ test("a healthy machine has nothing to fix", () => {
 });
 
 test("nothing installed is exactly one problem, and it says install", () => {
-  const report = emptyReport({ toolVersion: "4.1.0", binaryPath: "/x/bookmarks-but-better" });
+  const report = emptyReport({ toolVersion: "1.0.0", daemonVersion: "4.1.0", binaryPath: "/x/bookmarks-but-better" });
   const { ok, problems } = assess(report);
   assert.equal(ok, false);
   assert.deepEqual(problems, [
@@ -55,7 +59,7 @@ test("nothing installed is exactly one problem, and it says install", () => {
   assert.ok(!text.includes("service"), text);
 });
 
-test("a daemon older than this tool is an update, not an error", () => {
+test("a daemon older than the one this tool installs is an update, not an error", () => {
   const report = healthy();
   report.binary.version = "4.0.0";
   report.health.version = "4.0.0";
@@ -64,6 +68,33 @@ test("a daemon older than this tool is an update, not an error", () => {
   assert.ok(problems[0].summary.includes("4.0.0"));
   assert.ok(problems[0].summary.includes("4.1.0"));
   assert.equal(problems[0].fix, INSTALL);
+});
+
+test("a prerelease of the same daemon line is the same line", () => {
+  const report = healthy();
+  report.binary.version = "4.1.0-beta.2";
+  report.health.version = "4.1.0-beta.2";
+  assert.equal(assess(report).ok, true);
+});
+
+test("a daemon newer than this tool knows means the tool is out of date, not the daemon", () => {
+  const report = healthy();
+  report.binary.version = "4.2.0";
+  report.health.version = "4.2.0";
+  const { problems } = assess(report);
+  assert.equal(problems.length, 1);
+  assert.ok(problems[0].summary.includes("newer"));
+  assert.equal(problems[0].fix, "npx bookmarks-but-better@latest");
+  // Reinstalling would downgrade, so the menu must not offer it as the fix.
+  assert.deepEqual(problems[0].action, { kind: "manual" });
+});
+
+test("version lines compare on major.minor.patch only", () => {
+  assert.ok(compareBase("4.0.0", "4.1.0") < 0);
+  assert.equal(compareBase("4.1.0-beta.2", "4.1.0"), 0);
+  assert.ok(compareBase("4.10.0", "4.9.9") > 0);
+  assert.ok(compareBase("5.0.0", "4.99.99") > 0);
+  assert.equal(compareBase(null, "4.1.0"), 0, "an unknown version is not a problem here; the report says unknown");
 });
 
 test("no vault configured points at install, which asks for one", () => {

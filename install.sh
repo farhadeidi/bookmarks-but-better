@@ -372,7 +372,7 @@ install_service() {
   "$BIN" service install --from-config --ui-dir "$UI_DIR" \
     || die "the service could not be installed; run \"$BIN_DIR/$EXE\" service install --from-config --ui-dir \"$UI_DIR\" to retry"
   log ""
-  log "done. Open a new tab, or point the extension at $("$BIN" vault list 2>/dev/null | sed -n 's/^serving *//p')"
+  log "done. Open a new tab, or point the extension at the address the service reports above."
 }
 
 # A service installed before the Vault Registry existed (4.0.0) names its
