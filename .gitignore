@@ -54,3 +54,8 @@ safari/build/
 safari/Bookmarks But Better/Bookmarks But Better Extension/Resources/
 xcuserdata/
 *.xcuserstate
+
+# Bun owns the lockfile (bun.lock). npm is used only to publish the Daemon
+# Manager, and even a dry-run writes a root lockfile here because the root
+# package.json lists that package as a workspace.
+package-lock.json

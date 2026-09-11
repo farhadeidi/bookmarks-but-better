@@ -39,7 +39,7 @@ import {
   releaseAssetUrl,
   releaseTagFor,
 } from "../lib/release.mjs";
-import { assess, render, toJson } from "../lib/status.mjs";
+import { assess, compareBase, render, toJson } from "../lib/status.mjs";
 
 const GITHUB_BASE = process.env.BOOKMARKS_BUT_BETTER_INSTALL_GITHUB_BASE || DEFAULT_GITHUB_BASE;
 const HOME = homedir();
@@ -49,6 +49,8 @@ const VAULT_ID = /^[a-z0-9-]{1,64}$/;
 
 const packageJson = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
 const TOOL_VERSION = packageJson.version;
+// The daemon release this tool was published for, and installs by default.
+const DAEMON_VERSION = packageJson.daemon.version;
 
 const out = (text) => process.stdout.write(`${text}\n`);
 /** A path for display: `~/…` where it is under the home directory. */
@@ -108,7 +110,7 @@ async function runInstaller(flags) {
     // this platform is a refusal, not something to discover mid-install.
     const invocation = commandFor({ platform: process.platform, scriptPath, forwarded: flags });
 
-    spin.start(`Fetching ${assetName} from the ${tag ?? "latest"} release`);
+    spin.start(`Fetching ${assetName} from the ${tag} release`);
     const [installer, sidecar] = await Promise.all([download(installerUrl), download(checksumUrl)]);
     const expected = parseChecksumSidecar(sidecar.toString("utf8"));
     const actual = createHash("sha256").update(installer).digest("hex");
@@ -140,7 +142,7 @@ async function runInstaller(flags) {
 
 /** Reads the machine into a report, waiting a moment for a daemon that just started. */
 async function gather(layout, { settle = false } = {}) {
-  const report = await daemon.gather({ layout, toolVersion: TOOL_VERSION });
+  const report = await daemon.gather({ layout, toolVersion: TOOL_VERSION, daemonVersion: DAEMON_VERSION });
   if (settle && !report.health && report.service?.state === "running") {
     try {
       report.health = await daemon.waitForHealth(report.origin);
@@ -200,7 +202,9 @@ async function install({ layout, options, prompter }) {
   if (vault) vault = path.resolve(vault);
 
   const plan = [
-    installed ? `update the daemon to ${TOOL_VERSION}` : `install the daemon ${TOOL_VERSION} under ${shortHome(layout.installRoot)}`,
+    installed
+      ? `update the daemon to ${options.version || DAEMON_VERSION}`
+      : `install the daemon ${options.version || DAEMON_VERSION} under ${shortHome(layout.installRoot)}`,
     vault ? `use ${shortHome(vault)} as the vault` : null,
     "install and start the background service",
   ].filter(Boolean);
@@ -208,7 +212,7 @@ async function install({ layout, options, prompter }) {
     throw new Cancelled();
   }
 
-  await runInstaller(installerFlags({ options, toolVersion: TOOL_VERSION, vault }));
+  await runInstaller(installerFlags({ options, daemonVersion: DAEMON_VERSION, vault }));
   const report = await gather(layout, { settle: true });
   p.note(render(report, { homedir: HOME }), "Status");
   return assess(report).ok ? 0 : 1;
@@ -416,7 +420,10 @@ async function menu(context) {
   }
   options.push({
     value: "install",
-    label: report.binary.version === TOOL_VERSION ? "Reinstall the daemon and its service" : `Update the daemon to ${TOOL_VERSION}`,
+    label:
+      compareBase(report.binary.version, DAEMON_VERSION) < 0
+        ? `Update the daemon to ${DAEMON_VERSION}`
+        : "Reinstall the daemon and its service",
     hint: "keeps every vault",
   });
   options.push({ value: "uninstall", label: "Uninstall the daemon", hint: "vaults stay" });
