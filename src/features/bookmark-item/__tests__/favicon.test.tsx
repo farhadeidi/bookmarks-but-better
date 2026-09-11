@@ -11,17 +11,27 @@ import { Favicon } from "../favicon"
  * letter placeholder rather than a broken image.
  */
 
-const resolve = vi.fn<(pageUrl: string) => Promise<{ sources: string[] }>>()
+const resolve =
+  vi.fn<
+    (
+      pageUrl: string,
+      demand: { sharp?: boolean }
+    ) => Promise<{ sources: string[] }>
+  >()
 const reportMiss = vi.fn<(pageUrl: string) => Promise<void>>()
 
 vi.mock("@/browser/favicon/resolve", () => ({
   faviconResolver: {
-    resolve: (pageUrl: string) => resolve(pageUrl),
+    resolve: (
+      pageUrl: string,
+      _provider: unknown,
+      demand: { sharp?: boolean }
+    ) => resolve(pageUrl, demand),
     reportMiss: (pageUrl: string) => reportMiss(pageUrl),
   },
 }))
 
-function mount(url: string, title = "Example") {
+function mount(url: string, title = "Example", size?: number) {
   useBookmarkStore.setState({
     adapter: {
       bookmarks: {} as never,
@@ -35,7 +45,7 @@ function mount(url: string, title = "Example") {
       },
     },
   })
-  return render(<Favicon url={url} title={title} />)
+  return render(<Favicon url={url} title={title} size={size} />)
 }
 
 beforeEach(() => {
@@ -79,6 +89,23 @@ describe("Favicon with no usable source", () => {
     expect(screen.queryByText("E")).toBeNull()
     expect(container.querySelector("img")).toBeNull()
     expect(container.querySelector("[aria-label='Example']")).toBeTruthy()
+  })
+})
+
+describe("Favicon and the sharp demand", () => {
+  it("asks for a sharp icon only when drawn as a grid tile", async () => {
+    mount("https://example.com", "Example", 40)
+    await screen.findByText("E")
+    expect(resolve).toHaveBeenLastCalledWith("https://example.com", {
+      sharp: true,
+    })
+
+    cleanup()
+    mount("https://example.com", "Example", 20)
+    await screen.findByText("E")
+    expect(resolve).toHaveBeenLastCalledWith("https://example.com", {
+      sharp: false,
+    })
   })
 })
 

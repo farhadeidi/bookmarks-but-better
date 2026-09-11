@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest"
 import { installFakeIndexedDB } from "../__tests__/fake-indexeddb"
 import {
-  FAVICON_DB_NAME,
   FAVICON_MAX_ENTRIES,
   FAVICON_MISS_TTL_MS,
   FAVICON_TRIM_TO,
@@ -67,6 +66,15 @@ describe("FaviconCache storage", () => {
     const record = await cache.get("https://example.com")
     expect(record).not.toBeNull()
     expect(record?.bytes).toBeUndefined()
+  })
+
+  it("remembers whether an icon is sharp", async () => {
+    const cache = makeCache()
+    await cache.putIcon("https://a.example", bytes(1), "image/png", true)
+    await cache.putIcon("https://b.example", bytes(1), "image/png")
+
+    expect((await cache.get("https://a.example"))?.sharp).toBe(true)
+    expect((await cache.get("https://b.example"))?.sharp).toBe(false)
   })
 })
 
@@ -193,44 +201,5 @@ describe("FaviconCache eviction", () => {
 
     // The evicted site's live object URL went with it.
     expect(revoked).toHaveLength(1)
-  })
-})
-
-describe("FaviconCache versioning", () => {
-  it("drops everything an older version of the cache stored", async () => {
-    // A version-1 database as the first release of the cache left it, holding
-    // one icon that a later version has decided not to trust.
-    await new Promise<void>((resolve, reject) => {
-      const request = indexedDB.open(FAVICON_DB_NAME, 1)
-      request.onupgradeneeded = () => {
-        const store = request.result.createObjectStore("icons", {
-          keyPath: "key",
-        })
-        store.createIndex("storedAt", "storedAt")
-      }
-      request.onsuccess = () => {
-        const db = request.result
-        const tx = db.transaction("icons", "readwrite")
-        tx.objectStore("icons").put({
-          key: "https://example.com",
-          storedAt: clock,
-          bytes: bytes(1),
-          mime: "image/png",
-        })
-        tx.oncomplete = () => {
-          db.close()
-          resolve()
-        }
-        tx.onerror = () => reject(tx.error)
-      }
-      request.onerror = () => reject(request.error)
-    })
-
-    const cache = makeCache()
-    expect(await cache.get("https://example.com")).toBeNull()
-
-    // The emptied store is a working one.
-    await cache.putIcon("https://example.com", bytes(2), "image/png")
-    expect(await cache.get("https://example.com")).not.toBeNull()
   })
 })

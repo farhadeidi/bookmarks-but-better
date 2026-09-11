@@ -6,44 +6,36 @@ const googleV2 = new GoogleFaviconV2Provider()
 const chromeFavicon = new ChromeFaviconProvider()
 
 /**
- * Google first, Chrome's own `_favicon` as the fallback.
+ * Chrome asks itself first — for the sizes its own store can fill.
  *
- * The order was the other way round from the day the favicon cache landed,
- * because a `_favicon` hit is answered on the extension's own origin out of
- * the browser's icon database and tells nobody anything. It went back because
- * desktop Chrome cannot supply the icon the dashboard needs. Its favicon
- * handler keeps only the 16-dip icon at each supported scale — 16 and 32
- * pixels — and `_favicon` fills any other requested size by resizing that.
- * When the request is an integer multiple of what it holds, as `size=64` is
- * of both, it samples nearest-neighbour (Chromium's
- * `select_favicon_frames.cc`, `GetResizedBitmap`), so a grid tile drawn at 40
- * CSS pixels on a 2x display got a 32-pixel icon blown up into visible blocks.
- * The response is always 64×64, so nothing about it — not even decoding it —
- * reveals what it was scaled from; there is no quality check that could keep
- * `_favicon` first and fall through only when it is not good enough. Google's
- * service returns the site's larger icons at their real size, which is what
- * sharp icons have meant since 64-pixel requests were introduced.
+ * The `_favicon` API answers out of the browser's own icon database, on the
+ * extension's own origin, so a hit tells nobody anything — and because it is
+ * same-origin, the favicon cache can read and store its bytes, which no
+ * third-party provider's response allowed before this. This order used to be
+ * the other way round, with Google primary and `_favicon` as the fallback;
+ * flipping it is the whole privacy gain on Chrome, and it is safe only because
+ * the resolver can now recognize `_favicon`'s placeholder (see
+ * `getPlaceholderProbeUrl`) and move on to Google when Chrome has nothing.
  *
- * What `_favicon` is still good for is a site Google has nothing for: one
- * visited in this profile but unknown to Google's crawl, or one Google answers
- * with its generic globe. The resolver recognizes `_favicon`'s own placeholder
- * by sampling it (see `getPlaceholderProbeUrl`), so a miss there still ends at
- * the letter rather than at Chrome's default page icon.
- *
- * The privacy cost is bounded by the cache rather than by this order: Google's
- * bytes are readable here (`host_permissions` grants gstatic), so an origin is
- * disclosed about once a month, not on every render.
+ * What this order cannot give is a large icon. Desktop Chrome keeps a site's
+ * icon at 16 and 32 pixels only, and `_favicon` fills a bigger request by
+ * scaling those up — nearest-neighbour when the size divides evenly, as the
+ * 64 requested here does — so a 40-pixel grid tile drawn from it is visibly
+ * blocky, and nothing in the always-64×64 response says what it was scaled
+ * from. That is the resolver's problem, not this adapter's: a lookup that
+ * needs a sharp icon puts the native candidate last, after Google, and the
+ * cache keeps the two kinds apart. See `FaviconDemand` in `favicon/resolve.ts`.
  */
 export class ChromeFaviconAdapter implements FaviconProvider {
   getUrl(pageUrl: string): string {
+    if (chromeFavicon.isAvailable()) {
+      return chromeFavicon.getUrl(pageUrl)
+    }
     return googleV2.getUrl(pageUrl)
   }
 
   getFallbackUrl(pageUrl: string): string {
-    if (chromeFavicon.isAvailable()) {
-      return chromeFavicon.getUrl(pageUrl)
-    }
-    return ""
+    return googleV2.getUrl(pageUrl)
   }
 
   getPlaceholderProbeUrl(): string {

@@ -61,17 +61,8 @@ export const FAVICON_TRIM_TO = 900
  */
 export const FAVICON_MAX_BYTES = 256 * 1024
 
-export const FAVICON_DB_NAME = "bookmarks-but-better-favicons"
-
-/**
- * Bumped when what the cache holds can no longer be trusted, not when its
- * shape changes: an upgrade drops every entry, and the next render re-resolves.
- *
- * 2 — icons stored while Chrome's `_favicon` was the primary provider were
- *     16- or 32-pixel bitmaps blown up to 64, and would have stayed blocky for
- *     the rest of their 30-day TTL after the provider order was fixed.
- */
-const DB_VERSION = 2
+const DB_NAME = "bookmarks-but-better-favicons"
+const DB_VERSION = 1
 const STORE_NAME = "icons"
 const STORED_AT_INDEX = "storedAt"
 
@@ -82,6 +73,19 @@ export interface FaviconRecord {
   /** Absent on a negative entry: nobody could answer for this site. */
   bytes?: ArrayBuffer
   mime?: string
+  /**
+   * Whether these bytes are good enough for the largest size the UI draws.
+   *
+   * False only for an icon taken from the browser's own store by a lookup that
+   * did not need more. A browser keeps its icons at the small sizes it draws
+   * itself, and scaled up they show as blocks. A sharp lookup (see
+   * `FaviconResolver`) treats such a record as a miss and replaces it with
+   * whatever the other providers have; its own result is always marked sharp,
+   * because it already asked everyone. Absent on records from before the flag
+   * existed, which reads as false: they are re-resolved once, only where it
+   * matters.
+   */
+  sharp?: boolean
 }
 
 /**
@@ -106,18 +110,15 @@ export interface FaviconCacheOptions {
 
 function openDB(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
-    const request = indexedDB.open(FAVICON_DB_NAME, DB_VERSION)
+    const request = indexedDB.open(DB_NAME, DB_VERSION)
     request.onupgradeneeded = () => {
       const db = request.result
-      // Every version so far has meant "start over" (see DB_VERSION), so an
-      // existing store is dropped rather than migrated.
-      if (db.objectStoreNames.contains(STORE_NAME)) {
-        db.deleteObjectStore(STORE_NAME)
+      if (!db.objectStoreNames.contains(STORE_NAME)) {
+        const store = db.createObjectStore(STORE_NAME, { keyPath: "key" })
+        // Eviction walks this index oldest-first. It is the only ordering the
+        // cache needs, because entries expire in the same order they evict.
+        store.createIndex(STORED_AT_INDEX, "storedAt")
       }
-      const store = db.createObjectStore(STORE_NAME, { keyPath: "key" })
-      // Eviction walks this index oldest-first. It is the only ordering the
-      // cache needs, because entries expire in the same order they evict.
-      store.createIndex(STORED_AT_INDEX, "storedAt")
     }
     request.onsuccess = () => resolve(request.result)
     request.onerror = () => reject(request.error)
@@ -182,9 +183,16 @@ export class FaviconCache {
   async putIcon(
     key: string,
     bytes: ArrayBuffer,
-    mime: string
+    mime: string,
+    sharp = false
   ): Promise<FaviconRecord> {
-    const record: FaviconRecord = { key, storedAt: this.now(), bytes, mime }
+    const record: FaviconRecord = {
+      key,
+      storedAt: this.now(),
+      bytes,
+      mime,
+      sharp,
+    }
     await this.write(record)
     return record
   }

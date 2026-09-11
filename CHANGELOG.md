@@ -12,15 +12,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - **Grid icons are sharp again on Chrome.** Since the favicon cache landed,
-  Chrome asked its own `_favicon` API before Google. Desktop Chrome keeps site
-  icons at 16 and 32 pixels only, and `_favicon` fills a 64-pixel request by
-  blowing those up nearest-neighbour, so every tile in the grid view showed a
-  32-pixel icon at four times its size, and the result was cached for 30 days.
-  Google is the primary source again — it returns a site's larger icons at
-  their real size — and `_favicon` remains the fallback for a site Google has
-  nothing for. The favicon cache is emptied once on update, so the blocky
-  icons already stored are re-resolved instead of served for the rest of
-  their month.
+  Chrome asked its own `_favicon` API before Google, and the grid went blocky:
+  desktop Chrome keeps a site's icon at 16 and 32 pixels only and blows those
+  up to fill a 64-pixel request, and the result was cached for 30 days. The
+  provider order now depends on where the icon is drawn. A list row keeps
+  asking the browser first, which contacts nobody; a grid tile asks Google
+  first, which returns a site's larger icons at their real size, and falls
+  back to the browser's store only when Google has nothing. The cache
+  remembers which of the two an icon can serve, so a blocky icon already
+  stored for a row is replaced the first time a tile needs it, and nothing
+  has to be cleared.
 
 ## [4.1.0] - 2026-09-11
 

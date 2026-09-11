@@ -137,23 +137,26 @@ they come from a short chain of providers, tried in order:
 1. **The local cache.** Icon bytes stored in IndexedDB on this machine. A hit
    contacts nobody at all. Entries live 30 days; "nobody has an icon for this
    site" is remembered for a day.
-2. **Google's favicon service** (`t1.gstatic.com`, and `www.google.com/s2` in
+2. **The browser's own icon database**, where it exists. On Chrome that is the
+   `_favicon` API, which answers out of the browser's local store — this is the
+   first thing Chrome tries for a list row, and a hit contacts nobody. That
+   store only holds the small sizes the browser draws itself (16 and 32
+   pixels), so for a **grid tile**, drawn at 40, the order flips: a tile asks
+   Google first and the browser's store only when Google has nothing. Firefox
+   exposes no equivalent an extension can read without the `tabs` permission,
+   which this extension deliberately does not request, so it has no native
+   step.
+3. **Google's favicon service** (`t1.gstatic.com`, and `www.google.com/s2` in
    some builds). This is the step that discloses something: Google is sent the
    bookmark's **origin** — `https://example.com`, never the path, query or
    fragment. Over a whole dashboard, the set of origins asked about is
-   effectively your list of bookmarked sites. It comes before the browser's
-   own store because it is the only source of a sharp icon: desktop Chrome
-   keeps site icons at 16 and 32 pixels only, and the grid view draws them at
-   40.
-3. **The browser's own icon database**, where it exists. On Chrome that is the
-   `_favicon` API, which answers out of the browser's local store and contacts
-   nobody; it covers a site Google has no icon for. Firefox exposes no
-   equivalent an extension can read without the `tabs` permission, which this
-   extension deliberately does not request, so it has no native step.
+   effectively your list of bookmarked sites.
 4. **A letter placeholder**, generated locally, when everything above misses.
 
-So: an origin reaches Google when the cache misses. In the Chrome and Firefox
-extensions the response's bytes are stored
+So: an origin reaches Google only when the cache misses and no local source
+answered — and, in the grid view, whenever the cache misses, because the local
+source cannot draw a tile sharply. In the Chrome and Firefox extensions the
+response's bytes are stored
 after the first successful lookup, so a given site is asked about roughly once a
 month rather than on every render. The daemon's own web app, served over
 loopback, is not allowed to read a cross-origin response, so it can display

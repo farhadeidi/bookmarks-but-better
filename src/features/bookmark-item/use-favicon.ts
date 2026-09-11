@@ -21,10 +21,18 @@ export interface FaviconSources {
 
 const NOTHING: FaviconSources = { sources: [], pending: false }
 
-export function useFaviconSources(pageUrl: string): FaviconSources {
+/**
+ * @param sharp Whether the icon is drawn too large for the browser's own icon
+ *   store to fill; see `FaviconDemand`.
+ */
+export function useFaviconSources(
+  pageUrl: string,
+  sharp: boolean
+): FaviconSources {
   const provider = useBookmarkStore((s) => s.adapter?.favicon)
   const [resolved, setResolved] = React.useState<{
     pageUrl: string
+    sharp: boolean
     sources: string[]
   } | null>(null)
 
@@ -36,16 +44,21 @@ export function useFaviconSources(pageUrl: string): FaviconSources {
   React.useEffect(() => {
     if (!resolvable || !provider) return
     let cancelled = false
-    faviconResolver.resolve(pageUrl, provider).then((resolution) => {
-      if (!cancelled) setResolved({ pageUrl, sources: resolution.sources })
+    faviconResolver.resolve(pageUrl, provider, { sharp }).then((resolution) => {
+      if (!cancelled) {
+        setResolved({ pageUrl, sharp, sources: resolution.sources })
+      }
     })
     return () => {
       cancelled = true
     }
-  }, [pageUrl, provider, resolvable])
+  }, [pageUrl, provider, resolvable, sharp])
 
   if (!resolvable || !provider) return NOTHING
-  // Anything resolved for a *previous* URL is not an answer for this one.
-  if (resolved?.pageUrl !== pageUrl) return { sources: [], pending: true }
+  // Anything resolved for a *previous* URL or demand is not an answer for
+  // this one.
+  if (resolved?.pageUrl !== pageUrl || resolved.sharp !== sharp) {
+    return { sources: [], pending: true }
+  }
   return { sources: resolved.sources, pending: false }
 }
