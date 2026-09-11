@@ -590,10 +590,13 @@ fn run_vault_list(location: &ConfigLocation, config: &Config, json: bool) -> Exi
                 })
             })
             .collect();
+        // The file's own contents, `null` for what it leaves unsaid: a reader
+        // that needs the effective port asks the service, whose definition
+        // always names one, rather than being told the default is configured.
         let document = serde_json::json!({
             "configuration": location.path(),
-            "bind": config.bind.unwrap_or(DEFAULT_BIND).to_string(),
-            "port": config.port.unwrap_or(DEFAULT_PORT),
+            "bind": config.bind.map(|bind| bind.to_string()),
+            "port": config.port,
             "uiDir": config.ui_dir,
             "vaults": vaults,
         });

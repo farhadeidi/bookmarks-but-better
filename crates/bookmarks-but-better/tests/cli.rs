@@ -710,6 +710,13 @@ fn vault_list_json_carries_the_whole_configuration() {
     let home = tempfile::tempdir().expect("temp dir");
     let vault_dir = tempfile::tempdir().expect("temp dir");
     let vault = vault_arg(vault_dir.path());
+    // A port the person chose, and nothing said about the bind address: the
+    // JSON must tell the two apart, since a service installed before the
+    // registry existed keeps its own port and a reader must not be told the
+    // default is what was configured.
+    let config_dir = home.path().join(".config").join("bookmarks-but-better");
+    std::fs::create_dir_all(&config_dir).expect("config dir");
+    std::fs::write(config_dir.join("config.toml"), "port = 47321\n").expect("config");
     assert!(
         bookmarks_but_better_in_home(home.path(), &["vault", "add", "reading", &vault, "--init"])
             .status
@@ -720,8 +727,8 @@ fn vault_list_json_carries_the_whole_configuration() {
     assert!(output.status.success(), "{}", stderr(&output));
     let document: serde_json::Value = serde_json::from_str(&stdout(&output)).expect("JSON");
 
-    assert_eq!(document["port"], 52222);
-    assert_eq!(document["bind"], "127.0.0.1");
+    assert_eq!(document["port"], 47321);
+    assert!(document["bind"].is_null(), "{document}");
     let vaults = document["vaults"].as_array().expect("vaults");
     assert_eq!(vaults.len(), 1);
     assert_eq!(vaults[0]["id"], "reading");

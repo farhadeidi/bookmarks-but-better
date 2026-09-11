@@ -138,6 +138,15 @@ fi
 fail() { echo "NOT OK - $*" >&2; exit 1; }
 step() { printf '\n== %s\n' "$*"; }
 health() { curl -fsS "http://127.0.0.1:$port/api/v1/health" 2>/dev/null || true; }
+# A service just bootstrapped answers once it has opened its vaults, not the
+# instant `service install` returns; the manager waits the same way.
+wait_for_health() {
+  for _ in $(seq 1 100); do
+    [[ -n "$(health)" ]] && return 0
+    sleep 0.1
+  done
+  return 1
+}
 
 # --- The upgrade from 4.0.0 -------------------------------------------------
 # A 4.0.0 machine has a binary under the install root, a service whose
@@ -153,7 +162,7 @@ ln -sfn "$root/install/versions/4.0.0" "$root/install/current"
 rm -f "$XDG_CONFIG_HOME/bookmarks-but-better/config.toml"
 "$root/install/current/bookmarks-but-better" init --vault "$old_vault" >/dev/null
 "$root/install/current/bookmarks-but-better" service install --vault "$old_vault" --port "$port" >/dev/null
-[[ "$(health)" == *'"version"'* ]] || fail "the 4.0.0-shaped service did not start: $(health)"
+wait_for_health || fail "the 4.0.0-shaped service did not start"
 
 step "install --yes over it: adopt the vault, reinstall the service, ask nothing"
 bbb install --yes
