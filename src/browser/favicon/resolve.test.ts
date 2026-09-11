@@ -455,6 +455,26 @@ describe("the sharp demand", () => {
     expect((await cache.get("https://visited.example"))?.sharp).toBe(true)
   })
 
+  it("falls back to the native source when Google only has its globe, and marks that final", async () => {
+    const fetchImpl = router([
+      [PROBE, () => icon(9, 9, 9)],
+      [NATIVE_HOST, () => icon(64, 1, 2)],
+      [V2_HOST, () => icon(16)],
+    ])
+    const { cache, resolver } = build(fetchImpl, EXTENSION_ORIGIN)
+
+    await resolver.resolve("https://globe.example/", chrome, sharp)
+    await resolver.resolve("https://globe.example/", chrome, sharp)
+
+    const record = await cache.get("https://globe.example")
+    // The globe was not stored; the native icon was, as the sharpest available.
+    expect(new Uint8Array(record?.bytes as ArrayBuffer)).toEqual(
+      new Uint8Array([64, 1, 2])
+    )
+    expect(record?.sharp).toBe(true)
+    expect(lookups(fetchImpl, V2_HOST)).toBe(1)
+  })
+
   it("replaces a native icon cached by a row the first time a tile needs it", async () => {
     const fetchImpl = router([
       [PROBE, () => icon(9, 9, 9)],
@@ -534,6 +554,27 @@ describe("the sharp demand", () => {
 
     await resolver.resolve("https://example.com/", google, sharp)
     expect(fetchImpl).toHaveBeenCalledTimes(1)
+  })
+
+  it("does not re-resolve a record from before the flag where no native source exists", async () => {
+    const fetchImpl = router([[V2_HOST, () => icon(64)]])
+    const { cache, resolver } = build(fetchImpl)
+    // A record written by 4.1.0: Google's bytes, no `sharp` field at all.
+    await cache.putIcon(
+      "https://example.com",
+      new Uint8Array([64]).buffer,
+      "image/png"
+    )
+    expect((await cache.get("https://example.com"))?.sharp).toBe(false)
+
+    const { sources } = await resolver.resolve(
+      "https://example.com/",
+      google,
+      sharp
+    )
+
+    expect(sources[0].startsWith("blob:")).toBe(true)
+    expect(fetchImpl).not.toHaveBeenCalled()
   })
 })
 

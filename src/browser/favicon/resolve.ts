@@ -181,7 +181,12 @@ export class FaviconResolver {
     const key = normalizeFaviconKey(pageUrl)
     if (!key) return Promise.resolve(NO_SOURCES)
 
-    const sharp = demand.sharp === true
+    // A sharp demand only means something where there is a native store to
+    // put last. Elsewhere every icon is already as sharp as it gets, and
+    // reading the demand as plain spares a record from before the flag a
+    // pointless re-resolve.
+    const sharp =
+      demand.sharp === true && Boolean(provider.getPlaceholderProbeUrl?.())
     const flight = `${sharp ? "sharp" : "any"} ${key}`
     const existing = this.inFlight.get(flight)
     if (existing) return existing
