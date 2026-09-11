@@ -17,7 +17,7 @@ The daemon binary keeps its non-interactive commands (`serve`, `init`, `doctor`,
 
 ## Consequences
 
-- The npm package joins the one-version rule and installs exactly its own daemon version, so the daemon binary's JSON output is a contract versioned with it and needs no separate compatibility story.
+- The npm package names the daemon release it installs (`daemon.version`, checked against the tag by the release workflow) and installs exactly that by default, so the daemon binary's JSON output is a contract the manager is published against. The package's own version is independent, so a fix to the manager ships without a daemon release; `status` treats a prerelease of the named line as that line, and a daemon newer than the line the manager knows as a reason to update the manager, never to reinstall the daemon.
 - `curl … | bash` remains the headless install, and the manager drives that same script. Given `--vault <dir>` it records the Vault (initializing it), installs the service and starts it; given nothing it installs the binary and prints the next steps, naming `npx`. It never asks. The daemon binary's interactive `setup` goes away with it.
 - Reading and changing bookmarks from a terminal is out of scope. If it is ever wanted it is a Client over the HTTP API, not a manager command, and not a daemon command.
 - The daemon's health response carries `clients`, the number of open event streams, so `status` can say whether a browser is connected. It never gains a management endpoint.

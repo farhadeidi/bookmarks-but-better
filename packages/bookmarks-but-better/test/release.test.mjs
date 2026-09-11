@@ -74,7 +74,8 @@ test("the installer is fetched from the release it will install", () => {
   // The installers accept a tag with or without the leading v; the release
   // asset path only exists under the real tag.
   assert.equal(releaseTagFor(["--version", "4.1.0-beta.1"]), "v4.1.0-beta.1");
-  assert.equal(releaseTagFor(["--beta"]), null);
+  // Never the floating latest release: the tool knows which daemon it drives.
+  assert.throws(() => releaseTagFor(["--vault", "/v"]), /no --version/);
 });
 
 test("POSIX runs install.sh under bash, never sh, with the flags verbatim", () => {
@@ -91,14 +92,15 @@ test("Windows runs install.ps1 non-interactively with every flag translated", ()
   const { command, args } = commandFor({
     platform: "win32",
     scriptPath: "C:\\Temp\\install.ps1",
-    forwarded: ["--beta", "--install-dir", "D:\\bbb", "--vault", "D:\\Bookmarks"],
+    forwarded: ["--version", "v4.1.0", "--install-dir", "D:\\bbb", "--vault", "D:\\Bookmarks"],
   });
   assert.equal(command, "powershell");
   assert.ok(args.includes("-NonInteractive"), "the installer asks nothing, so nothing may wait on a prompt");
   assert.deepEqual(args.slice(args.indexOf("-File")), [
     "-File",
     "C:\\Temp\\install.ps1",
-    "-Beta",
+    "-Version",
+    "v4.1.0",
     "-InstallDir",
     "D:\\bbb",
     "-Vault",

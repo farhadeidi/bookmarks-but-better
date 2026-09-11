@@ -42,7 +42,10 @@ export function runVisible(command, args, { env = process.env } = {}) {
 async function readJson(binary, args) {
   const result = await runQuiet(binary, args);
   if (!result.ok) {
-    return { value: null, error: result.stderr.trim() || `exit code ${result.code}` };
+    // The first line only: a binary too old to know the command answers with
+    // its whole usage text, and the one line that says so is enough.
+    const said = result.stderr.trim().split("\n")[0]?.replace(/^error:\s*/, "");
+    return { value: null, error: said || `exit code ${result.code}` };
   }
   try {
     return { value: JSON.parse(result.stdout), error: null };
@@ -103,8 +106,8 @@ export function originOf({ registry, service }) {
 }
 
 /** Reads everything `status` reports into one shape. */
-export async function gather({ layout, toolVersion }) {
-  const report = emptyReport({ toolVersion, binaryPath: layout.binary });
+export async function gather({ layout, toolVersion, daemonVersion }) {
+  const report = emptyReport({ toolVersion, daemonVersion, binaryPath: layout.binary });
   if (!existsSync(layout.binary)) return report;
 
   report.binary.installed = true;

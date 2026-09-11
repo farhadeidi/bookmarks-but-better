@@ -31,7 +31,9 @@ private: there is no account, analytics, tracking, or bookmark-content collectio
   (`packages/bookmarks-but-better`: `npx bookmarks-but-better` — status,
   install, uninstall, vault add/remove/list; never bookmarks), install scripts
   (`install.sh`, `install.ps1`). The daemon binary asks no questions and answers
-  in JSON; the manager is where every question lives (ADR-0006).
+  in JSON; the manager is where every question lives (ADR-0006). The manager
+  has its own version; `daemon.version` in its `package.json` names the daemon
+  release it installs and is what must match a release tag.
 - **Dev Workbench** (`bun run dev`) runs the full app with URL-addressable
   scenarios and no extension or daemon.
 

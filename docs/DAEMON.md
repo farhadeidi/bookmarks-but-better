@@ -58,9 +58,9 @@ builtin option, and `/bin/sh` is dash on Debian and Ubuntu.
 ### Choosing a release
 
 Each installer resolves the latest **stable** release by default; `npx
-bookmarks-but-better` pins the daemon to its own version instead, so the tool
-and the daemon it manages never drift apart on one machine. Version 4 is the
-first stable release that carries daemon builds, so a normal install now
+bookmarks-but-better` pins the daemon release it was published for instead, so
+the tool and the daemon it manages never drift apart on one machine. Version 4
+is the first stable release that carries daemon builds, so a normal install now
 resolves the stable archive directly.
 
 For historical or pinned extension-only releases up to `v3.2.0`, the installer
@@ -81,7 +81,7 @@ To choose explicitly rather than rely on the fallback:
 
 | What you want | macOS / Linux | Windows | npx |
 | --- | --- | --- | --- |
-| The latest prerelease | `bash -s -- --beta` | `-Beta` | `install --beta` |
+| The latest prerelease | `bash -s -- --beta` | `-Beta` | `install --version <its tag>` |
 | One exact release | `bash -s -- --version v4.0.0` | `-Version v4.0.0` | `install --version v4.0.0` |
 | The first vault and the service too | `bash -s -- --vault ~/Bookmarks` | `-Vault …` | asked, or `install --vault …` |
 

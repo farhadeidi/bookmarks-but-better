@@ -43,8 +43,7 @@ npx bookmarks-but-better@latest uninstall --purge-config
 | `-y`, `--yes`         | everything  | Never ask; take every default. For scripts.                             |
 | `--json`              | status, vault list | Machine-readable output.                                         |
 | `--vault <dir>`       | install     | Where the first vault lives. Asked when left out; `~/Bookmarks` with `--yes`. |
-| `--beta`              | install     | The latest prerelease instead of this tool's own version.               |
-| `--version <tag>`     | install     | Exactly this release, e.g. `v4.1.0`.                                    |
+| `--version <tag>`     | install     | Exactly this daemon release, e.g. `v4.2.0-beta.1`, instead of the one this tool was published for. |
 | `--install-dir <dir>` | install     | Where daemon versions are unpacked.                                     |
 | `--bin-dir <dir>`     | install     | Where the `bookmarks-but-better` symlink goes. macOS and Linux only.    |
 | `--purge-config`      | uninstall   | Also remove the configuration file.                                     |
@@ -61,9 +60,10 @@ GitHub Release. The questions live here, drawn with
 [`@clack/prompts`](https://github.com/bombshell-dev/clack); the daemon asks
 none.
 
-By default it installs **its own version** of the daemon — the one it was
-written against — so the two never drift apart on one machine. `--beta` and
-`--version` are the explicit ways to choose otherwise.
+By default it installs the daemon release it was **published for** (named in
+its `package.json`), so the two never drift apart on one machine; `--version`
+is the explicit way to choose otherwise. The tool's own version moves
+independently, so a fix here does not wait for a daemon release.
 
 The install is **persistent**: the daemon lives on afterwards in a user-local
 directory, on your `PATH`, run by a login service (a `LaunchAgent`, a systemd

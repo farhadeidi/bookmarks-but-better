@@ -24,10 +24,30 @@ export function parseVersionOutput(text) {
   return match ? match[1] : null;
 }
 
+/**
+ * `major.minor.patch` of a version, ignoring any prerelease suffix: a
+ * `4.1.0-beta.2` daemon is the 4.1.0 line as far as compatibility goes.
+ */
+export function baseVersion(version) {
+  const match = String(version ?? "").match(/^(\d+)\.(\d+)\.(\d+)/);
+  return match ? match.slice(1, 4).map(Number) : null;
+}
+
+/** Negative, zero or positive as `a` is older than, the same line as, or newer than `b`. */
+export function compareBase(a, b) {
+  const left = baseVersion(a);
+  const right = baseVersion(b);
+  if (!left || !right) return 0;
+  for (let index = 0; index < 3; index += 1) {
+    if (left[index] !== right[index]) return left[index] - right[index];
+  }
+  return 0;
+}
+
 /** An empty report: the shape `daemon.mjs` fills in. */
-export function emptyReport({ toolVersion, binaryPath }) {
+export function emptyReport({ toolVersion, daemonVersion, binaryPath }) {
   return {
-    tool: { version: toolVersion },
+    tool: { version: toolVersion, daemonVersion },
     binary: { installed: false, path: binaryPath, version: null },
     registry: null,
     registryError: null,
@@ -58,10 +78,19 @@ export function assess(report) {
     add("the daemon is not installed", INSTALL);
     return { ok: false, problems };
   }
-  if (report.binary.version && report.binary.version !== report.tool.version) {
+  // The tool knows one daemon line. An older daemon is an update; a newer one
+  // means the tool is what is out of date, and reinstalling would downgrade.
+  const line = compareBase(report.binary.version, report.tool.daemonVersion);
+  if (report.binary.version && line < 0) {
     add(
-      `the installed daemon is ${report.binary.version}; this tool is ${report.tool.version}`,
+      `the installed daemon is ${report.binary.version}; this tool installs ${report.tool.daemonVersion}`,
       INSTALL,
+    );
+  } else if (report.binary.version && line > 0) {
+    add(
+      `the installed daemon is ${report.binary.version}, newer than the ${report.tool.daemonVersion} this tool knows`,
+      "npx bookmarks-but-better@latest",
+      { kind: "manual" },
     );
   }
 
@@ -149,7 +178,7 @@ export function render(report, { homedir = "" } = {}) {
   const lines = [];
   const row = (label, value) => lines.push(`${label.padEnd(10)} ${value}`);
 
-  row("tool", report.tool.version);
+  row("tool", `${report.tool.version} (installs daemon ${report.tool.daemonVersion})`);
 
   if (!report.binary.installed) {
     row("daemon", "not installed");

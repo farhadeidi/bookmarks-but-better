@@ -1,9 +1,10 @@
 # Releasing
 
-One product version covers the app, all three extension manifests, the Cargo
-workspace and the npm Daemon Manager, and a tag is what turns that version into
-a release. The manager installs its own version of the daemon, so it is
-published for every release, after the GitHub release exists.
+One product version covers the app, all three extension manifests and the Cargo
+workspace, and a tag is what turns that version into a release. The npm Daemon
+Manager has a version of its own and names the daemon release it installs in
+its `package.json`; it is published whenever it changes, and always after the
+GitHub release it names exists.
 
 Two commands do the whole job:
 
@@ -32,7 +33,8 @@ from it. A beta is a real build; the only thing it does not do is publish.
 1. Reconcile the product version everywhere. For `4.1.0` that means `4.1.0` —
    exactly this string — in these eight places:
    - `package.json`
-   - `packages/bookmarks-but-better/package.json` (the Daemon Manager)
+   - `packages/bookmarks-but-better/package.json` — the `daemon.version` field,
+     not the package's own `version`
    - `manifests/manifest.chrome.json`
    - `manifests/manifest.firefox.json`
    - `manifests/manifest.safari.json`
@@ -369,27 +371,31 @@ third tag shape to `on.push.tags` would need both of them updated.
 `packages/bookmarks-but-better` is the Daemon Manager
 ([ADR-0006](adr/0006-manage-the-daemon-from-an-npm-tool-and-keep-management-out-of-its-api.md)):
 `status`, `install`, `uninstall` and `vault add|remove|list`, for people who
-have Node.js. It carries the product version — the `validate` job checks it
-with the other version files — because by default it installs **its own
-version** of the daemon, whose `--json` output it reads. It ships **no
-binaries**: it downloads the installer for the platform it is running on,
-verifies it against the `.sha256` sidecar published next to it, runs it with
-`--version v<its own version>`, and afterwards drives the installed binary's
-own commands.
+have Node.js. It has a **version of its own**, so a fix to the manager ships
+without a daemon release, and it names the daemon release it installs by
+default in its `package.json` under `daemon.version` — the `validate` job
+checks that field against the tag, since that is the daemon whose `--json`
+output the manager reads. It ships **no binaries**: it downloads the installer
+for the platform it is running on, verifies it against the `.sha256` sidecar
+published next to it, runs it with `--version v<daemon.version>`, and
+afterwards drives the installed binary's own commands.
 
 Publishing it is a **manual step** — the release pipeline holds no npm
 credential:
 
 ```sh
 cd packages/bookmarks-but-better
-npm publish   # after the GitHub release for the tag exists
+npm version <major.minor.patch> --no-git-tag-version   # the manager's own version
+npm publish                                            # after the GitHub release it names exists
 ```
 
-Publish it **after** the stable GitHub release for that version exists, never
-before: a published manager pins its own version, so ahead of the release it
-would ask for an archive that is not there yet. Betas are not published to
-npm; `npx bookmarks-but-better install --beta` reaches a prerelease from the
-previous stable manager.
+Commit the version bump (and, on a product release, the new `daemon.version`)
+like any other change; `npm` is used for nothing else in this repository.
+Publish **after** the stable GitHub release named by `daemon.version` exists,
+never before: a published manager asks for exactly that archive. Betas are not
+published to npm; a prerelease is tried from a checkout, or with
+`npx bookmarks-but-better install --version v4.2.0-beta.1`, and `status` then
+treats a prerelease of the same line as that line.
 
 The root `package.json` stays `"private": true` and is never published; the
 name `bookmarks-but-better` on npm belongs to the manager.
