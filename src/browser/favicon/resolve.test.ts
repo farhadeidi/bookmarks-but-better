@@ -8,9 +8,9 @@ import { FaviconResolver } from "./resolve"
 /**
  * The provider order these tests drive is the real one. `StandaloneFaviconAdapter`
  * is Google V2 then Google s2 — the order daemon, standalone and the served web
- * app all use — and `ChromeFaviconAdapter` is the extension's own `_favicon`
- * first. Building the resolver against fakes would have let the two get out of
- * step silently.
+ * app all use — and `ChromeFaviconAdapter` is Google V2 with the extension's
+ * own `_favicon` as the fallback. Building the resolver against fakes would
+ * have let the two get out of step silently.
  */
 
 const V2_HOST = "https://t1.gstatic.com/faviconV2"
@@ -315,7 +315,7 @@ describe("a native provider the extension serves itself", () => {
 
   const chrome = new ChromeFaviconAdapter()
 
-  it("prefers the native source and never contacts Google when it answers", async () => {
+  it("asks Google first and never touches the native source when Google answers", async () => {
     const fetchImpl = router([
       [PROBE, () => icon(9, 9, 9)],
       [NATIVE_HOST, () => icon(64, 1, 2)],
@@ -327,37 +327,62 @@ describe("a native provider the extension serves itself", () => {
 
     expect(sources[0].startsWith("blob:")).toBe(true)
     expect(
-      fetchImpl.mock.calls.some(([url]) => String(url).startsWith(V2_HOST))
+      fetchImpl.mock.calls.some(([url]) => String(url).startsWith(NATIVE_HOST))
     ).toBe(false)
     expect(
       new Uint8Array(
         (await cache.get("https://example.com"))?.bytes as ArrayBuffer
       )
-    ).toEqual(new Uint8Array([64, 1, 2]))
+    ).toEqual(new Uint8Array([64]))
   })
 
-  it("recognizes the native placeholder and goes to Google instead", async () => {
+  it("falls back to the native source when Google only has its globe", async () => {
     const fetchImpl = router([
       [PROBE, () => icon(9, 9, 9)],
-      [NATIVE_HOST, () => icon(9, 9, 9)],
-      [V2_HOST, () => icon(64)],
+      [NATIVE_HOST, () => icon(64, 1, 2)],
+      [V2_HOST, () => icon(16)],
     ])
     const { cache, resolver } = build(fetchImpl, EXTENSION_ORIGIN)
 
-    await resolver.resolve("https://unknown.example/", chrome)
+    const { sources } = await resolver.resolve(
+      "https://visited.example/",
+      chrome
+    )
 
-    // The placeholder was not stored — Google's real icon was.
+    // The globe was not stored — the browser's own icon was.
+    expect(sources[0].startsWith("blob:")).toBe(true)
     expect(
       new Uint8Array(
-        (await cache.get("https://unknown.example"))?.bytes as ArrayBuffer
+        (await cache.get("https://visited.example"))?.bytes as ArrayBuffer
       )
-    ).toEqual(new Uint8Array([64]))
+    ).toEqual(new Uint8Array([64, 1, 2]))
+  })
+
+  it("recognizes the native placeholder and ends at the letter", async () => {
+    const fetchImpl = router([
+      [PROBE, () => icon(9, 9, 9)],
+      [NATIVE_HOST, () => icon(9, 9, 9)],
+      [V2_HOST, () => missing()],
+    ])
+    const { cache, resolver } = build(fetchImpl, EXTENSION_ORIGIN)
+
+    const { sources } = await resolver.resolve(
+      "https://unknown.example/",
+      chrome
+    )
+
+    // The placeholder was not stored as the site's icon; the miss was.
+    expect(sources).toEqual([])
+    const record = await cache.get("https://unknown.example")
+    expect(record).not.toBeNull()
+    expect(record?.bytes).toBeUndefined()
   })
 
   it("samples the placeholder once for the whole session", async () => {
     const fetchImpl = router([
       [PROBE, () => icon(9, 9, 9)],
       [NATIVE_HOST, () => icon(64, 1)],
+      [V2_HOST, () => missing()],
     ])
     const { resolver } = build(fetchImpl, EXTENSION_ORIGIN)
 
@@ -374,19 +399,16 @@ describe("a native provider the extension serves itself", () => {
   it("skips the native source entirely when the placeholder cannot be sampled", async () => {
     const fetchImpl = router([
       [`${NATIVE_HOST}?pageUrl=https%3A%2F%2Fexample.com`, () => icon(1, 2)],
-      [V2_HOST, () => icon(64)],
+      [V2_HOST, () => missing()],
     ])
     const { cache, resolver } = build(fetchImpl, EXTENSION_ORIGIN)
 
-    await resolver.resolve("https://example.com/", chrome)
+    const { sources } = await resolver.resolve("https://example.com/", chrome)
 
     // Without a sample a native response cannot be told from a placeholder, so
     // it is dropped rather than cached as if it were the site's icon.
-    expect(
-      new Uint8Array(
-        (await cache.get("https://example.com"))?.bytes as ArrayBuffer
-      )
-    ).toEqual(new Uint8Array([64]))
+    expect(sources).toEqual([])
+    expect((await cache.get("https://example.com"))?.bytes).toBeUndefined()
   })
 })
 

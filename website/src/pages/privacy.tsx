@@ -65,11 +65,12 @@ export function Privacy() {
         <p className={BODY}>
           Icons are looked up in this order, and each step that answers stops
           the next from running: a local cache of icon bytes stored on your
-          machine, then the browser's own on-device icon store (Chrome's favicon
-          API — Firefox has no equivalent an extension may read), then Google,
-          then a letter placeholder drawn locally. A successful lookup is cached
-          for 30 days, so a given site is normally asked about once a month
-          rather than on every new tab, and cached icons keep working offline.
+          machine, then Google, then the browser's own on-device icon store
+          (Chrome's favicon API, for a site Google has no icon for — Firefox has
+          no equivalent an extension may read), then a letter placeholder drawn
+          locally. A successful lookup is cached for 30 days, so a given site is
+          normally asked about once a month rather than on every new tab, and
+          cached icons keep working offline.
         </p>
         <p className={BODY}>
           If you connect a local daemon, the extension talks to that loopback

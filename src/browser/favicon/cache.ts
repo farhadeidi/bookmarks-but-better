@@ -61,8 +61,17 @@ export const FAVICON_TRIM_TO = 900
  */
 export const FAVICON_MAX_BYTES = 256 * 1024
 
-const DB_NAME = "bookmarks-but-better-favicons"
-const DB_VERSION = 1
+export const FAVICON_DB_NAME = "bookmarks-but-better-favicons"
+
+/**
+ * Bumped when what the cache holds can no longer be trusted, not when its
+ * shape changes: an upgrade drops every entry, and the next render re-resolves.
+ *
+ * 2 — icons stored while Chrome's `_favicon` was the primary provider were
+ *     16- or 32-pixel bitmaps blown up to 64, and would have stayed blocky for
+ *     the rest of their 30-day TTL after the provider order was fixed.
+ */
+const DB_VERSION = 2
 const STORE_NAME = "icons"
 const STORED_AT_INDEX = "storedAt"
 
@@ -97,15 +106,18 @@ export interface FaviconCacheOptions {
 
 function openDB(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, DB_VERSION)
+    const request = indexedDB.open(FAVICON_DB_NAME, DB_VERSION)
     request.onupgradeneeded = () => {
       const db = request.result
-      if (!db.objectStoreNames.contains(STORE_NAME)) {
-        const store = db.createObjectStore(STORE_NAME, { keyPath: "key" })
-        // Eviction walks this index oldest-first. It is the only ordering the
-        // cache needs, because entries expire in the same order they evict.
-        store.createIndex(STORED_AT_INDEX, "storedAt")
+      // Every version so far has meant "start over" (see DB_VERSION), so an
+      // existing store is dropped rather than migrated.
+      if (db.objectStoreNames.contains(STORE_NAME)) {
+        db.deleteObjectStore(STORE_NAME)
       }
+      const store = db.createObjectStore(STORE_NAME, { keyPath: "key" })
+      // Eviction walks this index oldest-first. It is the only ordering the
+      // cache needs, because entries expire in the same order they evict.
+      store.createIndex(STORED_AT_INDEX, "storedAt")
     }
     request.onsuccess = () => resolve(request.result)
     request.onerror = () => reject(request.error)

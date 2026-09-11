@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.1.1] - 2026-09-11
+
+### Fixed
+
+- **Grid icons are sharp again on Chrome.** Since the favicon cache landed,
+  Chrome asked its own `_favicon` API before Google. Desktop Chrome keeps site
+  icons at 16 and 32 pixels only, and `_favicon` fills a 64-pixel request by
+  blowing those up nearest-neighbour, so every tile in the grid view showed a
+  32-pixel icon at four times its size, and the result was cached for 30 days.
+  Google is the primary source again — it returns a site's larger icons at
+  their real size — and `_favicon` remains the fallback for a site Google has
+  nothing for. The favicon cache is emptied once on update, so the blocky
+  icons already stored are re-resolved instead of served for the rest of
+  their month.
+
 ## [4.1.0] - 2026-09-11
 
 ### Added
@@ -368,6 +383,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Rewrote README for end users with screenshots and badges
 
+[4.1.1]: https://github.com/farhadeidi/bookmarks-but-better/compare/v4.1.0...v4.1.1
 [4.1.0]: https://github.com/farhadeidi/bookmarks-but-better/compare/v4.0.0...v4.1.0
 [4.0.0]: https://github.com/farhadeidi/bookmarks-but-better/compare/v3.2.1...v4.0.0
 [3.2.0]: https://github.com/farhadeidi/bookmarks-but-better/compare/v3.1.0...v3.2.0
