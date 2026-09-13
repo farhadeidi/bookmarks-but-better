@@ -274,7 +274,8 @@ pub enum ServiceCommand {
 
     /// Remove the service definition.
     ///
-    /// The vault is never touched: this removes one generated file.
+    /// The vault is never touched: this removes the generated definition, and
+    /// one a version before 4.2.0 left behind.
     Uninstall,
 }
 
@@ -1039,9 +1040,7 @@ fn run_service_status(
     let port = service::installed_command_line(layout, kind)
         .as_deref()
         .and_then(service::port_in);
-    let definition = layout
-        .installed_definition_path(kind)
-        .unwrap_or_else(|| layout.definition_path(kind));
+    let definition = layout.active_definition_path(kind);
 
     if json {
         let document = serde_json::json!({
@@ -1123,9 +1122,7 @@ fn run_service(command: ServiceCommand) -> ExitCode {
         },
 
         ServiceCommand::Uninstall => {
-            let installed = layout
-                .installed_definition_path(kind)
-                .unwrap_or_else(|| layout.definition_path(kind));
+            let installed = layout.active_definition_path(kind);
             // Best-effort, and deliberately before the file goes: a service
             // manager cannot be asked to stop a unit whose definition is gone.
             service::disable_and_stop(&layout, kind);

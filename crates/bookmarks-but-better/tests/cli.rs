@@ -433,12 +433,12 @@ fn service_status_reports_what_is_installed_and_uninstall_never_touches_the_vaul
     );
 }
 
-/// A 4.x machine's agent is named after the domain the project used to have.
+/// Before 4.2.0 the agent was named after the domain the project used to have.
 /// An upgrade reads it — its vault and its port — and replaces it, leaving
 /// only the current definition behind.
 #[cfg(target_os = "macos")]
 #[test]
-fn service_install_retires_the_agent_4x_installed() {
+fn service_install_retires_the_agent_an_earlier_version_installed() {
     let home = tempfile::tempdir().expect("temp dir");
     let vault_dir = tempfile::tempdir().expect("temp dir");
     let vault = vault_arg(vault_dir.path());
@@ -448,7 +448,7 @@ fn service_install_retires_the_agent_4x_installed() {
             .success()
     );
 
-    // The shape 4.x left: a plist under the old file name. Its label is one
+    // The shape an earlier version left: a plist under the old file name. Its label is one
     // nothing loads, because retiring boots the agent out by this file and the
     // real old label may belong to a daemon running on this machine.
     let installed = bookmarks_but_better_in_home(
@@ -470,7 +470,7 @@ fn service_install_retires_the_agent_4x_installed() {
         "<string>dev.but-better.bookmarks</string>",
         "<string>dev.but-better.bookmarks.cli-test</string>",
     );
-    std::fs::write(&legacy, text).expect("write the 4.x agent");
+    std::fs::write(&legacy, text).expect("write the old agent");
     std::fs::remove_file(&current).expect("remove the current agent");
 
     let status = bookmarks_but_better_in_home(home.path(), &["service", "status"]);
@@ -489,7 +489,7 @@ fn service_install_retires_the_agent_4x_installed() {
         output.contains("keeping the installed port 47321"),
         "{output}"
     );
-    assert!(!legacy.exists(), "the 4.x agent is gone: {output}");
+    assert!(!legacy.exists(), "the old agent is gone: {output}");
     assert!(definition_text(&current).contains("47321"), "{output}");
 }
 

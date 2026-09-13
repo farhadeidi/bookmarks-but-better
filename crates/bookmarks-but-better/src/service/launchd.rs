@@ -11,12 +11,13 @@ use super::spec::{SERVICE_DESCRIPTION, SERVICE_LABEL, ServiceSpec};
 /// The file name of the generated agent.
 pub(crate) const PLIST_FILE: &str = "dev.but-better.bookmarks.plist";
 
-/// The label 4.x gave the agent, after a domain the project no longer uses.
-/// Nothing writes it: it is only read, to find and retire an agent installed
-/// under it, and can go once an upgrade from 4.x is no longer supported.
+/// The label versions before 4.2.0 gave the agent, after a domain the project
+/// no longer uses. Nothing writes it: it is only read, to find and retire an
+/// agent installed under it, and can go once an upgrade from before 4.2.0 is
+/// no longer supported.
 pub(crate) const LEGACY_LABEL: &str = "com.farhadeidi.bookmarks";
 
-/// The file name 4.x gave the agent.
+/// The file name versions before 4.2.0 gave the agent.
 pub(crate) const LEGACY_PLIST_FILE: &str = "com.farhadeidi.bookmarks.plist";
 
 /// Renders the `LaunchAgent` property list for `spec`.
