@@ -86,7 +86,10 @@ Before creating the stable tag:
    switch sources and repeat.
 3. Review `marketing/store-description.chrome.txt` and
    `marketing/store-description.firefox.txt` against the final manifests,
-   especially permission and privacy disclosures.
+   especially permission and privacy disclosures. These files are the listing
+   text for both stores: the release sets the Firefox description from its file,
+   and tells you when the Chrome one needs pasting — see
+   [Store listings](#store-listings).
 4. Confirm the store screenshots and promotional assets show the current v4 UI.
 5. Run `bun run check` and confirm the latest CI run is green on Linux, macOS
    and Windows.
@@ -137,6 +140,36 @@ The job summary says this on every run, and links the dashboard. Check it:
 
 > AMO also requires a source-code upload to review a bundled build. The first
 > listed submission may need a one-time manual source upload from the dashboard.
+
+## Store listings
+
+The listing descriptions live in the repository, one file per store. Edit the
+files, not the dashboards: a stable release writes the Firefox file over
+whatever the AMO dashboard holds.
+
+| Store            | Description                                                            | Summary, name, screenshots, promo images |
+| ---------------- | ---------------------------------------------------------------------- | ---------------------------------------- |
+| Firefox AMO      | Set from `marketing/store-description.firefox.txt` by `publish-stores` | Edited in the dashboard                  |
+| Chrome Web Store | Pasted by hand from `marketing/store-description.chrome.txt`           | Edited in the dashboard                  |
+
+**Firefox.** Once AMO accepts the version, `publish-stores` replaces the
+description in the add-on's default locale with the file from the tag. Other
+locales are left as they are. The listing is add-on wide and changes at once,
+while the version waits for review, so for that window the text can describe a
+version that is not live yet.
+
+If the update fails, the job stays green and its summary says so. The version is
+already submitted, so **do not** start a recovery dispatch for it — AMO would
+reject the version as a duplicate. Paste the file into the listing at
+<https://addons.mozilla.org/developers/> instead.
+
+**Chrome.** The Chrome Web Store API uploads and publishes packages and has no
+endpoint for listing text, so this stays a manual step. When Chrome publishes,
+the job summary compares the file with the previous stable tag. If it changed,
+the summary links the diff and includes the text ready to paste into the
+**Store listing** tab at <https://chrome.google.com/webstore/devconsole>. Only a
+change since the previous stable tag is flagged; one that was never pasted for
+an earlier release is not flagged again.
 
 ## Recovery: re-running a store submission
 
