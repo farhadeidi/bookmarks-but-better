@@ -105,10 +105,11 @@ Properties that hold on every platform:
 - **An explicit port survives an upgrade.** `install` with no `--port` reads the
   installed definition's own command line and keeps its port, so an
   installation configured on the previous default (47321) is not moved.
-- **A macOS agent from 4.x is replaced, not duplicated.** 4.x labelled it
-  `com.farhadeidi.bookmarks`. `status` still reads that definition, `install`
-  boots it out and removes it before starting the current one, and
-  `uninstall` removes either.
+- **A macOS agent from before 4.2.0 is replaced, not duplicated.** Those
+  versions labelled it `com.farhadeidi.bookmarks`. `status` still reads that
+  definition; `install` — even with `--no-start` — boots it out and removes it
+  before the current one starts; `start`, `stop`, `status` and `uninstall`
+  act on both while both exist.
 - **Several vaults, or one.** Repeat `--vault <id>=<path>`, or install what the
   registry holds with `--from-config`. A definition serving exactly one vault
   under the id `default` still spells it as a bare `--vault <path>` — the shape

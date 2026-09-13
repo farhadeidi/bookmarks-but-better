@@ -24,7 +24,7 @@ mode="run"
 # Never the product default (52222): a run must not collide with a real daemon.
 port=${BOOKMARKS_BUT_BETTER_E2E_PORT:-52224}
 label="dev.but-better.bookmarks"
-# The label 4.x gave the agent, which an upgrade has to retire.
+# The label versions before 4.2.0 gave the agent, which an upgrade retires.
 legacy_label="com.farhadeidi.bookmarks"
 
 case "$(uname -s)" in
@@ -170,7 +170,7 @@ rm -f "$XDG_CONFIG_HOME/bookmarks-but-better/config.toml"
 "$root/install/current/bookmarks-but-better" service install --vault "$old_vault" --port "$port" >/dev/null
 agents="$HOME/Library/LaunchAgents"
 if [[ "$os" == "apple-darwin" ]]; then
-  # 4.x loaded its agent under the old label, from a file named after it.
+  # Before 4.2.0 the agent loaded under the old label, from a file named after it.
   launchctl bootout "gui/$(id -u)" "$agents/$label.plist"
   sed "s/$label/$legacy_label/" "$agents/$label.plist" > "$agents/$legacy_label.plist"
   rm "$agents/$label.plist"
@@ -186,9 +186,9 @@ grep -q "$old_vault" "$root/registry.json" || fail "the registry does not name t
 [[ "$(health)" == *'"id":"default"'* ]] || fail "the upgraded daemon does not host the old vault: $(health)"
 [[ -f "$old_vault/.bookmarks-but-better-folder.md" ]] || fail "the old vault was touched"
 if [[ "$os" == "apple-darwin" ]]; then
-  [[ ! -e "$agents/$legacy_label.plist" ]] || fail "the 4.x agent's definition remains"
+  [[ ! -e "$agents/$legacy_label.plist" ]] || fail "the old-label agent's definition remains"
   if launchctl print "gui/$(id -u)/$legacy_label" >/dev/null 2>&1; then
-    fail "the 4.x agent is still loaded"
+    fail "the old-label agent is still loaded"
   fi
 fi
 bbb status | tee "$root/status.txt"
