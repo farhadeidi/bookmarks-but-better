@@ -2,6 +2,7 @@ import * as React from "react"
 import type { BookmarkNode } from "@/browser"
 import { collectCardItems } from "./grid-navigation"
 import { GridNavigationContext, NO_SUBSCRIPTION } from "./use-grid-navigation"
+import { LazyCardsContext } from "./lazy-cards-gate"
 
 /**
  * A folder card that exists in full only near the viewport.
@@ -22,6 +23,10 @@ import { GridNavigationContext, NO_SUBSCRIPTION } from "./use-grid-navigation"
  *
  * In nested mode a card wraps each of its sub-folder cards the same way, so
  * a deep tree under one root is not one enormous card either.
+ *
+ * None of this applies below `LAZY_CARDS_ABOVE` bookmarks (see
+ * `lazy-cards-gate.ts`): the grid decides once per tree and hands the answer
+ * down through `LazyCardsContext`, and an ungated card is just its children.
  *
  * Without an IntersectionObserver (jsdom) every card is simply mounted.
  */
@@ -111,6 +116,33 @@ interface LazyCardProps {
 }
 
 export function LazyCard({
+  folder,
+  nestedFolders,
+  estimatedHeight,
+  measureRef,
+  children,
+}: LazyCardProps) {
+  const gated = React.useContext(LazyCardsContext)
+  if (!gated) {
+    return (
+      <div ref={measureRef} className="min-w-0">
+        {children}
+      </div>
+    )
+  }
+  return (
+    <GatedCard
+      folder={folder}
+      nestedFolders={nestedFolders}
+      estimatedHeight={estimatedHeight}
+      measureRef={measureRef}
+    >
+      {children}
+    </GatedCard>
+  )
+}
+
+function GatedCard({
   folder,
   nestedFolders,
   estimatedHeight,

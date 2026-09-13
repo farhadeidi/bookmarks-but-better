@@ -14,6 +14,16 @@ const CARD = '[data-testid="bookmark-card"]'
 const PLACEHOLDER = '[data-testid="bookmark-card-placeholder"]'
 const SCROLL_VIEWPORT = '[data-slot="scroll-area-viewport"]'
 
+test("a collection of a few hundred mounts every card, as before", async ({
+  page,
+}) => {
+  await page.goto("/?scenario=browser-daemon")
+  await page.waitForSelector(CARD)
+
+  expect(await page.locator(PLACEHOLDER).count()).toBe(0)
+  expect(await page.locator(CARD).count()).toBeGreaterThan(20)
+})
+
 test("only the cards near the viewport are mounted", async ({ page }) => {
   await page.goto("/?scenario=huge-library")
   await page.waitForSelector(CARD)

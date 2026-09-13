@@ -2,9 +2,11 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { act, cleanup, render } from "@testing-library/react"
+import type { BookmarkNode } from "@/browser"
 import { useBookmarkStore } from "@/stores/bookmark-store"
 import { usePreferencesStore } from "@/stores/preferences-store"
 import { BookmarkGrid } from "../bookmark-grid"
+import { LAZY_CARDS_ABOVE } from "../lazy-cards-gate"
 
 /**
  * The grid mounts a folder card only near the viewport (issue #75). These
@@ -53,32 +55,40 @@ class StubIntersectionObserver {
   }
 }
 
-const TREE = [
-  {
-    id: "root",
-    title: "Root",
-    children: ["one", "two"].map((id) => ({
-      id,
-      title: id,
-      children: [
-        { id: `${id}-b`, title: `${id} bookmark`, url: "https://e.example" },
-        {
-          id: `${id}-sub`,
-          title: `${id} sub`,
-          children: [
-            {
-              id: `${id}-sub-b`,
-              title: `${id} sub bookmark`,
-              url: "https://sub.example",
-            },
-          ],
-        },
-      ],
-    })),
-  },
-]
+/**
+ * Large enough to be gated: the sub-folders together carry the collection
+ * over the threshold, and they stay placeholders in every case but the one
+ * that scrolls to one, so the size costs the tests nothing.
+ */
+const SUB_SIZE = LAZY_CARDS_ABOVE
 
-function mount() {
+function tree(subSize: number): BookmarkNode[] {
+  return [
+    {
+      id: "root",
+      title: "Root",
+      children: ["one", "two"].map((id) => ({
+        id,
+        title: id,
+        children: [
+          { id: `${id}-b`, title: `${id} bookmark`, url: "https://e.example" },
+          {
+            id: `${id}-sub`,
+            title: `${id} sub`,
+            children: Array.from({ length: subSize }, (_, i) => ({
+              id: `${id}-sub-${i}`,
+              title: `${id} sub bookmark ${i}`,
+              url: `https://sub.example/${i}`,
+            })),
+          },
+        ],
+      })),
+    },
+  ]
+}
+
+function mount(subSize = SUB_SIZE) {
+  const TREE = tree(subSize)
   useBookmarkStore.setState({
     adapter: {
       bookmarks: {} as never,
@@ -203,13 +213,26 @@ describe("LazyCard", () => {
     // still a placeholder until the viewport reaches it.
     expect(mountedTitles(container)).toEqual(["one"])
     expect(placeholderTitles(container)).toEqual(["one sub", "two"])
-    expect(container.querySelector('a[href="https://sub.example"]')).toBeNull()
+    expect(container.querySelector('a[href^="https://sub.example"]')).toBeNull()
 
     report({ "one sub": { isIntersecting: true, height: 96 } })
     expect(mountedTitles(container)).toEqual(["one", "one sub"])
     expect(
-      container.querySelector('a[href="https://sub.example"]')
-    ).not.toBeNull()
+      container.querySelectorAll('a[href^="https://sub.example"]')
+    ).toHaveLength(SUB_SIZE)
+  })
+
+  it("gates nothing in a collection below the threshold: the grid it always was", () => {
+    const { container } = mount(1)
+
+    expect(mountedTitles(container)).toEqual([
+      "one",
+      "one sub",
+      "two",
+      "two sub",
+    ])
+    expect(placeholderTitles(container)).toEqual([])
+    expect(StubIntersectionObserver.instances).toEqual([])
   })
 
   it("keeps the card holding the grid's tab stop mounted wherever the viewport is", () => {

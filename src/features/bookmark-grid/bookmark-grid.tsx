@@ -12,6 +12,7 @@ import {
   useMeasuredCardHeights,
 } from "./card-heights"
 import { LazyCard } from "./lazy-card"
+import { LazyCardsContext, shouldGateCards } from "./lazy-cards-gate"
 import { BookmarkGridEmpty } from "./bookmark-grid-empty"
 import { GridNavigationContext, useGridNavigation } from "./use-grid-navigation"
 
@@ -107,6 +108,11 @@ export function BookmarkGrid() {
     })
   }, [displayRoot, nestedFolders, experimentalCardDrag, folderOrder])
 
+  const gateCards = React.useMemo(
+    () => (displayRoot ? shouldGateCards(displayRoot) : false),
+    [displayRoot]
+  )
+
   const folderIndexMap = React.useMemo(() => {
     const map = new Map<string, number>()
     folders.forEach((f, i) => map.set(f.id, i))
@@ -152,40 +158,42 @@ export function BookmarkGrid() {
       )}
     >
       <GridNavigationContext value={navigation}>
-        <div
-          {...containerProps}
-          className="grid w-full min-w-0 items-start gap-4"
-          style={{
-            gridTemplateColumns: `repeat(${columnCount}, minmax(0, 1fr))`,
-          }}
-        >
-          {columns.map((columnFolders, colIndex) => (
-            <div key={colIndex} className="flex min-w-0 flex-col gap-4">
-              {columnFolders.map((folder) => (
-                // The lazy wrapper is what the ResizeObserver watches: it is
-                // the only element that exists in both the draggable and
-                // plain variants, and it is only measured while the card is
-                // real rather than a placeholder.
-                <LazyCard
-                  key={folder.id}
-                  folder={folder}
-                  nestedFolders={nestedFolders}
-                  estimatedHeight={estimateCardHeight(folder, cardLayouts)}
-                  measureRef={measureRefs.get(folder.id)}
-                >
-                  {experimentalCardDrag ? (
-                    <SortableFolderCard
-                      folder={folder}
-                      sortableIndex={folderIndexMap.get(folder.id) ?? 0}
-                    />
-                  ) : (
-                    <BookmarkCard folder={folder} />
-                  )}
-                </LazyCard>
-              ))}
-            </div>
-          ))}
-        </div>
+        <LazyCardsContext value={gateCards}>
+          <div
+            {...containerProps}
+            className="grid w-full min-w-0 items-start gap-4"
+            style={{
+              gridTemplateColumns: `repeat(${columnCount}, minmax(0, 1fr))`,
+            }}
+          >
+            {columns.map((columnFolders, colIndex) => (
+              <div key={colIndex} className="flex min-w-0 flex-col gap-4">
+                {columnFolders.map((folder) => (
+                  // The lazy wrapper is what the ResizeObserver watches: it is
+                  // the only element that exists in both the draggable and
+                  // plain variants, and it is only measured while the card is
+                  // real rather than a placeholder.
+                  <LazyCard
+                    key={folder.id}
+                    folder={folder}
+                    nestedFolders={nestedFolders}
+                    estimatedHeight={estimateCardHeight(folder, cardLayouts)}
+                    measureRef={measureRefs.get(folder.id)}
+                  >
+                    {experimentalCardDrag ? (
+                      <SortableFolderCard
+                        folder={folder}
+                        sortableIndex={folderIndexMap.get(folder.id) ?? 0}
+                      />
+                    ) : (
+                      <BookmarkCard folder={folder} />
+                    )}
+                  </LazyCard>
+                ))}
+              </div>
+            ))}
+          </div>
+        </LazyCardsContext>
       </GridNavigationContext>
     </div>
   )
