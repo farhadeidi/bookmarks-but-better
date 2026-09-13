@@ -1,7 +1,7 @@
 import * as React from "react"
 import type { BookmarkNode } from "@/browser"
 import { collectCardItems } from "./grid-navigation"
-import { GridNavigationContext } from "./use-grid-navigation"
+import { GridNavigationContext, NO_SUBSCRIPTION } from "./use-grid-navigation"
 
 /**
  * A folder card that exists in full only near the viewport.
@@ -14,11 +14,14 @@ import { GridNavigationContext } from "./use-grid-navigation"
  * a placeholder the height of its last measurement (its estimate until it has
  * ever been measured), and its rows are torn down again once it scrolls away.
  *
- * Two things pin a card open regardless of the viewport: the keyboard focus,
+ * One thing pins a card open regardless of the viewport: the keyboard focus,
  * because the grid's roving tab stop has to land on an element that exists
- * (`useGridNavigation` focuses it once it registers); and an in-progress drag
- * entering the placeholder, so the folder becomes a drop target under the
- * pointer.
+ * (`useGridNavigation` focuses it once it registers). A drag needs no pin of
+ * its own — the browser scrolls the page for it, and scrolling is what
+ * mounts cards.
+ *
+ * In nested mode a card wraps each of its sub-folder cards the same way, so
+ * a deep tree under one root is not one enormous card either.
  *
  * Without an IntersectionObserver (jsdom) every card is simply mounted.
  */
@@ -99,8 +102,11 @@ interface LazyCardProps {
   nestedFolders: boolean
   /** The card's height before it has ever been rendered. */
   estimatedHeight: number
-  /** Where `useMeasuredCardHeights` looks; attached only while the card is real. */
-  measureRef: ((element: HTMLElement | null) => void) | undefined
+  /**
+   * Where `useMeasuredCardHeights` looks; attached only while the card is
+   * real. A nested card is not measured — its parent is.
+   */
+  measureRef?: (element: HTMLElement | null) => void
   children: React.ReactNode
 }
 
@@ -135,13 +141,10 @@ export function LazyCard({
     lastHeight: null,
   }))
   const { near, lastHeight } = viewport
-  const [dragTarget, setDragTarget] = React.useState(false)
 
   const ref = React.useCallback((element: HTMLElement | null) => {
     if (!element || typeof IntersectionObserver === "undefined") return
     return observeNear(element, (isNear, height) => {
-      // A drag pin lasts only while the card is near; leaving clears it.
-      if (!isNear) setDragTarget(false)
       setViewport((previous) => ({
         near: isNear,
         lastHeight: !isNear && height > 0 ? height : previous.lastHeight,
@@ -149,7 +152,7 @@ export function LazyCard({
     })
   }, [])
 
-  const mounted = near || holdsActiveItem || dragTarget
+  const mounted = near || holdsActiveItem
 
   return (
     <div ref={ref} className="min-w-0">
@@ -162,7 +165,6 @@ export function LazyCard({
           data-testid="bookmark-card-placeholder"
           className="flex w-full min-w-0 flex-col rounded-2xl bg-card p-4 ring-1 ring-border"
           style={{ minHeight: lastHeight ?? estimatedHeight }}
-          onDragEnter={() => setDragTarget(true)}
         >
           <h3 className="min-w-0 truncate text-base font-medium sm:text-sm">
             {folder.title}
@@ -172,5 +174,3 @@ export function LazyCard({
     </div>
   )
 }
-
-const NO_SUBSCRIPTION = () => () => {}

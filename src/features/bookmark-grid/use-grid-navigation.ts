@@ -44,7 +44,7 @@ export const GridNavigationContext = React.createContext<GridNavigation | null>(
   null
 )
 
-const NO_SUBSCRIPTION = () => () => {}
+export const NO_SUBSCRIPTION = () => () => {}
 
 /**
  * Outside a grid there is no roving order to join, so the item reports itself
@@ -109,6 +109,8 @@ export function useGridNavigation(options: GridNavigationOptions) {
 
   const containerRef = React.useRef<HTMLDivElement | null>(null)
   const elements = React.useRef(new Map<string, HTMLElement>())
+  /** The same elements, for asking whether a focused element is one of them. */
+  const registered = React.useRef(new WeakSet<HTMLElement>())
   const listeners = React.useRef(new Set<() => void>())
   const activeId = React.useRef<string | null>(null)
   const position = React.useRef<GridPosition | null>(null)
@@ -167,19 +169,31 @@ export function useGridNavigation(options: GridNavigationOptions) {
       registerItem(id, element) {
         if (element) {
           elements.current.set(id, element)
+          registered.current.add(element)
           // The tab stop arriving after it was chosen: an arrow key can land
           // on an item whose card `LazyCard` had not mounted yet, so the key
           // handler found nothing to focus. The card mounts in response to
           // the same move, and the item finishes it here — only while the
-          // grid is the thing holding focus, as with a refresh.
+          // grid is the thing holding focus, and never away from a control
+          // inside it that is not a grid item (a folder menu, say): that is
+          // a refresh landing under a user who is busy elsewhere.
+          const active = document.activeElement
+          const focusIsElsewhereInGrid =
+            active instanceof HTMLElement &&
+            active !== document.body &&
+            containerRef.current?.contains(active) === true &&
+            !registered.current.has(active)
           if (
             id === activeId.current &&
             heldFocus.current &&
-            document.activeElement !== element
+            active !== element &&
+            !focusIsElsewhereInGrid
           ) {
             element.focus()
           }
         } else {
+          const previous = elements.current.get(id)
+          if (previous) registered.current.delete(previous)
           elements.current.delete(id)
         }
       },

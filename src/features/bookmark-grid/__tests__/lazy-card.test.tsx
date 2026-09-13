@@ -62,6 +62,17 @@ const TREE = [
       title: id,
       children: [
         { id: `${id}-b`, title: `${id} bookmark`, url: "https://e.example" },
+        {
+          id: `${id}-sub`,
+          title: `${id} sub`,
+          children: [
+            {
+              id: `${id}-sub-b`,
+              title: `${id} sub bookmark`,
+              url: "https://sub.example",
+            },
+          ],
+        },
       ],
     })),
   },
@@ -96,21 +107,21 @@ function mount() {
 }
 
 /** The lazy wrappers the grid asked the observer to watch, by folder title. */
-function wrappersByTitle(container: HTMLElement): Map<string, Element> {
+function wrappersByTitle(): Map<string, Element> {
   const wrappers = new Map<string, Element>()
-  for (const heading of container.querySelectorAll("h3")) {
-    // Placeholder or card, the wrapper is the column's direct child.
-    const wrapper = heading.closest(".grid > div > div")
-    if (wrapper) wrappers.set(heading.textContent ?? "", wrapper)
+  for (const instance of StubIntersectionObserver.instances) {
+    for (const target of instance.targets) {
+      const heading = target.querySelector("h3")
+      if (heading) wrappers.set(heading.textContent ?? "", target)
+    }
   }
   return wrappers
 }
 
 function report(
-  container: HTMLElement,
   near: Record<string, { isIntersecting: boolean; height: number }>
 ) {
-  const wrappers = wrappersByTitle(container)
+  const wrappers = wrappersByTitle()
   const byElement = new Map<
     Element,
     { isIntersecting: boolean; height: number }
@@ -161,10 +172,10 @@ describe("LazyCard", () => {
     const { container } = mount()
 
     expect(mountedTitles(container)).toEqual(["one"])
-    expect(placeholderTitles(container)).toEqual(["two"])
-    const placeholder = container.querySelector<HTMLElement>(
+    expect(placeholderTitles(container)).toEqual(["one sub", "two"])
+    const placeholder = container.querySelectorAll<HTMLElement>(
       '[data-testid="bookmark-card-placeholder"]'
-    )
+    )[1]
     // One list row on top of the card chrome; see `estimateCardHeight`.
     expect(placeholder?.style.minHeight).toBe("96px")
   })
@@ -172,22 +183,39 @@ describe("LazyCard", () => {
   it("mounts a card the viewport approaches and tears it down when it leaves, keeping its last height", () => {
     const { container } = mount()
 
-    report(container, { two: { isIntersecting: true, height: 96 } })
+    report({ two: { isIntersecting: true, height: 96 } })
     expect(mountedTitles(container)).toEqual(["one", "two"])
-    expect(placeholderTitles(container)).toEqual([])
+    expect(placeholderTitles(container)).toEqual(["one sub", "two sub"])
 
-    report(container, { two: { isIntersecting: false, height: 240 } })
+    report({ two: { isIntersecting: false, height: 240 } })
     expect(mountedTitles(container)).toEqual(["one"])
-    const placeholder = container.querySelector<HTMLElement>(
+    expect(placeholderTitles(container)).toEqual(["one sub", "two"])
+    const placeholder = container.querySelectorAll<HTMLElement>(
       '[data-testid="bookmark-card-placeholder"]'
-    )
+    )[1]
     expect(placeholder?.style.minHeight).toBe("240px")
+  })
+
+  it("wraps each nested sub-folder card the same way, so a deep tree is not one enormous card", () => {
+    const { container } = mount()
+
+    // The first card is mounted (it holds the tab stop); its sub-folder is
+    // still a placeholder until the viewport reaches it.
+    expect(mountedTitles(container)).toEqual(["one"])
+    expect(placeholderTitles(container)).toEqual(["one sub", "two"])
+    expect(container.querySelector('a[href="https://sub.example"]')).toBeNull()
+
+    report({ "one sub": { isIntersecting: true, height: 96 } })
+    expect(mountedTitles(container)).toEqual(["one", "one sub"])
+    expect(
+      container.querySelector('a[href="https://sub.example"]')
+    ).not.toBeNull()
   })
 
   it("keeps the card holding the grid's tab stop mounted wherever the viewport is", () => {
     const { container } = mount()
 
-    report(container, {
+    report({
       one: { isIntersecting: true, height: 96 },
       two: { isIntersecting: true, height: 96 },
     })
@@ -197,11 +225,11 @@ describe("LazyCard", () => {
     act(() => bookmark.focus())
     expect(bookmark.tabIndex).toBe(0)
 
-    report(container, {
+    report({
       one: { isIntersecting: false, height: 96 },
       two: { isIntersecting: false, height: 96 },
     })
     expect(mountedTitles(container)).toEqual(["one"])
-    expect(placeholderTitles(container)).toEqual(["two"])
+    expect(placeholderTitles(container)).toEqual(["one sub", "two"])
   })
 })

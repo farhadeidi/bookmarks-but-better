@@ -24,6 +24,8 @@ import { useFolderDropTarget } from "@/features/dnd"
 // Past the grid's barrel on purpose: importing it would pull `BookmarkGrid`,
 // which renders this card, back into the card's own module graph.
 import { useGridItem } from "@/features/bookmark-grid/use-grid-navigation"
+import { LazyCard } from "@/features/bookmark-grid/lazy-card"
+import { estimateCardHeight } from "@/features/bookmark-grid/card-heights"
 import { usePreferencesStore } from "@/stores/preferences-store"
 import { useBookmarkStore } from "@/stores/bookmark-store"
 import { useUIStore } from "@/stores/ui-store"
@@ -171,6 +173,7 @@ export const BookmarkCard = React.memo(function BookmarkCard({
   dragHandleRef,
 }: BookmarkCardProps) {
   const layout = usePreferencesStore((s) => s.cardLayouts[folder.id] ?? "list")
+  const cardLayouts = usePreferencesStore((s) => s.cardLayouts)
   const setCardLayout = usePreferencesStore((s) => s.setCardLayout)
   const nestedFolders = usePreferencesStore((s) => s.nestedFolders)
   const adapter = useBookmarkStore((s) => s.adapter)
@@ -269,7 +272,14 @@ export const BookmarkCard = React.memo(function BookmarkCard({
       {/* Nested subfolders (only in nested mode) */}
       {nestedFolders &&
         subfolders.map((subfolder) => (
-          <BookmarkCard key={subfolder.id} folder={subfolder} nested />
+          <LazyCard
+            key={subfolder.id}
+            folder={subfolder}
+            nestedFolders
+            estimatedHeight={estimateCardHeight(subfolder, cardLayouts)}
+          >
+            <BookmarkCard folder={subfolder} nested />
+          </LazyCard>
         ))}
     </div>
   )
