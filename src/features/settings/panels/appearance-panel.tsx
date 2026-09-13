@@ -1,36 +1,29 @@
+import { Radio as RadioPrimitive } from "@base-ui/react/radio"
 import { HugeiconsIcon } from "@hugeicons/react"
 import { Tick02Icon } from "@hugeicons/core-free-icons"
+import { RadioGroup } from "@/components/ui/radio-group"
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
 } from "@/components/ui/select"
-import { useTheme } from "@/components/theme-provider"
+import { useTheme, type Theme } from "@/components/theme-provider"
 import { cn } from "@/lib/utils"
-import { COLOR_THEME_LABELS } from "@/lib/color-themes"
 import {
-  usePreferencesStore,
-  COLOR_THEMES,
-  type ColorTheme,
-} from "@/stores/preferences-store"
+  COLOR_THEME_IDS,
+  COLOR_THEME_LABELS,
+  type ColorThemeId,
+} from "@/lib/color-themes"
+import { usePreferencesStore } from "@/stores/preferences-store"
 import { SettingGroup, SettingRow, SettingSection } from "./setting-row"
 
-type Scheme = "system" | "light" | "dark"
-
-const SCHEMES: { id: Scheme; label: string }[] = [
+const SCHEMES: { id: Theme; label: string }[] = [
   { id: "system", label: "System" },
   { id: "light", label: "Light" },
   { id: "dark", label: "Dark" },
 ]
 
-/**
- * The dashboard in miniature: the Source Switcher pill up top, folder cards
- * with their bookmark rows below, and the floating action pill in the corner.
- * It is drawn entirely from theme tokens, so wrapping it in `.light` /
- * `.dark` and a `data-color-theme` shows exactly what that combination
- * looks like.
- */
 function MiniFolderCard({ rows }: { rows: number }) {
   return (
     <div className="flex flex-col gap-1 rounded-md bg-card p-1.5 ring-1 ring-border">
@@ -50,6 +43,13 @@ function MiniFolderCard({ rows }: { rows: number }) {
   )
 }
 
+/**
+ * The dashboard in miniature: the Source Switcher pill up top, folder cards
+ * with their bookmark rows below, and the floating action pill in the corner.
+ * It is drawn entirely from theme tokens (never `dark:` utilities, which
+ * would still fire under a dark page), so wrapping it in `.light` / `.dark`
+ * and a `data-color-theme` shows exactly what that combination looks like.
+ */
 function MiniDashboard() {
   return (
     <div className="relative flex h-full w-full flex-col gap-1.5 bg-background p-2 text-foreground">
@@ -73,7 +73,7 @@ function MiniDashboard() {
  * The attribute that scopes a color theme's tokens to one element. The
  * default theme has no attribute; the root works the same way.
  */
-function colorThemeAttr(theme: ColorTheme) {
+function colorThemeAttr(theme: ColorThemeId) {
   return theme === "default" ? undefined : theme
 }
 
@@ -85,8 +85,8 @@ function DashboardPreview({
   scheme,
   colorTheme,
 }: {
-  scheme: Scheme
-  colorTheme: ColorTheme
+  scheme: Theme
+  colorTheme: ColorThemeId
 }) {
   const themeAttr = colorThemeAttr(colorTheme)
   if (scheme === "system") {
@@ -112,6 +112,44 @@ function DashboardPreview({
   )
 }
 
+/** One selectable card in a picker: a preview above its label. */
+function PreviewRadio({
+  value,
+  label,
+  checked,
+  children,
+}: {
+  value: string
+  label: string
+  checked: boolean
+  children: React.ReactNode
+}) {
+  return (
+    <RadioPrimitive.Root
+      value={value}
+      aria-label={label}
+      className={cn(
+        "flex flex-col gap-2 rounded-xl p-2 text-left ring-1 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        checked
+          ? "bg-accent/40 ring-2 ring-primary"
+          : "ring-border/60 hover:bg-accent/30 hover:ring-border"
+      )}
+    >
+      {children}
+      <span className="flex items-center justify-between gap-2 px-1">
+        <span className="truncate text-sm">{label}</span>
+        {checked && (
+          <HugeiconsIcon
+            icon={Tick02Icon}
+            className="size-4 shrink-0 text-primary"
+            strokeWidth={2.5}
+          />
+        )}
+      </span>
+    </RadioPrimitive.Root>
+  )
+}
+
 export function AppearancePanel() {
   const colorTheme = usePreferencesStore((s) => s.colorTheme)
   const setColorTheme = usePreferencesStore((s) => s.setColorTheme)
@@ -124,33 +162,23 @@ export function AppearancePanel() {
   return (
     <div className="flex flex-col gap-8">
       <SettingSection title="Color scheme">
-        <div
-          role="radiogroup"
+        <RadioGroup
           aria-label="Color scheme"
-          className="grid grid-cols-3 gap-3"
+          value={theme}
+          onValueChange={(value) => setTheme(value as Theme)}
+          className="grid-cols-3"
         >
-          {SCHEMES.map((scheme) => {
-            const checked = theme === scheme.id
-            return (
-              <button
-                key={scheme.id}
-                type="button"
-                role="radio"
-                aria-checked={checked}
-                onClick={() => setTheme(scheme.id)}
-                className={cn(
-                  "flex flex-col gap-2 rounded-xl p-2 text-left ring-1 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                  checked
-                    ? "bg-accent/40 ring-2 ring-primary"
-                    : "ring-border/60 hover:bg-accent/30 hover:ring-border"
-                )}
-              >
-                <DashboardPreview scheme={scheme.id} colorTheme={colorTheme} />
-                <span className="text-center text-sm">{scheme.label}</span>
-              </button>
-            )
-          })}
-        </div>
+          {SCHEMES.map((scheme) => (
+            <PreviewRadio
+              key={scheme.id}
+              value={scheme.id}
+              label={scheme.label}
+              checked={theme === scheme.id}
+            >
+              <DashboardPreview scheme={scheme.id} colorTheme={colorTheme} />
+            </PreviewRadio>
+          ))}
+        </RadioGroup>
         <p className="text-xs text-muted-foreground">
           Applies to this browser profile on every source. Press{" "}
           <kbd className="rounded border border-border/60 bg-muted px-1 font-mono text-[11px]">
@@ -161,44 +189,24 @@ export function AppearancePanel() {
       </SettingSection>
 
       <SettingSection title="Theme">
-        <div
-          role="radiogroup"
+        <RadioGroup
           aria-label="Theme"
-          className="grid grid-cols-2 gap-3 sm:grid-cols-3"
+          value={colorTheme}
+          onValueChange={(value) => setColorTheme(value as ColorThemeId)}
+          className="grid-cols-2 sm:grid-cols-3"
         >
-          {COLOR_THEMES.map((id) => {
-            const checked = colorTheme === id
-            return (
-              <button
-                key={id}
-                type="button"
-                role="radio"
-                aria-checked={checked}
-                onClick={() => setColorTheme(id)}
-                className={cn(
-                  "flex flex-col gap-2 rounded-xl p-2 text-left ring-1 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                  checked
-                    ? "bg-accent/40 ring-2 ring-primary"
-                    : "ring-border/60 hover:bg-accent/30 hover:ring-border"
-                )}
-              >
-                <DashboardPreview scheme="system" colorTheme={id} />
-                <span className="flex items-center justify-between gap-2 px-1">
-                  <span className="truncate text-sm">
-                    {COLOR_THEME_LABELS[id]}
-                  </span>
-                  {checked && (
-                    <HugeiconsIcon
-                      icon={Tick02Icon}
-                      className="size-4 shrink-0 text-primary"
-                      strokeWidth={2.5}
-                    />
-                  )}
-                </span>
-              </button>
-            )
-          })}
-        </div>
+          {COLOR_THEME_IDS.map((id) => (
+            <PreviewRadio
+              key={id}
+              value={id}
+              label={COLOR_THEME_LABELS[id]}
+              checked={colorTheme === id}
+            >
+              {/* Shown in the scheme in use, so the cards match the page. */}
+              <DashboardPreview scheme={theme} colorTheme={id} />
+            </PreviewRadio>
+          ))}
+        </RadioGroup>
       </SettingSection>
 
       <SettingSection title="Layout">

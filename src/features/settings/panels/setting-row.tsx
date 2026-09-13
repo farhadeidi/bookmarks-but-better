@@ -1,5 +1,4 @@
 import * as React from "react"
-import { cn } from "@/lib/utils"
 
 /**
  * The building blocks every settings panel is laid out with: a muted section
@@ -9,40 +8,22 @@ import { cn } from "@/lib/utils"
 
 export function SettingSection({
   title,
-  action,
   children,
-  className,
 }: {
   title: string
-  action?: React.ReactNode
   children: React.ReactNode
-  className?: string
 }) {
   return (
-    <section className={cn("flex flex-col gap-3", className)}>
-      <div className="flex items-center justify-between gap-3">
-        <h3 className="text-sm font-medium text-muted-foreground">{title}</h3>
-        {action}
-      </div>
+    <section className="flex flex-col gap-3">
+      <h3 className="text-sm font-medium text-muted-foreground">{title}</h3>
       {children}
     </section>
   )
 }
 
-export function SettingGroup({
-  children,
-  className,
-}: {
-  children: React.ReactNode
-  className?: string
-}) {
+export function SettingGroup({ children }: { children: React.ReactNode }) {
   return (
-    <div
-      className={cn(
-        "divide-y divide-border/60 overflow-hidden rounded-xl bg-card ring-1 ring-border/60",
-        className
-      )}
-    >
+    <div className="divide-y divide-border/60 overflow-hidden rounded-xl bg-card ring-1 ring-border/60">
       {children}
     </div>
   )

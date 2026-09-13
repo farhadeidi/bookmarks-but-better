@@ -40,23 +40,25 @@ const css = readFileSync(new URL("../index.css", import.meta.url), "utf8")
 function parseTokens(body: string): Tokens {
   const tokens: Tokens = {}
   for (const [, name, l, c, h] of body.matchAll(
-    /--([a-z0-9-]+):\s*oklch\(\s*([\d.]+)\s+([\d.]+)\s+([\d.]+)\s*\)/g
+    /--([a-z0-9-]+):\s*oklch\(\s*([\d.]+)\s+([\d.]+)\s+([\d.]+)\s*(?:\/[^)]*)?\)/g
   )) {
     tokens[name] = [Number(l), Number(c), Number(h)]
   }
   return tokens
 }
 
+/** The body of the rule whose selector list ends with `selector`. */
 function block(selector: string): string {
+  const escaped = selector.replace(/[[\]().]/g, "\\$&")
   const match = css.match(
-    new RegExp(`${selector.replace(/[[\]().]/g, "\\$&")}\\s*\\{([^}]*)\\}`)
+    new RegExp(`(?:^|\\n)(?:[^{}\\n]*,\\s*)?${escaped}\\s*\\{([^}]*)\\}`)
   )
   if (!match) throw new Error(`No CSS block for ${selector}`)
   return match[1]
 }
 
-const ROOT = parseTokens(block(":root,\n.light"))
-const DARK = parseTokens(block("\n.dark"))
+const ROOT = parseTokens(block(".light"))
+const DARK = parseTokens(block(".dark"))
 
 function themeTokens(id: string, mode: "light" | "dark"): Tokens {
   const base = mode === "light" ? ROOT : DARK
@@ -124,6 +126,10 @@ describe("color themes", () => {
     )
   )("%s (%s) keeps its text readable", (id, mode) => {
     const tokens = themeTokens(id, mode)
+    for (const [fg, bg] of readablePairs) {
+      expect(tokens[fg], `${fg} is not an oklch token`).toBeDefined()
+      expect(tokens[bg], `${bg} is not an oklch token`).toBeDefined()
+    }
     const failures = readablePairs
       .map(([fg, bg]) => ({ fg, bg, ratio: contrast(tokens[fg], tokens[bg]) }))
       .filter(({ ratio }) => ratio < TEXT_CONTRAST)

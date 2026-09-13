@@ -1,7 +1,6 @@
 import * as React from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import {
   Select,
@@ -258,134 +257,143 @@ export function DataMigrationPanel({
     await runPlan(plan, importParentId, {})
   }
 
+  const importDisabledReason = !adapter
+    ? "Bookmarks are still loading."
+    : !defaultImportParentId
+      ? "There is no folder to import into yet. Create one first, or choose a root folder in Bookmarks."
+      : null
+
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-2">
-        <Label className="text-sm font-medium">Bookmarks data</Label>
-        <div className="flex gap-2">
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={!adapter || !defaultImportParentId}
-                  onClick={handlePickImportFile}
-                >
-                  Import
-                </Button>
-              }
-            />
-            {!adapter || !defaultImportParentId ? (
-              <TooltipContent side="bottom">
-                {adapter
-                  ? "There is no folder to import into yet. Create one first, or choose a root folder in Bookmarks."
-                  : "Bookmarks are still loading."}
-              </TooltipContent>
-            ) : null}
-          </Tooltip>
-          <DropdownMenu>
-            <DropdownMenuTrigger
-              render={
-                <Button variant="outline" size="sm">
-                  Export
-                </Button>
-              }
-            />
-            <DropdownMenuContent align="start">
-              {/* With no root folder chosen there is nothing to narrow to, so
-                  this would hand back the same file as "Everything" — two
-                  entries, one outcome. */}
-              <DropdownMenuItem
-                disabled={!rootFolderId}
-                title={
-                  rootFolderId
-                    ? undefined
-                    : "Choose a root folder in Bookmarks to export just that folder."
-                }
-                onClick={() => handleExport("dashboard")}
+    <div className="flex flex-col gap-8">
+      <SettingSection title="Bookmarks data">
+        <SettingGroup>
+          <SettingRow
+            title="Import"
+            description="Bring in bookmarks from an HTML file (the standard browser format). They land in the active source."
+            control={
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={importDisabledReason !== null}
+                      onClick={handlePickImportFile}
+                    >
+                      Import…
+                    </Button>
+                  }
+                />
+                {importDisabledReason && (
+                  <TooltipContent side="bottom">
+                    {importDisabledReason}
+                  </TooltipContent>
+                )}
+              </Tooltip>
+            }
+          />
+          {pendingImport && (
+            <div className="flex flex-col gap-2 bg-muted/30 p-4">
+              <p className="text-xs text-muted-foreground">
+                Found {pendingImport.bookmarks} bookmark
+                {pendingImport.bookmarks === 1 ? "" : "s"} in{" "}
+                {pendingImport.folders} folder
+                {pendingImport.folders === 1 ? "" : "s"}. Choose where to put
+                them.
+              </p>
+
+              <Select
+                value={importParentId ?? ""}
+                onValueChange={setImportParentId}
               >
-                Dashboard folder
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => handleExport("everything")}>
-                Everything
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-        <p className="text-xs text-muted-foreground">
-          Import or export bookmarks as HTML (standard browser format). Imports
-          land in the active source.
-        </p>
+                <SelectTrigger className="w-full">
+                  <span className="truncate">
+                    {folderOptions.find((f) => f.id === importParentId)
+                      ?.label ?? "Select a folder"}
+                  </span>
+                </SelectTrigger>
+                <SelectContent>
+                  {folderOptions.map((folder) => (
+                    <SelectItem key={folder.id} value={folder.id}>
+                      {folder.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
 
-        {pendingImport && (
-          <div className="flex flex-col gap-2 rounded-lg border border-dashed border-border/70 p-3">
-            <p className="text-xs text-muted-foreground">
-              Found {pendingImport.bookmarks} bookmark
-              {pendingImport.bookmarks === 1 ? "" : "s"} in{" "}
-              {pendingImport.folders} folder
-              {pendingImport.folders === 1 ? "" : "s"}. Choose where to put
-              them.
-            </p>
-
-            <Select
-              value={importParentId ?? ""}
-              onValueChange={setImportParentId}
-            >
-              <SelectTrigger className="w-full">
-                <span className="truncate">
-                  {folderOptions.find((f) => f.id === importParentId)?.label ??
-                    "Select a folder"}
-                </span>
-              </SelectTrigger>
-              <SelectContent>
-                {folderOptions.map((folder) => (
-                  <SelectItem key={folder.id} value={folder.id}>
-                    {folder.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            <Input
-              value={importFolderName}
-              onChange={(e) => setImportFolderName(e.target.value)}
-              placeholder="Optional: import into a new subfolder"
-              aria-label="New subfolder name"
-              disabled={isImporting}
-            />
-
-            <div className="flex gap-2">
-              <Button
-                size="sm"
-                disabled={isImporting || !importParentId}
-                title={
-                  importParentId
-                    ? undefined
-                    : "Pick a destination folder first."
-                }
-                onClick={() => void handleConfirmImport()}
-              >
-                {isImporting ? "Importing…" : "Import here"}
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
+              <Input
+                value={importFolderName}
+                onChange={(e) => setImportFolderName(e.target.value)}
+                placeholder="Optional: import into a new subfolder"
+                aria-label="New subfolder name"
                 disabled={isImporting}
-                onClick={cancelImport}
-              >
-                Cancel
-              </Button>
-            </div>
-          </div>
-        )}
+              />
 
-        {importStatus && (
-          <p role="status" className="text-xs text-muted-foreground">
-            {importStatus}
-          </p>
-        )}
-      </div>
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  disabled={isImporting || !importParentId}
+                  title={
+                    importParentId
+                      ? undefined
+                      : "Pick a destination folder first."
+                  }
+                  onClick={() => void handleConfirmImport()}
+                >
+                  {isImporting ? "Importing…" : "Import here"}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={isImporting}
+                  onClick={cancelImport}
+                >
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          )}
+          {importStatus && (
+            <p role="status" className="p-4 text-xs text-muted-foreground">
+              {importStatus}
+            </p>
+          )}
+          <SettingRow
+            title="Export"
+            description="Save bookmarks as an HTML file you can import into any browser."
+            control={
+              <DropdownMenu>
+                <DropdownMenuTrigger
+                  render={
+                    <Button variant="outline" size="sm">
+                      Export…
+                    </Button>
+                  }
+                />
+                <DropdownMenuContent align="end">
+                  {/* With no root folder chosen there is nothing to narrow to, so
+                      this would hand back the same file as "Everything" — two
+                      entries, one outcome. */}
+                  <DropdownMenuItem
+                    disabled={!rootFolderId}
+                    title={
+                      rootFolderId
+                        ? undefined
+                        : "Choose a root folder in Bookmarks to export just that folder."
+                    }
+                    onClick={() => handleExport("dashboard")}
+                  >
+                    Dashboard folder
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleExport("everything")}>
+                    Everything
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            }
+          />
+        </SettingGroup>
+      </SettingSection>
 
       {activePlan && (
         <ImportConflictDialog
@@ -398,19 +406,23 @@ export function DataMigrationPanel({
       )}
 
       {showStandaloneMigration && (
-        <div className="flex flex-col gap-2">
-          <Label className="text-sm font-medium">Legacy Standalone data</Label>
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={onMigrateStandalone}>
-              Migrate Standalone bookmarks…
-            </Button>
-          </div>
-          <p className="text-xs text-muted-foreground">
-            Copy the legacy Standalone collection into the active source or any
-            other. The original data is never deleted and stays readable here
-            for the whole sunset period.
-          </p>
-        </div>
+        <SettingSection title="Legacy Standalone data">
+          <SettingGroup>
+            <SettingRow
+              title="Migrate Standalone bookmarks"
+              description="Copy the legacy Standalone collection into the active source or any other. The original data is never deleted and stays readable here for the whole sunset period."
+              control={
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={onMigrateStandalone}
+                >
+                  Migrate…
+                </Button>
+              }
+            />
+          </SettingGroup>
+        </SettingSection>
       )}
     </div>
   )
@@ -458,40 +470,68 @@ export function AboutPanel() {
   const caps = React.useMemo(() => platformCapabilities(), [])
 
   return (
-    <div className="flex flex-col gap-3">
-      <div className="flex flex-col gap-1">
-        <span className="text-sm font-medium">Bookmarks — But Better</span>
-        <span className="text-xs text-muted-foreground">
-          Version {__APP_VERSION__}
-        </span>
-      </div>
-      <div className="flex flex-col gap-1 text-xs text-muted-foreground">
-        <span>Build: {caps.buildTarget}</span>
-        <span>
-          Browser Source: {caps.browserSource ? "available" : "unavailable"}
-        </span>
-        <span>
-          Daemon Sources: {caps.daemonSource ? "available" : "unavailable"}
-        </span>
-      </div>
-      <div className="flex flex-col gap-1">
-        <a
-          href="https://chromewebstore.google.com/detail/nflojekghnganlcjncbepnnnkgakghif?utm_source=extension-info"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-xs text-muted-foreground underline-offset-2 hover:underline"
-        >
-          Chrome Web Store
-        </a>
-        <a
-          href="https://github.com/farhadeidi/bookmarks-but-better"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-xs text-muted-foreground underline-offset-2 hover:underline"
-        >
-          GitHub
-        </a>
-      </div>
+    <div className="flex flex-col gap-8">
+      <SettingSection title="This build">
+        <SettingGroup>
+          <SettingRow
+            title="Bookmarks — But Better"
+            description={`Version ${__APP_VERSION__}`}
+            control={
+              <span className="text-xs text-muted-foreground">
+                {caps.buildTarget}
+              </span>
+            }
+          />
+          <SettingRow
+            title="Browser Source"
+            description="Bookmarks kept by this browser profile."
+            control={
+              <span className="text-xs text-muted-foreground">
+                {caps.browserSource ? "Available" : "Unavailable"}
+              </span>
+            }
+          />
+          <SettingRow
+            title="Daemon Sources"
+            description="Vaults served by a local daemon."
+            control={
+              <span className="text-xs text-muted-foreground">
+                {caps.daemonSource ? "Available" : "Unavailable"}
+              </span>
+            }
+          />
+        </SettingGroup>
+      </SettingSection>
+      <SettingSection title="Links">
+        <SettingGroup>
+          <SettingRow
+            title="Extension listing"
+            control={
+              <a
+                href="https://chromewebstore.google.com/detail/nflojekghnganlcjncbepnnnkgakghif?utm_source=extension-info"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs text-muted-foreground underline-offset-2 hover:underline"
+              >
+                Chrome Web Store
+              </a>
+            }
+          />
+          <SettingRow
+            title="Source code"
+            control={
+              <a
+                href="https://github.com/farhadeidi/bookmarks-but-better"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs text-muted-foreground underline-offset-2 hover:underline"
+              >
+                GitHub
+              </a>
+            }
+          />
+        </SettingGroup>
+      </SettingSection>
     </div>
   )
 }
