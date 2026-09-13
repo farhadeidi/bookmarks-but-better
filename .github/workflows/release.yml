@@ -1349,6 +1349,13 @@ jobs:
         run: |
           set -euo pipefail
           file=marketing/store-description.chrome.txt
+          if [ ! -s "$file" ]; then
+            echo "::warning::$file is missing or empty in this tag."
+            echo "### Chrome Web Store listing" >> "$GITHUB_STEP_SUMMARY"
+            echo "\`$file\` is missing or empty in this tag, so there is nothing to paste." \
+              >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
           if ! previous=$(git describe --tags --abbrev=0 --match 'v*' --exclude 'v*-*' HEAD^ 2>/dev/null); then
             state=unknown
           elif git diff --quiet "$previous" HEAD -- "$file"; then
