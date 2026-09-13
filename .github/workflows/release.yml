@@ -1013,6 +1013,19 @@ jobs:
           fi
           echo "the two AMO credential names resolve to a non-empty value"
 
+      # The store listing text lives in the repository, so the listing steps at
+      # the end of this job read it from the tag. Full history, because the
+      # Chrome reminder compares the tag with the previous stable one. Nothing
+      # here pushes, so no credential is left in the checkout.
+      #
+      # Before the package download, not after: checkout empties a workspace
+      # that is not already this repository, which would delete `artifacts/`.
+      - name: Check out the tag for the store listings
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
       - name: Collect the extension packages
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
@@ -1199,5 +1212,173 @@ jobs:
               echo "select the tag \`$TAG\` under *Use workflow from*, and tick"
               echo "**Re-submit to Firefox AMO** only — leave Chrome off if it"
               echo "already published, or it will be rejected as a duplicate."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # --- Firefox AMO listing ------------------------------------------------
+      #
+      # Unlike Chrome's, AMO's API can edit a listing, so the description on AMO
+      # is set from `marketing/store-description.firefox.txt` in this tag. Only
+      # the description, in the add-on's default locale: the API leaves other
+      # locales untouched, and the summary, name and screenshots are still
+      # edited in the dashboard.
+      #
+      # It runs only after AMO accepted the version, so a rejected submission
+      # never leaves the listing describing a version AMO does not have.
+      #
+      # `continue-on-error` is deliberate here, and narrow. By this point the
+      # version is submitted, and failing the job would read as a failed release
+      # and invite a recovery dispatch that AMO rejects as a duplicate. The
+      # report step below reads this step's real outcome and says so in the
+      # summary, so a failure is reported rather than hidden.
+      #
+      # AMO wants an HS256 JWT with a unique `jti` per request, valid for at most
+      # five minutes. Node signs it reading the secret from the environment, and
+      # curl reads the token from a header file, so neither the secret nor the
+      # token ever appears on a command line.
+      - name: Update the AMO listing description
+        id: amo_listing
+        if: steps.amo.outcome == 'success'
+        continue-on-error: true
+        env:
+          AMO_JWT_ISSUER: ${{ secrets.AMO_JWT_ISSUER }}
+          AMO_JWT_SECRET: ${{ secrets.AMO_JWT_SECRET }}
+        run: |
+          set -euo pipefail
+          file=marketing/store-description.firefox.txt
+          if [ ! -s "$file" ]; then
+            echo "::error::$file is missing or empty; refusing to blank the AMO listing."
+            exit 1
+          fi
+          # The GUID from this tag's manifest: the add-on web-ext submitted to.
+          guid=$(jq -er '.browser_specific_settings.gecko.id | @uri' manifests/manifest.firefox.json)
+          api="https://addons.mozilla.org/api/v5/addons/addon/$guid/"
+          headers="$RUNNER_TEMP/amo-headers"
+          response="$RUNNER_TEMP/amo-response.json"
+          patch="$RUNNER_TEMP/amo-patch.json"
+
+          # Writes a fresh token to the header file. Called before every request.
+          authorize() {
+            local token
+            token=$(node -e '
+              const { createHmac, randomUUID } = require("node:crypto");
+              const b64 = (value) => Buffer.from(value).toString("base64url");
+              const iat = Math.floor(Date.now() / 1000);
+              const head = b64(JSON.stringify({ alg: "HS256", typ: "JWT" }));
+              const claims = b64(JSON.stringify({
+                iss: process.env.AMO_JWT_ISSUER,
+                jti: randomUUID(),
+                iat,
+                exp: iat + 60,
+              }));
+              const signature = createHmac("sha256", process.env.AMO_JWT_SECRET)
+                .update(`${head}.${claims}`)
+                .digest("base64url");
+              process.stdout.write(`${head}.${claims}.${signature}`);
+            ')
+            (umask 077 && printf 'Authorization: JWT %s\nContent-Type: application/json\n' \
+              "$token" > "$headers")
+          }
+
+          # The add-on's own default locale, rather than assuming en-US.
+          authorize
+          status=$(curl -sS -o "$response" -w '%{http_code}' -H @"$headers" "$api")
+          if [ "$status" != "200" ]; then
+            echo "::error::reading the add-on from AMO returned HTTP $status:"
+            cat "$response"
+            exit 1
+          fi
+          locale=$(jq -er '.default_locale' "$response")
+
+          jq -n --arg locale "$locale" --rawfile text "$file" \
+            '{description: {($locale): ($text | sub("\\s+$"; ""))}}' > "$patch"
+          authorize
+          status=$(curl -sS -o "$response" -w '%{http_code}' -X PATCH \
+            -H @"$headers" --data-binary @"$patch" "$api")
+          if [ "$status" != "200" ]; then
+            echo "::error::updating the AMO description returned HTTP $status:"
+            cat "$response"
+            exit 1
+          fi
+          echo "the AMO description ($locale) is now $file"
+
+      # `outcome`, not `conclusion`: with `continue-on-error` the conclusion is
+      # always success, and only the outcome says what happened.
+      - name: Report the AMO listing update
+        if: always() && steps.amo.outcome == 'success'
+        env:
+          OUTCOME: ${{ steps.amo_listing.outcome }}
+        run: |
+          set -euo pipefail
+          file=marketing/store-description.firefox.txt
+          {
+            echo "### Firefox AMO listing"
+            echo
+            if [ "$OUTCOME" = "success" ]; then
+              echo "The AMO description is now \`$file\` from this tag. It is live"
+              echo "on the listing already, while the version itself waits for review."
+              echo "The summary, name and screenshots are not synced; edit those in"
+              echo "the dashboard."
+            else
+              echo "**The description was not updated** (\`${OUTCOME:-did not run}\`)."
+              echo "The version submission above is unaffected, so **do not** start a"
+              echo "recovery dispatch for this: AMO would reject the version as a"
+              echo "duplicate. Read the step log, then paste \`$file\` into the"
+              echo "listing at <https://addons.mozilla.org/developers/>."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # --- Chrome Web Store listing -------------------------------------------
+      #
+      # The Chrome Web Store API uploads and publishes packages and nothing
+      # else: no endpoint touches the description, title or screenshots. The
+      # listing therefore stays a manual edit in the dashboard, and this step
+      # makes it hard to forget. It compares the listing text in this tag with
+      # the previous stable tag and, when it changed, puts the text in the
+      # summary ready to paste.
+      #
+      # Only a change since the previous stable tag is flagged. A change that
+      # was never pasted for an earlier release is not flagged again.
+      #
+      # Last in the job, so a problem here can never stand between Chrome and
+      # the Firefox submission.
+      - name: Remind to update the Chrome listing
+        if: always() && steps.chrome.outcome == 'success'
+        env:
+          TAG: ${{ needs.validate.outputs.tag }}
+        run: |
+          set -euo pipefail
+          file=marketing/store-description.chrome.txt
+          if ! previous=$(git describe --tags --abbrev=0 --match 'v*' --exclude 'v*-*' HEAD^ 2>/dev/null); then
+            state=unknown
+          elif git diff --quiet "$previous" HEAD -- "$file"; then
+            state=unchanged
+          else
+            state=changed
+          fi
+          {
+            echo "### Chrome Web Store listing"
+            echo
+            if [ "$state" = "unchanged" ]; then
+              echo "\`$file\` is unchanged since \`$previous\`. Nothing to paste."
+            else
+              if [ "$state" = "changed" ]; then
+                echo "**\`$file\` changed since \`$previous\`**" \
+                     "([diff](https://github.com/${GITHUB_REPOSITORY}/compare/${previous}...${TAG}))."
+              else
+                echo "**No earlier stable tag to compare with**, so whether \`$file\`"
+                echo "changed is unknown."
+              fi
+              echo "The Chrome Web Store API cannot edit a listing, so paste the text"
+              echo "below into the **Store listing** tab at"
+              echo "<https://chrome.google.com/webstore/devconsole>."
+              echo
+              echo "<details><summary>Description</summary>"
+              echo
+              echo '```text'
+              printf '%s\n' "$(cat "$file")"
+              echo '```'
+              echo
+              echo "</details>"
             fi
           } >> "$GITHUB_STEP_SUMMARY"
