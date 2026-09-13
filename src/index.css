@@ -48,7 +48,10 @@
     --radius-4xl: calc(var(--radius) * 2.6);
 }
 
-:root {
+/* `.light` mirrors `:root` so a swatch or preview can render a theme's light
+   tokens while the page itself is dark; `.dark` already works per element. */
+:root,
+.light {
     color-scheme: light;
     --radius: 0.65rem;
     --background: oklch(1 0 0);

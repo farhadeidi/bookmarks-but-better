@@ -20,13 +20,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import {
-  usePreferencesStore,
-  COLOR_THEMES,
-  type ColorTheme,
-} from "@/stores/preferences-store"
+import { usePreferencesStore } from "@/stores/preferences-store"
 import { useBookmarkStore } from "@/stores/bookmark-store"
-import { useTheme } from "@/components/theme-provider"
 import { buildRootFolderOptions } from "@/features/root-folder-select"
 import { serializeNetscapeBookmarks } from "@/browser/import-export/netscape-serializer"
 import { parseNetscapeBookmarks } from "@/browser/import-export/netscape-parser"
@@ -47,6 +42,7 @@ import type { BookmarkNode } from "@/browser"
 import { setOnboardingCompleted } from "@/browser/onboarding-preference"
 import { useUIStore } from "@/stores/ui-store"
 import { platformCapabilities } from "@/sources/platform"
+import { SettingGroup, SettingRow, SettingSection } from "./setting-row"
 
 // ---------------------------------------------------------------------------
 // General
@@ -67,127 +63,24 @@ export function GeneralPanel() {
   }
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-col gap-2">
-        <Label className="text-sm font-medium">Setup wizard</Label>
-        <div className="flex gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => void handleShowOnboarding()}
-          >
-            Show setup wizard
-          </Button>
-        </div>
-        <p className="text-xs text-muted-foreground">
-          Walk through the first-run setup again, including choosing bookmark
-          sources and a root folder.
-        </p>
-      </div>
-    </div>
-  )
-}
-
-// ---------------------------------------------------------------------------
-// Appearance
-// ---------------------------------------------------------------------------
-
-export function AppearancePanel() {
-  const colorTheme = usePreferencesStore((s) => s.colorTheme)
-  const setColorTheme = usePreferencesStore((s) => s.setColorTheme)
-  const maxColumns = usePreferencesStore((s) => s.maxColumns)
-  const setMaxColumns = usePreferencesStore((s) => s.setMaxColumns)
-  const containerMode = usePreferencesStore((s) => s.containerMode)
-  const setContainerMode = usePreferencesStore((s) => s.setContainerMode)
-  const { theme, setTheme } = useTheme()
-
-  return (
-    <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-2">
-        <Label className="text-sm font-medium">Light / dark</Label>
-        <Select
-          value={theme}
-          onValueChange={(value) =>
-            setTheme(value as "light" | "dark" | "system")
-          }
-        >
-          <SelectTrigger className="w-full">
-            <span className="capitalize">{theme}</span>
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="light">Light</SelectItem>
-            <SelectItem value="dark">Dark</SelectItem>
-            <SelectItem value="system">System</SelectItem>
-          </SelectContent>
-        </Select>
-        <p className="text-xs text-muted-foreground">
-          Applies to this browser profile on every source.
-        </p>
-      </div>
-
-      <div className="flex flex-col gap-2">
-        <Label className="text-sm font-medium">Color theme</Label>
-        <Select
-          value={colorTheme}
-          onValueChange={(value) => setColorTheme(value as ColorTheme)}
-        >
-          <SelectTrigger className="w-full">
-            <span className="capitalize">{colorTheme}</span>
-          </SelectTrigger>
-          <SelectContent>
-            {COLOR_THEMES.map((t) => (
-              <SelectItem key={t} value={t} className="capitalize">
-                {t}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-
-      <div className="flex flex-col gap-2">
-        <Label className="text-sm font-medium">Max columns</Label>
-        <Select
-          value={String(maxColumns)}
-          onValueChange={(val) => setMaxColumns(Number(val))}
-        >
-          <SelectTrigger className="w-full">
-            <span>{maxColumns} columns</span>
-          </SelectTrigger>
-          <SelectContent>
-            {[2, 3, 4, 5, 6].map((n) => (
-              <SelectItem key={n} value={String(n)}>
-                {n} columns
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <p className="text-xs text-muted-foreground">
-          Maximum number of columns in the dashboard grid. Fewer columns are
-          used on smaller screens.
-        </p>
-      </div>
-
-      <div className="flex flex-col gap-2">
-        <Label className="text-sm font-medium">Container</Label>
-        <Select
-          value={containerMode}
-          onValueChange={(val) =>
-            setContainerMode(val as "fluid" | "contained")
-          }
-        >
-          <SelectTrigger className="w-full">
-            <span>{containerMode === "fluid" ? "Fluid" : "Contained"}</span>
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="fluid">Fluid</SelectItem>
-            <SelectItem value="contained">Contained</SelectItem>
-          </SelectContent>
-        </Select>
-        <p className="text-xs text-muted-foreground">
-          Contained limits the dashboard to 1440px wide and centers it on the
-          screen.
-        </p>
-      </div>
+    <div className="flex flex-col gap-8">
+      <SettingSection title="Setup">
+        <SettingGroup>
+          <SettingRow
+            title="Setup wizard"
+            description="Walk through the first-run setup again, including choosing bookmark sources and a root folder."
+            control={
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => void handleShowOnboarding()}
+              >
+                Show setup wizard
+              </Button>
+            }
+          />
+        </SettingGroup>
+      </SettingSection>
     </div>
   )
 }
@@ -536,17 +429,23 @@ export function AdvancedPanel() {
   )
 
   return (
-    <div className="flex items-center justify-between">
-      <div className="flex flex-col gap-1">
-        <Label className="text-sm font-medium">Experimental card drag</Label>
-        <p className="text-xs text-muted-foreground">
-          Enable the in-progress card-to-card drag affordance in the grid.
-        </p>
-      </div>
-      <Switch
-        checked={experimentalCardDrag}
-        onCheckedChange={(checked) => setExperimentalCardDrag(checked)}
-      />
+    <div className="flex flex-col gap-8">
+      <SettingSection title="Experiments">
+        <SettingGroup>
+          <SettingRow
+            title="Experimental card drag"
+            description="Enable the in-progress card-to-card drag affordance in the grid."
+            htmlFor="experimental-card-drag"
+            control={
+              <Switch
+                id="experimental-card-drag"
+                checked={experimentalCardDrag}
+                onCheckedChange={(checked) => setExperimentalCardDrag(checked)}
+              />
+            }
+          />
+        </SettingGroup>
+      </SettingSection>
     </div>
   )
 }
