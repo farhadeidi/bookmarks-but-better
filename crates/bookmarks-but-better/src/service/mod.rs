@@ -43,7 +43,7 @@ use std::io;
 use std::path::{Path, PathBuf};
 
 pub use self::manage::{
-    disable_and_stop, enable_and_start, preferred_kind, reload, start, state, stop,
+    disable_and_stop, enable_and_start, preferred_kind, reload, retire_legacy, start, state, stop,
     systemd_is_usable,
 };
 pub use self::spec::{
@@ -215,6 +215,39 @@ impl ServiceLayout {
                 .join(kind.file_name()),
         }
     }
+
+    /// Where 4.x put the definition for `kind`, for the one kind whose name
+    /// has changed since.
+    ///
+    /// The macOS agent was labelled `com.farhadeidi.bookmarks`, after a domain
+    /// the project no longer uses. A machine upgraded from 4.x still has that
+    /// file, and reading it is what lets `status`, the kept port and
+    /// `install.sh`'s vault adoption see the service that is really there
+    /// until an install retires it ([`retire_legacy`]).
+    #[must_use]
+    pub fn legacy_definition_path(&self, kind: ServiceKind) -> Option<PathBuf> {
+        match kind {
+            ServiceKind::LaunchAgent => Some(
+                self.home
+                    .join("Library")
+                    .join("LaunchAgents")
+                    .join(launchd::LEGACY_PLIST_FILE),
+            ),
+            ServiceKind::Systemd | ServiceKind::XdgAutostart | ServiceKind::ScheduledTask => None,
+        }
+    }
+
+    /// The definition actually installed: the current one, else the one 4.x
+    /// wrote, else none.
+    #[must_use]
+    pub fn installed_definition_path(&self, kind: ServiceKind) -> Option<PathBuf> {
+        let current = self.definition_path(kind);
+        if current.exists() {
+            return Some(current);
+        }
+        self.legacy_definition_path(kind)
+            .filter(|path| path.exists())
+    }
 }
 
 /// What an install did.
@@ -383,7 +416,7 @@ pub fn install(
 /// The command line an installed definition runs, if one is installed.
 #[must_use]
 pub fn installed_command_line(layout: &ServiceLayout, kind: ServiceKind) -> Option<Vec<String>> {
-    let bytes = std::fs::read(layout.definition_path(kind)).ok()?;
+    let bytes = std::fs::read(layout.installed_definition_path(kind)?).ok()?;
     let text = match kind {
         ServiceKind::ScheduledTask => decode_utf16le(&bytes)?,
         _ => String::from_utf8(bytes).ok()?,
@@ -435,17 +468,25 @@ pub fn installed_vaults(
         .unwrap_or_default()
 }
 
-/// Removes the definition file, and nothing else.
+/// Removes the definition file — and the one 4.x wrote, if it is still there
+/// — and nothing else.
 ///
 /// Returns whether a file was there to remove. **The vault is never touched**:
-/// this deletes one generated file whose path this module chose, and a vault
-/// path is data inside that file, not a target.
+/// this deletes generated files whose paths this module chose, and a vault
+/// path is data inside them, not a target.
 ///
 /// # Errors
 ///
-/// [`ServiceError::Io`] when the file exists but cannot be removed.
+/// [`ServiceError::Io`] when a file exists but cannot be removed.
 pub fn uninstall(layout: &ServiceLayout, kind: ServiceKind) -> Result<bool, ServiceError> {
-    let path = layout.definition_path(kind);
+    let mut removed = remove_definition(layout.definition_path(kind))?;
+    if let Some(legacy) = layout.legacy_definition_path(kind) {
+        removed |= remove_definition(legacy)?;
+    }
+    Ok(removed)
+}
+
+fn remove_definition(path: PathBuf) -> Result<bool, ServiceError> {
     match std::fs::remove_file(&path) {
         Ok(()) => Ok(true),
         Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(false),
@@ -453,10 +494,10 @@ pub fn uninstall(layout: &ServiceLayout, kind: ServiceKind) -> Result<bool, Serv
     }
 }
 
-/// Whether a definition for `kind` is installed.
+/// Whether a definition for `kind` is installed, under either name.
 #[must_use]
 pub fn is_installed(layout: &ServiceLayout, kind: ServiceKind) -> bool {
-    layout.definition_path(kind).exists()
+    layout.installed_definition_path(kind).is_some()
 }
 
 #[cfg(test)]
@@ -619,12 +660,68 @@ mod tests {
         );
         assert_eq!(
             layout.definition_path(ServiceKind::LaunchAgent),
-            home.join("Library/LaunchAgents/com.farhadeidi.bookmarks.plist")
+            home.join("Library/LaunchAgents/dev.but-better.bookmarks.plist")
         );
         assert_eq!(
             layout.definition_path(ServiceKind::ScheduledTask),
             home.join(".config/bookmarks-but-better/bookmarks-but-better-task.xml")
         );
+    }
+
+    #[test]
+    fn only_the_launch_agent_had_a_different_name_in_4x() {
+        let home = PathBuf::from("test-home");
+        let layout = ServiceLayout::rooted_at(&home);
+
+        assert_eq!(
+            layout.legacy_definition_path(ServiceKind::LaunchAgent),
+            Some(home.join("Library/LaunchAgents/com.farhadeidi.bookmarks.plist"))
+        );
+        for kind in [
+            ServiceKind::Systemd,
+            ServiceKind::XdgAutostart,
+            ServiceKind::ScheduledTask,
+        ] {
+            assert_eq!(layout.legacy_definition_path(kind), None, "{kind:?}");
+        }
+    }
+
+    #[test]
+    fn an_agent_installed_by_4x_is_read_until_replaced_and_removed_on_uninstall() {
+        let home = tempfile::tempdir().expect("temp dir");
+        let layout = ServiceLayout::rooted_at(home.path());
+        let kind = ServiceKind::LaunchAgent;
+
+        let legacy = layout
+            .legacy_definition_path(kind)
+            .expect("the agent had a legacy name");
+        std::fs::create_dir_all(legacy.parent().expect("parent")).expect("create");
+        let text = kind
+            .definition(&spec("/Users/user/Vault", 47321))
+            .replace(SERVICE_LABEL, launchd::LEGACY_LABEL);
+        std::fs::write(&legacy, text).expect("write the 4.x agent");
+
+        // What is installed is what 4.x wrote: its port and its vault.
+        assert!(is_installed(&layout, kind));
+        assert_eq!(layout.installed_definition_path(kind), Some(legacy.clone()));
+        assert_eq!(resolve_port(&layout, kind, None), 47321);
+        assert_eq!(
+            installed_vaults(&layout, kind)[0].path,
+            PathBuf::from("/Users/user/Vault")
+        );
+
+        // Once the current definition is written, it is the one read.
+        install(&layout, kind, &spec("/Users/user/Vault", 40404)).expect("install");
+        assert_eq!(
+            layout.installed_definition_path(kind),
+            Some(layout.definition_path(kind))
+        );
+        assert_eq!(resolve_port(&layout, kind, None), 40404);
+
+        // And uninstalling leaves neither behind.
+        assert!(uninstall(&layout, kind).expect("uninstall"));
+        assert!(!legacy.exists());
+        assert!(!is_installed(&layout, kind));
     }
 
     #[test]

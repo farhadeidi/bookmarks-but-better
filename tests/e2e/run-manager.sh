@@ -23,7 +23,9 @@ mode="run"
 
 # Never the product default (52222): a run must not collide with a real daemon.
 port=${BOOKMARKS_BUT_BETTER_E2E_PORT:-52224}
-label="com.farhadeidi.bookmarks"
+label="dev.but-better.bookmarks"
+# The label 4.x gave the agent, which an upgrade has to retire.
+legacy_label="com.farhadeidi.bookmarks"
 
 case "$(uname -s)" in
   Darwin) os="apple-darwin" ;;
@@ -37,9 +39,13 @@ case "$(uname -m)" in
 esac
 target="$arch-$os"
 
-if [[ "$os" == "apple-darwin" ]] && launchctl print "gui/$(id -u)/$label" >/dev/null 2>&1; then
-  echo "a real $label agent is loaded; stop it first: bookmarks-but-better service stop" >&2
-  exit 1
+if [[ "$os" == "apple-darwin" ]]; then
+  for loaded in "$label" "$legacy_label"; do
+    if launchctl print "gui/$(id -u)/$loaded" >/dev/null 2>&1; then
+      echo "a real $loaded agent is loaded; stop it first: bookmarks-but-better service stop" >&2
+      exit 1
+    fi
+  done
 fi
 if lsof -nP -iTCP:"$port" -sTCP:LISTEN >/dev/null 2>&1; then
   echo "port $port is busy; set BOOKMARKS_BUT_BETTER_E2E_PORT to another" >&2
@@ -162,6 +168,14 @@ ln -sfn "$root/install/versions/4.0.0" "$root/install/current"
 rm -f "$XDG_CONFIG_HOME/bookmarks-but-better/config.toml"
 "$root/install/current/bookmarks-but-better" init --vault "$old_vault" >/dev/null
 "$root/install/current/bookmarks-but-better" service install --vault "$old_vault" --port "$port" >/dev/null
+agents="$HOME/Library/LaunchAgents"
+if [[ "$os" == "apple-darwin" ]]; then
+  # 4.x loaded its agent under the old label, from a file named after it.
+  launchctl bootout "gui/$(id -u)" "$agents/$label.plist"
+  sed "s/$label/$legacy_label/" "$agents/$label.plist" > "$agents/$legacy_label.plist"
+  rm "$agents/$label.plist"
+  launchctl bootstrap "gui/$(id -u)" "$agents/$legacy_label.plist"
+fi
 wait_for_health || fail "the 4.0.0-shaped service did not start"
 
 step "install --yes over it: adopt the vault, reinstall the service, ask nothing"
@@ -171,6 +185,12 @@ grep -q '"id": "default"' "$root/registry.json" || fail "the service's vault was
 grep -q "$old_vault" "$root/registry.json" || fail "the registry does not name the old vault's path"
 [[ "$(health)" == *'"id":"default"'* ]] || fail "the upgraded daemon does not host the old vault: $(health)"
 [[ -f "$old_vault/.bookmarks-but-better-folder.md" ]] || fail "the old vault was touched"
+if [[ "$os" == "apple-darwin" ]]; then
+  [[ ! -e "$agents/$legacy_label.plist" ]] || fail "the 4.x agent's definition remains"
+  if launchctl print "gui/$(id -u)/$legacy_label" >/dev/null 2>&1; then
+    fail "the 4.x agent is still loaded"
+  fi
+fi
 bbb status | tee "$root/status.txt"
 grep -q "everything is in place" "$root/status.txt" || fail "status reports a problem after the upgrade"
 

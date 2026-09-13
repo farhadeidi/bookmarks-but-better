@@ -995,6 +995,15 @@ fn run_service_install(
     }
     println!("  serving http://{}:{}", spec.bind, spec.port);
 
+    match service::retire_legacy(layout, kind) {
+        Ok(Some(path)) => println!(
+            "removed {}, which an earlier version installed",
+            path.display()
+        ),
+        Ok(None) => {}
+        Err(error) => return fail(format_args!("{error}")),
+    }
+
     if let Err(error) = service::reload(layout, kind) {
         return fail(format_args!("{error}"));
     }
@@ -1030,11 +1039,14 @@ fn run_service_status(
     let port = service::installed_command_line(layout, kind)
         .as_deref()
         .and_then(service::port_in);
+    let definition = layout
+        .installed_definition_path(kind)
+        .unwrap_or_else(|| layout.definition_path(kind));
 
     if json {
         let document = serde_json::json!({
             "kind": kind.describe(),
-            "definition": layout.definition_path(kind),
+            "definition": definition,
             "state": match state {
                 service::ServiceState::NotInstalled => "not-installed",
                 service::ServiceState::Running => "running",
@@ -1055,7 +1067,7 @@ fn run_service_status(
     }
 
     println!("kind       {}", kind.describe());
-    println!("definition {}", layout.definition_path(kind).display());
+    println!("definition {}", definition.display());
     println!(
         "state      {}",
         match state {
@@ -1111,12 +1123,15 @@ fn run_service(command: ServiceCommand) -> ExitCode {
         },
 
         ServiceCommand::Uninstall => {
+            let installed = layout
+                .installed_definition_path(kind)
+                .unwrap_or_else(|| layout.definition_path(kind));
             // Best-effort, and deliberately before the file goes: a service
             // manager cannot be asked to stop a unit whose definition is gone.
             service::disable_and_stop(&layout, kind);
             match service::uninstall(&layout, kind) {
                 Ok(true) => {
-                    println!("removed {}", layout.definition_path(kind).display());
+                    println!("removed {}", installed.display());
                     println!("your vault was not touched");
                     ExitCode::SUCCESS
                 }

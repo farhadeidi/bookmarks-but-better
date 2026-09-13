@@ -379,9 +379,10 @@ fi
 #
 # The Daemon Manager's own test suite is excluded: it asserts these strings
 # are absent, so its source necessarily contains them.
-off_release=$(grep -rn -e 'raw\.githubusercontent\.com' -e 'bookmarks\.farhadeidi\.com/install' \
+off_release=$(grep -rn -e 'raw\.githubusercontent\.com' -e 'but-better\.dev/install' \
   "$repo_root/README.md" \
   "$repo_root/docs" \
+  "$repo_root/src" \
   "$repo_root/packages/bookmarks-but-better/README.md" \
   "$repo_root/packages/bookmarks-but-better/bin" \
   "$repo_root/packages/bookmarks-but-better/lib" \

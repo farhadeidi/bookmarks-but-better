@@ -8,7 +8,7 @@ use crate::server::{DEFAULT_BIND, DEFAULT_PORT};
 
 /// The reverse-DNS identifier the macOS agent uses, and the stem every other
 /// platform's definition file is named after.
-pub const SERVICE_LABEL: &str = "com.farhadeidi.bookmarks";
+pub const SERVICE_LABEL: &str = "dev.but-better.bookmarks";
 
 /// The systemd unit / desktop entry / task name, without an extension.
 pub const SERVICE_NAME: &str = "bookmarks-but-better";

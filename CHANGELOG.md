@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **The website moved to `bookmarks.but-better.dev`.** Every link, canonical
+  URL and the npm package's homepage point there. The Safari app and its
+  extension, not yet published, take the matching bundle identifiers
+  `dev.but-better.bookmarks.safari` and `dev.but-better.bookmarks.safari.Extension`.
+- **The macOS background service is labelled `dev.but-better.bookmarks`.** An
+  agent installed by 4.x under `com.farhadeidi.bookmarks` keeps being reported
+  by `service status`, and the next `service install` — which an upgrade runs —
+  keeps its port and vaults, unloads and removes it, and starts the new one in
+  its place. `service uninstall` removes either.
+
+### Fixed
+
+- **The daemon install command in Settings works.** It fetched `install.sh`
+  and `install.ps1` from a domain the project does not own; it now fetches
+  them from the latest GitHub Release, like the README and the website.
+
 ## [4.1.1] - 2026-09-11
 
 ### Fixed

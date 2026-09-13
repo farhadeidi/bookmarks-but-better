@@ -24,7 +24,7 @@ function healthy(overrides = {}) {
   };
   report.service = {
     kind: "LaunchAgent",
-    definition: "/home/me/Library/LaunchAgents/com.farhadeidi.bookmarks.plist",
+    definition: "/home/me/Library/LaunchAgents/dev.but-better.bookmarks.plist",
     state: "running",
     vaults: [{ id: "default", path: "/home/me/Bookmarks" }],
     port: 52222,

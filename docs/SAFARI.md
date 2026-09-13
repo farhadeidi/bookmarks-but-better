@@ -55,10 +55,10 @@ open Safari's Extensions settings.
 Bundle identifiers matter and are not free-form — Safari requires the
 extension's id to be a prefixed child of the app's:
 
-| Target    | Bundle identifier                                    |
-| --------- | ---------------------------------------------------- |
-| App       | `com.farhadeidi.bookmarks-but-better.safari`           |
-| Extension | `com.farhadeidi.bookmarks-but-better.safari.Extension` |
+| Target    | Bundle identifier                           |
+| --------- | ------------------------------------------- |
+| App       | `dev.but-better.bookmarks.safari`           |
+| Extension | `dev.but-better.bookmarks.safari.Extension` |
 
 The product version is **not** stored in the Xcode project. `safari/build.sh`
 reads it from the manifest it just built and passes it as `MARKETING_VERSION`,
@@ -113,7 +113,7 @@ rm -rf safari/Bookmarks\ But\ Better
 xcrun safari-web-extension-converter dist-safari \
   --project-location safari \
   --app-name "Bookmarks But Better" \
-  --bundle-identifier com.farhadeidi.bookmarks-but-better.safari \
+  --bundle-identifier dev.but-better.bookmarks.safari \
   --macos-only --swift --copy-resources --no-open --no-prompt --force
 ```
 
@@ -123,11 +123,11 @@ Then **reapply both corrections** in
 forgotten one fails loudly rather than shipping.
 
 1. **The app target's bundle identifier.** The converter derives it from the
-   *app name* (`com.farhadeidi.bookmarks-but-better.Bookmarks-But-Better`),
+   *app name* (`dev.but-better.bookmarks.Bookmarks-But-Better`),
    which breaks the required `<app-id>.Extension` relationship — the extension
    target is given `…safari.Extension`, a child of an id nothing has. Set both
    `PRODUCT_BUNDLE_IDENTIFIER` entries of the **app** target (Debug and
-   Release) to `com.farhadeidi.bookmarks-but-better.safari`.
+   Release) to `dev.but-better.bookmarks.safari`.
 
 2. **The deployment target.** The converter pins `MACOSX_DEPLOYMENT_TARGET` to
    the installed SDK's version at the project level (`26.5` on Xcode 26.6),
@@ -137,7 +137,7 @@ forgotten one fails loudly rather than shipping.
 
 ```bash
 sed -i '' \
-  -e 's/PRODUCT_BUNDLE_IDENTIFIER = "com\.farhadeidi\.bookmarks-but-better\.Bookmarks-But-Better";/PRODUCT_BUNDLE_IDENTIFIER = "com.farhadeidi.bookmarks-but-better.safari";/' \
+  -e 's/PRODUCT_BUNDLE_IDENTIFIER = "dev\.but-better\.bookmarks\.Bookmarks-But-Better";/PRODUCT_BUNDLE_IDENTIFIER = "dev.but-better.bookmarks.safari";/' \
   -e 's/MACOSX_DEPLOYMENT_TARGET = [0-9.]*;/MACOSX_DEPLOYMENT_TARGET = 14.0;/' \
   "safari/Bookmarks But Better/Bookmarks But Better.xcodeproj/project.pbxproj"
 ```
@@ -193,7 +193,7 @@ fails is a bug worth filing before the build is called good.
 1. **Build.** From a clean checkout, run `bun install`, then
    `bash safari/build.sh`. It must end with `** BUILD SUCCEEDED **` and print
    the app path, the version, and the two bundle ids
-   (`com.farhadeidi.bookmarks-but-better.safari` and the same with
+   (`dev.but-better.bookmarks.safari` and the same with
    `.Extension`).
 2. **Register the app.** Open the built app once:
    `open "safari/build/Products/Release/Bookmarks But Better.app"`. A small
