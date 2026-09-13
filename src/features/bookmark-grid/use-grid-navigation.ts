@@ -34,6 +34,7 @@ export interface GridItemProps {
 export interface GridNavigation {
   subscribe(listener: () => void): () => void
   isActive(id: string): boolean
+  activeId(): string | null
   activate(id: string): void
   registerItem(id: string, element: HTMLElement | null): void
   handleKeyDown(id: string, event: React.KeyboardEvent<HTMLElement>): void
@@ -157,12 +158,27 @@ export function useGridNavigation(options: GridNavigationOptions) {
       isActive(id) {
         return activeId.current === id
       },
+      activeId() {
+        return activeId.current
+      },
       activate(id) {
         setActiveId(id)
       },
       registerItem(id, element) {
         if (element) {
           elements.current.set(id, element)
+          // The tab stop arriving after it was chosen: an arrow key can land
+          // on an item whose card `LazyCard` had not mounted yet, so the key
+          // handler found nothing to focus. The card mounts in response to
+          // the same move, and the item finishes it here — only while the
+          // grid is the thing holding focus, as with a refresh.
+          if (
+            id === activeId.current &&
+            heldFocus.current &&
+            document.activeElement !== element
+          ) {
+            element.focus()
+          }
         } else {
           elements.current.delete(id)
         }

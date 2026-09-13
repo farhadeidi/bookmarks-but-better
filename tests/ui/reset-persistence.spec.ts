@@ -55,6 +55,12 @@ test("mutations persist across reloads, and Reset Scenario restores the seed", a
     "Travel",
     "Gaming",
   ]) {
+    // A card far below the fold is a placeholder until scrolled near, so it
+    // is brought into view before its layout can be seen.
+    await page
+      .locator("h3", { hasText: title })
+      .first()
+      .scrollIntoViewIfNeeded()
     await expect(
       page
         .getByTestId("bookmark-card")

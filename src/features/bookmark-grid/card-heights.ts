@@ -20,7 +20,7 @@ const HEIGHT_CHANGE_THRESHOLD = 8
  * wide the column actually is. They are only ever the first paint's answer:
  * `useMeasuredCardHeights` replaces each card's guess with its real height.
  */
-function estimateCardHeight(
+export function estimateCardHeight(
   folder: BookmarkNode,
   cardLayouts: Record<string, string>
 ): number {

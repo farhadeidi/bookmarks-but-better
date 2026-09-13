@@ -6,7 +6,12 @@ import { useSortableFolder, DropIndicator } from "@/features/dnd"
 import type { BookmarkNode } from "@/browser"
 import { cn } from "@/lib/utils"
 import { getVisibleFolders } from "./folder-collection"
-import { distributeToColumns, useMeasuredCardHeights } from "./card-heights"
+import {
+  distributeToColumns,
+  estimateCardHeight,
+  useMeasuredCardHeights,
+} from "./card-heights"
+import { LazyCard } from "./lazy-card"
 import { BookmarkGridEmpty } from "./bookmark-grid-empty"
 import { GridNavigationContext, useGridNavigation } from "./use-grid-navigation"
 
@@ -157,13 +162,16 @@ export function BookmarkGrid() {
           {columns.map((columnFolders, colIndex) => (
             <div key={colIndex} className="flex min-w-0 flex-col gap-4">
               {columnFolders.map((folder) => (
-                // The wrapper is what the ResizeObserver watches: it is the
-                // only element that exists in both the draggable and plain
-                // variants.
-                <div
+                // The lazy wrapper is what the ResizeObserver watches: it is
+                // the only element that exists in both the draggable and
+                // plain variants, and it is only measured while the card is
+                // real rather than a placeholder.
+                <LazyCard
                   key={folder.id}
-                  ref={measureRefs.get(folder.id)}
-                  className="min-w-0"
+                  folder={folder}
+                  nestedFolders={nestedFolders}
+                  estimatedHeight={estimateCardHeight(folder, cardLayouts)}
+                  measureRef={measureRefs.get(folder.id)}
                 >
                   {experimentalCardDrag ? (
                     <SortableFolderCard
@@ -173,7 +181,7 @@ export function BookmarkGrid() {
                   ) : (
                     <BookmarkCard folder={folder} />
                   )}
-                </div>
+                </LazyCard>
               ))}
             </div>
           ))}
