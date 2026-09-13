@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Bookmarks But Better",
   "description": "A bookmarks dashboard backed by a local daemon. Themes, dark mode, full management. Reads the current page only when you click Save.",
-  "version": "4.2.0",
+  "version": "4.2.1",
   "action": {
     "default_popup": "popup.html",
     "default_title": "Save bookmark"

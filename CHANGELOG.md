@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.2.1] - 2026-09-13
+
+### Fixed
+
+- **A collection of thousands of bookmarks no longer hangs the new tab.**
+  Every folder card mounted at once, and with it a hover card, a drag
+  source, a tab stop and a favicon lookup for each row — ten thousand of
+  them was a gigabyte of memory before the first paint, and the tab crashed
+  (#75). Above 500 bookmarks the dashboard now lays out every card but only
+  builds the ones within a screen of the viewport, keeping a placeholder of
+  the right height for the rest; cards are built as they scroll near and
+  released as they leave. The keyboard still reaches every item, and the
+  card holding the focus is never released. Collections of a few hundred
+  bookmarks are untouched: below the threshold the grid mounts everything,
+  exactly as before, so the browser's find-in-page still sees every card.
+- **The Dev Workbench has a `huge-library` scenario** with over ten thousand
+  bookmarks across three nesting levels, for keeping it that way.
+
 ## [4.2.0] - 2026-09-13
 
 ### Changed
@@ -408,6 +426,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Rewrote README for end users with screenshots and badges
 
+[4.2.1]: https://github.com/farhadeidi/bookmarks-but-better/compare/v4.2.0...v4.2.1
 [4.2.0]: https://github.com/farhadeidi/bookmarks-but-better/compare/v4.1.1...v4.2.0
 [4.1.1]: https://github.com/farhadeidi/bookmarks-but-better/compare/v4.1.0...v4.1.1
 [4.1.0]: https://github.com/farhadeidi/bookmarks-but-better/compare/v4.0.0...v4.1.0
