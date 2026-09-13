@@ -1,13 +1,13 @@
 import { create } from "zustand"
 import type { BrowserAdapter } from "@/browser"
-import { COLOR_THEME_IDS } from "@/lib/color-themes"
+import { COLOR_THEME_IDS, type ColorThemeId } from "@/lib/color-themes"
 import {
   ProfileStorageAdapter,
   readProfilePreference,
 } from "@/stores/profile-storage"
 
 type CardLayout = "list" | "grid"
-export type ColorTheme = (typeof COLOR_THEME_IDS)[number]
+export type ColorTheme = ColorThemeId
 
 export const COLOR_THEMES: ColorTheme[] = [...COLOR_THEME_IDS]
 

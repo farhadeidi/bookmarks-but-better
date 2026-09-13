@@ -72,8 +72,16 @@ test("appearance controls and product information remain available in Settings",
   const dialog = await openSettings(page)
 
   await dialog.getByRole("tab", { name: "Appearance" }).click()
-  await expect(dialog.getByText("Light / dark", { exact: true })).toBeVisible()
-  await expect(dialog.getByText("Color theme", { exact: true })).toBeVisible()
+  await expect(
+    dialog.getByRole("radiogroup", { name: "Color scheme" })
+  ).toBeVisible()
+  await dialog.getByRole("radio", { name: "Light" }).click()
+  await expect(dialog.getByRole("radio", { name: "Light" })).toBeChecked()
+  await expect(page.locator("html")).toHaveClass(/light/)
+  await dialog.getByRole("radio", { name: "Dark" }).click()
+  await expect(page.locator("html")).toHaveClass(/dark/)
+  await expect(dialog.getByRole("radiogroup", { name: "Theme" })).toBeVisible()
+  await expect(dialog.getByText("Max columns", { exact: true })).toBeVisible()
 
   await dialog.getByRole("tab", { name: "About" }).click()
   await expect(

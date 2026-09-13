@@ -15,7 +15,7 @@ import {
   type SettingsCategoryId,
 } from "./settings-categories"
 import { GeneralPanel } from "./panels/settings-panels"
-import { AppearancePanel } from "./panels/settings-panels"
+import { AppearancePanel } from "./panels/appearance-panel"
 import { DataMigrationPanel } from "./panels/settings-panels"
 import { AdvancedPanel } from "./panels/settings-panels"
 import { AboutPanel } from "./panels/settings-panels"
