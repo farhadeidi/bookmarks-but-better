@@ -34,9 +34,12 @@ function guessPlatform(): Platform {
  * steps, which the paragraph below names. See docs/DAEMON.md.
  */
 const INSTALL_COMMANDS: Record<Platform, string> = {
-  macos: "curl -fsSL https://bookmarks-but-better.dev/install.sh | bash",
-  linux: "curl -fsSL https://bookmarks-but-better.dev/install.sh | bash",
-  windows: "irm https://bookmarks-but-better.dev/install.ps1 | iex",
+  macos:
+    "curl -fsSL https://github.com/farhadeidi/bookmarks-but-better/releases/latest/download/install.sh | bash",
+  linux:
+    "curl -fsSL https://github.com/farhadeidi/bookmarks-but-better/releases/latest/download/install.sh | bash",
+  windows:
+    "irm https://github.com/farhadeidi/bookmarks-but-better/releases/latest/download/install.ps1 | iex",
 }
 
 const PLATFORM_LABEL: Record<Platform, string> = {

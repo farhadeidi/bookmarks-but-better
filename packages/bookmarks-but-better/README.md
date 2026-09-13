@@ -1,6 +1,6 @@
 # bookmarks-but-better
 
-Installs and looks after the [Bookmarks But Better](https://bookmarks.farhadeidi.com)
+Installs and looks after the [Bookmarks But Better](https://bookmarks.but-better.dev)
 daemon on your machine.
 
 ```sh

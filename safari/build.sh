@@ -18,7 +18,7 @@ project_dir="$repo_root/safari/Bookmarks But Better"
 project="$project_dir/Bookmarks But Better.xcodeproj"
 pbxproj="$project/project.pbxproj"
 build_dir="$repo_root/safari/build"
-app_bundle_id="com.farhadeidi.bookmarks-but-better.safari"
+app_bundle_id="dev.but-better.bookmarks.safari"
 
 # The two corrections `safari-web-extension-converter` needs after every
 # generation (docs/SAFARI.md → Regenerating the Xcode project). They are

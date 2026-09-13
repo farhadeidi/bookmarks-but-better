@@ -89,7 +89,7 @@ and "hosted" is visible.
 | -------- | ------------------------------------------ | ------------------------------------------------------------------------------------- |
 | Linux    | systemd **user** unit (`systemctl --user`) | `$XDG_CONFIG_HOME/systemd/user/bookmarks-but-better.service`                            |
 | Linux¹   | XDG autostart entry, the fallback          | `$XDG_CONFIG_HOME/autostart/bookmarks-but-better.desktop`                               |
-| macOS    | `LaunchAgent`                              | `~/Library/LaunchAgents/com.farhadeidi.bookmarks.plist`                                 |
+| macOS    | `LaunchAgent`                              | `~/Library/LaunchAgents/dev.but-better.bookmarks.plist`                                 |
 | Windows  | Scheduled Task, triggered at logon         | registered from `$XDG_CONFIG_HOME/bookmarks-but-better/bookmarks-but-better-task.xml`   |
 
 ¹ Used only when there is no usable `systemctl --user`. An autostart entry is
@@ -105,6 +105,11 @@ Properties that hold on every platform:
 - **An explicit port survives an upgrade.** `install` with no `--port` reads the
   installed definition's own command line and keeps its port, so an
   installation configured on the previous default (47321) is not moved.
+- **A macOS agent from before 4.2.0 is replaced, not duplicated.** Those
+  versions labelled it `com.farhadeidi.bookmarks`. `status` still reads that
+  definition; `install` — even with `--no-start` — boots it out and removes it
+  before the current one starts; `start`, `stop`, `status` and `uninstall`
+  act on both while both exist.
 - **Several vaults, or one.** Repeat `--vault <id>=<path>`, or install what the
   registry holds with `--from-config`. A definition serving exactly one vault
   under the id `default` still spells it as a bare `--vault <path>` — the shape

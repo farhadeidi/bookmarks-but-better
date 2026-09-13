@@ -6,9 +6,9 @@ use std::path::{Path, PathBuf};
 use crate::registry::{DEFAULT_VAULT_ID, VaultSpec};
 use crate::server::{DEFAULT_BIND, DEFAULT_PORT};
 
-/// The reverse-DNS identifier the macOS agent uses, and the stem every other
-/// platform's definition file is named after.
-pub const SERVICE_LABEL: &str = "com.farhadeidi.bookmarks";
+/// The reverse-DNS label of the macOS agent. The other platforms name their
+/// definitions after [`SERVICE_NAME`].
+pub const SERVICE_LABEL: &str = "dev.but-better.bookmarks";
 
 /// The systemd unit / desktop entry / task name, without an extension.
 pub const SERVICE_NAME: &str = "bookmarks-but-better";

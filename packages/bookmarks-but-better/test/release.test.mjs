@@ -40,7 +40,7 @@ test("asset URLs are GitHub Release URLs, never a branch or the website", () => 
   for (const url of [latest, pinned]) {
     assert.ok(url.startsWith(`${DEFAULT_GITHUB_BASE}/${REPO}/releases/`));
     assert.ok(!url.includes("raw.githubusercontent.com"));
-    assert.ok(!url.includes("bookmarks.farhadeidi.com"));
+    assert.ok(!url.includes("bookmarks.but-better.dev"));
   }
 });
 

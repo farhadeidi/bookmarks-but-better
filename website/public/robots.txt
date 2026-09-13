@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://bookmarks.farhadeidi.com/sitemap.xml
+Sitemap: https://bookmarks.but-better.dev/sitemap.xml

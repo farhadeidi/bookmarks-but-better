@@ -10,7 +10,7 @@
 //! the user should run instead, rather than reporting a success that did not
 //! happen.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use super::{ServiceError, ServiceKind, ServiceLayout, ServiceState, is_installed};
@@ -139,8 +139,8 @@ fn launchd_bootout(plist_path: &Path) -> Result<(), ServiceError> {
     launchctl(&["bootout", &domain, &plist_path.to_string_lossy()]).map(|_| ())
 }
 
-fn launchd_state() -> Result<ServiceState, ServiceError> {
-    let target = format!("{}/{}", launchd_domain()?, super::SERVICE_LABEL);
+fn launchd_state(label: &str) -> Result<ServiceState, ServiceError> {
+    let target = format!("{}/{label}", launchd_domain()?);
     let output = Command::new("launchctl")
         .args(["print", &target])
         .output()
@@ -157,6 +157,54 @@ fn launchd_state() -> Result<ServiceState, ServiceError> {
     Ok(parse_launchctl_print(&String::from_utf8_lossy(
         &output.stdout,
     )))
+}
+
+/// Every agent definition on disk, with the label it loads under: the current
+/// one, and one from before 4.2.0 while it is still there.
+fn launchd_definitions(layout: &ServiceLayout) -> Vec<(PathBuf, &'static str)> {
+    let kind = ServiceKind::LaunchAgent;
+    let current = layout.definition_path(kind);
+    let mut definitions = Vec::new();
+    if current.exists() {
+        definitions.push((current, super::SERVICE_LABEL));
+    }
+    if let Some(legacy) = layout.installed_legacy_definition_path(kind) {
+        definitions.push((legacy, super::launchd::LEGACY_LABEL));
+    }
+    definitions
+}
+
+/// Loads the installed agent. A definition from before 4.2.0 still sitting
+/// next to the current one is retired first, because both claim the same port.
+fn launchd_start(layout: &ServiceLayout) -> Result<(), ServiceError> {
+    let kind = ServiceKind::LaunchAgent;
+    if layout.definition_path(kind).exists() {
+        retire_legacy(layout, kind)?;
+    }
+    launchd_bootstrap(&layout.active_definition_path(kind))
+}
+
+/// Unloads every agent definition on disk, trying them all before reporting
+/// the first failure, so one that is not loaded cannot keep another running.
+fn launchd_stop(layout: &ServiceLayout) -> Result<(), ServiceError> {
+    let definitions = launchd_definitions(layout);
+    if definitions.is_empty() {
+        return launchd_bootout(&layout.definition_path(ServiceKind::LaunchAgent));
+    }
+    definitions
+        .iter()
+        .map(|(path, _)| launchd_bootout(path))
+        .fold(Ok(()), Result::and)
+}
+
+/// Running when any agent definition on disk is running under its label.
+fn launchd_installed_state(layout: &ServiceLayout) -> Result<ServiceState, ServiceError> {
+    for (_, label) in launchd_definitions(layout) {
+        if launchd_state(label)? == ServiceState::Running {
+            return Ok(ServiceState::Running);
+        }
+    }
+    Ok(ServiceState::Stopped)
 }
 
 /// Reads the `state = …` line out of `launchctl print`'s output.
@@ -319,7 +367,7 @@ pub fn enable_and_start(layout: &ServiceLayout, kind: ServiceKind) -> Result<(),
         // `~/Library/LaunchAgents` — a real login session reloads everything
         // there on its own. Bootstrapping (after a bootout of whatever was
         // loaded) is the "run this definition now" half.
-        ServiceKind::LaunchAgent => launchd_bootstrap(&layout.definition_path(kind)),
+        ServiceKind::LaunchAgent => launchd_start(layout),
         // Likewise: the logon trigger already covers "enabled". A task that is
         // still running the old command line is ended first; ending one that
         // is not running is not an error worth stopping for.
@@ -339,7 +387,7 @@ pub fn enable_and_start(layout: &ServiceLayout, kind: ServiceKind) -> Result<(),
 pub fn start(layout: &ServiceLayout, kind: ServiceKind) -> Result<(), ServiceError> {
     match kind {
         ServiceKind::Systemd => systemctl(&["start", UNIT]).map(|_| ()),
-        ServiceKind::LaunchAgent => launchd_bootstrap(&layout.definition_path(kind)),
+        ServiceKind::LaunchAgent => launchd_start(layout),
         ServiceKind::ScheduledTask => schtasks_run(),
         ServiceKind::XdgAutostart => Err(xdg_autostart_unwired()),
     }
@@ -353,7 +401,7 @@ pub fn start(layout: &ServiceLayout, kind: ServiceKind) -> Result<(), ServiceErr
 pub fn stop(layout: &ServiceLayout, kind: ServiceKind) -> Result<(), ServiceError> {
     match kind {
         ServiceKind::Systemd => systemctl(&["stop", UNIT]).map(|_| ()),
-        ServiceKind::LaunchAgent => launchd_bootout(&layout.definition_path(kind)),
+        ServiceKind::LaunchAgent => launchd_stop(layout),
         ServiceKind::ScheduledTask => schtasks_end(),
         ServiceKind::XdgAutostart => Err(xdg_autostart_unwired()),
     }
@@ -372,13 +420,45 @@ pub fn disable_and_stop(layout: &ServiceLayout, kind: ServiceKind) {
             let _ = systemctl(&["disable", "--now", UNIT]);
         }
         ServiceKind::LaunchAgent => {
-            let _ = launchd_bootout(&layout.definition_path(kind));
+            let _ = launchd_stop(layout);
         }
         ServiceKind::ScheduledTask => {
             let _ = schtasks_end();
             let _ = schtasks_delete();
         }
         ServiceKind::XdgAutostart => {}
+    }
+}
+
+/// Unloads and removes the definition a version before 4.2.0 wrote, once the
+/// current one has been written in its place. Returns the path it removed, if
+/// there was one.
+///
+/// Both definitions start the same daemon on the same port, so the old agent
+/// is booted out even under `--no-start`: left loaded, it would hold the port
+/// the new one needs. Booted out *by its file*, never by its label, so that
+/// nothing is unloaded unless its definition is in `layout`. If the file then
+/// cannot be removed, the old agent is loaded again rather than leaving the
+/// machine with no daemon at all.
+///
+/// # Errors
+///
+/// [`ServiceError::Io`] when the old file exists but cannot be removed.
+pub fn retire_legacy(
+    layout: &ServiceLayout,
+    kind: ServiceKind,
+) -> Result<Option<PathBuf>, ServiceError> {
+    // Only the macOS agent ever had a legacy name, so the path is a plist.
+    let Some(path) = layout.installed_legacy_definition_path(kind) else {
+        return Ok(None);
+    };
+    let _ = launchd_bootout(&path);
+    match super::remove_definition(path.clone()) {
+        Ok(removed) => Ok(removed.then_some(path)),
+        Err(error) => {
+            let _ = launchd_bootstrap(&path);
+            Err(error)
+        }
     }
 }
 
@@ -414,7 +494,7 @@ pub fn state(layout: &ServiceLayout, kind: ServiceKind) -> Result<ServiceState, 
             })
         }
         ServiceKind::XdgAutostart => Ok(ServiceState::InstalledUnsupervised),
-        ServiceKind::LaunchAgent => launchd_state(),
+        ServiceKind::LaunchAgent => launchd_installed_state(layout),
         ServiceKind::ScheduledTask => schtasks_state(),
     }
 }
@@ -512,6 +592,83 @@ mod tests {
     }
 
     #[test]
+    fn every_agent_definition_on_disk_is_found_with_its_label() {
+        let home = tempfile::tempdir().expect("temp dir");
+        let layout = ServiceLayout::rooted_at(home.path());
+        let kind = ServiceKind::LaunchAgent;
+        assert!(launchd_definitions(&layout).is_empty());
+
+        let current = layout.definition_path(kind);
+        let legacy = layout
+            .legacy_definition_path(kind)
+            .expect("the agent had a legacy name");
+        std::fs::create_dir_all(current.parent().expect("parent")).expect("create");
+
+        std::fs::write(&legacy, "old").expect("write");
+        assert_eq!(
+            launchd_definitions(&layout),
+            vec![(legacy.clone(), crate::service::launchd::LEGACY_LABEL)]
+        );
+
+        // Both on disk — a failed retirement, or an older binary reinstalling —
+        // and both are addressed, so neither can be left loaded unseen.
+        std::fs::write(&current, "current").expect("write");
+        assert_eq!(
+            launchd_definitions(&layout),
+            vec![
+                (current, crate::service::SERVICE_LABEL),
+                (legacy, crate::service::launchd::LEGACY_LABEL),
+            ]
+        );
+    }
+
+    #[test]
+    fn retiring_removes_only_the_agent_an_earlier_version_wrote() {
+        let home = tempfile::tempdir().expect("temp dir");
+        let layout = ServiceLayout::rooted_at(home.path());
+        let kind = ServiceKind::LaunchAgent;
+
+        assert_eq!(
+            retire_legacy(&layout, kind).expect("nothing to retire"),
+            None
+        );
+
+        let legacy = layout
+            .legacy_definition_path(kind)
+            .expect("the agent had a legacy name");
+        std::fs::create_dir_all(legacy.parent().expect("parent")).expect("create");
+        // A label nothing loads: retiring boots the agent out by this file,
+        // and the real legacy label may belong to a daemon running on the
+        // machine these tests run on.
+        std::fs::write(
+            &legacy,
+            "<plist><dict><key>Label</key><string>dev.but-better.bookmarks.test-legacy</string></dict></plist>",
+        )
+        .expect("write");
+        let current = layout.definition_path(kind);
+        std::fs::write(&current, "current").expect("write");
+
+        assert_eq!(
+            retire_legacy(&layout, kind).expect("retire"),
+            Some(legacy.clone())
+        );
+        assert!(!legacy.exists());
+        assert!(current.is_file(), "the current definition stays");
+
+        for other in [
+            ServiceKind::Systemd,
+            ServiceKind::XdgAutostart,
+            ServiceKind::ScheduledTask,
+        ] {
+            assert_eq!(
+                retire_legacy(&layout, other).expect("no legacy name"),
+                None,
+                "{other:?}"
+            );
+        }
+    }
+
+    #[test]
     fn reload_never_starts_a_launch_agent() {
         // A `RunAtLoad` agent cannot be bootstrapped without also running, so
         // `reload` (which `--no-start` still calls) must not bootstrap one —
@@ -528,7 +685,7 @@ mod tests {
         #[test]
         fn a_running_service_is_reported_as_running() {
             let output =
-                "gui/501/com.farhadeidi.bookmarks = {\n\tactive count = 1\n\tstate = running\n}\n";
+                "gui/501/dev.but-better.bookmarks = {\n\tactive count = 1\n\tstate = running\n}\n";
             assert_eq!(parse_launchctl_print(output), ServiceState::Running);
         }
 
@@ -539,7 +696,7 @@ mod tests {
                 "state = not running",
                 "state = spawn scheduled",
             ] {
-                let output = format!("gui/501/com.farhadeidi.bookmarks = {{\n\t{state_line}\n}}\n");
+                let output = format!("gui/501/dev.but-better.bookmarks = {{\n\t{state_line}\n}}\n");
                 assert_eq!(
                     parse_launchctl_print(&output),
                     ServiceState::Stopped,
@@ -641,7 +798,7 @@ mod tests {
     ///   Playwright-style parallelism turns them into a coin flip.
     /// - They must not run at all on a machine where that agent is really
     ///   installed and loaded. `bootout` there stops the developer's own
-    ///   daemon, and `launchd_state()` reports *its* state instead of the
+    ///   daemon, and `launchd_state` reports *its* state instead of the
     ///   fixture's.
     ///
     /// [`SERVICE_LABEL`]: super::super::SERVICE_LABEL
@@ -670,7 +827,10 @@ mod tests {
         /// never be mistaken for one. CI runners have no such install, which
         /// is where these tests are relied on.
         fn a_real_agent_is_loaded() -> bool {
-            matches!(launchd_state(), Ok(ServiceState::Running))
+            matches!(
+                launchd_state(crate::service::SERVICE_LABEL),
+                Ok(ServiceState::Running)
+            )
         }
 
         fn spec(vault: &std::path::Path) -> crate::service::ServiceSpec {

@@ -9,7 +9,7 @@ import Cocoa
 import SafariServices
 import WebKit
 
-let extensionBundleIdentifier = "com.farhadeidi.bookmarks-but-better.safari.Extension"
+let extensionBundleIdentifier = "dev.but-better.bookmarks.safari.Extension"
 
 class ViewController: NSViewController, WKNavigationDelegate, WKScriptMessageHandler {
 

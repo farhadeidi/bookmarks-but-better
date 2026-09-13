@@ -1,4 +1,4 @@
-# Website Brand Direction — bookmarks.farhadeidi.com
+# Website Brand Direction — bookmarks.but-better.dev
 
 Source of truth for the marketing site's visual identity. Generated via the
 `ui-brand-kit` workflow (written spec in place of the rendered board — the
