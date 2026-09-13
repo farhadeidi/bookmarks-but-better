@@ -29,7 +29,7 @@ export interface GridPosition {
  * its heading, then its direct bookmarks, then — in nested mode only — each
  * sub-folder card in full.
  */
-function collectCardItems(
+export function collectCardItems(
   folder: BookmarkNode,
   nestedFolders: boolean
 ): GridNavigationItem[] {

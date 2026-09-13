@@ -46,6 +46,7 @@ describe("the scenario registry", () => {
       "fresh-safari",
       "empty",
       "large-library",
+      "huge-library",
     ])
     expect(DEFAULT_SCENARIO_ID).toBe("browser-daemon")
   })

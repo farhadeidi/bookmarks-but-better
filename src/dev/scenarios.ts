@@ -192,6 +192,45 @@ function largeLibrary(
   }))
 }
 
+/**
+ * Deterministic huge library: `folders` top-level folders, each holding `per`
+ * direct bookmarks and `subfolders` subfolders of `per` bookmarks, with a
+ * third level under the first subfolder. The shape is what issue #75
+ * describes — 10k+ bookmarks across several nesting levels.
+ */
+function hugeLibrary(
+  prefix: string,
+  folders: number,
+  subfolders: number,
+  per: number
+): SeedNode[] {
+  const bookmarks = (path: string): SeedNode[] =>
+    Array.from({ length: per }, (_, b) => ({
+      title: `${prefix} ${path}.${b + 1}`,
+      url: `https://example.com/${prefix.toLowerCase()}/${path.replaceAll(".", "/")}/${b + 1}`,
+    }))
+  return Array.from({ length: folders }, (_, f) => ({
+    title: `${prefix} Folder ${f + 1}`,
+    children: [
+      ...bookmarks(`${f + 1}`),
+      ...Array.from({ length: subfolders }, (_, sf) => ({
+        title: `${prefix} Folder ${f + 1}.${sf + 1}`,
+        children: [
+          ...bookmarks(`${f + 1}.${sf + 1}`),
+          ...(sf === 0
+            ? [
+                {
+                  title: `${prefix} Folder ${f + 1}.${sf + 1}.1`,
+                  children: bookmarks(`${f + 1}.${sf + 1}.1`),
+                },
+              ]
+            : []),
+        ],
+      })),
+    ],
+  }))
+}
+
 function withBrowserAndDaemons(
   base: Pick<DevScenario, "id" | "label" | "description">,
   options: {
@@ -401,6 +440,19 @@ export const DEV_SCENARIOS: DevScenario[] = [
           ],
         },
       ],
+    }
+  ),
+  withBrowserAndDaemons(
+    {
+      id: "huge-library",
+      label: "Huge library",
+      description:
+        "Over ten thousand bookmarks in nested folders on the browser source — the collection size from issue #75.",
+    },
+    {
+      // 40 × (30 + 6 × 30 + 30) = 9,600 generated bookmarks plus the seed,
+      // on top of 320 folders across three nesting levels.
+      browserTree: [...browserBookmarks, ...hugeLibrary("Browser", 40, 6, 30)],
     }
   ),
 ]

@@ -24,6 +24,7 @@ The workbench (bottom-left pill) exposes deterministic, URL-addressable scenario
 | `/?scenario=fresh-safari` | Safari's world before setup: no source, and onboarding with no source question |
 | `/?scenario=empty` | Nothing enabled — the dashboard's own empty state |
 | `/?scenario=large-library` | Hundreds of seeded bookmarks |
+| `/?scenario=huge-library` | Over ten thousand bookmarks in nested folders — the collection size that used to hang the tab (issue #75) |
 
 - **Scenario state persists** in IndexedDB while you develop: mutations, the active source and preference changes all survive reloads. Navigating without a `?scenario` parameter keeps the persisted scenario; navigating with one applies it.
 - **Reset Scenario** deterministically restores the seed: the revision bumps, every simulated source and the profile's Source Configuration are reseeded, and the page reloads into the scenario's URL.
