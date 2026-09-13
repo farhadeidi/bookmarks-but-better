@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.2.0] - 2026-09-13
+
 ### Changed
 
 - **The website moved to `bookmarks.but-better.dev`.** Every link, canonical
@@ -18,6 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   by `service status`, and the next `service install` — which an upgrade runs —
   keeps its port and vaults, unloads and removes it, and starts the new one in
   its place. `service uninstall` removes either.
+- **`npx bookmarks-but-better` 1.1.0 installs daemon 4.2.0**, and names the new
+  website as its homepage.
 
 ### Fixed
 
@@ -402,6 +406,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Rewrote README for end users with screenshots and badges
 
+[4.2.0]: https://github.com/farhadeidi/bookmarks-but-better/compare/v4.1.1...v4.2.0
 [4.1.1]: https://github.com/farhadeidi/bookmarks-but-better/compare/v4.1.0...v4.1.1
 [4.1.0]: https://github.com/farhadeidi/bookmarks-but-better/compare/v4.0.0...v4.1.0
 [4.0.0]: https://github.com/farhadeidi/bookmarks-but-better/compare/v3.2.1...v4.0.0
