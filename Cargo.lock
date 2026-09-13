@@ -148,7 +148,7 @@ dependencies = [
 
 [[package]]
 name = "bookmarks-but-better"
-version = "4.2.0"
+version = "4.2.1"
 dependencies = [
  "axum",
  "bookmarks-but-better-vault-core",
@@ -174,7 +174,7 @@ dependencies = [
 
 [[package]]
 name = "bookmarks-but-better-vault-core"
-version = "4.2.0"
+version = "4.2.1"
 dependencies = [
  "cap-fs-ext",
  "cap-std",
