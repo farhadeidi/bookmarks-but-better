@@ -54,7 +54,7 @@ const MINI_FEATURES = [
   {
     title: "Omnibox search",
     description:
-      "Address-bar search across a connected vault — no dashboard required.",
+      "Type “bb” in the address bar to search your active source — browser bookmarks or a vault, no dashboard required.",
   },
 ]
 

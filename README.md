@@ -32,12 +32,14 @@
 - **Inline editing** — Rename bookmarks, change URLs, edit folders all inline
 - **10 color themes** — Default, Amber, Bubblegum, Caffeine, Claude, Claymorphism, Cyberpunk, Solar Dusk, T3 Chat, Vintage Paper
 - **Light and dark mode** — Follows system preference or toggle manually
-- **Choose your root folder** — Display bookmarks from any folder
-- **Import and export** — Standard HTML bookmark files
+- **Choose your root folder** — Display bookmarks from any folder, picked right from the new tab header
+- **Import and export** — Standard HTML bookmark files, plus CSV import from Raindrop and Pocket
 - **Smart favicons** — Sharp, high-quality site icons, cached locally so they load offline, with a clean letter fallback when a site has none
 - **Quick capture** — Save the active tab from the extension popup
 - **Address-bar search** — Search the active source with the `bb` omnibox keyword
-- **Three bookmark sources** — Browser bookmarks, a browser-local standalone collection, or an optional Markdown vault daemon
+- **Browser bookmarks and Markdown vaults** — Use either or both and switch from the header; sources are never silently mixed. The legacy browser-local standalone collection is retiring
+- **Guided setup** — Pick your sources and connect a vault with `npx bookmarks-but-better@latest`, or skip straight to the dashboard
+- **Safe mode** — Recover a new tab that will not load, from a Settings page reachable from the browser's extensions page
 - **Private by design** — No account, analytics, tracking, ads, or bookmark-content collection. Favicons are the one thing that leaves your machine; see [Privacy](#privacy)
 
 Existing extension users upgrade in place. Version 4 preserves their selected
