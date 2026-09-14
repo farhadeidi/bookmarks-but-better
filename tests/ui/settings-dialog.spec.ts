@@ -66,6 +66,24 @@ test("Browser bookmark settings live inside Sources instead of a separate catego
   ).toBeVisible()
 })
 
+test("the source picker's Manage sources opens Settings on Sources, whatever was shown last", async ({
+  page,
+}) => {
+  const dialog = await openSettings(page)
+  await dialog.getByRole("tab", { name: "Appearance" }).click()
+  await page.keyboard.press("Escape")
+  await expect(dialog).toBeHidden()
+
+  await page.getByRole("button", { name: "Bookmark source" }).click()
+  await page.getByRole("menuitem", { name: "Manage sources" }).click()
+
+  await expect(dialog).toBeVisible()
+  await expect(dialog.getByRole("tab", { name: "Sources" })).toHaveAttribute(
+    "aria-selected",
+    "true"
+  )
+})
+
 test("appearance controls and product information remain available in Settings", async ({
   page,
 }) => {

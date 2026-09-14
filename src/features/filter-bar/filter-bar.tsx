@@ -34,7 +34,7 @@ export function FilterBar() {
   if (!showSources && !showFolders) return null
 
   return (
-    <div className="flex min-h-7 min-w-0 flex-wrap items-center gap-1.5 px-1 text-sm">
+    <div className="flex min-h-8 min-w-0 flex-wrap items-center gap-0.5 text-sm">
       <SourceSwitcher />
       {showSources && showFolders && (
         <span aria-hidden className="text-muted-foreground/40">

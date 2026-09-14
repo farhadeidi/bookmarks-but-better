@@ -16,8 +16,13 @@ test("the default scenario provides Browser plus the reading and archive vaults"
   await expect(trigger).toContainText("Browser bookmarks")
 
   await trigger.click()
-  const items = page.getByRole("menuitem")
+  const items = page
+    .getByRole("menuitem")
+    .filter({ hasNotText: "Manage sources" })
   await expect(items).toHaveCount(3)
+  await expect(
+    page.getByRole("menuitem", { name: "Manage sources" })
+  ).toBeVisible()
   await expect(items.filter({ hasText: "Browser bookmarks" })).toHaveAttribute(
     "aria-disabled",
     "true"

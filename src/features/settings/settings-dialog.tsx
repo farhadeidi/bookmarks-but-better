@@ -21,8 +21,19 @@ import { SettingsBody } from "./settings-body"
 export function SettingsDialog() {
   const open = useUIStore((s) => s.settingsOpen)
   const closeSettings = useUIStore((s) => s.closeSettings)
+  const requestedCategory = useUIStore((s) => s.settingsCategory)
 
-  const [category, setCategory] = React.useState<SettingsCategoryId>("sources")
+  const [category, setCategory] = React.useState<SettingsCategoryId>(
+    requestedCategory ?? "sources"
+  )
+  // A plain open keeps the last category; an open that asks for one moves
+  // there. Adjusted during render, and the request clears on close, so asking
+  // for the same category on the next visit moves there again.
+  const [seenRequest, setSeenRequest] = React.useState(requestedCategory)
+  if (requestedCategory !== seenRequest) {
+    setSeenRequest(requestedCategory)
+    if (requestedCategory) setCategory(requestedCategory)
+  }
   const active = SETTINGS_CATEGORIES.find((c) => c.id === category)
 
   const onOpenChange = (next: boolean) => {

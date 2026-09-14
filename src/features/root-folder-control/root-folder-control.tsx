@@ -12,8 +12,8 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { HugeiconsIcon } from "@hugeicons/react"
 import {
   ArrowDown01Icon,
-  Cancel01Icon,
   FolderTreeIcon,
+  Tick02Icon,
 } from "@hugeicons/core-free-icons"
 import {
   buildRootFolderOptions,
@@ -29,6 +29,10 @@ const chevron = (
     strokeWidth={2}
     className="size-3.5 shrink-0 opacity-70"
   />
+)
+
+const tick = (
+  <HugeiconsIcon icon={Tick02Icon} strokeWidth={2} className="ml-auto" />
 )
 
 /**
@@ -65,73 +69,58 @@ export function RootFolderControl() {
 
   if (!hasRootFolderChoice(tree, rootIsCreatable)) return null
 
+  // "All bookmarks" is the picker's first item, so narrowing back needs no
+  // separate reset control beside the trigger.
   return (
-    <>
-      <DropdownMenu>
-        <DropdownMenuTrigger
-          render={
-            <button
-              type="button"
-              className={cn(
-                "inline-flex min-w-0 items-center gap-1 rounded-md px-1.5 py-0.5 transition-colors hover:bg-muted/60 hover:text-foreground",
-                rootFolderId ? "text-foreground" : "text-muted-foreground"
-              )}
-            />
-          }
-        >
-          <span className="truncate">{displayLabel}</span>
-          {chevron}
-        </DropdownMenuTrigger>
-        {/* The folder list scrolls on its own inside a popup capped by the
-            space below the trigger, so the footer action stays in view on a
-            short window. Nested flex columns let the scroll viewport shrink
-            to that cap. */}
-        <DropdownMenuContent
-          align="start"
-          className="flex max-h-[min(28rem,var(--available-height))] w-auto max-w-[min(24rem,calc(100vw-2rem))] min-w-56 flex-col overflow-hidden p-0"
-        >
-          <ScrollArea className="flex min-h-0 flex-1 flex-col *:data-[slot=scroll-area-viewport]:min-h-0 *:data-[slot=scroll-area-viewport]:flex-1">
-            <div className="p-1">
-              <DropdownMenuItem onClick={() => setRootFolderId(null)}>
-                {ALL_BOOKMARKS_LABEL}
-              </DropdownMenuItem>
-              {folders.map((folder) => (
-                <DropdownMenuItem
-                  key={folder.id}
-                  onClick={() => setRootFolderId(folder.id)}
-                >
-                  <span className="truncate">{folder.label}</span>
-                </DropdownMenuItem>
-              ))}
-            </div>
-          </ScrollArea>
-          <DropdownMenuSeparator className="mx-0 my-0" />
-          <div className="p-1">
-            <DropdownMenuItem onClick={openBookmarkOrganizer}>
-              <HugeiconsIcon icon={FolderTreeIcon} strokeWidth={2} />
-              Edit bookmark tree
-            </DropdownMenuItem>
-          </div>
-        </DropdownMenuContent>
-      </DropdownMenu>
-
-      {/* The narrowed-root cue: only worth a click when the root isn't
-          already "all bookmarks". */}
-      {rootFolderId && (
-        <button
-          type="button"
-          aria-label="Show all bookmarks"
-          title="All bookmarks"
-          onClick={() => setRootFolderId(null)}
-          className="inline-flex size-5 items-center justify-center rounded-full text-muted-foreground/70 transition-colors hover:bg-muted hover:text-foreground"
-        >
-          <HugeiconsIcon
-            icon={Cancel01Icon}
-            strokeWidth={2}
-            className="size-3"
+    <DropdownMenu>
+      {/* A minimum width keeps the caret clear of short folder names. */}
+      <DropdownMenuTrigger
+        render={
+          <button
+            type="button"
+            className={cn(
+              "inline-flex min-w-32 items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 transition-colors hover:bg-muted/60 hover:text-foreground",
+              rootFolderId ? "text-foreground" : "text-muted-foreground"
+            )}
           />
-        </button>
-      )}
-    </>
+        }
+      >
+        <span className="truncate">{displayLabel}</span>
+        {chevron}
+      </DropdownMenuTrigger>
+      {/* The folder list scrolls on its own inside a popup capped by the
+          space below the trigger, so the footer action stays in view on a
+          short window. Nested flex columns let the scroll viewport shrink
+          to that cap. */}
+      <DropdownMenuContent
+        align="start"
+        className="flex max-h-[min(28rem,var(--available-height))] w-auto max-w-[min(24rem,calc(100vw-2rem))] min-w-56 flex-col overflow-hidden p-0"
+      >
+        <ScrollArea className="flex min-h-0 flex-1 flex-col *:data-[slot=scroll-area-viewport]:min-h-0 *:data-[slot=scroll-area-viewport]:flex-1">
+          <div className="p-1">
+            <DropdownMenuItem onClick={() => setRootFolderId(null)}>
+              {ALL_BOOKMARKS_LABEL}
+              {!selected && tick}
+            </DropdownMenuItem>
+            {folders.map((folder) => (
+              <DropdownMenuItem
+                key={folder.id}
+                onClick={() => setRootFolderId(folder.id)}
+              >
+                <span className="truncate">{folder.label}</span>
+                {folder.id === selected?.id && tick}
+              </DropdownMenuItem>
+            ))}
+          </div>
+        </ScrollArea>
+        <DropdownMenuSeparator className="mx-0 my-0" />
+        <div className="p-1">
+          <DropdownMenuItem onClick={openBookmarkOrganizer}>
+            <HugeiconsIcon icon={FolderTreeIcon} strokeWidth={2} />
+            Edit bookmark tree
+          </DropdownMenuItem>
+        </div>
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }
