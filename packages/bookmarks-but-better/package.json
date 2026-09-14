@@ -2,7 +2,7 @@
   "name": "bookmarks-but-better",
   "version": "1.1.1",
   "daemon": {
-    "version": "4.2.1"
+    "version": "4.3.0"
   },
   "description": "Installs and looks after the Bookmarks But Better daemon: status, install, uninstall, and the vaults it serves.",
   "keywords": [

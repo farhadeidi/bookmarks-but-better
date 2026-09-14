@@ -7,7 +7,7 @@ members = ["crates/bookmarks-but-better", "crates/bookmarks-but-better-vault-cor
 # all extension manifests carry, so a release tag names one number rather than
 # one per language. `GET /api/v1/health` and `bookmarks-but-better --version` report it straight
 # from `CARGO_PKG_VERSION`.
-version = "4.2.1"
+version = "4.3.0"
 edition = "2024"
 rust-version = "1.97.1"
 license = "MIT"
