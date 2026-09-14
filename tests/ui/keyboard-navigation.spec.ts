@@ -154,11 +154,8 @@ test("the same keys reorder through whole-folder ordering in a Vault", async ({
 
   // A Daemon Source has `reorder: false` and `setChildOrder: true`, so this
   // is the other write path — the one whose absence would be silent.
-  await page
-    .getByRole("tablist", { name: "Bookmark source" })
-    .getByRole("tab")
-    .filter({ hasText: "reading" })
-    .click()
+  await page.getByRole("button", { name: "Bookmark source" }).click()
+  await page.getByRole("menuitem", { name: "reading" }).click()
 
   const card = page.getByTestId("bookmark-card").filter({
     has: page.getByRole("heading", { name: "Articles", exact: true }),

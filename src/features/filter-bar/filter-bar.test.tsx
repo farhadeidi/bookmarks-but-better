@@ -77,16 +77,20 @@ describe("FilterBar", () => {
 
     const { container } = render(<FilterBar />)
 
-    const switcher = screen.getByRole("tablist", { name: "Bookmark source" })
-    const chip = screen.getByRole("button", { name: "All bookmarks" })
+    // The trigger's name carries the active source, not just the control's
+    // purpose, so a screen reader announces what is being looked at.
+    const switcher = screen.getByRole("button", {
+      name: "Bookmark source: Browser bookmarks",
+    })
+    const folder = screen.getByRole("button", { name: /All bookmarks/ })
     // One container wraps the row; both controls are within it rather than
     // in separate top-level rows.
     const row = container.firstElementChild
     expect(row?.contains(switcher)).toBe(true)
-    expect(row?.contains(chip)).toBe(true)
+    expect(row?.contains(folder)).toBe(true)
   })
 
-  it("still left-aligns the chip alone when there is only one source", () => {
+  it("still left-aligns the folder control alone when there is only one source", () => {
     useSourceStore.setState({
       config: {
         ...emptySourceConfig(),
@@ -103,7 +107,9 @@ describe("FilterBar", () => {
 
     render(<FilterBar />)
 
-    expect(screen.queryByRole("tablist")).toBeNull()
+    expect(
+      screen.queryByRole("button", { name: /^Bookmark source/ })
+    ).toBeNull()
     expect(screen.getByRole("button", { name: "All bookmarks" })).not.toBeNull()
   })
 })

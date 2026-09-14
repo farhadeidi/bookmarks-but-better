@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test"
+import { expect, test, type Page } from "@playwright/test"
 
 /**
  * Scenario persistence and deterministic reset: changes made while
@@ -6,15 +6,19 @@ import { expect, test } from "@playwright/test"
  * Scenario restores the seed exactly.
  */
 
+/** Opens the source switcher's menu and picks the source named `label`. */
+async function switchSource(page: Page, label: string): Promise<void> {
+  await page.getByRole("button", { name: "Bookmark source" }).click()
+  await page.getByRole("menuitem", { name: label }).click()
+}
+
 test("mutations persist across reloads, and Reset Scenario restores the seed", async ({
   page,
 }) => {
   await page.goto("/?scenario=browser-daemon")
 
-  const tabs = page
-    .getByRole("tablist", { name: "Bookmark source" })
-    .getByRole("tab")
-  await tabs.filter({ hasText: "archive" }).click()
+  const trigger = page.getByRole("button", { name: "Bookmark source" })
+  await switchSource(page, "archive")
   await expect(page.getByText("State of CSS 2024")).toBeVisible()
 
   // A real mutation through the real create flow.
@@ -29,10 +33,7 @@ test("mutations persist across reloads, and Reset Scenario restores the seed", a
 
   // Reload: the same scenario world comes back — active source and all.
   await page.reload()
-  await expect(tabs.filter({ hasText: "archive" })).toHaveAttribute(
-    "aria-selected",
-    "true"
-  )
+  await expect(trigger).toContainText("archive")
   await expect(page.getByText("Persisted Work")).toBeVisible()
 
   // Reset Scenario: deterministic seed, default active source.
@@ -40,10 +41,7 @@ test("mutations persist across reloads, and Reset Scenario restores the seed", a
   await page.getByRole("button", { name: "Reset scenario" }).click()
   await page.waitForURL(/\/\?scenario=browser-daemon$/)
 
-  await expect(tabs.filter({ hasText: "Browser bookmarks" })).toHaveAttribute(
-    "aria-selected",
-    "true"
-  )
+  await expect(trigger).toContainText("Browser bookmarks")
   await expect(page.getByText("Persisted Work")).toHaveCount(0)
   await expect(page.getByText("MDN Web Docs")).toBeVisible()
 
@@ -71,7 +69,7 @@ test("mutations persist across reloads, and Reset Scenario restores the seed", a
   }
 
   // The reset Vault is its seed again, too.
-  await tabs.filter({ hasText: "archive" }).click()
+  await switchSource(page, "archive")
   await expect(page.getByText("State of CSS 2024")).toBeVisible()
   await expect(page.getByText("Persisted Work")).toHaveCount(0)
 })
@@ -83,9 +81,10 @@ test("scenario selection is stable through URL navigation", async ({
   // The safari scenario is the reading Vault as the only source: that Vault's
   // bookmark on screen with no switcher above it is its fingerprint. The
   // scenarios that also show this bookmark (multi-vault, slow-daemon) do so
-  // behind a tab strip, and the default scenario opens on Browser bookmarks.
+  // behind a source switcher, and the default scenario opens on Browser
+  // bookmarks.
   const fingerprint = page.getByText("SQLite is not a toy database")
-  const switcher = page.getByRole("tablist", { name: "Bookmark source" })
+  const switcher = page.getByRole("button", { name: "Bookmark source" })
   await expect(fingerprint).toBeVisible()
   await expect(switcher).toHaveCount(0)
 

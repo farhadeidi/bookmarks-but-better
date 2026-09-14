@@ -1,11 +1,5 @@
 import * as React from "react"
 import { useBookmarkStore } from "@/stores/bookmark-store"
-import { Button } from "@/components/ui/button"
-import {
-  Tooltip,
-  TooltipTrigger,
-  TooltipContent,
-} from "@/components/ui/tooltip"
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -18,16 +12,26 @@ import {
   buildRootFolderOptions,
   hasRootFolderChoice,
 } from "@/features/root-folder-select"
+import { cn } from "@/lib/utils"
 
 const ALL_BOOKMARKS_LABEL = "All bookmarks"
 
+const chevron = (
+  <HugeiconsIcon
+    icon={ArrowDown01Icon}
+    strokeWidth={2}
+    className="size-3.5 shrink-0 opacity-70"
+  />
+)
+
 /**
- * The new tab's reachable form of the Root folder setting: a chip in the
- * filter bar (#95) — in the same visual family as the source switcher next
- * to it — rather than the wide centered `Select` it originally replaced
- * (#88 / PR #91). It is built on the same folder-path options
- * `RootFolderSelect` shows in Settings and onboarding — there is no second
- * copy of the choice or its labelling, just a lighter-weight trigger for it.
+ * The new tab's reachable form of the Root folder setting: a quiet text
+ * dropdown in the filter bar (#95), in the same visual family as the
+ * source switcher next to it — rather than the wide centered `Select` it
+ * originally replaced (#88 / PR #91). It is built on the same folder-path
+ * options `RootFolderSelect` shows in Settings and onboarding — there is no
+ * second copy of the choice or its labelling, just a lighter-weight
+ * trigger for it.
  *
  * Hidden under the same condition the wizard uses to skip its own Root
  * folder step: an empty tree, or a source with nowhere to point, has nothing
@@ -54,22 +58,21 @@ export function RootFolderControl() {
   if (!hasRootFolderChoice(tree, rootIsCreatable)) return null
 
   return (
-    <div className="flex h-8 min-w-0 shrink-0 items-center gap-0.5 rounded-full bg-muted/60 py-1 pr-1 pl-3 text-sm ring-1 ring-border/60">
+    <>
       <DropdownMenu>
         <DropdownMenuTrigger
           render={
             <button
               type="button"
-              className="flex min-w-0 items-center gap-1 rounded-full text-foreground transition-colors hover:text-muted-foreground"
+              className={cn(
+                "inline-flex min-w-0 items-center gap-1 rounded-md px-1.5 py-0.5 transition-colors hover:bg-muted/60 hover:text-foreground",
+                rootFolderId ? "text-foreground" : "text-muted-foreground"
+              )}
             />
           }
         >
           <span className="truncate">{displayLabel}</span>
-          <HugeiconsIcon
-            icon={ArrowDown01Icon}
-            strokeWidth={2}
-            className="size-3.5 shrink-0"
-          />
+          {chevron}
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" className="w-auto min-w-56">
           <DropdownMenuItem onClick={() => setRootFolderId(null)}>
@@ -89,27 +92,20 @@ export function RootFolderControl() {
       {/* The narrowed-root cue: only worth a click when the root isn't
           already "all bookmarks". */}
       {rootFolderId && (
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                className="text-muted-foreground hover:bg-background/70"
-                aria-label="Show all bookmarks"
-                onClick={() => setRootFolderId(null)}
-              />
-            }
-          >
-            <HugeiconsIcon
-              icon={Cancel01Icon}
-              strokeWidth={2}
-              className="size-3.5"
-            />
-          </TooltipTrigger>
-          <TooltipContent side="top">All bookmarks</TooltipContent>
-        </Tooltip>
+        <button
+          type="button"
+          aria-label="Show all bookmarks"
+          title="All bookmarks"
+          onClick={() => setRootFolderId(null)}
+          className="inline-flex size-5 items-center justify-center rounded-full text-muted-foreground/70 transition-colors hover:bg-muted hover:text-foreground"
+        >
+          <HugeiconsIcon
+            icon={Cancel01Icon}
+            strokeWidth={2}
+            className="size-3"
+          />
+        </button>
       )}
-    </div>
+    </>
   )
 }

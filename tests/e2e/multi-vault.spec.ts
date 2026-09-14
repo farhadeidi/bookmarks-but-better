@@ -131,8 +131,11 @@ test("the served web app switches between the hosted vaults", async ({
     .click()
 
   // Both vaults appear as switchable sources.
-  await expect(page.getByRole("tab", { name: /reading/i })).toBeVisible()
-  await expect(page.getByRole("tab", { name: /archive/i })).toBeVisible()
+  const trigger = page.getByRole("button", { name: "Bookmark source" })
+  await trigger.click()
+  await expect(page.getByRole("menuitem", { name: /reading/i })).toBeVisible()
+  await expect(page.getByRole("menuitem", { name: /archive/i })).toBeVisible()
+  await page.keyboard.press("Escape")
 
   // Sources are listed in a deterministic order — `archive` sorts before
   // `reading` — so the app starts on archive's content.
@@ -142,7 +145,8 @@ test("the served web app switches between the hosted vaults", async ({
 
   // A switch shows the other vault's content — client-side, with no
   // process-wide active Vault on the daemon.
-  await page.getByRole("tab", { name: /reading/i }).click()
+  await trigger.click()
+  await page.getByRole("menuitem", { name: /reading/i }).click()
   await expect(
     page.getByText("Reading Only Marker", { exact: true })
   ).toBeVisible()
@@ -150,7 +154,8 @@ test("the served web app switches between the hosted vaults", async ({
     page.getByText("Archive Only Marker", { exact: true })
   ).toHaveCount(0)
 
-  await page.getByRole("tab", { name: /archive/i }).click()
+  await trigger.click()
+  await page.getByRole("menuitem", { name: /archive/i }).click()
   await expect(
     page.getByText("Archive Only Marker", { exact: true })
   ).toBeVisible()
