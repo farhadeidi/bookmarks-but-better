@@ -71,6 +71,7 @@ export const SETTING_HOMES: Record<string, SettingsCategoryId> = {
   standaloneMigration: "data-migration",
   // General
   setupWizard: "general",
+  safeMode: "general",
   // Advanced
   experimentalCardDrag: "advanced",
 }

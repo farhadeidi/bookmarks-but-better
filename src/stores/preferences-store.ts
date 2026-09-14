@@ -24,6 +24,13 @@ interface PreferencesState {
   containerMode: "fluid" | "contained"
   experimentalCardDrag: boolean
   isFoldersOnlyEnabledInTreeEditor: boolean
+  /**
+   * Safe mode: the new tab draws its header and a notice instead of the
+   * bookmark grid, so a grid that crashes or hangs on a large tree can be
+   * reconfigured from Settings before it is drawn again. Profile-wide, like
+   * the look-and-feel preferences: it describes this browser, not a source.
+   */
+  safeMode: boolean
   adapter: BrowserAdapter | null
 
   // Actions
@@ -39,6 +46,8 @@ interface PreferencesState {
   setFolderOrder(order: string[]): void
   setExperimentalCardDrag(value: boolean): void
   setIsFoldersOnlyEnabledInTreeEditor(value: boolean): void
+  /** Resolves once the value is persisted, so a reload can follow it. */
+  setSafeMode(value: boolean): Promise<void>
 }
 
 /** One profile-wide store for the whole session; never re-created per source. */
@@ -53,6 +62,7 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
   folderOrder: [],
   experimentalCardDrag: false,
   isFoldersOnlyEnabledInTreeEditor: true,
+  safeMode: false,
   adapter: null,
 
   async init(adapter: BrowserAdapter, options = {}) {
@@ -71,6 +81,7 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
       folderOrder,
       experimentalCardDrag,
       isFoldersOnlyEnabledInTreeEditor,
+      safeMode,
     ] = await Promise.all([
       adapter.storage.get<Record<string, CardLayout>>("cardLayouts"),
       readProfilePreference<boolean>("nestedFolders", adapter.storage),
@@ -86,6 +97,7 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
         "isFoldersOnlyEnabledInTreeEditor",
         adapter.storage
       ),
+      readProfilePreference<boolean>("safeMode", adapter.storage),
     ])
 
     // A second transition may have started (and finished) during those
@@ -161,6 +173,7 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
           | boolean
           | undefined) ??
         true,
+      safeMode: safeMode ?? false,
     })
 
     // Apply color theme to root element
@@ -209,6 +222,11 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
   setIsFoldersOnlyEnabledInTreeEditor(value: boolean) {
     set({ isFoldersOnlyEnabledInTreeEditor: value })
     void profileStorage.set("isFoldersOnlyEnabledInTreeEditor", value)
+  },
+
+  async setSafeMode(value: boolean) {
+    set({ safeMode: value })
+    await profileStorage.set("safeMode", value)
   },
 }))
 

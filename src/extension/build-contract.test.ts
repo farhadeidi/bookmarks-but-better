@@ -18,10 +18,11 @@ async function manifest(name: "chrome" | "firefox" | "safari") {
 }
 
 describe("extension build contract", () => {
-  it("builds the new tab, popup, and stable background entries for extensions", () => {
-    expect(buildEntryNames("chrome")).toEqual(["index", "popup", "background"])
-    expect(buildEntryNames("firefox")).toEqual(["index", "popup", "background"])
-    expect(buildEntryNames("safari")).toEqual(["index", "popup", "background"])
+  it("builds the new tab, popup, options page, and stable background entries for extensions", () => {
+    const entries = ["index", "popup", "options", "background"]
+    expect(buildEntryNames("chrome")).toEqual(entries)
+    expect(buildEntryNames("firefox")).toEqual(entries)
+    expect(buildEntryNames("safari")).toEqual(entries)
     expect(BACKGROUND_OUTPUT_FILE).toBe("background.js")
     expect(BACKGROUND_OUTPUT_FORMAT).toBe("iife")
   })
@@ -47,6 +48,19 @@ describe("extension build contract", () => {
     expect(chrome.permissions).not.toContain("tabs")
     expect(firefox.permissions).toContain("activeTab")
     expect(firefox.permissions).not.toContain("clipboardWrite")
+  })
+
+  /**
+   * The options page is the way into Settings that does not go through the
+   * new tab, so it has to be declared wherever the new tab can break — which
+   * is every extension build. `open_in_tab` gives the full Settings UI a
+   * page of its own rather than the browser's embedded options frame.
+   */
+  it("every manifest declares the options page, opened in its own tab", async () => {
+    for (const name of ["chrome", "firefox", "safari"] as const) {
+      const m = await manifest(name)
+      expect(m.options_ui).toEqual({ page: "options.html", open_in_tab: true })
+    }
   })
 
   /**

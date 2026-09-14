@@ -51,6 +51,8 @@ export function GeneralPanel() {
   const openOnboarding = useUIStore((s) => s.openOnboarding)
   const closeSettings = useUIStore((s) => s.closeSettings)
   const adapter = useBookmarkStore((s) => s.adapter)
+  const safeMode = usePreferencesStore((s) => s.safeMode)
+  const setSafeMode = usePreferencesStore((s) => s.setSafeMode)
 
   const handleShowOnboarding = async () => {
     await Promise.all([
@@ -76,6 +78,22 @@ export function GeneralPanel() {
               >
                 Show setup wizard
               </Button>
+            }
+          />
+        </SettingGroup>
+      </SettingSection>
+      <SettingSection title="Recovery">
+        <SettingGroup>
+          <SettingRow
+            title="Safe mode"
+            description="Open the new tab without drawing the bookmark grid, so a root folder or source that breaks it can be changed here first."
+            htmlFor="safe-mode"
+            control={
+              <Switch
+                id="safe-mode"
+                checked={safeMode}
+                onCheckedChange={(checked) => void setSafeMode(checked)}
+              />
             }
           />
         </SettingGroup>

@@ -50,6 +50,7 @@ describe("settings categorization", () => {
     expect(homes.has("standaloneMigration")).toBe(true)
     // General.
     expect(homes.has("setupWizard")).toBe(true)
+    expect(homes.has("safeMode")).toBe(true)
     // Advanced.
     expect(homes.has("experimentalCardDrag")).toBe(true)
   })
