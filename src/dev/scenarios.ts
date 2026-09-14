@@ -231,6 +231,85 @@ function hugeLibrary(
   }))
 }
 
+/** Mulberry32: a tiny seeded PRNG, so a "random" tree is the same every run. */
+function seededRandom(seed: number): () => number {
+  let state = seed >>> 0
+  return () => {
+    state = (state + 0x6d2b79f5) >>> 0
+    let t = state
+    t = Math.imul(t ^ (t >>> 15), t | 1)
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61)
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+  }
+}
+
+/**
+ * Deterministic, irregular large tree for performance work (issue #85):
+ * exactly `folders` folders and `bookmarks` bookmarks, with `topLevel`
+ * top-level folders and the rest hung under random folders at most four
+ * levels deep. Folder sizes are skewed — a few big folders, many small ones —
+ * so card heights vary the way a real collection's do.
+ */
+function largeTree(
+  prefix: string,
+  options: {
+    topLevel: number
+    folders: number
+    bookmarks: number
+    seed: number
+  }
+): SeedNode[] {
+  const MAX_DEPTH = 4
+  const random = seededRandom(options.seed)
+
+  interface Draft {
+    path: string
+    depth: number
+    weight: number
+    subfolders: Draft[]
+  }
+  const all: Draft[] = []
+  const top: Draft[] = []
+  const draft = (path: string, depth: number): Draft => {
+    const node = { path, depth, weight: random() ** 3, subfolders: [] }
+    all.push(node)
+    return node
+  }
+
+  for (let i = 0; i < options.topLevel; i++) top.push(draft(`${i + 1}`, 1))
+  while (all.length < options.folders) {
+    const parents = all.filter((node) => node.depth < MAX_DEPTH)
+    const parent = parents[Math.floor(random() * parents.length)]
+    parent.subfolders.push(
+      draft(`${parent.path}.${parent.subfolders.length + 1}`, parent.depth + 1)
+    )
+  }
+
+  // Share the bookmarks out by weight, handing the rounding remainder to the
+  // first folders so the total is exact.
+  const totalWeight = all.reduce((sum, node) => sum + node.weight, 0)
+  const counts = all.map((node) =>
+    Math.floor((node.weight / totalWeight) * options.bookmarks)
+  )
+  let remainder = options.bookmarks - counts.reduce((sum, n) => sum + n, 0)
+  for (let i = 0; remainder > 0; i = (i + 1) % counts.length, remainder--) {
+    counts[i] += 1
+  }
+  const countOf = new Map(all.map((node, i) => [node, counts[i]]))
+
+  const build = (node: Draft): SeedNode => ({
+    title: `${prefix} ${node.path}`,
+    children: [
+      ...Array.from({ length: countOf.get(node) ?? 0 }, (_, b) => ({
+        title: `${prefix} ${node.path} link ${b + 1}`,
+        url: `https://example.com/${prefix.toLowerCase()}/${node.path.replaceAll(".", "/")}/${b + 1}`,
+      })),
+      ...node.subfolders.map(build),
+    ],
+  })
+  return top.map(build)
+}
+
 function withBrowserAndDaemons(
   base: Pick<DevScenario, "id" | "label" | "description">,
   options: {
@@ -453,6 +532,22 @@ export const DEV_SCENARIOS: DevScenario[] = [
       // 40 × (30 + 6 × 30 + 30) = 9,600 generated bookmarks plus the seed,
       // on top of 320 folders across three nesting levels.
       browserTree: [...browserBookmarks, ...hugeLibrary("Browser", 40, 6, 30)],
+    }
+  ),
+  withBrowserAndDaemons(
+    {
+      id: "large-tree",
+      label: "Large tree",
+      description:
+        "Exactly 10,000 bookmarks in 300 irregular folders up to four levels deep, from a seeded generator — the fixture for measuring grid performance (issue #85).",
+    },
+    {
+      browserTree: largeTree("Tree", {
+        topLevel: 12,
+        folders: 300,
+        bookmarks: 10_000,
+        seed: 85,
+      }),
     }
   ),
 ]

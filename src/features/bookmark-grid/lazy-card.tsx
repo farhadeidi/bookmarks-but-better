@@ -48,21 +48,43 @@ interface SharedObserver {
 const observers = new Map<Element | null, SharedObserver>()
 
 /**
+ * Each element's answer from `findScrollRoot`, so the cards of one column —
+ * which share every ancestor — ask `getComputedStyle` once between them
+ * instead of once per card per ancestor. With 300 cards that walk was the
+ * grid's largest cost of its own on mount (issue #85). Weak, so a torn-down
+ * grid takes its entries with it; the grid never re-parents its DOM, so an
+ * element's scroll root does not change while it lives.
+ */
+const scrollRoots = new WeakMap<Element, Element | null>()
+
+/**
  * The element whose scroll position decides what is near: the dashboard's own
  * scroll area, found generically rather than by name. With the viewport as the
  * root an ancestor scroll container would clip a card away before the margin
  * could count it as near.
  */
 function findScrollRoot(element: Element): Element | null {
+  const visited: Element[] = []
+  let root: Element | null = null
   for (
     let node = element.parentElement;
     node && node !== document.body;
     node = node.parentElement
   ) {
+    const cached = scrollRoots.get(node)
+    if (cached !== undefined) {
+      root = cached
+      break
+    }
     const { overflowY } = getComputedStyle(node)
-    if (overflowY === "auto" || overflowY === "scroll") return node
+    if (overflowY === "auto" || overflowY === "scroll") {
+      root = node
+      break
+    }
+    visited.push(node)
   }
-  return null
+  for (const node of visited) scrollRoots.set(node, root)
+  return root
 }
 
 function observeNear(element: Element, onNear: OnNear): () => void {
