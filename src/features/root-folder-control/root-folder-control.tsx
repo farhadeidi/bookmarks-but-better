@@ -1,13 +1,20 @@
 import * as React from "react"
 import { useBookmarkStore } from "@/stores/bookmark-store"
+import { useUIStore } from "@/stores/ui-store"
 import {
   DropdownMenu,
   DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu"
+import { ScrollArea } from "@/components/ui/scroll-area"
 import { HugeiconsIcon } from "@hugeicons/react"
-import { ArrowDown01Icon, Cancel01Icon } from "@hugeicons/core-free-icons"
+import {
+  ArrowDown01Icon,
+  Cancel01Icon,
+  FolderTreeIcon,
+} from "@hugeicons/core-free-icons"
 import {
   buildRootFolderOptions,
   hasRootFolderChoice,
@@ -42,6 +49,7 @@ export function RootFolderControl() {
   const tree = useBookmarkStore((s) => s.tree)
   const rootFolderId = useBookmarkStore((s) => s.rootFolderId)
   const setRootFolderId = useBookmarkStore((s) => s.setRootFolderId)
+  const openBookmarkOrganizer = useUIStore((s) => s.openBookmarkOrganizer)
   const rootIsCreatable = useBookmarkStore(
     (s) => s.adapter?.capabilities.rootIsCreatable ?? false
   )
@@ -74,18 +82,36 @@ export function RootFolderControl() {
           <span className="truncate">{displayLabel}</span>
           {chevron}
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" className="w-auto min-w-56">
-          <DropdownMenuItem onClick={() => setRootFolderId(null)}>
-            {ALL_BOOKMARKS_LABEL}
-          </DropdownMenuItem>
-          {folders.map((folder) => (
-            <DropdownMenuItem
-              key={folder.id}
-              onClick={() => setRootFolderId(folder.id)}
-            >
-              {folder.label}
+        {/* The folder list scrolls on its own inside a popup capped by the
+            space below the trigger, so the footer action stays in view on a
+            short window. Nested flex columns let the scroll viewport shrink
+            to that cap. */}
+        <DropdownMenuContent
+          align="start"
+          className="flex max-h-[min(28rem,var(--available-height))] w-auto max-w-[min(24rem,calc(100vw-2rem))] min-w-56 flex-col overflow-hidden p-0"
+        >
+          <ScrollArea className="flex min-h-0 flex-1 flex-col *:data-[slot=scroll-area-viewport]:min-h-0 *:data-[slot=scroll-area-viewport]:flex-1">
+            <div className="p-1">
+              <DropdownMenuItem onClick={() => setRootFolderId(null)}>
+                {ALL_BOOKMARKS_LABEL}
+              </DropdownMenuItem>
+              {folders.map((folder) => (
+                <DropdownMenuItem
+                  key={folder.id}
+                  onClick={() => setRootFolderId(folder.id)}
+                >
+                  <span className="truncate">{folder.label}</span>
+                </DropdownMenuItem>
+              ))}
+            </div>
+          </ScrollArea>
+          <DropdownMenuSeparator className="mx-0 my-0" />
+          <div className="p-1">
+            <DropdownMenuItem onClick={openBookmarkOrganizer}>
+              <HugeiconsIcon icon={FolderTreeIcon} strokeWidth={2} />
+              Edit bookmark tree
             </DropdownMenuItem>
-          ))}
+          </div>
         </DropdownMenuContent>
       </DropdownMenu>
 
