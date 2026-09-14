@@ -43,7 +43,9 @@ test("the multi-vault scenario hosts four switchable vaults", async ({
   await expect(trigger).toContainText("reading")
 
   await trigger.click()
-  const items = page.getByRole("menuitem")
+  const items = page
+    .getByRole("menuitem")
+    .filter({ hasNotText: "Manage sources" })
   await expect(items).toHaveCount(4)
   // No Browser Source in this scenario at all.
   await expect(items.filter({ hasText: "Browser bookmarks" })).toHaveCount(0)

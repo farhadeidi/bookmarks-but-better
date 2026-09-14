@@ -1,82 +1,120 @@
 import { HugeiconsIcon } from "@hugeicons/react"
 import { BrowserIcon, ComputerTerminal01Icon } from "@hugeicons/core-free-icons"
+import { Switch } from "@/components/ui/switch"
 import { cn } from "@/lib/utils"
-
-export type OnboardingSourceChoice = "browser" | "daemon"
+import { StepHeading } from "./step-heading"
 
 interface SourceStepProps {
-  value: OnboardingSourceChoice
-  onChange: (choice: OnboardingSourceChoice) => void
+  useBrowser: boolean
+  onUseBrowserChange: (on: boolean) => void
+  addVault: boolean
+  onAddVaultChange: (on: boolean) => void
+}
+
+function SourceOption({
+  id,
+  icon,
+  title,
+  description,
+  checked,
+  onCheckedChange,
+}: {
+  id: string
+  icon: typeof BrowserIcon
+  title: string
+  description: string
+  checked: boolean
+  onCheckedChange: (checked: boolean) => void
+}) {
+  return (
+    <label
+      htmlFor={id}
+      className={cn(
+        "flex cursor-pointer items-start gap-3 rounded-xl p-4 ring-1 transition-colors",
+        checked
+          ? "bg-primary/5 ring-primary/60"
+          : "ring-border/60 hover:bg-muted/40"
+      )}
+    >
+      <HugeiconsIcon
+        icon={icon}
+        size={20}
+        className="mt-0.5 shrink-0 text-primary"
+      />
+      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <span id={`${id}-title`} className="text-sm font-medium">
+          {title}
+        </span>
+        <span
+          id={`${id}-description`}
+          className="text-xs text-muted-foreground"
+        >
+          {description}
+        </span>
+      </div>
+      {/* Named by the title alone; the wrapping label would otherwise make the
+          whole card, description included, the switch's name. */}
+      <Switch
+        id={id}
+        aria-labelledby={`${id}-title`}
+        aria-describedby={`${id}-description`}
+        className="mt-0.5"
+        checked={checked}
+        onCheckedChange={onCheckedChange}
+      />
+    </label>
+  )
 }
 
 /**
- * Where bookmarks will live for a brand-new profile: the Browser Source, or a
- * Daemon Source.
+ * Where a brand-new profile gets its bookmarks from: the Browser Source, a
+ * daemon Vault, or both.
  *
- * The wizard only reaches this step where both of those exist, so both options
- * are unconditional here — a platform that offers one source skips the step
- * rather than asking a question with a single answer.
+ * Neither is the "real" one. Sources are never merged, but a profile can have
+ * both enabled and switch between them, so each is a switch and at least one
+ * stays on. The wizard owns that rule and what the switches lead to: the vault
+ * puts the connection step on the track, and turning the browser off only
+ * takes effect once a vault is connected to take its place.
  *
- * The Standalone Source is deliberately absent: it is in its sunset period and
- * cannot be selected by new users.
+ * The wizard only reaches this step where both sources exist. The Standalone
+ * Source is deliberately absent: it is in its sunset period and cannot be
+ * selected by new users.
  */
-export function SourceStep({ value, onChange }: SourceStepProps) {
+export function SourceStep({
+  useBrowser,
+  onUseBrowserChange,
+  addVault,
+  onAddVaultChange,
+}: SourceStepProps) {
   return (
-    <div className="flex flex-col gap-6 py-4">
-      <div className="flex flex-col gap-2 text-center">
-        <h2 className="text-2xl font-bold tracking-tight">
-          Where do your bookmarks live?
-        </h2>
-        <p className="text-muted-foreground">
-          You can always change this later in settings.
+    <div className="flex flex-col gap-6">
+      <StepHeading
+        title="Your bookmarks"
+        description="Choose where the dashboard gets bookmarks from. Use one or both."
+      />
+
+      <div className="flex flex-col gap-3">
+        <SourceOption
+          id="onboarding-use-browser"
+          icon={BrowserIcon}
+          title="Browser bookmarks"
+          description="The bookmarks already in this browser, kept in sync both ways."
+          checked={useBrowser}
+          onCheckedChange={onUseBrowserChange}
+        />
+        <SourceOption
+          id="onboarding-add-vault"
+          icon={ComputerTerminal01Icon}
+          title="Local vault"
+          description="Bookmarks kept in a folder on this machine by the Bookmarks But Better daemon, shared across browsers and profiles."
+          checked={addVault}
+          onCheckedChange={onAddVaultChange}
+        />
+
+        <p className="text-xs text-muted-foreground">
+          Keep at least one on. With both, switch between them from the top of
+          the dashboard.
         </p>
-      </div>
-
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <button
-          type="button"
-          onClick={() => onChange("browser")}
-          className={cn(
-            "flex flex-col items-start gap-2 rounded-lg border p-4 text-left transition-colors",
-            value === "browser"
-              ? "border-primary bg-accent ring-2 ring-primary"
-              : "border-border hover:bg-accent/50"
-          )}
-        >
-          <HugeiconsIcon
-            icon={BrowserIcon}
-            size={22}
-            className="text-primary"
-          />
-          <span className="font-medium">Browser</span>
-          <span className="text-xs text-muted-foreground">
-            Uses the bookmarks already in this browser and stays in sync with
-            it. No extra install.
-          </span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => onChange("daemon")}
-          className={cn(
-            "flex flex-col items-start gap-2 rounded-lg border p-4 text-left transition-colors",
-            value === "daemon"
-              ? "border-primary bg-accent ring-2 ring-primary"
-              : "border-border hover:bg-accent/50"
-          )}
-        >
-          <HugeiconsIcon
-            icon={ComputerTerminal01Icon}
-            size={22}
-            className="text-primary"
-          />
-          <span className="font-medium">Daemon</span>
-          <span className="text-xs text-muted-foreground">
-            Bookmarks live in a local <code>bookmarks-but-better</code> daemon
-            vault, shared across browsers and profiles on this machine. Requires
-            installing the daemon.
-          </span>
-        </button>
       </div>
     </div>
   )

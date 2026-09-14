@@ -1,5 +1,6 @@
 import { create } from "zustand"
 import type { BookmarkNode } from "@/browser"
+import type { SettingsCategoryId } from "@/features/settings/settings-categories"
 
 interface DeletingItem {
   id: string
@@ -24,6 +25,8 @@ interface SearchPaletteRequest {
 
 interface UIState {
   settingsOpen: boolean
+  /** The category the last open asked for; null keeps the one shown last. */
+  settingsCategory: SettingsCategoryId | null
   bookmarkOrganizerOpen: boolean
   onboardingOpen: boolean
   editingBookmark: BookmarkNode | null
@@ -40,6 +43,8 @@ interface UIState {
 
   // Actions
   openSettings(): void
+  /** Opens Settings at one category, e.g. from the source picker. */
+  openSettingsAt(category: SettingsCategoryId): void
   closeSettings(): void
   openBookmarkOrganizer(): void
   closeBookmarkOrganizer(): void
@@ -65,6 +70,7 @@ interface UIState {
 
 export const useUIStore = create<UIState>((set) => ({
   settingsOpen: false,
+  settingsCategory: null,
   bookmarkOrganizerOpen: false,
   onboardingOpen: false,
   editingBookmark: null,
@@ -73,8 +79,10 @@ export const useUIStore = create<UIState>((set) => ({
   searchPalette: null,
   organizerRevealId: null,
 
-  openSettings: () => set({ settingsOpen: true }),
-  closeSettings: () => set({ settingsOpen: false }),
+  openSettings: () => set({ settingsOpen: true, settingsCategory: null }),
+  openSettingsAt: (category) =>
+    set({ settingsOpen: true, settingsCategory: category }),
+  closeSettings: () => set({ settingsOpen: false, settingsCategory: null }),
   openBookmarkOrganizer: () =>
     set({ bookmarkOrganizerOpen: true, organizerRevealId: null }),
   closeBookmarkOrganizer: () =>

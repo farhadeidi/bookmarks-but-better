@@ -16,8 +16,13 @@ test("the default scenario provides Browser plus the reading and archive vaults"
   await expect(trigger).toContainText("Browser bookmarks")
 
   await trigger.click()
-  const items = page.getByRole("menuitem")
+  const items = page
+    .getByRole("menuitem")
+    .filter({ hasNotText: "Manage sources" })
   await expect(items).toHaveCount(3)
+  await expect(
+    page.getByRole("menuitem", { name: "Manage sources" })
+  ).toBeVisible()
   await expect(items.filter({ hasText: "Browser bookmarks" })).toHaveAttribute(
     "aria-disabled",
     "true"
@@ -114,6 +119,8 @@ test("mobile source and action controls stay contained without overlapping", asy
     expect(box!.x + box!.width).toBeLessThanOrEqual(305)
   }
   expect(firstActionBox?.height).toBeGreaterThanOrEqual(48)
+  // On a phone the actions float at the bottom, and the workbench pill sits
+  // clear above them.
   expect(workbenchBox!.y + workbenchBox!.height).toBeLessThanOrEqual(
     toolbarBox!.y - 8
   )

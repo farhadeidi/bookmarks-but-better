@@ -1,12 +1,14 @@
 // @vitest-environment jsdom
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { cleanup, render, screen, waitFor } from "@testing-library/react"
+import { act, cleanup, render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { installFakeIndexedDB } from "@/browser/__tests__/fake-indexeddb"
 import { ThemeProvider } from "@/components/theme-provider"
 import { usePreferencesStore } from "@/stores/preferences-store"
 import { useBookmarkStore } from "@/stores/bookmark-store"
+import { useSourceStore } from "@/stores/source-store"
+import { emptySourceConfig } from "@/sources/config"
 import { OnboardingWizard } from "../onboarding-wizard"
 import { getOnboardingCompleted } from "@/browser/onboarding-preference"
 import {
@@ -99,6 +101,9 @@ class StubResizeObserver {
 
 installFakeIndexedDB()
 
+/** Restored before each test, since some replace it with a spy. */
+const originalSetSourceEnabled = useSourceStore.getState().setSourceEnabled
+
 function renderWizard(onComplete = vi.fn()) {
   return {
     onComplete,
@@ -164,6 +169,11 @@ beforeEach(() => {
     createFolder: vi.fn(),
     refresh: vi.fn().mockResolvedValue(undefined),
   })
+
+  useSourceStore.setState({
+    config: emptySourceConfig(),
+    setSourceEnabled: originalSetSourceEnabled,
+  })
 })
 
 afterEach(() => {
@@ -174,15 +184,32 @@ afterEach(() => {
   installFakeIndexedDB()
 })
 
+/** Presses the primary button until the teaching card is on screen. */
+async function advanceToTips(user: ReturnType<typeof userEvent.setup>) {
+  for (let i = 0; i < 5; i++) {
+    if (screen.queryByRole("heading", { name: "You're all set" })) return
+    await user.click(
+      screen.getByRole("button", { name: /^(Next|Skip for now)$/ })
+    )
+  }
+}
+
 describe("OnboardingWizard step track", () => {
   it("opens on the first real question rather than a welcome screen", () => {
     renderWizard()
 
-    expect(screen.getByText("Where do your bookmarks live?")).toBeTruthy()
+    expect(screen.getByRole("heading", { name: "Your bookmarks" })).toBeTruthy()
     expect(screen.queryByRole("button", { name: "Get Started" })).toBeNull()
     expect(
       screen.queryByRole("heading", { name: "Bookmarks — But Better" })
     ).toBeNull()
+  })
+
+  it("is a dialog that says where the user is on the track", () => {
+    renderWizard()
+
+    expect(screen.getByRole("dialog")).toBeTruthy()
+    expect(screen.getByText("Step 1 of 3")).toBeTruthy()
   })
 
   it("never asks about appearance — Settings owns it", () => {
@@ -201,18 +228,17 @@ describe("OnboardingWizard step track", () => {
     renderWizard()
 
     expect(screen.getByRole("heading", { name: "You're all set" })).toBeTruthy()
-    expect(screen.queryByRole("button", { name: "Skip, use defaults" })).toBe(
-      null
-    )
-    expect(screen.getByRole("button", { name: "Start Browsing" })).toBeTruthy()
+    expect(screen.queryByRole("button", { name: "Skip setup" })).toBeNull()
+    expect(screen.getByRole("button", { name: "Open dashboard" })).toBeTruthy()
     expect(screen.queryByRole("button", { name: "Next" })).toBeNull()
+    expect(screen.queryByText(/Step \d of/)).toBeNull()
   })
 
   it("offers skipping from the very first step", async () => {
     const user = userEvent.setup()
     renderWizard()
 
-    await user.click(screen.getByRole("button", { name: "Skip, use defaults" }))
+    await user.click(screen.getByRole("button", { name: "Skip setup" }))
 
     await waitFor(async () => {
       expect(await getOnboardingCompleted()).toBe(true)
@@ -221,24 +247,130 @@ describe("OnboardingWizard step track", () => {
 })
 
 describe("OnboardingWizard source step", () => {
-  it("adds a daemon setup step only when Daemon is selected", async () => {
-    const user = userEvent.setup()
+  it("offers Browser bookmarks and a local vault as two switches, browser on by default", () => {
     renderWizard()
 
-    expect(screen.getByText("Where do your bookmarks live?")).toBeTruthy()
-    expect(screen.queryByText("Set up the daemon")).toBeNull()
-
-    await user.click(screen.getByRole("button", { name: /Daemon/ }))
-    await user.click(screen.getByRole("button", { name: "Next" }))
-
-    expect(screen.getByText("Set up the daemon")).toBeTruthy()
+    expect(
+      screen
+        .getByRole("switch", { name: "Browser bookmarks" })
+        .getAttribute("aria-checked")
+    ).toBe("true")
+    expect(
+      screen
+        .getByRole("switch", { name: "Local vault" })
+        .getAttribute("aria-checked")
+    ).toBe("false")
+    expect(screen.queryByText("Included")).toBeNull()
   })
 
-  it("skips straight to the root folder step for Browser", async () => {
+  it("keeps at least one on: switching Browser bookmarks off switches the vault on", async () => {
     const user = userEvent.setup()
     renderWizard()
 
-    await user.click(screen.getByRole("button", { name: /Browser/ }))
+    await user.click(screen.getByRole("switch", { name: "Browser bookmarks" }))
+
+    expect(
+      screen
+        .getByRole("switch", { name: "Local vault" })
+        .getAttribute("aria-checked")
+    ).toBe("true")
+    await user.click(screen.getByRole("button", { name: "Next" }))
+    expect(
+      screen.getByRole("heading", { name: "Connect your vault" })
+    ).toBeTruthy()
+    expect(
+      screen.getByText(/keep Browser bookmarks until a vault is connected/)
+    ).toBeTruthy()
+  })
+
+  it("switches Browser bookmarks off on finish once a vault is connected", async () => {
+    const user = userEvent.setup()
+    const setSourceEnabled = vi.fn().mockResolvedValue(true)
+    useSourceStore.setState({ setSourceEnabled })
+    renderWizard()
+
+    await user.click(screen.getByRole("switch", { name: "Browser bookmarks" }))
+    await user.click(screen.getByRole("button", { name: "Next" }))
+    act(() => {
+      useSourceStore.setState({
+        config: {
+          ...emptySourceConfig(),
+          connections: { "http://127.0.0.1:52222": {} },
+        },
+      })
+    })
+    await user.click(screen.getByRole("button", { name: "Skip setup" }))
+
+    await waitFor(() => {
+      expect(setSourceEnabled).toHaveBeenCalledWith("browser", false)
+    })
+  })
+
+  it("re-opened, starts on the sources that are on and can turn Browser bookmarks back on", async () => {
+    const user = userEvent.setup()
+    const setSourceEnabled = vi.fn().mockResolvedValue(true)
+    useSourceStore.setState({
+      setSourceEnabled,
+      config: {
+        ...emptySourceConfig(),
+        connections: { "http://127.0.0.1:52222": {} },
+        sources: { browser: { enabled: false } },
+      },
+    })
+    renderWizard()
+
+    expect(
+      screen
+        .getByRole("switch", { name: "Browser bookmarks" })
+        .getAttribute("aria-checked")
+    ).toBe("false")
+    expect(
+      screen
+        .getByRole("switch", { name: "Local vault" })
+        .getAttribute("aria-checked")
+    ).toBe("true")
+
+    await user.click(screen.getByRole("switch", { name: "Browser bookmarks" }))
+    await user.click(screen.getByRole("button", { name: "Skip setup" }))
+
+    await waitFor(() => {
+      expect(setSourceEnabled).toHaveBeenCalledWith("browser", true)
+    })
+  })
+
+  it("leaves Browser bookmarks on when no vault was connected to replace it", async () => {
+    const user = userEvent.setup()
+    const setSourceEnabled = vi.fn().mockResolvedValue(true)
+    useSourceStore.setState({ setSourceEnabled })
+    renderWizard()
+
+    await user.click(screen.getByRole("switch", { name: "Browser bookmarks" }))
+    await user.click(screen.getByRole("button", { name: "Skip setup" }))
+
+    await waitFor(async () => {
+      expect(await getOnboardingCompleted()).toBe(true)
+    })
+    expect(setSourceEnabled).not.toHaveBeenCalled()
+  })
+
+  it("adds the vault step only when adding a vault is turned on", async () => {
+    const user = userEvent.setup()
+    renderWizard()
+
+    expect(screen.queryByText("Connect your vault")).toBeNull()
+
+    await user.click(screen.getByRole("switch", { name: "Local vault" }))
+    await user.click(screen.getByRole("button", { name: "Next" }))
+
+    expect(
+      screen.getByRole("heading", { name: "Connect your vault" })
+    ).toBeTruthy()
+  })
+
+  it("goes straight to the root folder step without a vault", async () => {
+    const user = userEvent.setup()
+    renderWizard()
+
     await user.click(screen.getByRole("button", { name: "Next" }))
 
     expect(screen.getByText("Choose your bookmark folder")).toBeTruthy()
@@ -247,23 +379,25 @@ describe("OnboardingWizard source step", () => {
   it("never offers the Standalone source to a new profile, in any spelling", () => {
     renderWizard()
 
-    expect(screen.getByText("Where do your bookmarks live?")).toBeTruthy()
+    expect(screen.getByRole("heading", { name: "Your bookmarks" })).toBeTruthy()
 
     // The sunset removed it from new-user UI entirely.
     expect(screen.queryByText(/standalone/i)).toBeNull()
   })
 
-  it("on a daemon-only platform there is no source step, and daemon setup is on the track", () => {
+  it("on a daemon-only platform there is no source step, and the vault step is on the track", () => {
     // Safari's capabilities: no Browser Source, so a daemon Vault is the only
-    // way in and there is no question to ask.
+    // way in and there is nothing to add it to.
     setPlatformCapabilities(SAFARI_CAPABILITIES)
     renderWizard()
 
-    expect(screen.queryByText("Where do your bookmarks live?")).toBeNull()
-    expect(screen.getByText("Set up the daemon")).toBeTruthy()
+    expect(screen.queryByRole("heading", { name: "Your bookmarks" })).toBeNull()
+    expect(
+      screen.getByRole("heading", { name: "Connect your vault" })
+    ).toBeTruthy()
   })
 
-  it("on a daemon-only platform, the daemon step says the browser's own bookmarks are not used", () => {
+  it("on a daemon-only platform, the vault step says the browser's own bookmarks are not used", () => {
     setPlatformCapabilities(SAFARI_CAPABILITIES)
     renderWizard()
 
@@ -274,8 +408,8 @@ describe("OnboardingWizard source step", () => {
   })
 
   it("skips the source step where a daemon cannot be reached at all", () => {
-    // Firefox for Android: a Browser Source and nothing else, so the question
-    // has one answer and is not asked.
+    // Firefox for Android: a Browser Source and nothing else, so there is no
+    // vault to add.
     setPlatformCapabilities({
       buildTarget: "firefox",
       browserSource: true,
@@ -286,32 +420,56 @@ describe("OnboardingWizard source step", () => {
     })
     renderWizard()
 
-    expect(screen.queryByText("Where do your bookmarks live?")).toBeNull()
+    expect(screen.queryByRole("heading", { name: "Your bookmarks" })).toBeNull()
     expect(screen.getByText("Choose your bookmark folder")).toBeTruthy()
   })
 
-  it("completing with Daemon selected but not connected still marks onboarding done", async () => {
+  it("completing with a vault asked for but not connected still marks onboarding done", async () => {
     const user = userEvent.setup()
     renderWizard()
 
-    await user.click(screen.getByRole("button", { name: /Daemon/ }))
-    await user.click(screen.getByRole("button", { name: "Skip, use defaults" }))
+    await user.click(screen.getByRole("switch", { name: "Local vault" }))
+    await user.click(screen.getByRole("button", { name: "Skip setup" }))
 
     await waitFor(async () => {
       expect(await getOnboardingCompleted()).toBe(true)
     })
   })
+})
 
-  it("completing with Browser selected marks onboarding done", async () => {
+describe("OnboardingWizard vault step", () => {
+  it("shows the Daemon Manager command and says skipping keeps Browser bookmarks", async () => {
     const user = userEvent.setup()
     renderWizard()
 
-    await user.click(screen.getByRole("button", { name: /Browser/ }))
-    await user.click(screen.getByRole("button", { name: "Skip, use defaults" }))
+    await user.click(screen.getByRole("switch", { name: "Local vault" }))
+    await user.click(screen.getByRole("button", { name: "Next" }))
 
-    await waitFor(async () => {
-      expect(await getOnboardingCompleted()).toBe(true)
+    expect(screen.getByText("npx bookmarks-but-better@latest")).toBeTruthy()
+    expect(screen.getByText(/start on Browser bookmarks/)).toBeTruthy()
+    expect(screen.getByRole("button", { name: "Skip for now" })).toBeTruthy()
+  })
+
+  it("confirms a connection and moves on with Next instead of Skip for now", async () => {
+    const user = userEvent.setup()
+    renderWizard()
+
+    await user.click(screen.getByRole("switch", { name: "Local vault" }))
+    await user.click(screen.getByRole("button", { name: "Next" }))
+
+    act(() => {
+      useSourceStore.setState({
+        config: {
+          ...emptySourceConfig(),
+          connections: { "http://127.0.0.1:52222": {} },
+        },
+      })
     })
+
+    expect(screen.getByRole("status").textContent).toContain("Connected")
+    expect(screen.queryByLabelText("Daemon address")).toBeNull()
+    expect(screen.getByRole("button", { name: "Next" })).toBeTruthy()
+    expect(screen.queryByRole("button", { name: "Skip for now" })).toBeNull()
   })
 })
 
@@ -332,7 +490,6 @@ describe("OnboardingWizard root folder step", () => {
 
     renderWizard()
 
-    await user.click(screen.getByRole("button", { name: /Browser/ }))
     await user.click(screen.getByRole("button", { name: "Next" }))
 
     expect(screen.getByText("Choose your bookmark folder")).toBeTruthy()
@@ -356,19 +513,17 @@ describe("OnboardingWizard root folder step", () => {
 
     renderWizard()
 
-    await user.click(screen.getByRole("button", { name: /Browser/ }))
-
     expect(screen.queryByText("Choose your bookmark folder")).toBeNull()
     expect(screen.queryByLabelText("New folder name")).toBeNull()
     // The source step is followed straight by the teaching card.
-    expect(screen.getByRole("button", { name: "Next" })).toBeTruthy()
     await user.click(screen.getByRole("button", { name: "Next" }))
     expect(screen.getByRole("heading", { name: "You're all set" })).toBeTruthy()
   })
 
-  it("keeps the step when an empty tree root is itself creatable", () => {
+  it("keeps the step when an empty tree root is itself creatable", async () => {
     // A freshly connected, empty daemon Vault: no folders yet, but its root
     // accepts one, so "create a folder to point at" is a real choice.
+    const user = userEvent.setup()
     useBookmarkStore.setState({
       tree: [{ id: "root", title: "reading", children: [] }],
       adapter: adapterWith({
@@ -381,6 +536,7 @@ describe("OnboardingWizard root folder step", () => {
     })
 
     renderWizard()
+    await user.click(screen.getByRole("button", { name: "Next" }))
 
     expect(screen.getByText("Choose your bookmark folder")).toBeTruthy()
   })
@@ -391,7 +547,6 @@ describe("OnboardingWizard root folder step", () => {
 
     renderWizard()
 
-    await user.click(screen.getByRole("button", { name: /Browser/ }))
     await user.click(screen.getByRole("button", { name: "Next" }))
 
     expect(screen.getByRole("combobox").textContent).toBe("Bookmarks Bar")
@@ -403,18 +558,53 @@ describe("OnboardingWizard root folder step", () => {
 
     renderWizard()
 
-    await user.click(screen.getByRole("button", { name: /Browser/ }))
     await user.click(screen.getByRole("button", { name: "Next" }))
 
     expect(screen.getByRole("combobox").textContent).toBe("Other Bookmarks")
+  })
+
+  it("never writes a browser folder into a vault connected mid-wizard", async () => {
+    const user = userEvent.setup()
+    const setRootFolderId = vi.fn()
+    useBookmarkStore.setState({ tree: BOOKMARK_TREE, setRootFolderId })
+
+    renderWizard()
+
+    // Connecting a vault switches the Active Source: a new adapter and a tree
+    // in which the browser's Bookmarks Bar ("1") does not exist.
+    act(() => {
+      useBookmarkStore.setState({
+        adapter: adapterWith({
+          openInManager: false,
+          move: true,
+          reorder: false,
+          setChildOrder: true,
+          rootIsCreatable: true,
+        }),
+        tree: [
+          {
+            id: "vault-root",
+            title: "reading",
+            children: [{ id: "inbox", title: "Inbox", children: [] }],
+          },
+        ],
+      })
+    })
+
+    await user.click(screen.getByRole("button", { name: "Skip setup" }))
+
+    await waitFor(async () => {
+      expect(await getOnboardingCompleted()).toBe(true)
+    })
+    expect(setRootFolderId).not.toHaveBeenCalledWith("1")
   })
 })
 
 /**
  * The card's hard constraint (ADR 0004): every line is driven by a Platform
  * Capability or an adapter capability, never by a build target or a browser
- * name. Each case below is a single-step wizard, so the card is the only thing
- * in the DOM and an absent line is genuinely absent.
+ * name. Only the current step is rendered, so where the card is not the only
+ * step the tests walk to it before asserting an absence.
  */
 describe("OnboardingWizard teaching card", () => {
   it("teaches type-to-search on every platform", () => {
@@ -467,11 +657,15 @@ describe("OnboardingWizard teaching card", () => {
     expect(screen.queryByText(/new tab/i)).toBeNull()
   })
 
-  it("also refuses the new-tab promise on Safari, where the wizard has other steps", () => {
+  it("also refuses the new-tab promise on Safari, where the wizard has other steps", async () => {
+    const user = userEvent.setup()
     setPlatformCapabilities(SAFARI_CAPABILITIES)
     useBookmarkStore.setState({ tree: [] })
     renderWizard()
 
+    await advanceToTips(user)
+
+    expect(screen.getByRole("heading", { name: "You're all set" })).toBeTruthy()
     expect(screen.queryByText(/new tab/i)).toBeNull()
     expect(screen.queryByText(/\bbb\b/)).toBeNull()
   })
@@ -545,11 +739,15 @@ describe("OnboardingWizard teaching card", () => {
     expect(screen.queryByText("Alt")).toBeNull()
   })
 
-  it("never teaches Alt+arrow before any source is connected", () => {
+  it("never teaches Alt+arrow before any source is connected", async () => {
+    const user = userEvent.setup()
     setPlatformCapabilities(SAFARI_CAPABILITIES)
     useBookmarkStore.setState({ tree: [], adapter: undefined })
     renderWizard()
 
+    await advanceToTips(user)
+
+    expect(screen.getByRole("heading", { name: "You're all set" })).toBeTruthy()
     expect(screen.queryByText("Alt")).toBeNull()
   })
 })

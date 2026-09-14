@@ -80,7 +80,7 @@ describe("SettingsDialog Sources category", () => {
     openSourcesCategory()
 
     expect(screen.getByText("Browser bookmarks")).toBeTruthy()
-    expect(screen.getByRole("button", { name: "Active" })).toBeTruthy()
+    expect(screen.getByText("Active")).toBeTruthy()
     expect(screen.getByText("Root folder")).toBeTruthy()
     expect(screen.getByText("Nested folders")).toBeTruthy()
   })

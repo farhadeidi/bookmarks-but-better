@@ -1,27 +1,48 @@
 import * as React from "react"
+import { HugeiconsIcon } from "@hugeicons/react"
+import {
+  Add01Icon,
+  MoreVerticalIcon,
+  PencilEdit01Icon,
+} from "@hugeicons/core-free-icons"
 import { Button } from "@/components/ui/button"
 import { Field, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { allSourceDescriptors, useSourceStore } from "@/stores/source-store"
 import { platformCapabilities } from "@/sources/platform"
 import { STANDALONE_DEPRECATION_MESSAGE } from "@/features/standalone-sunset"
-import { DaemonConnectionPanel } from "../daemon-connection-panel"
 import { useBookmarkStore } from "@/stores/bookmark-store"
 import { usePreferencesStore } from "@/stores/preferences-store"
 import { RootFolderSelect } from "@/features/root-folder-select"
 import type { SourceDescriptor } from "@/sources/descriptors"
+import { cn } from "@/lib/utils"
+import { DaemonConnectionPanel } from "../daemon-connection-panel"
+import { SettingGroup, SettingRow, SettingSection } from "./setting-row"
 
-function SourceCard({
+type DaemonStatus = "checking" | "connected" | "unreachable"
+
+/**
+ * One source as a row: its name (with the default it replaces, once renamed),
+ * whether it is the Active Source or can become it, and whether it is
+ * enabled. Renaming opens an inline form under the row.
+ */
+function SourceRow({
   source,
   enabled,
   active,
   switching,
   onToggle,
   onActivate,
-  children,
+  note,
 }: {
   source: SourceDescriptor
   enabled: boolean
@@ -29,7 +50,7 @@ function SourceCard({
   switching: boolean
   onToggle: (enabled: boolean) => void
   onActivate: () => void
-  children?: React.ReactNode
+  note?: React.ReactNode
 }) {
   const setSourceLabel = useSourceStore((s) => s.setSourceLabel)
   const [editing, setEditing] = React.useState(false)
@@ -53,45 +74,47 @@ function SourceCard({
   }
 
   return (
-    <div className="overflow-hidden rounded-xl bg-card ring-1 ring-border/60">
-      <div className="flex flex-col gap-3 p-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex min-w-0 flex-col gap-0.5">
-          <span className="truncate text-sm font-medium">{source.label}</span>
+    <div>
+      <div className="flex items-center gap-3 p-4">
+        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+          <div className="flex min-w-0 items-center gap-1">
+            <span className="truncate text-sm font-medium">{source.label}</span>
+            <Button
+              type="button"
+              size="icon-xs"
+              variant="ghost"
+              className="shrink-0 text-muted-foreground hover:text-foreground"
+              aria-label={`Rename ${source.label}`}
+              title="Rename"
+              onClick={startEditing}
+            >
+              <HugeiconsIcon icon={PencilEdit01Icon} strokeWidth={2} />
+            </Button>
+          </div>
           {source.label !== source.defaultLabel && (
             <span className="truncate text-xs text-muted-foreground">
-              Default: {source.defaultLabel}
+              {source.defaultLabel}
             </span>
           )}
-          {source.kind === "daemon" && source.vaultId && (
-            <span className="truncate text-xs text-muted-foreground">
-              Vault ID: {source.vaultId}
-            </span>
-          )}
-          {source.kind === "standalone" && (
-            <span className="text-sm text-amber-600 dark:text-amber-400">
-              {STANDALONE_DEPRECATION_MESSAGE}
-            </span>
-          )}
+          {note}
         </div>
-        <div className="flex flex-wrap items-center gap-2 sm:shrink-0 sm:justify-end">
-          <Button
-            type="button"
-            size="sm"
-            variant="ghost"
-            aria-label={`Rename ${source.label}`}
-            onClick={startEditing}
-          >
-            Rename
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            variant={active ? "default" : "outline"}
-            disabled={switching || active}
-            onClick={onActivate}
-          >
-            {active ? "Active" : "Make active"}
-          </Button>
+        <div className="flex shrink-0 items-center gap-3">
+          {active ? (
+            <span className="rounded-full bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary">
+              Active
+            </span>
+          ) : (
+            <Button
+              type="button"
+              size="xs"
+              variant="outline"
+              disabled={switching}
+              aria-label={`Use ${source.label}`}
+              onClick={onActivate}
+            >
+              Use
+            </Button>
+          )}
           <Switch
             aria-label={`Enable ${source.label}`}
             checked={enabled}
@@ -102,7 +125,7 @@ function SourceCard({
 
       {editing && (
         <form
-          className="flex flex-col gap-3 border-t border-border/60 bg-muted/20 p-3 sm:flex-row sm:items-end"
+          className="flex flex-col gap-3 border-t border-border/60 bg-muted/20 p-4 sm:flex-row sm:items-end"
           onSubmit={(event) => void saveLabel(event)}
         >
           <Field className="min-w-0 flex-1 gap-1.5">
@@ -134,53 +157,136 @@ function SourceCard({
           </div>
         </form>
       )}
-
-      {children}
     </div>
   )
 }
 
-function BrowserSourceSettings() {
-  const rootFolderId = useBookmarkStore((s) => s.rootFolderId)
-  const setRootFolderId = useBookmarkStore((s) => s.setRootFolderId)
-  const nestedFolders = usePreferencesStore((s) => s.nestedFolders)
-  const setNestedFolders = usePreferencesStore((s) => s.setNestedFolders)
+const STATUS_TEXT: Record<DaemonStatus, string> = {
+  checking: "Checking…",
+  connected: "Connected",
+  unreachable: "Unreachable",
+}
+
+/**
+ * One daemon connection: a header that says whether the daemon answers right
+ * now, its Vaults as rows, and the connection-level actions behind a menu.
+ * Forget is destructive and sits apart from Refresh; an unreachable daemon
+ * gets its Retry in the open.
+ */
+function DaemonCard({
+  origin,
+  vaultCount,
+  status,
+  canForget,
+  onRefresh,
+  onForget,
+  children,
+}: {
+  origin: string
+  vaultCount: number
+  status: DaemonStatus
+  canForget: boolean
+  onRefresh: () => void
+  onForget: () => void
+  children: React.ReactNode
+}) {
+  const name = origin || "This daemon"
+  const vaults = `${vaultCount} ${vaultCount === 1 ? "Vault" : "Vaults"}`
 
   return (
-    <div className="flex flex-col gap-5 border-t border-border/60 bg-muted/20 p-4">
-      <RootFolderSelect
-        value={rootFolderId}
-        onChange={setRootFolderId}
-        label="Root folder"
-        description="Choose which Browser bookmarks folder appears on the dashboard."
-      />
-
-      <div className="flex items-center justify-between gap-4">
-        <div className="flex min-w-0 flex-col gap-1">
-          <Label className="text-sm font-medium">Nested folders</Label>
-          <p className="text-sm text-muted-foreground">
-            Show Browser bookmark subfolders inside their parent cards.
-          </p>
-        </div>
-        <Switch
-          className="shrink-0"
-          aria-label="Show nested Browser bookmark folders"
-          checked={nestedFolders}
-          onCheckedChange={setNestedFolders}
+    <section
+      role="group"
+      aria-label={`Daemon ${origin || "this daemon"}`}
+      className="overflow-hidden rounded-xl bg-card ring-1 ring-border/60"
+    >
+      <div className="flex items-center gap-3 border-b border-border/60 bg-muted/30 py-3 pr-2 pl-4">
+        <span
+          aria-hidden
+          className={cn(
+            "size-2 shrink-0 rounded-full",
+            status === "connected" && "bg-emerald-500",
+            status === "unreachable" && "bg-destructive",
+            status === "checking" && "animate-pulse bg-muted-foreground/50"
+          )}
         />
+        <div className="flex min-w-0 flex-1 flex-col">
+          <span className="truncate text-sm font-medium">{name}</span>
+          <span
+            className={cn(
+              "text-xs",
+              status === "unreachable"
+                ? "text-destructive"
+                : "text-muted-foreground"
+            )}
+          >
+            {STATUS_TEXT[status]} · {vaults}
+          </span>
+        </div>
+        {status === "unreachable" && (
+          <Button type="button" size="xs" variant="outline" onClick={onRefresh}>
+            Retry
+          </Button>
+        )}
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            render={
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                aria-label={`Actions for daemon ${origin || "this daemon"}`}
+              />
+            }
+          >
+            <HugeiconsIcon icon={MoreVerticalIcon} strokeWidth={2} />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-auto min-w-44">
+            <DropdownMenuItem
+              disabled={status === "checking"}
+              onClick={onRefresh}
+            >
+              Refresh Vaults
+            </DropdownMenuItem>
+            {canForget && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem variant="destructive" onClick={onForget}>
+                  Forget daemon
+                </DropdownMenuItem>
+              </>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
-    </div>
+
+      {status === "unreachable" && (
+        <p className="border-b border-border/60 px-4 py-2.5 text-xs text-muted-foreground">
+          Not answering. Run <code>npx bookmarks-but-better@latest status</code>{" "}
+          to see why and how to fix it.
+        </p>
+      )}
+
+      <div className="divide-y divide-border/60">{children}</div>
+
+      <p className="border-t border-border/60 px-4 py-3 text-xs text-muted-foreground">
+        Add or remove Vaults with{" "}
+        <code>npx bookmarks-but-better@latest vault</code>, then Refresh.
+        Disabling a Vault here keeps it for later.
+      </p>
+    </section>
   )
 }
 
 /**
- * The Sources category: every source this profile knows, its enabled state,
- * which one is Active, and the daemon connections underneath them.
+ * The Sources category, in sections: the Browser Source with the settings
+ * that belong to it, each daemon connection with its Vaults and live status,
+ * connecting a daemon, and — only for profiles still on it — the legacy
+ * Standalone source.
  *
  * Enable/disable retains configuration and is always reversible; Forget is a
- * separate, destructive-looking action confined to daemon connections. The
- * two are never conflated — disabling a Vault keeps its address and token,
- * forgetting the connection is what discards them.
+ * separate, destructive action confined to daemon connections. The two are
+ * never conflated — disabling a Vault keeps its address and token, forgetting
+ * the connection is what discards them.
  */
 export function SourcesPanel({
   onMigrateStandalone,
@@ -201,25 +307,20 @@ export function SourcesPanel({
   const switchSource = useSourceStore((s) => s.switchSource)
   const forgetDaemon = useSourceStore((s) => s.forgetDaemon)
   const refreshDaemonVaults = useSourceStore((s) => s.refreshDaemonVaults)
+  const rootFolderId = useBookmarkStore((s) => s.rootFolderId)
+  const setRootFolderId = useBookmarkStore((s) => s.setRootFolderId)
+  const nestedFolders = usePreferencesStore((s) => s.nestedFolders)
+  const setNestedFolders = usePreferencesStore((s) => s.setNestedFolders)
   const caps = React.useMemo(() => platformCapabilities(), [])
 
   const [enableError, setEnableError] = React.useState<string | null>(null)
-  const [refreshingOrigin, setRefreshingOrigin] = React.useState<string | null>(
-    null
+  const [connectOpen, setConnectOpen] = React.useState(false)
+
+  const browserSource = sources.find((source) => source.kind === "browser")
+  const standaloneSource = sources.find(
+    (source) => source.kind === "standalone"
   )
-
-  const handleToggle = async (id: string, enabled: boolean) => {
-    setEnableError(null)
-    const applied = await setSourceEnabled(id, enabled)
-    if (!applied) {
-      setEnableError(
-        "At least one source must stay enabled. Forget a daemon connection instead, or keep this one."
-      )
-    }
-  }
-
   const daemonSources = sources.filter((source) => source.kind === "daemon")
-  const localSources = sources.filter((source) => source.kind !== "daemon")
   const daemonGroups = React.useMemo(() => {
     const origins = new Set([
       ...Object.keys(config.connections),
@@ -233,121 +334,70 @@ export function SourcesPanel({
     }))
   }, [config.connections, daemonSources])
 
-  const refreshVaults = async (origin: string) => {
-    setRefreshingOrigin(origin)
-    try {
-      await refreshDaemonVaults(origin)
-    } finally {
-      setRefreshingOrigin(null)
+  // Which daemons answered the last check, and which one is being re-checked.
+  // `null` means no check has come back yet, which reads as checking rather
+  // than unreachable.
+  const [reachable, setReachable] = React.useState<Set<string> | null>(null)
+  const [checkingOrigin, setCheckingOrigin] = React.useState<string | null>(
+    null
+  )
+
+  const checkDaemons = React.useCallback(
+    async (origin?: string) => {
+      if (origin !== undefined) setCheckingOrigin(origin)
+      let answered: string[] = []
+      try {
+        answered = await refreshDaemonVaults(origin)
+      } catch {
+        // A failed check reads the same as a daemon that did not answer.
+      }
+      setReachable((previous) => {
+        const next = new Set(origin === undefined ? [] : (previous ?? []))
+        if (origin !== undefined) next.delete(origin)
+        for (const found of answered) next.add(found)
+        return next
+      })
+      setCheckingOrigin(null)
+    },
+    [refreshDaemonVaults]
+  )
+
+  // Checked whenever the set of daemons changes, not only at mount: the panel
+  // can render before the source store has loaded, when there is nothing yet
+  // to check.
+  const daemonOriginsKey = daemonGroups.map((group) => group.origin).join("\n")
+  React.useEffect(() => {
+    if (daemonOriginsKey !== "") void checkDaemons()
+  }, [daemonOriginsKey, checkDaemons])
+
+  const statusOf = (origin: string): DaemonStatus => {
+    if (reachable === null || checkingOrigin === origin) return "checking"
+    return reachable.has(origin) ? "connected" : "unreachable"
+  }
+
+  const handleToggle = async (id: string, enabled: boolean) => {
+    setEnableError(null)
+    const applied = await setSourceEnabled(id, enabled)
+    if (!applied) {
+      setEnableError(
+        "At least one source must stay enabled. Forget a daemon connection instead, or keep this one."
+      )
     }
   }
 
+  const rowProps = (source: SourceDescriptor) => ({
+    source,
+    enabled: Boolean(sourceEntries[source.id]?.enabled),
+    active: source.id === activeSourceId,
+    switching,
+    onActivate: () => void switchSource(source.id),
+    onToggle: (checked: boolean) => void handleToggle(source.id, checked),
+  })
+
+  const showDaemons = daemonGroups.length > 0 || caps.daemonSource
+
   return (
-    <div className="flex flex-col gap-6">
-      {localSources.length > 0 && (
-        <div className="flex flex-col gap-2">
-          <Label className="text-sm font-medium">Local sources</Label>
-          {localSources.map((source) => (
-            <SourceCard
-              key={source.id}
-              source={source}
-              enabled={Boolean(sourceEntries[source.id]?.enabled)}
-              active={source.id === activeSourceId}
-              switching={switching}
-              onActivate={() => void switchSource(source.id)}
-              onToggle={(checked) => void handleToggle(source.id, checked)}
-            >
-              {source.kind === "browser" && source.id === activeSourceId && (
-                <BrowserSourceSettings />
-              )}
-            </SourceCard>
-          ))}
-          {sources.some((s) => s.kind === "standalone") && (
-            <Button
-              variant="outline"
-              size="sm"
-              className="w-fit"
-              onClick={onMigrateStandalone}
-            >
-              Migrate Standalone bookmarks…
-            </Button>
-          )}
-        </div>
-      )}
-
-      <div className="flex flex-col gap-2">
-        <Label className="text-sm font-medium">Daemon sources</Label>
-        {daemonGroups.length === 0 && (
-          <p className="text-sm text-muted-foreground">
-            No daemon connected yet. Each Vault a daemon hosts becomes its own
-            source.
-          </p>
-        )}
-        {daemonGroups.map(({ origin, sources: groupSources }) => (
-          <section
-            key={origin || "same-origin"}
-            role="group"
-            aria-label={`Daemon ${origin || "this daemon"}`}
-            className="flex flex-col gap-3 rounded-xl bg-muted/20 p-3 ring-1 ring-border/60"
-          >
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div className="min-w-0">
-                <p className="truncate text-sm font-medium">
-                  {origin || "This daemon"}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {groupSources.length}{" "}
-                  {groupSources.length === 1 ? "Vault" : "Vaults"}
-                </p>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  disabled={refreshingOrigin !== null}
-                  onClick={() => void refreshVaults(origin)}
-                >
-                  {refreshingOrigin === origin
-                    ? "Refreshing…"
-                    : "Refresh Vaults"}
-                </Button>
-                {Object.hasOwn(config.connections, origin) && (
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    onClick={() => void forgetDaemon(origin)}
-                  >
-                    Forget daemon
-                  </Button>
-                )}
-              </div>
-            </div>
-
-            <div className="flex flex-col gap-2">
-              {groupSources.map((source) => (
-                <SourceCard
-                  key={source.id}
-                  source={source}
-                  enabled={Boolean(sourceEntries[source.id]?.enabled)}
-                  active={source.id === activeSourceId}
-                  switching={switching}
-                  onActivate={() => void switchSource(source.id)}
-                  onToggle={(checked) => void handleToggle(source.id, checked)}
-                />
-              ))}
-            </div>
-
-            <p className="text-xs text-muted-foreground">
-              Add, remove, or rename Vaults in the daemon configuration, then
-              restart the daemon and refresh this list. Disabling a Vault keeps
-              the connection for later.
-            </p>
-          </section>
-        ))}
-      </div>
-
+    <div className="flex flex-col gap-8">
       {enableError && (
         <Alert variant="destructive">
           <AlertTitle>Cannot disable</AlertTitle>
@@ -355,12 +405,113 @@ export function SourcesPanel({
         </Alert>
       )}
 
-      {caps.daemonSource && <DaemonConnectionPanel />}
+      {browserSource && (
+        <SettingSection title="Browser">
+          <SettingGroup>
+            <SourceRow {...rowProps(browserSource)} />
+            {/* The root folder is chosen from the tree the dashboard shows,
+                so these apply while the Browser Source is the active one. */}
+            {browserSource.id === activeSourceId ? (
+              <>
+                <div className="p-4">
+                  <RootFolderSelect
+                    value={rootFolderId}
+                    onChange={setRootFolderId}
+                    label="Root folder"
+                    description="Which folder the dashboard starts from."
+                  />
+                </div>
+                <SettingRow
+                  title="Nested folders"
+                  description="Show subfolders inside their parent cards."
+                  control={
+                    <Switch
+                      aria-label="Show nested Browser bookmark folders"
+                      checked={nestedFolders}
+                      onCheckedChange={setNestedFolders}
+                    />
+                  }
+                />
+              </>
+            ) : (
+              <p className="p-4 text-xs text-muted-foreground">
+                Root folder and nested folders can be set while Browser
+                bookmarks is the active source.
+              </p>
+            )}
+          </SettingGroup>
+        </SettingSection>
+      )}
 
-      <p className="text-sm text-muted-foreground">
-        Source Configuration is local to this browser profile and is never
-        synced. Exactly one enabled source is the Active Source across the
-        dashboard, the capture popup and the omnibox.
+      {showDaemons && (
+        <SettingSection title="Daemons">
+          {daemonGroups.map(({ origin, sources: groupSources }) => (
+            <DaemonCard
+              key={origin || "same-origin"}
+              origin={origin}
+              vaultCount={groupSources.length}
+              status={statusOf(origin)}
+              canForget={Object.hasOwn(config.connections, origin)}
+              onRefresh={() => void checkDaemons(origin)}
+              onForget={() => void forgetDaemon(origin)}
+            >
+              {groupSources.map((source) => (
+                <SourceRow key={source.id} {...rowProps(source)} />
+              ))}
+            </DaemonCard>
+          ))}
+
+          {caps.daemonSource &&
+            (daemonGroups.length === 0 || connectOpen ? (
+              <div className="rounded-xl bg-card p-4 ring-1 ring-border/60">
+                <DaemonConnectionPanel
+                  firstConnection={daemonGroups.length === 0}
+                  onConnected={(origin) => {
+                    setConnectOpen(false)
+                    setReachable(
+                      (previous) => new Set([...(previous ?? []), origin])
+                    )
+                  }}
+                />
+              </div>
+            ) : (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="w-fit"
+                onClick={() => setConnectOpen(true)}
+              >
+                <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
+                Connect another daemon
+              </Button>
+            ))}
+        </SettingSection>
+      )}
+
+      {standaloneSource && (
+        <SettingSection title="Legacy">
+          <SettingGroup>
+            <SourceRow
+              {...rowProps(standaloneSource)}
+              note={
+                <span className="text-xs text-amber-600 dark:text-amber-400">
+                  {STANDALONE_DEPRECATION_MESSAGE}
+                </span>
+              }
+            />
+            <div className="p-4">
+              <Button variant="outline" size="sm" onClick={onMigrateStandalone}>
+                Migrate Standalone bookmarks…
+              </Button>
+            </div>
+          </SettingGroup>
+        </SettingSection>
+      )}
+
+      <p className="text-xs text-muted-foreground">
+        Sources are set per browser profile and never synced. One enabled source
+        at a time backs the dashboard, the capture popup and the omnibox.
       </p>
     </div>
   )

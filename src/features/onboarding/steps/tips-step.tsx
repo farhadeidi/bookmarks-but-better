@@ -1,6 +1,7 @@
 import * as React from "react"
 import { useBookmarkStore } from "@/stores/bookmark-store"
 import { platformCapabilities } from "@/sources/platform"
+import { StepHeading } from "./step-heading"
 
 /** One key, or key combination, printed the way a keyboard prints it. */
 function Kbd({ children }: { children: React.ReactNode }) {
@@ -56,15 +57,15 @@ export function TipsStep() {
   const canReorder = canMoveByIndex || canSetChildOrder
 
   return (
-    <div className="flex flex-col gap-6 py-4">
-      <div className="flex flex-col gap-2 text-center">
-        <h2 className="text-2xl font-bold tracking-tight">You're all set</h2>
-        <p className="text-muted-foreground">
-          {caps.newTabOverride
+    <div className="flex flex-col gap-6">
+      <StepHeading
+        title="You're all set"
+        description={
+          caps.newTabOverride
             ? "Every new tab is this dashboard. A few things it will never tell you:"
-            : "A few things the dashboard will never tell you:"}
-        </p>
-      </div>
+            : "A few things the dashboard will never tell you:"
+        }
+      />
 
       <ul className="flex flex-col gap-2">
         <Tip keys={<Kbd>Any key</Kbd>}>

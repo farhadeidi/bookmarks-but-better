@@ -5,6 +5,7 @@ import { cleanup, render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import type { BookmarkNode, BrowserAdapter } from "@/browser"
 import { useBookmarkStore } from "@/stores/bookmark-store"
+import { useUIStore } from "@/stores/ui-store"
 import { RootFolderControl } from "./root-folder-control"
 
 class StubResizeObserver {
@@ -55,6 +56,7 @@ afterEach(() => {
     rootFolder: null,
     adapter: null,
   })
+  useUIStore.setState({ bookmarkOrganizerOpen: false })
 })
 
 describe("RootFolderControl", () => {
@@ -113,24 +115,33 @@ describe("RootFolderControl", () => {
     expect(useBookmarkStore.getState().rootFolderId).toBe("work")
   })
 
-  it("resets to all bookmarks with one click on the ✕", async () => {
+  it("opens the bookmark tree from the picker's footer", async () => {
+    const user = userEvent.setup()
+    useBookmarkStore.setState({ tree: VAULT, rootFolderId: null })
+
+    render(<RootFolderControl />)
+
+    await user.click(screen.getByRole("button", { name: "All bookmarks" }))
+    await user.click(
+      await screen.findByRole("menuitem", { name: "Edit bookmark tree" })
+    )
+
+    expect(useUIStore.getState().bookmarkOrganizerOpen).toBe(true)
+    // Opening the tree leaves the grid's root folder alone.
+    expect(useBookmarkStore.getState().rootFolderId).toBeNull()
+  })
+
+  it("returns to all bookmarks from the picker's first item", async () => {
     const user = userEvent.setup()
     useBookmarkStore.setState({ tree: VAULT, rootFolderId: "work" })
 
     render(<RootFolderControl />)
 
-    await user.click(screen.getByRole("button", { name: "Show all bookmarks" }))
+    await user.click(screen.getByRole("button", { name: "Work" }))
+    await user.click(
+      await screen.findByRole("menuitem", { name: "All bookmarks" })
+    )
 
     expect(useBookmarkStore.getState().rootFolderId).toBeNull()
-  })
-
-  it("has no reset action when already showing all bookmarks", () => {
-    useBookmarkStore.setState({ tree: VAULT, rootFolderId: null })
-
-    render(<RootFolderControl />)
-
-    expect(
-      screen.queryByRole("button", { name: "Show all bookmarks" })
-    ).toBeNull()
   })
 })

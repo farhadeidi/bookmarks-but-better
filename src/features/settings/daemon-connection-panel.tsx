@@ -48,43 +48,143 @@ const PLATFORM_LABEL: Record<Platform, string> = {
   windows: "Windows",
 }
 
-function InstallGuide() {
+/**
+ * The Daemon Manager: one command that installs the daemon, asks where the
+ * first vault lives and starts the service — and, run again, reports status
+ * and adds vaults. See packages/bookmarks-but-better.
+ */
+const MANAGER_COMMAND = "npx bookmarks-but-better@latest"
+
+const MANAGER_DESCRIPTION =
+  "It installs the daemon, asks where your vault should live and starts it. Run it again any time for status, updates and more vaults."
+
+/** A quiet text toggle, so secondary options don't read as actions. */
+const TEXT_TOGGLE_CLASS =
+  "h-auto w-fit px-0 text-xs text-muted-foreground hover:text-foreground hover:no-underline"
+
+/** A command to paste into a terminal, with a copy button beside it. */
+function CommandLine({ command }: { command: string }) {
+  const [copied, setCopied] = React.useState(false)
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(command)
+      setCopied(true)
+      window.setTimeout(() => setCopied(false), 1500)
+    } catch {
+      // No clipboard access here: the command stays selectable by hand.
+    }
+  }
+
+  return (
+    <div className="flex items-center gap-2 rounded-lg bg-muted/60 py-1.5 pr-1.5 pl-3 ring-1 ring-border/60">
+      <code className="min-w-0 flex-1 overflow-x-auto font-mono text-xs whitespace-pre">
+        <span aria-hidden className="text-muted-foreground select-none">
+          ${" "}
+        </span>
+        {command}
+      </code>
+      <Button
+        type="button"
+        variant="outline"
+        size="xs"
+        aria-label={`Copy ${command}`}
+        onClick={() => void copy()}
+      >
+        {copied ? "Copied" : "Copy"}
+      </Button>
+    </div>
+  )
+}
+
+/**
+ * The Daemon Manager first, because it is the whole setup in one command; the
+ * raw install scripts are the fallback for a machine without Node.js.
+ *
+ * `standalone` introduces itself; inside a numbered step the step does that.
+ */
+function InstallGuide({ standalone = false }: { standalone?: boolean }) {
+  const [showScripts, setShowScripts] = React.useState(false)
   const [platform, setPlatform] = React.useState<Platform>(() =>
     guessPlatform()
   )
 
   return (
-    <div className="flex flex-col gap-2 rounded-lg border border-border/60 p-3">
-      <div className="flex items-center justify-between">
-        <span className="text-xs font-medium text-muted-foreground">
-          Don't have the daemon installed yet?
+    <div className="flex flex-col gap-2">
+      {standalone && (
+        <span className="text-xs font-medium">
+          No daemon yet? Run this in a terminal:
         </span>
-        <div className="flex gap-1">
-          {(["macos", "linux", "windows"] as const).map((p) => (
-            <Button
-              key={p}
-              type="button"
-              variant={platform === p ? "default" : "outline"}
-              size="sm"
-              className="h-6 px-2 text-xs"
-              onClick={() => setPlatform(p)}
-            >
-              {PLATFORM_LABEL[p]}
-            </Button>
-          ))}
+      )}
+      <CommandLine command={MANAGER_COMMAND} />
+      {standalone && (
+        <p className="text-xs text-muted-foreground">{MANAGER_DESCRIPTION}</p>
+      )}
+      <Button
+        type="button"
+        variant="link"
+        size="xs"
+        className={TEXT_TOGGLE_CLASS}
+        onClick={() => setShowScripts((v) => !v)}
+      >
+        {showScripts
+          ? "Hide install scripts"
+          : "No Node.js? Use an install script"}
+      </Button>
+      {showScripts && (
+        <div className="flex flex-col gap-2">
+          <div className="flex gap-1">
+            {(["macos", "linux", "windows"] as const).map((p) => (
+              <Button
+                key={p}
+                type="button"
+                variant={platform === p ? "secondary" : "ghost"}
+                size="xs"
+                onClick={() => setPlatform(p)}
+              >
+                {PLATFORM_LABEL[p]}
+              </Button>
+            ))}
+          </div>
+          <CommandLine command={INSTALL_COMMANDS[platform]} />
+          <p className="text-xs text-muted-foreground">
+            Add <code>--vault &lt;path&gt;</code> to set up the vault in the
+            same step.
+          </p>
         </div>
-      </div>
-      <code className="overflow-x-auto rounded bg-muted px-2 py-1.5 text-xs whitespace-pre">
-        {INSTALL_COMMANDS[platform]}
-      </code>
-      <p className="text-xs text-muted-foreground">
-        Then run <code>npx bookmarks-but-better</code>: it asks where your vault
-        should live and starts the background service. Without Node.js, add{" "}
-        <code>--vault &lt;path&gt;</code> to the install command above to do the
-        same. The extension connects over loopback only — nothing here ever
-        leaves this machine.
-      </p>
+      )}
     </div>
+  )
+}
+
+/** One numbered step of a first connection. */
+function SetupStep({
+  number,
+  title,
+  description,
+  children,
+}: {
+  number: number
+  title: string
+  description: string
+  children: React.ReactNode
+}) {
+  return (
+    <li className="flex gap-3">
+      <span
+        aria-hidden
+        className="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary"
+      >
+        {number}
+      </span>
+      <div className="flex min-w-0 flex-1 flex-col gap-3 pt-0.5">
+        <div className="flex flex-col gap-0.5">
+          <span className="text-sm font-medium">{title}</span>
+          <span className="text-xs text-muted-foreground">{description}</span>
+        </div>
+        {children}
+      </div>
+    </li>
   )
 }
 
@@ -92,8 +192,19 @@ function InstallGuide() {
  * Connecting a daemon: validate, permission, health-check, discover — then
  * the source store persists the connection and switches to its first Vault,
  * live, with no reload.
+ *
+ * For a profile's first connection it reads as two numbered steps — start the
+ * daemon, then connect — since that is when someone is most likely not to have
+ * a daemon yet. Otherwise the install guide waits under Advanced with the
+ * bearer token.
  */
-export function DaemonConnectionPanel() {
+export function DaemonConnectionPanel({
+  firstConnection = false,
+  onConnected,
+}: {
+  firstConnection?: boolean
+  onConnected?: (origin: string) => void
+} = {}) {
   const connectDaemon = useSourceStore((s) => s.connectDaemon)
 
   const [origin, setOrigin] = React.useState(DEFAULT_DAEMON_ORIGIN)
@@ -111,72 +222,60 @@ export function DaemonConnectionPanel() {
     if (result.ok) {
       // The source store has already switched, live.
       setPhase("idle")
+      onConnected?.(result.origin)
       return
     }
     setPhase("error")
     setError({ stage: result.stage, message: result.message })
-  }, [origin, bearerToken, connectDaemon])
+  }, [origin, bearerToken, connectDaemon, onConnected])
 
-  return (
-    <div className="flex flex-col gap-3">
-      <div className="flex flex-col gap-2">
+  const connectForm = (
+    <div className="flex flex-col gap-2">
+      {!firstConnection && (
         <Label className="text-sm font-medium" htmlFor="daemon-address">
           Daemon address
         </Label>
-        <div className="flex gap-2">
-          <Input
-            id="daemon-address"
-            value={origin}
-            onChange={(e) => setOrigin(e.target.value)}
-            placeholder={DEFAULT_DAEMON_ORIGIN}
-            aria-label="Daemon address"
-            disabled={phase === "connecting"}
-          />
-          <Button
-            type="button"
-            size="sm"
-            disabled={phase === "connecting" || origin.trim() === ""}
-            title={
-              origin.trim() === ""
-                ? "Enter the daemon address first."
-                : undefined
-            }
-            onClick={handleConnect}
-          >
-            {phase === "connecting"
-              ? "Connecting…"
-              : error
-                ? "Retry"
-                : "Connect"}
-          </Button>
-        </div>
-        <p className="text-xs text-muted-foreground">
-          Connects to a local <code>bookmarks-but-better</code> daemon over
-          loopback (127.0.0.1 or localhost). Nothing is requested from the
-          daemon, and no browser permission is asked for, until you click
-          Connect. Every Vault it hosts becomes its own source; an unreachable
-          daemon is reported as an error — it never falls back to another
-          source.
-        </p>
-        {error && (
-          <p className="text-xs text-destructive" role="alert">
-            {error.message}
-          </p>
-        )}
+      )}
+      <div className="flex gap-2">
+        <Input
+          id="daemon-address"
+          value={origin}
+          onChange={(e) => setOrigin(e.target.value)}
+          placeholder={DEFAULT_DAEMON_ORIGIN}
+          aria-label="Daemon address"
+          disabled={phase === "connecting"}
+        />
+        <Button
+          type="button"
+          disabled={phase === "connecting" || origin.trim() === ""}
+          title={
+            origin.trim() === "" ? "Enter the daemon address first." : undefined
+          }
+          onClick={handleConnect}
+        >
+          {phase === "connecting" ? "Connecting…" : error ? "Retry" : "Connect"}
+        </Button>
       </div>
-
+      {error && (
+        <p className="text-xs text-destructive" role="alert">
+          {error.message}
+        </p>
+      )}
+      <p className="text-xs text-muted-foreground">
+        Loopback only (127.0.0.1 or localhost). Nothing leaves this machine, and
+        nothing is requested until you click Connect.
+      </p>
       <Button
         type="button"
-        variant="ghost"
-        size="sm"
-        className="w-fit px-0 text-xs text-muted-foreground"
+        variant="link"
+        size="xs"
+        className={TEXT_TOGGLE_CLASS}
         onClick={() => setShowAdvanced((v) => !v)}
       >
         {showAdvanced ? "Hide advanced" : "Advanced"}
       </Button>
-
       {showAdvanced && (
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-3 pt-1">
           <div className="flex flex-col gap-2">
             <Label className="text-sm font-medium" htmlFor="daemon-token">
               Bearer token (optional)
@@ -195,9 +294,30 @@ export function DaemonConnectionPanel() {
               token authenticates the whole connection — every Vault it hosts.
             </p>
           </div>
-          <InstallGuide />
+          {!firstConnection && <InstallGuide standalone />}
         </div>
       )}
     </div>
+  )
+
+  if (!firstConnection) return connectForm
+
+  return (
+    <ol className="flex flex-col gap-6">
+      <SetupStep
+        number={1}
+        title="Start the daemon"
+        description={`Run this in a terminal. ${MANAGER_DESCRIPTION}`}
+      >
+        <InstallGuide />
+      </SetupStep>
+      <SetupStep
+        number={2}
+        title="Connect to it"
+        description="Each Vault the daemon hosts becomes its own source."
+      >
+        {connectForm}
+      </SetupStep>
+    </ol>
   )
 }

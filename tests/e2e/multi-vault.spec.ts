@@ -127,7 +127,7 @@ test("the served web app switches between the hosted vaults", async ({
   // a capability question. Exactly one of these two controls exists at a time:
   // the skip link on every step but the last, the finish button only on it.
   await page
-    .getByRole("button", { name: /^(Skip, use defaults|Start Browsing)$/ })
+    .getByRole("button", { name: /^(Skip setup|Open dashboard)$/ })
     .click()
 
   // Both vaults appear as switchable sources.

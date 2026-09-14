@@ -21,6 +21,7 @@ import {
   FolderTreeIcon,
   Search01Icon,
 } from "@hugeicons/core-free-icons"
+import { cn } from "@/lib/utils"
 import { useAppBootstrap } from "@/hooks/use-app-bootstrap"
 // Imported past the feature's barrel on purpose: the listener has to be
 // mounted before the palette exists, and the barrel would defeat the lazy
@@ -85,134 +86,153 @@ export function App() {
   const rootFolderId = useBookmarkStore((s) => s.rootFolderId)
   const activeSourceId = useSourceStore((s) => s.activeSourceId)
   const safeMode = usePreferencesStore((s) => s.safeMode)
+  const containerMode = usePreferencesStore((s) => s.containerMode)
   const openBookmarkOrganizer = useUIStore((s) => s.openBookmarkOrganizer)
   const openSearchPalette = useUIStore((s) => s.openSearchPalette)
 
   return (
     <ScrollArea className="h-svh bg-background text-foreground">
-      {/* Main content */}
-      <main className="flex flex-col gap-5 px-4 pt-8 pb-24">
-        {/* The filter bar: source switcher and root-folder chip on one row
-            above the grid (#95). Each half hides itself independently — the
-            switcher with fewer than two enabled sources, the chip under the
-            same condition the setup wizard uses to skip its own Root folder
-            step — so the row still lines up at the left edge with only one
-            of the two visible. */}
-        {sourceStatus === "ready" && <FilterBar />}
-        {sourceStatus === "ready" && <StandaloneDeprecationBanner />}
+      <div className="flex flex-col gap-5 px-4 pt-8 pb-8 max-sm:pb-24">
+        {/* The header row: the filter bar's breadcrumb on the left, the three
+            global actions on the right. It mirrors the grid's width so both
+            ends line up with the card columns, and it always renders — the
+            actions stay reachable even when the filter bar has nothing to
+            show. Not sticky: search also opens by typing anywhere. Below
+            `sm` the breadcrumb and three 48px touch targets don't fit one
+            row, so the actions float at the bottom, within thumb reach. */}
+        <header
+          className={cn(
+            "flex w-full min-w-0 items-center gap-2",
+            containerMode === "contained" && "mx-auto max-w-[1440px]"
+          )}
+        >
+          <div className="min-w-0 flex-1">
+            {sourceStatus === "ready" && <FilterBar />}
+          </div>
 
-        {sourceStatus === "ready" && !hasActiveSource ? (
+          {/* Appearance and product information live in their Settings
+              categories instead of being duplicated here. */}
           <div
-            className="flex flex-col items-center gap-3 p-12 text-center text-muted-foreground"
-            role="status"
+            role="toolbar"
+            aria-label="App actions"
+            className="flex shrink-0 items-center gap-0.5 max-sm:fixed max-sm:right-4 max-sm:bottom-4 max-sm:z-10 max-sm:gap-2 max-sm:rounded-2xl max-sm:border max-sm:border-border/60 max-sm:bg-background/90 max-sm:px-2 max-sm:py-1.5 max-sm:shadow-sm max-sm:backdrop-blur-sm max-sm:[&_button]:size-12"
           >
-            <p className="font-medium text-foreground">
-              No bookmark source yet.
-            </p>
-            <p className="max-w-md text-sm">
-              This build has no Browser Source — connect a local{" "}
-              <code>bookmarks-but-better</code> daemon and each Vault it hosts
-              becomes a source.
-            </p>
-            <Button variant="outline" size="sm" onClick={openSettings}>
-              Connect a daemon
-            </Button>
+            {/* Typing anywhere on the page opens the same palette; this is
+                the way in for a pointer, and the only one on a touch screen. */}
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    className="text-muted-foreground hover:text-foreground"
+                    onClick={() => openSearchPalette()}
+                    aria-label="Search bookmarks"
+                  />
+                }
+              >
+                <HugeiconsIcon icon={Search01Icon} />
+              </TooltipTrigger>
+              <TooltipContent side="bottom">Search bookmarks</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    className="text-muted-foreground hover:text-foreground"
+                    onClick={openBookmarkOrganizer}
+                    aria-label="Bookmark tree"
+                  />
+                }
+              >
+                <HugeiconsIcon icon={FolderTreeIcon} />
+              </TooltipTrigger>
+              <TooltipContent side="bottom">Bookmark tree</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    className="text-muted-foreground hover:text-foreground"
+                    onClick={openSettings}
+                    aria-label="Settings"
+                  />
+                }
+              >
+                <HugeiconsIcon icon={Settings03Icon} />
+              </TooltipTrigger>
+              <TooltipContent side="bottom">Settings</TooltipContent>
+            </Tooltip>
           </div>
-        ) : switching ? (
-          <div className="flex items-center justify-center gap-2 p-12 text-muted-foreground">
-            Switching source…
-          </div>
-        ) : status === "unavailable" ? (
-          <div
-            role="alert"
-            className="flex flex-col items-center gap-3 p-12 text-center text-muted-foreground"
-          >
-            <p className="font-medium text-foreground">
-              Bookmarks are unavailable.
-            </p>
-            <p className="text-sm">
-              {loadError ?? "Could not reach the bookmark source."}
-            </p>
-            <div className="flex gap-2">
-              <Button variant="outline" size="sm" onClick={() => void retry()}>
-                Retry
-              </Button>
+        </header>
+
+        <main className="flex flex-col gap-5">
+          {sourceStatus === "ready" && <StandaloneDeprecationBanner />}
+
+          {sourceStatus === "ready" && !hasActiveSource ? (
+            <div
+              className="flex flex-col items-center gap-3 p-12 text-center text-muted-foreground"
+              role="status"
+            >
+              <p className="font-medium text-foreground">
+                No bookmark source yet.
+              </p>
+              <p className="max-w-md text-sm">
+                This build has no Browser Source — connect a local{" "}
+                <code>bookmarks-but-better</code> daemon and each Vault it hosts
+                becomes a source.
+              </p>
               <Button variant="outline" size="sm" onClick={openSettings}>
-                Switch source
+                Connect a daemon
               </Button>
             </div>
-          </div>
-        ) : safeMode ? (
-          <SafeModeNotice />
-        ) : isLoading || status === "loading" ? (
-          <div className="flex items-center justify-center p-12 text-muted-foreground">
-            Loading bookmarks...
-          </div>
-        ) : (
-          // Keyed on what the grid draws from, so fixing the cause in
-          // Settings — another root folder, another source — gives the grid a
-          // fresh boundary and a fresh attempt without a reload.
-          <GridErrorBoundary key={`${activeSourceId}:${rootFolderId}`}>
-            <BookmarkGrid />
-          </GridErrorBoundary>
-        )}
-      </main>
-
-      {/* The three global actions. Appearance and product information live in
-          their corresponding Settings categories instead of being duplicated
-          here. */}
-      <div
-        role="toolbar"
-        aria-label="App actions"
-        className="fixed right-4 bottom-4 z-10 flex w-fit items-center gap-2 rounded-2xl border border-border/60 bg-background/90 px-2 py-1.5 shadow-sm backdrop-blur-sm sm:right-6 sm:bottom-6 max-sm:[&_button]:size-12"
-      >
-        {/* Typing anywhere on the page opens the same palette; this is the
-            way in for a pointer, and the only one on a touch screen. */}
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={() => openSearchPalette()}
-                aria-label="Search bookmarks"
-              />
-            }
-          >
-            <HugeiconsIcon icon={Search01Icon} />
-          </TooltipTrigger>
-          <TooltipContent side="top">Search bookmarks</TooltipContent>
-        </Tooltip>
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={openBookmarkOrganizer}
-                aria-label="Bookmark tree"
-              />
-            }
-          >
-            <HugeiconsIcon icon={FolderTreeIcon} />
-          </TooltipTrigger>
-          <TooltipContent side="top">Bookmark tree</TooltipContent>
-        </Tooltip>
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={openSettings}
-                aria-label="Settings"
-              />
-            }
-          >
-            <HugeiconsIcon icon={Settings03Icon} />
-          </TooltipTrigger>
-          <TooltipContent side="top">Settings</TooltipContent>
-        </Tooltip>
+          ) : switching ? (
+            <div className="flex items-center justify-center gap-2 p-12 text-muted-foreground">
+              Switching source…
+            </div>
+          ) : status === "unavailable" ? (
+            <div
+              role="alert"
+              className="flex flex-col items-center gap-3 p-12 text-center text-muted-foreground"
+            >
+              <p className="font-medium text-foreground">
+                Bookmarks are unavailable.
+              </p>
+              <p className="text-sm">
+                {loadError ?? "Could not reach the bookmark source."}
+              </p>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void retry()}
+                >
+                  Retry
+                </Button>
+                <Button variant="outline" size="sm" onClick={openSettings}>
+                  Switch source
+                </Button>
+              </div>
+            </div>
+          ) : safeMode ? (
+            <SafeModeNotice />
+          ) : isLoading || status === "loading" ? (
+            <div className="flex items-center justify-center p-12 text-muted-foreground">
+              Loading bookmarks...
+            </div>
+          ) : (
+            // Keyed on what the grid draws from, so fixing the cause in
+            // Settings — another root folder, another source — gives the grid a
+            // fresh boundary and a fresh attempt without a reload.
+            <GridErrorBoundary key={`${activeSourceId}:${rootFolderId}`}>
+              <BookmarkGrid />
+            </GridErrorBoundary>
+          )}
+        </main>
       </div>
 
       {/* DnD monitor (renders nothing, handles drop logic) */}

@@ -66,6 +66,24 @@ test("Browser bookmark settings live inside Sources instead of a separate catego
   ).toBeVisible()
 })
 
+test("the source picker's Manage sources opens Settings on Sources, whatever was shown last", async ({
+  page,
+}) => {
+  const dialog = await openSettings(page)
+  await dialog.getByRole("tab", { name: "Appearance" }).click()
+  await page.keyboard.press("Escape")
+  await expect(dialog).toBeHidden()
+
+  await page.getByRole("button", { name: "Bookmark source" }).click()
+  await page.getByRole("menuitem", { name: "Manage sources" }).click()
+
+  await expect(dialog).toBeVisible()
+  await expect(dialog.getByRole("tab", { name: "Sources" })).toHaveAttribute(
+    "aria-selected",
+    "true"
+  )
+})
+
 test("appearance controls and product information remain available in Settings", async ({
   page,
 }) => {
@@ -109,7 +127,7 @@ test("a source can be given a profile-local display label", async ({
   ).toBeVisible()
 })
 
-test("each daemon connection exposes its discovered Vaults and refresh control", async ({
+test("each daemon connection shows its status, its discovered Vaults and a refresh action", async ({
   page,
 }) => {
   const dialog = await openSettings(page)
@@ -118,13 +136,32 @@ test("each daemon connection exposes its discovered Vaults and refresh control",
   const daemon = dialog.getByRole("group", {
     name: "Daemon http://127.0.0.1:52222",
   })
-  await expect(daemon.getByText("2 Vaults", { exact: true })).toBeVisible()
+  await expect(daemon).toContainText("Connected · 2 Vaults")
   await expect(daemon.getByText("reading", { exact: true })).toBeVisible()
   await expect(daemon.getByText("archive", { exact: true })).toBeVisible()
-  await expect(
-    daemon.getByRole("button", { name: "Refresh Vaults" })
-  ).toBeVisible()
   await expect(daemon).toContainText(
-    "Add, remove, or rename Vaults in the daemon configuration"
+    "Add or remove Vaults with npx bookmarks-but-better@latest vault"
   )
+
+  await daemon
+    .getByRole("button", { name: "Actions for daemon http://127.0.0.1:52222" })
+    .click()
+  await expect(
+    page.getByRole("menuitem", { name: "Refresh Vaults" })
+  ).toBeVisible()
+})
+
+test("an unreachable daemon reads as unreachable, not as connected", async ({
+  page,
+}) => {
+  await page.goto("/?scenario=daemon-offline")
+  await page.getByRole("button", { name: "Settings" }).click()
+  const dialog = page.getByRole("dialog")
+  await dialog.getByRole("tab", { name: "Sources" }).click()
+
+  const daemon = dialog.getByRole("group", {
+    name: "Daemon http://127.0.0.1:52222",
+  })
+  await expect(daemon).toContainText("Unreachable · 2 Vaults")
+  await expect(daemon.getByRole("button", { name: "Retry" })).toBeVisible()
 })
