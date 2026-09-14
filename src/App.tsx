@@ -7,6 +7,7 @@ import { BookmarkGrid } from "@/features/bookmark-grid"
 import { GridErrorBoundary, SafeModeNotice } from "@/features/safety-net"
 import { DndMonitor } from "@/features/dnd"
 import { SourceSwitcher } from "@/features/source-switcher"
+import { RootFolderControl } from "@/features/root-folder-control"
 import { StandaloneDeprecationBanner } from "@/features/standalone-sunset"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Button } from "@/components/ui/button"
@@ -96,6 +97,10 @@ export function App() {
             above the bookmarks so the destination of every operation below it
             is visible. With one source there is no choice, and nothing. */}
         {sourceStatus === "ready" && <SourceSwitcher />}
+        {/* Reachable from the new tab itself rather than two clicks into
+            Settings — see issue #88. Hides itself under the same condition
+            the setup wizard uses to skip its own Root folder step. */}
+        {sourceStatus === "ready" && <RootFolderControl />}
         {sourceStatus === "ready" && <StandaloneDeprecationBanner />}
 
         {sourceStatus === "ready" && !hasActiveSource ? (

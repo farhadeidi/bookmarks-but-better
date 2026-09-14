@@ -1,5 +1,4 @@
 import * as React from "react"
-import type { BookmarkNode } from "@/browser"
 import { useBookmarkStore } from "@/stores/bookmark-store"
 import { usePreferencesStore } from "@/stores/preferences-store"
 import { SourceStep, type OnboardingSourceChoice } from "./steps/source-step"
@@ -13,7 +12,7 @@ import {
   type PlatformCapabilities,
 } from "@/sources/platform"
 import {
-  buildRootFolderOptions,
+  hasRootFolderChoice,
   resolveEffectiveCreateParentId,
 } from "@/features/root-folder-select"
 import { setOnboardingCompleted } from "@/browser/onboarding-preference"
@@ -44,26 +43,6 @@ function hasSourceChoice(caps: PlatformCapabilities): boolean {
  */
 function requiresDaemonSetup(caps: PlatformCapabilities): boolean {
   return caps.isExtension && !caps.browserSource && caps.daemonSource
-}
-
-/**
- * Whether pointing the dashboard at a folder is a question at all here.
- *
- * It is one only where the tree offers somewhere to point: a folder to select,
- * or a real parent to create one under. With neither — an empty tree, or the
- * daemon-only profile that has not connected anything yet — the picker's only
- * entry is "all bookmarks", which is exactly what choosing nothing already
- * means, so the step would be a dead end rather than a decision. Connecting a
- * daemon on the previous step brings a tree with it, and the step appears.
- */
-function hasRootFolderChoice(
-  tree: BookmarkNode[],
-  rootIsCreatable: boolean
-): boolean {
-  return (
-    buildRootFolderOptions(tree).length > 0 ||
-    resolveEffectiveCreateParentId(tree, rootIsCreatable) !== null
-  )
 }
 
 /**
