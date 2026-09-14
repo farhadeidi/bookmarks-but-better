@@ -22,6 +22,7 @@
 		872142383036815900A48288 /* apple-touch-icon.png in Resources */ = {isa = PBXBuildFile; fileRef = 872142283036815900A48288 /* apple-touch-icon.png */; };
 		872142393036815900A48288 /* background.js in Resources */ = {isa = PBXBuildFile; fileRef = 872142293036815900A48288 /* background.js */; };
 		8721423A3036815900A48288 /* popup.html in Resources */ = {isa = PBXBuildFile; fileRef = 8721422A3036815900A48288 /* popup.html */; };
+		872142463036815900A48288 /* options.html in Resources */ = {isa = PBXBuildFile; fileRef = 872142473036815900A48288 /* options.html */; };
 		8721423B3036815900A48288 /* icon-192.png in Resources */ = {isa = PBXBuildFile; fileRef = 8721422B3036815900A48288 /* icon-192.png */; };
 		8721423C3036815900A48288 /* vite.svg in Resources */ = {isa = PBXBuildFile; fileRef = 8721422C3036815900A48288 /* vite.svg */; };
 		8721423D3036815900A48288 /* logo-dark.svg in Resources */ = {isa = PBXBuildFile; fileRef = 8721422D3036815900A48288 /* logo-dark.svg */; };
@@ -78,6 +79,7 @@
 		872142283036815900A48288 /* apple-touch-icon.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = "apple-touch-icon.png"; path = "Resources/apple-touch-icon.png"; sourceTree = "<group>"; };
 		872142293036815900A48288 /* background.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = background.js; path = Resources/background.js; sourceTree = "<group>"; };
 		8721422A3036815900A48288 /* popup.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; name = popup.html; path = Resources/popup.html; sourceTree = "<group>"; };
+		872142473036815900A48288 /* options.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; name = options.html; path = Resources/options.html; sourceTree = "<group>"; };
 		8721422B3036815900A48288 /* icon-192.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = "icon-192.png"; path = "Resources/icon-192.png"; sourceTree = "<group>"; };
 		8721422C3036815900A48288 /* vite.svg */ = {isa = PBXFileReference; lastKnownFileType = text; name = vite.svg; path = Resources/vite.svg; sourceTree = "<group>"; };
 		8721422D3036815900A48288 /* logo-dark.svg */ = {isa = PBXFileReference; lastKnownFileType = text; name = "logo-dark.svg"; path = "Resources/logo-dark.svg"; sourceTree = "<group>"; };
@@ -169,6 +171,7 @@
 				872142283036815900A48288 /* apple-touch-icon.png */,
 				872142293036815900A48288 /* background.js */,
 				8721422A3036815900A48288 /* popup.html */,
+				872142473036815900A48288 /* options.html */,
 				8721422B3036815900A48288 /* icon-192.png */,
 				8721422C3036815900A48288 /* vite.svg */,
 				8721422D3036815900A48288 /* logo-dark.svg */,
@@ -288,6 +291,7 @@
 				872142403036815900A48288 /* icons in Resources */,
 				872142393036815900A48288 /* background.js in Resources */,
 				8721423A3036815900A48288 /* popup.html in Resources */,
+				872142463036815900A48288 /* options.html in Resources */,
 				8721423E3036815900A48288 /* icon-512-maskable.png in Resources */,
 				872142433036815900A48288 /* logo.svg in Resources */,
 				872142413036815900A48288 /* manifest.json in Resources */,

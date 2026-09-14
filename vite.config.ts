@@ -36,11 +36,9 @@ export default defineConfig({
           name,
           path.resolve(
             __dirname,
-            name === "index"
-              ? "index.html"
-              : name === "popup"
-                ? "popup.html"
-                : "src/extension/background.ts"
+            name === "background"
+              ? "src/extension/background.ts"
+              : `${name}.html`
           ),
         ])
       ),

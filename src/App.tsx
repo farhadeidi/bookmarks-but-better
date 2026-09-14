@@ -2,7 +2,9 @@ import * as React from "react"
 import { useBookmarkStore } from "@/stores/bookmark-store"
 import { useSourceStore } from "@/stores/source-store"
 import { useUIStore } from "@/stores/ui-store"
+import { usePreferencesStore } from "@/stores/preferences-store"
 import { BookmarkGrid } from "@/features/bookmark-grid"
+import { GridErrorBoundary, SafeModeNotice } from "@/features/safety-net"
 import { DndMonitor } from "@/features/dnd"
 import { SourceSwitcher } from "@/features/source-switcher"
 import { StandaloneDeprecationBanner } from "@/features/standalone-sunset"
@@ -80,6 +82,9 @@ export function App() {
   const status = useBookmarkStore((s) => s.status)
   const loadError = useBookmarkStore((s) => s.loadError)
   const retry = useBookmarkStore((s) => s.retry)
+  const rootFolderId = useBookmarkStore((s) => s.rootFolderId)
+  const activeSourceId = useSourceStore((s) => s.activeSourceId)
+  const safeMode = usePreferencesStore((s) => s.safeMode)
   const openBookmarkOrganizer = useUIStore((s) => s.openBookmarkOrganizer)
   const openSearchPalette = useUIStore((s) => s.openSearchPalette)
 
@@ -134,12 +139,19 @@ export function App() {
               </Button>
             </div>
           </div>
+        ) : safeMode ? (
+          <SafeModeNotice />
         ) : isLoading || status === "loading" ? (
           <div className="flex items-center justify-center p-12 text-muted-foreground">
             Loading bookmarks...
           </div>
         ) : (
-          <BookmarkGrid />
+          // Keyed on what the grid draws from, so fixing the cause in
+          // Settings — another root folder, another source — gives the grid a
+          // fresh boundary and a fresh attempt without a reload.
+          <GridErrorBoundary key={`${activeSourceId}:${rootFolderId}`}>
+            <BookmarkGrid />
+          </GridErrorBoundary>
         )}
       </main>
 

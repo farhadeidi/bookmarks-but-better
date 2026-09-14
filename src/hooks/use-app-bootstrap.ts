@@ -21,8 +21,13 @@ import {
  * Runs as a single async effect, so the cleanup has to guard against the
  * effect being torn down (StrictMode double-invoke, or a real unmount)
  * before the initialization resolves.
+ *
+ * `offerOnboarding: false` is for pages that mount no wizard — the options
+ * page — where opening it would only flip a flag nothing reads.
  */
-export function useAppBootstrap() {
+export function useAppBootstrap({
+  offerOnboarding = true,
+}: { offerOnboarding?: boolean } = {}) {
   const initializeSources = useSourceStore((s) => s.initialize)
   const refreshDaemonVaults = useSourceStore((s) => s.refreshDaemonVaults)
   const openOnboarding = useUIStore((s) => s.openOnboarding)
@@ -57,7 +62,9 @@ export function useAppBootstrap() {
       // paint on every connection.
       void refreshDaemonVaults()
 
-      if (screenshotMode === "onboarding") {
+      if (!offerOnboarding) {
+        // Nothing to decide: the wizard is not on this page.
+      } else if (screenshotMode === "onboarding") {
         openOnboarding()
       } else if (!screenshotMode) {
         let onboardingCompleted = await getOnboardingCompleted()
@@ -93,7 +100,13 @@ export function useAppBootstrap() {
     return () => {
       cancelled = true
     }
-  }, [initializeSources, refreshDaemonVaults, openOnboarding, screenshotMode])
+  }, [
+    initializeSources,
+    refreshDaemonVaults,
+    openOnboarding,
+    screenshotMode,
+    offerOnboarding,
+  ])
 
   return {
     onboardingChecked,

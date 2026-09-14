@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <style>
+      html,
+      body {
+        margin: 0;
+        background: oklch(0.145 0 0);
+        color-scheme: dark;
+      }
+
+      html.light,
+      html.light body {
+        background: white;
+        color-scheme: light;
+      }
+    </style>
+    <script src="/theme-bootstrap.js"></script>
+    <link rel="icon" href="/favicon.ico" sizes="32x32">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Bookmarks But Better Settings</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/options/main.tsx"></script>
+  </body>
+</html>
