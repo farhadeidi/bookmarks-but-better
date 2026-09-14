@@ -97,11 +97,13 @@ export function App() {
             above the bookmarks so the destination of every operation below it
             is visible. With one source there is no choice, and nothing. */}
         {sourceStatus === "ready" && <SourceSwitcher />}
-        {/* Reachable from the new tab itself rather than two clicks into
-            Settings — see issue #88. Hides itself under the same condition
-            the setup wizard uses to skip its own Root folder step. */}
-        {sourceStatus === "ready" && <RootFolderControl />}
         {sourceStatus === "ready" && <StandaloneDeprecationBanner />}
+        {/* Reachable from the new tab itself rather than two clicks into
+            Settings — see issue #88. A quiet label in the row directly above
+            the grid rather than a primary control (#93); hides itself under
+            the same condition the setup wizard uses to skip its own Root
+            folder step. */}
+        {sourceStatus === "ready" && <RootFolderControl />}
 
         {sourceStatus === "ready" && !hasActiveSource ? (
           <div

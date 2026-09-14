@@ -58,12 +58,20 @@ afterEach(() => {
 })
 
 describe("RootFolderControl", () => {
-  it("shows the current root name", () => {
+  it('shows "All bookmarks" at the root', () => {
+    useBookmarkStore.setState({ tree: VAULT, rootFolderId: null })
+
+    render(<RootFolderControl />)
+
+    expect(screen.getByRole("button", { name: "All bookmarks" })).not.toBeNull()
+  })
+
+  it("shows the folder name, not the full path, when narrowed", () => {
     useBookmarkStore.setState({ tree: VAULT, rootFolderId: "work" })
 
     render(<RootFolderControl />)
 
-    expect(screen.getByRole("combobox").textContent).toBe("Bookmarks > Work")
+    expect(screen.getByRole("button", { name: "Work" })).not.toBeNull()
   })
 
   it("is hidden when the source offers no folder choice", () => {
@@ -78,21 +86,34 @@ describe("RootFolderControl", () => {
     expect(container.innerHTML).toBe("")
   })
 
+  it("opens the picker from the chevron and lists the same paths RootFolderSelect shows", async () => {
+    const user = userEvent.setup()
+    useBookmarkStore.setState({ tree: VAULT, rootFolderId: null })
+
+    render(<RootFolderControl />)
+
+    await user.click(screen.getByRole("button", { name: "All bookmarks" }))
+
+    expect(
+      await screen.findByRole("menuitem", { name: "Bookmarks > Work" })
+    ).not.toBeNull()
+  })
+
   it("choosing a folder updates the store", async () => {
     const user = userEvent.setup()
     useBookmarkStore.setState({ tree: VAULT, rootFolderId: null })
 
     render(<RootFolderControl />)
 
-    await user.click(screen.getByRole("combobox"))
+    await user.click(screen.getByRole("button", { name: "All bookmarks" }))
     await user.click(
-      await screen.findByRole("option", { name: "Bookmarks > Work" })
+      await screen.findByRole("menuitem", { name: "Bookmarks > Work" })
     )
 
     expect(useBookmarkStore.getState().rootFolderId).toBe("work")
   })
 
-  it("resets to all bookmarks with one click", async () => {
+  it("resets to all bookmarks with one click on the ✕", async () => {
     const user = userEvent.setup()
     useBookmarkStore.setState({ tree: VAULT, rootFolderId: "work" })
 
