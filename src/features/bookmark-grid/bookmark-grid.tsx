@@ -105,8 +105,15 @@ export function BookmarkGrid() {
       nestedFolders,
       experimentalCardDrag,
       folderOrder,
+      isTreeRoot: rootFolder === null,
     })
-  }, [displayRoot, nestedFolders, experimentalCardDrag, folderOrder])
+  }, [
+    displayRoot,
+    nestedFolders,
+    experimentalCardDrag,
+    folderOrder,
+    rootFolder,
+  ])
 
   const gateCards = React.useMemo(
     () => (displayRoot ? shouldGateCards(displayRoot) : false),
