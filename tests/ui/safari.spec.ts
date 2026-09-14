@@ -15,10 +15,10 @@ test("the safari scenario is daemon-only: no Browser Source exists", async ({
   // The Vault's bookmarks load through the daemon-shaped adapter...
   await expect(page.getByText("SQLite is not a toy database")).toBeVisible()
   // ...and with exactly one enabled source there is nothing to switch to, so
-  // no source control is drawn above them — no tabs, no badge.
-  await expect(page.getByRole("tablist")).toHaveCount(0)
-  await expect(page.getByRole("tab")).toHaveCount(0)
-  await expect(page.getByRole("tab", { name: "reading" })).toHaveCount(0)
+  // no source control is drawn above them.
+  await expect(
+    page.getByRole("button", { name: "Bookmark source" })
+  ).toHaveCount(0)
 })
 
 test("a profile with nothing connected shows the daemon-only empty state", async ({
@@ -30,7 +30,9 @@ test("a profile with nothing connected shows the daemon-only empty state", async
   await expect(
     page.getByRole("button", { name: "Connect a daemon" })
   ).toBeVisible()
-  await expect(page.getByRole("tab")).toHaveCount(0)
+  await expect(
+    page.getByRole("button", { name: "Bookmark source" })
+  ).toHaveCount(0)
 })
 
 test("a fresh Safari profile is onboarded straight into connecting a daemon", async ({

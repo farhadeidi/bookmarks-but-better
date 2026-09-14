@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test"
+import { expect, test, type Page } from "@playwright/test"
 
 /**
  * The offline path and its recovery: the daemon-offline scenario starts with
@@ -6,6 +6,12 @@ import { expect, test } from "@playwright/test"
  * (never falling back), and bringing the daemon back plus Retry recovers —
  * all through the application's real error handling.
  */
+
+/** Opens the source switcher's menu and picks the source named `label`. */
+async function switchSource(page: Page, label: string): Promise<void> {
+  await page.getByRole("button", { name: "Bookmark source" }).click()
+  await page.getByRole("menuitem", { name: label }).click()
+}
 
 test("an offline daemon surfaces the unavailable state and recovers via Retry", async ({
   page,
@@ -15,18 +21,14 @@ test("an offline daemon surfaces the unavailable state and recovers via Retry", 
   // The browser source still works.
   await expect(page.getByText("MDN Web Docs")).toBeVisible()
 
-  const tabs = page
-    .getByRole("tablist", { name: "Bookmark source" })
-    .getByRole("tab")
-  await tabs.filter({ hasText: "reading" }).click()
+  await switchSource(page, "reading")
 
   // Unavailable — with the source kept selected, no silent fallback.
   const alert = page.getByRole("alert")
   await expect(alert).toContainText("Bookmarks are unavailable")
-  await expect(tabs.filter({ hasText: "reading" })).toHaveAttribute(
-    "aria-selected",
-    "true"
-  )
+  await expect(
+    page.getByRole("button", { name: "Bookmark source" })
+  ).toContainText("reading")
 
   // Bring the simulated daemon back through the workbench control.
   await page.getByRole("button", { name: "Open Dev Workbench" }).click()
@@ -60,10 +62,7 @@ test("the mutation-failure control exercises the daemon's refusal path", async (
 }) => {
   await page.goto("/?scenario=browser-daemon")
 
-  const tabs = page
-    .getByRole("tablist", { name: "Bookmark source" })
-    .getByRole("tab")
-  await tabs.filter({ hasText: "archive" }).click()
+  await switchSource(page, "archive")
   await expect(page.getByText("State of CSS 2024")).toBeVisible()
 
   await page.getByRole("button", { name: "Open Dev Workbench" }).click()

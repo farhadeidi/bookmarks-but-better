@@ -103,8 +103,9 @@ test("a source can be given a profile-local display label", async ({
 
   await expect(dialog.getByText("Research", { exact: true })).toBeVisible()
   await dialog.getByRole("button", { name: "Close" }).click()
+  await page.getByRole("button", { name: "Bookmark source" }).click()
   await expect(
-    page.getByRole("tab", { name: "Research", exact: true })
+    page.getByRole("menuitem", { name: "Research", exact: true })
   ).toBeVisible()
 })
 

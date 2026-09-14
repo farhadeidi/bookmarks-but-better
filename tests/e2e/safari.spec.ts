@@ -109,7 +109,9 @@ test("the Safari build has no bookmarks API and says the daemon is the way in", 
     page.getByRole("button", { name: "Connect a daemon" })
   ).toBeVisible()
   // Nothing to switch between, and no Browser Source to switch to.
-  await expect(page.getByRole("tab")).toHaveCount(0)
+  await expect(
+    page.getByRole("button", { name: "Bookmark source" })
+  ).toHaveCount(0)
 
   expect(errors).toEqual([])
 })

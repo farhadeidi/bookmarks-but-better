@@ -27,7 +27,11 @@ test.describe("marketing website artifact", () => {
     )
 
     const appFrame = page.frameLocator("iframe")
-    await expect(appFrame.getByRole("tab", { name: "archive" })).toBeVisible()
+    await appFrame.getByRole("button", { name: "Bookmark source" }).click()
+    await expect(
+      appFrame.getByRole("menuitem", { name: "archive" })
+    ).toBeVisible()
+    await page.keyboard.press("Escape")
     await expect(
       appFrame.getByRole("button", { name: "Settings" })
     ).toBeVisible()

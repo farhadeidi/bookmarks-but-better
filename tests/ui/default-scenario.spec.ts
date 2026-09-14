@@ -12,16 +12,19 @@ test("the default scenario provides Browser plus the reading and archive vaults"
 }) => {
   await page.goto("/")
 
-  const tabs = page
-    .getByRole("tablist", { name: "Bookmark source" })
-    .getByRole("tab")
-  await expect(tabs).toHaveCount(3)
-  await expect(tabs.filter({ hasText: "Browser bookmarks" })).toHaveAttribute(
-    "aria-selected",
+  const trigger = page.getByRole("button", { name: "Bookmark source" })
+  await expect(trigger).toContainText("Browser bookmarks")
+
+  await trigger.click()
+  const items = page.getByRole("menuitem")
+  await expect(items).toHaveCount(3)
+  await expect(items.filter({ hasText: "Browser bookmarks" })).toHaveAttribute(
+    "aria-disabled",
     "true"
   )
-  await expect(tabs.filter({ hasText: "reading" })).toBeVisible()
-  await expect(tabs.filter({ hasText: "archive" })).toBeVisible()
+  await expect(items.filter({ hasText: "reading" })).toBeVisible()
+  await expect(items.filter({ hasText: "archive" })).toBeVisible()
+  await page.keyboard.press("Escape")
 
   // The Browser source is active and shows its seeded bookmarks.
   await expect(page.getByText("MDN Web Docs")).toBeVisible()
@@ -41,30 +44,24 @@ test("the Dev Workbench exercises real favicon URLs instead of forcing every boo
   await expect(page.locator("img[src='']")).toHaveCount(0)
 })
 
-test("the themed source control has breathing room above the bookmark grid", async ({
+test("the filter bar has breathing room above the bookmark grid", async ({
   page,
 }) => {
   await page.goto("/")
   await page.evaluate(() => document.documentElement.classList.add("dark"))
 
-  const tabs = page.getByRole("tablist", { name: "Bookmark source" })
+  const trigger = page.getByRole("button", { name: "Bookmark source" })
   const firstCard = page.getByTestId("bookmark-card").first()
-  const [tabsBox, cardBox] = await Promise.all([
-    tabs.boundingBox(),
+  const [triggerBox, cardBox] = await Promise.all([
+    trigger.boundingBox(),
     firstCard.boundingBox(),
   ])
 
-  expect(tabsBox).not.toBeNull()
+  expect(triggerBox).not.toBeNull()
   expect(cardBox).not.toBeNull()
-  expect(cardBox!.y - (tabsBox!.y + tabsBox!.height)).toBeGreaterThanOrEqual(16)
-
-  const [pageBackground, tabsBackground] = await Promise.all([
-    page
-      .locator("body")
-      .evaluate((node) => getComputedStyle(node).backgroundColor),
-    tabs.evaluate((node) => getComputedStyle(node).backgroundColor),
-  ])
-  expect(tabsBackground).not.toBe(pageBackground)
+  expect(
+    cardBox!.y - (triggerBox!.y + triggerBox!.height)
+  ).toBeGreaterThanOrEqual(16)
 })
 
 test("bookmark cards fill the available content width on mobile", async ({
@@ -88,10 +85,10 @@ test("mobile source and action controls stay contained without overlapping", asy
   await page.setViewportSize({ width: 320, height: 568 })
   await page.goto("/")
 
-  const tabs = page.getByRole("tablist", { name: "Bookmark source" })
+  const trigger = page.getByRole("button", { name: "Bookmark source" })
   const toolbar = page.getByRole("toolbar", { name: "App actions" })
   const workbench = page.getByRole("button", { name: "Open Dev Workbench" })
-  await expect(tabs).toBeVisible()
+  await expect(trigger).toBeVisible()
   await expect(toolbar).toBeVisible()
   await expect(workbench).toBeVisible()
   await expect(toolbar.getByRole("button")).toHaveCount(3)
@@ -103,21 +100,19 @@ test("mobile source and action controls stay contained without overlapping", asy
   ).toBeVisible()
   await expect(toolbar.getByRole("button", { name: "Settings" })).toBeVisible()
 
-  const [tabsBox, toolbarBox, workbenchBox, firstActionBox] = await Promise.all(
-    [
-      tabs.boundingBox(),
+  const [triggerBox, toolbarBox, workbenchBox, firstActionBox] =
+    await Promise.all([
+      trigger.boundingBox(),
       toolbar.boundingBox(),
       workbench.boundingBox(),
       toolbar.getByRole("button").first().boundingBox(),
-    ]
-  )
+    ])
 
-  for (const box of [tabsBox, toolbarBox]) {
+  for (const box of [triggerBox, toolbarBox]) {
     expect(box).not.toBeNull()
     expect(box!.x).toBeGreaterThanOrEqual(15)
     expect(box!.x + box!.width).toBeLessThanOrEqual(305)
   }
-  await expect(tabs).toHaveCSS("overflow-x", "auto")
   expect(firstActionBox?.height).toBeGreaterThanOrEqual(48)
   expect(workbenchBox!.y + workbenchBox!.height).toBeLessThanOrEqual(
     toolbarBox!.y - 8
