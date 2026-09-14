@@ -75,8 +75,12 @@ interface SourceState {
   ): Promise<DaemonConnectResult>
   /** Forgets a daemon connection: sources, token and host permission. */
   forgetDaemon(origin: string): Promise<void>
-  /** Re-runs discovery for one connection, or every connection when omitted. */
-  refreshDaemonVaults(origin?: string): Promise<void>
+  /**
+   * Re-runs discovery for one connection, or every connection when omitted.
+   * Resolves with the origins that answered — an unreachable daemon is simply
+   * absent — which is how Settings tells a live connection from a dead one.
+   */
+  refreshDaemonVaults(origin?: string): Promise<string[]>
 }
 
 /** Session token: bumped by every transition; stale async work checks it. */
@@ -275,6 +279,7 @@ export const useSourceStore = create<SourceState>((set, get) => ({
         await teardownToEmpty()
       }
     }
+    return discoveries.map((discovery) => discovery.origin)
   },
 }))
 

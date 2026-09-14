@@ -92,8 +92,18 @@ function InstallGuide() {
  * Connecting a daemon: validate, permission, health-check, discover — then
  * the source store persists the connection and switches to its first Vault,
  * live, with no reload.
+ *
+ * For a profile's first connection the install guide is shown outright: that
+ * is when someone is most likely not to have a daemon yet. Otherwise it waits
+ * under Advanced with the bearer token.
  */
-export function DaemonConnectionPanel() {
+export function DaemonConnectionPanel({
+  firstConnection = false,
+  onConnected,
+}: {
+  firstConnection?: boolean
+  onConnected?: (origin: string) => void
+} = {}) {
   const connectDaemon = useSourceStore((s) => s.connectDaemon)
 
   const [origin, setOrigin] = React.useState(DEFAULT_DAEMON_ORIGIN)
@@ -111,11 +121,12 @@ export function DaemonConnectionPanel() {
     if (result.ok) {
       // The source store has already switched, live.
       setPhase("idle")
+      onConnected?.(result.origin)
       return
     }
     setPhase("error")
     setError({ stage: result.stage, message: result.message })
-  }, [origin, bearerToken, connectDaemon])
+  }, [origin, bearerToken, connectDaemon, onConnected])
 
   return (
     <div className="flex flex-col gap-3">
@@ -151,12 +162,11 @@ export function DaemonConnectionPanel() {
           </Button>
         </div>
         <p className="text-xs text-muted-foreground">
-          Connects to a local <code>bookmarks-but-better</code> daemon over
-          loopback (127.0.0.1 or localhost). Nothing is requested from the
-          daemon, and no browser permission is asked for, until you click
-          Connect. Every Vault it hosts becomes its own source; an unreachable
-          daemon is reported as an error — it never falls back to another
-          source.
+          {firstConnection
+            ? "Each Vault a local daemon hosts becomes its own source. "
+            : null}
+          Loopback only (127.0.0.1 or localhost); nothing is requested until you
+          click Connect.
         </p>
         {error && (
           <p className="text-xs text-destructive" role="alert">
@@ -164,6 +174,8 @@ export function DaemonConnectionPanel() {
           </p>
         )}
       </div>
+
+      {firstConnection && <InstallGuide />}
 
       <Button
         type="button"
@@ -195,7 +207,7 @@ export function DaemonConnectionPanel() {
               token authenticates the whole connection — every Vault it hosts.
             </p>
           </div>
-          <InstallGuide />
+          {!firstConnection && <InstallGuide />}
         </div>
       )}
     </div>

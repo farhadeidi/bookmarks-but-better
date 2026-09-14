@@ -9,6 +9,7 @@ import {
   waitFor,
   within,
 } from "@testing-library/react"
+import userEvent from "@testing-library/user-event"
 import { installFakeIndexedDB } from "@/browser/__tests__/fake-indexeddb"
 import { useSourceStore } from "@/stores/source-store"
 import { daemonSourceId } from "@/sources/config"
@@ -19,10 +20,16 @@ installFakeIndexedDB()
 const ORIGIN = "http://127.0.0.1:52224"
 const VAULT_ID = daemonSourceId(ORIGIN, "main")
 
+/** Stands in for discovery, so opening the panel never touches the network. */
+const refreshDaemonVaults = vi.fn<(origin?: string) => Promise<string[]>>()
+
 beforeEach(() => {
   installFakeIndexedDB()
   vi.stubGlobal("chrome", { bookmarks: {}, storage: {} })
+  refreshDaemonVaults.mockReset()
+  refreshDaemonVaults.mockResolvedValue([ORIGIN])
   useSourceStore.setState({
+    refreshDaemonVaults,
     status: "ready",
     switching: false,
     lastSwitchError: null,
@@ -76,20 +83,48 @@ describe("SourcesPanel enable switches", () => {
 })
 
 describe("SourcesPanel source management", () => {
-  it("groups Vaults under their daemon and exposes refresh and forget actions", () => {
+  it("groups Vaults under their daemon and keeps refresh and forget in its actions menu", async () => {
+    const user = userEvent.setup()
     render(<SourcesPanel onMigrateStandalone={() => {}} />)
 
     const daemon = screen.getByRole("group", { name: `Daemon ${ORIGIN}` })
-    expect(within(daemon).getByText("1 Vault")).toBeTruthy()
+    expect(within(daemon).getByText(/1 Vault/)).toBeTruthy()
     expect(
-      within(daemon).getByRole("button", { name: "Refresh Vaults" })
+      within(daemon).getByText(/Vaults come from the daemon's configuration/)
     ).toBeTruthy()
+
+    await user.click(
+      within(daemon).getByRole("button", {
+        name: `Actions for daemon ${ORIGIN}`,
+      })
+    )
     expect(
-      within(daemon).getByRole("button", { name: "Forget daemon" })
+      await screen.findByRole("menuitem", { name: "Refresh Vaults" })
     ).toBeTruthy()
+    expect(screen.getByRole("menuitem", { name: "Forget daemon" })).toBeTruthy()
+  })
+
+  it("says whether each daemon answered when Sources opens", async () => {
+    render(<SourcesPanel onMigrateStandalone={() => {}} />)
+
+    const daemon = screen.getByRole("group", { name: `Daemon ${ORIGIN}` })
+    expect(await within(daemon).findByText(/Connected · 1 Vault/)).toBeTruthy()
+    expect(within(daemon).queryByRole("button", { name: "Retry" })).toBeNull()
+  })
+
+  it("marks a daemon that does not answer as unreachable and offers Retry", async () => {
+    refreshDaemonVaults.mockResolvedValue([])
+    render(<SourcesPanel onMigrateStandalone={() => {}} />)
+
+    const daemon = screen.getByRole("group", { name: `Daemon ${ORIGIN}` })
     expect(
-      within(daemon).getByText(/Add, remove, or rename Vaults/)
+      await within(daemon).findByText(/Unreachable · 1 Vault/)
     ).toBeTruthy()
+
+    refreshDaemonVaults.mockResolvedValue([ORIGIN])
+    fireEvent.click(within(daemon).getByRole("button", { name: "Retry" }))
+    expect(await within(daemon).findByText(/Connected · 1 Vault/)).toBeTruthy()
+    expect(refreshDaemonVaults).toHaveBeenLastCalledWith(ORIGIN)
   })
 
   it("renames a source only for this profile", async () => {
