@@ -24,6 +24,7 @@ import { useBookmarkStore } from "@/stores/bookmark-store"
 import { buildRootFolderOptions } from "@/features/root-folder-select"
 import { serializeNetscapeBookmarks } from "@/browser/import-export/netscape-serializer"
 import { parseNetscapeBookmarks } from "@/browser/import-export/netscape-parser"
+import { parseCsvBookmarks } from "@/browser/import-export/csv-parser"
 import { resolveDefaultImportParentId } from "../import-target"
 import { executeImportPlan, formatImportResult } from "../import-bookmarks"
 import {
@@ -111,6 +112,8 @@ interface PendingImport {
   nodes: BookmarkNode[]
   folders: number
   bookmarks: number
+  /** Rows dropped for lacking a valid http(s) URL, for CSV imports. */
+  skipped: number
 }
 
 function summarize(nodes: BookmarkNode[]): {
@@ -187,7 +190,7 @@ export function DataMigrationPanel({
   const handlePickImportFile = () => {
     const input = document.createElement("input")
     input.type = "file"
-    input.accept = ".html,.htm"
+    input.accept = ".html,.htm,.csv"
     input.onchange = async (e) => {
       const file = (e.target as HTMLInputElement).files?.[0]
       if (!file) return
@@ -195,10 +198,18 @@ export function DataMigrationPanel({
       setImportStatus(null)
 
       let nodes: BookmarkNode[]
+      let skipped = 0
       try {
-        nodes = parseNetscapeBookmarks(await file.text()).flatMap(
-          (root) => root.children ?? []
-        )
+        const text = await file.text()
+        if (file.name.toLowerCase().endsWith(".csv")) {
+          const parsed = parseCsvBookmarks(text, file.name)
+          nodes = parsed.nodes
+          skipped = parsed.skipped
+        } else {
+          nodes = parseNetscapeBookmarks(text).flatMap(
+            (root) => root.children ?? []
+          )
+        }
       } catch (error) {
         setImportStatus(
           `Could not read that file: ${error instanceof Error ? error.message : String(error)}`
@@ -213,7 +224,7 @@ export function DataMigrationPanel({
 
       // Ask where it goes only once a file is in hand, so the counts below
       // can tell the user what they are about to import.
-      setPendingImport({ nodes, ...summarize(nodes) })
+      setPendingImport({ nodes, skipped, ...summarize(nodes) })
       setImportParentId(defaultImportParentId)
       setImportFolderName("")
     }
@@ -287,7 +298,7 @@ export function DataMigrationPanel({
         <SettingGroup>
           <SettingRow
             title="Import"
-            description="Bring in bookmarks from an HTML file (the standard browser format). They land in the active source."
+            description="Bring in bookmarks from an HTML file (the standard browser format) or a CSV export from Raindrop or Pocket. They land in the active source."
             control={
               <Tooltip>
                 <TooltipTrigger
@@ -318,6 +329,8 @@ export function DataMigrationPanel({
                 {pendingImport.folders} folder
                 {pendingImport.folders === 1 ? "" : "s"}. Choose where to put
                 them.
+                {pendingImport.skipped > 0 &&
+                  ` ${pendingImport.skipped} row${pendingImport.skipped === 1 ? "" : "s"} had no valid URL and ${pendingImport.skipped === 1 ? "was" : "were"} skipped.`}
               </p>
 
               <Select
