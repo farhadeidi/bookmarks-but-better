@@ -100,13 +100,13 @@ test("mobile source and action controls stay contained without overlapping", asy
   ).toBeVisible()
   await expect(toolbar.getByRole("button", { name: "Settings" })).toBeVisible()
 
-  const [triggerBox, toolbarBox, workbenchBox, firstActionBox] =
-    await Promise.all([
-      trigger.boundingBox(),
-      toolbar.boundingBox(),
-      workbench.boundingBox(),
-      toolbar.getByRole("button").first().boundingBox(),
-    ])
+  const firstCard = page.getByTestId("bookmark-card").first()
+  const [triggerBox, toolbarBox, firstActionBox, cardBox] = await Promise.all([
+    trigger.boundingBox(),
+    toolbar.boundingBox(),
+    toolbar.getByRole("button").first().boundingBox(),
+    firstCard.boundingBox(),
+  ])
 
   for (const box of [triggerBox, toolbarBox]) {
     expect(box).not.toBeNull()
@@ -114,9 +114,9 @@ test("mobile source and action controls stay contained without overlapping", asy
     expect(box!.x + box!.width).toBeLessThanOrEqual(305)
   }
   expect(firstActionBox?.height).toBeGreaterThanOrEqual(48)
-  expect(workbenchBox!.y + workbenchBox!.height).toBeLessThanOrEqual(
-    toolbarBox!.y - 8
-  )
+  // The actions live in the header row, above the grid rather than floating
+  // over it.
+  expect(toolbarBox!.y + toolbarBox!.height).toBeLessThanOrEqual(cardBox!.y)
 })
 
 test("the workbench is present, collapsed, and reports the scenario", async ({
