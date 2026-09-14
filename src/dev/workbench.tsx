@@ -131,7 +131,7 @@ export function ScenarioWorkbench() {
         type="button"
         aria-label="Open Dev Workbench"
         onClick={() => setOpen(true)}
-        className="fixed bottom-4 left-4 z-10 inline-flex min-h-12 items-center gap-2 rounded-full border border-border/60 bg-background/90 px-3 py-2.5 text-base font-medium text-muted-foreground shadow-sm backdrop-blur-sm transition-colors hover:text-foreground sm:bottom-6 sm:left-6 sm:min-h-0 sm:py-1.5 sm:text-xs"
+        className="fixed bottom-24 left-4 z-10 inline-flex min-h-12 items-center gap-2 rounded-full border border-border/60 bg-background/90 px-3 py-2.5 text-base font-medium text-muted-foreground shadow-sm backdrop-blur-sm transition-colors hover:text-foreground sm:bottom-6 sm:left-6 sm:min-h-0 sm:py-1.5 sm:text-xs"
       >
         <span aria-hidden className="size-1.5 rounded-full bg-violet-500" />
         Dev Workbench
@@ -147,7 +147,7 @@ export function ScenarioWorkbench() {
   return (
     <aside
       aria-label="Dev Workbench"
-      className="fixed right-4 bottom-4 left-4 z-10 flex max-h-[calc(100svh-2rem)] w-auto flex-col rounded-2xl border border-border/60 bg-background/95 text-sm shadow-lg backdrop-blur-sm sm:right-auto sm:bottom-6 sm:left-6 sm:max-h-[80svh] sm:w-80 sm:text-xs"
+      className="fixed right-4 bottom-24 left-4 z-10 flex max-h-[calc(100svh-7rem)] w-auto flex-col rounded-2xl border border-border/60 bg-background/95 text-sm shadow-lg backdrop-blur-sm sm:right-auto sm:bottom-6 sm:left-6 sm:max-h-[80svh] sm:w-80 sm:text-xs"
     >
       <header className="flex items-center gap-2 border-b border-border/60 py-2 pr-2 pl-4">
         <span aria-hidden className="size-1.5 rounded-full bg-violet-500" />

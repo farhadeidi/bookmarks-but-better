@@ -92,12 +92,14 @@ export function App() {
 
   return (
     <ScrollArea className="h-svh bg-background text-foreground">
-      <div className="flex flex-col gap-5 px-4 pt-8 pb-8">
+      <div className="flex flex-col gap-5 px-4 pt-8 pb-8 max-sm:pb-24">
         {/* The header row: the filter bar's breadcrumb on the left, the three
             global actions on the right. It mirrors the grid's width so both
             ends line up with the card columns, and it always renders — the
             actions stay reachable even when the filter bar has nothing to
-            show. Not sticky: search also opens by typing anywhere. */}
+            show. Not sticky: search also opens by typing anywhere. Below
+            `sm` the breadcrumb and three 48px touch targets don't fit one
+            row, so the actions float at the bottom, within thumb reach. */}
         <header
           className={cn(
             "flex w-full min-w-0 items-center gap-2",
@@ -113,7 +115,7 @@ export function App() {
           <div
             role="toolbar"
             aria-label="App actions"
-            className="flex shrink-0 items-center gap-0.5 max-sm:[&_button]:size-12"
+            className="flex shrink-0 items-center gap-0.5 max-sm:fixed max-sm:right-4 max-sm:bottom-4 max-sm:z-10 max-sm:gap-2 max-sm:rounded-2xl max-sm:border max-sm:border-border/60 max-sm:bg-background/90 max-sm:px-2 max-sm:py-1.5 max-sm:shadow-sm max-sm:backdrop-blur-sm max-sm:[&_button]:size-12"
           >
             {/* Typing anywhere on the page opens the same palette; this is
                 the way in for a pointer, and the only one on a touch screen. */}
