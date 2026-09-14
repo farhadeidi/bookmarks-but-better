@@ -29,7 +29,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Dev Workbench `large-tree` scenario**: exactly 10,000 bookmarks in 300
   folders, for keeping the dashboard responsive at that scale (#85, PR #86).
 
+### Changed
+
+- **Setup no longer asks you to pick one source.** Browser bookmarks and a
+  local vault are two switches — the browser on by default, and at least one
+  always on. Turning the vault on adds a step that leads with
+  `npx bookmarks-but-better@latest` as two numbered steps (start the daemon,
+  then connect), confirms the connection once it is made, and offers an
+  explicit "Skip for now". Setup is a proper dialog with a step counter, shows
+  only the step you are on, and its actions read "Skip setup" and "Open
+  dashboard" (PR #100).
+- **Settings → Sources is split into clear sections**, with each daemon's live
+  status — connected or not answering — and pointers to the Daemon Manager for
+  status and adding or removing vaults (PR #100).
+- **The app actions sit in the header row**, and float as a bottom toolbar on
+  phones. The root folder picker scrolls its list and opens the bookmark tree
+  from its footer; the source and root folder triggers get more room, a tick
+  on the current choice, and a "Manage sources" link (PR #100).
+- **The Dev Workbench panel has one-click scenarios** and scrolls at low
+  heights (PR #100).
+
 ### Fixed
+
+- **Connecting a vault during setup no longer saves a browser folder as the
+  vault's root folder.** The folder choice is seeded per source, and one that
+  is not in the active source is never written (PR #100).
 
 - **A crash while rendering the dashboard no longer leaves a blank new tab.**
   An error boundary around the grid shows a card with the error text, and
