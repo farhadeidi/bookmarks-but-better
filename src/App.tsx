@@ -6,8 +6,7 @@ import { usePreferencesStore } from "@/stores/preferences-store"
 import { BookmarkGrid } from "@/features/bookmark-grid"
 import { GridErrorBoundary, SafeModeNotice } from "@/features/safety-net"
 import { DndMonitor } from "@/features/dnd"
-import { SourceSwitcher } from "@/features/source-switcher"
-import { RootFolderControl } from "@/features/root-folder-control"
+import { FilterBar } from "@/features/filter-bar"
 import { StandaloneDeprecationBanner } from "@/features/standalone-sunset"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Button } from "@/components/ui/button"
@@ -93,17 +92,14 @@ export function App() {
     <ScrollArea className="h-svh bg-background text-foreground">
       {/* Main content */}
       <main className="flex flex-col gap-5 px-4 pt-8 pb-24">
-        {/* The tab switcher, drawn only with several enabled sources: it sits
-            above the bookmarks so the destination of every operation below it
-            is visible. With one source there is no choice, and nothing. */}
-        {sourceStatus === "ready" && <SourceSwitcher />}
+        {/* The filter bar: source switcher and root-folder chip on one row
+            above the grid (#95). Each half hides itself independently — the
+            switcher with fewer than two enabled sources, the chip under the
+            same condition the setup wizard uses to skip its own Root folder
+            step — so the row still lines up at the left edge with only one
+            of the two visible. */}
+        {sourceStatus === "ready" && <FilterBar />}
         {sourceStatus === "ready" && <StandaloneDeprecationBanner />}
-        {/* Reachable from the new tab itself rather than two clicks into
-            Settings — see issue #88. A quiet label in the row directly above
-            the grid rather than a primary control (#93); hides itself under
-            the same condition the setup wizard uses to skip its own Root
-            folder step. */}
-        {sourceStatus === "ready" && <RootFolderControl />}
 
         {sourceStatus === "ready" && !hasActiveSource ? (
           <div
