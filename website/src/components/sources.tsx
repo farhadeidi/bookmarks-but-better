@@ -17,7 +17,7 @@ const SOURCES = [
     name: "Markdown vault daemon",
     tag: "Power users",
     description:
-      "Your bookmarks as plain Markdown files on disk, served by a small local daemon. The only source that works in Safari.",
+      "Your bookmarks as plain Markdown files on disk, served by a small local daemon. Use it next to browser bookmarks or on its own — and the only source that works in Safari.",
   },
 ]
 

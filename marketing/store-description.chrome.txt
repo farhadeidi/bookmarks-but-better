@@ -4,12 +4,16 @@ Open a new tab and see your folders in a responsive masonry layout instead of di
 
 WHAT'S NEW IN VERSION 4
 
-- Optional local-first Markdown vault powered by the Bookmarks But Better daemon
-- Save the active page from the extension popup when connected to a daemon vault
-- Search daemon bookmarks from the address bar: type “bb”, press Tab, then search by title or URL
-- Import and export standard browser bookmark HTML files
-- Improved setup flow that preserves completed setup and existing preferences during upgrades
-- Reliable bookmark-root recovery when a previously selected folder was deleted
+- Use your browser bookmarks, a local Markdown vault, or both, and switch between them from the top of the dashboard
+- A guided setup that asks which sources to use and walks you through connecting a vault, or lets you skip straight to your bookmarks
+- Set up the optional vault daemon with one command: npx bookmarks-but-better@latest
+- Choose the dashboard's root folder right from the new tab
+- Search your bookmarks from the address bar: type “bb”, press Tab, then search by title or URL
+- Save the active page to your bookmarks from the extension popup
+- Import and export standard browser bookmark HTML files, plus CSV import from Raindrop and Pocket
+- Site icons cached on your device, so each site's icon is fetched about once a month
+- Safe mode, and a Settings page you can open from the extensions page, for a new tab that will not load
+- Upgrades keep your completed setup and existing preferences
 
 FEATURES
 
@@ -21,18 +25,19 @@ FEATURES
 - Choose any folder as the dashboard root
 - Ten color themes plus light, dark and system modes
 - High-quality favicons with a clean letter fallback
-- Browser, standalone and optional daemon bookmark sources
+- Browser bookmarks and optional local Markdown vaults, never silently mixed
+- Address-bar search with the “bb” keyword
 - Standard HTML import and export, plus CSV import from Raindrop and Pocket
 
 UPGRADING
 
-Version 4 upgrades in place. Existing users keep their root folder, layouts, themes and completed setup state. The setup wizard is shown again only when requested from Settings.
+Version 4 upgrades in place. Existing users keep their root folder, layouts, themes and completed setup state. The setup wizard is shown again only when requested from Settings. The legacy standalone collection keeps working and can be copied into a vault; the copy leaves the original intact.
 
 PRIVACY
 
 Bookmarks But Better has no account system, analytics, tracking, ads or bookmark-content collection. Browser mode reads and updates bookmarks through Chrome's built-in APIs. Preferences remain local to the browser profile.
 
-Bookmark origins are sent to Google's public favicon service to retrieve icons; URL paths are not sent. Chrome can use its on-device favicon API as a fallback. Daemon mode is optional, binds to localhost only and is contacted only after the user explicitly connects it.
+Bookmark origins are sent to Google's public favicon service to retrieve icons; URL paths are not sent. Icons are cached on the device, and Chrome's on-device favicon API is used where it can supply a sharp icon. Daemon mode is optional, binds to localhost only and is contacted only after the user explicitly connects it.
 
 PERMISSION JUSTIFICATIONS
 
@@ -42,7 +47,7 @@ bookmarks: Displays and manages the user's Chrome bookmark tree.
 
 storage: Saves local preferences, the selected root folder and completed setup state.
 
-favicon: Uses Chrome's local favicon API when the public favicon provider has no usable icon.
+favicon: Uses Chrome's local favicon API for small icons, and when the public favicon provider has no usable icon.
 
 clipboardWrite: Copies a bookmark URL when the user chooses Copy link.
 

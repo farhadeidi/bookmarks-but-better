@@ -48,6 +48,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   on the current choice, and a "Manage sources" link (PR #100).
 - **The Dev Workbench panel has one-click scenarios** and scrolls at low
   heights (PR #100).
+- **`npx bookmarks-but-better` 1.1.2 installs daemon 4.3.0.**
 
 ### Fixed
 

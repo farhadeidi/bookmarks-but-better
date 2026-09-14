@@ -79,11 +79,11 @@ archives.
 
 To choose explicitly rather than rely on the fallback:
 
-| What you want | macOS / Linux | Windows | npx |
-| --- | --- | --- | --- |
-| The latest prerelease | `bash -s -- --beta` | `-Beta` | `install --version <its tag>` |
-| One exact release | `bash -s -- --version v4.0.0` | `-Version v4.0.0` | `install --version v4.0.0` |
-| The first vault and the service too | `bash -s -- --vault ~/Bookmarks` | `-Vault …` | asked, or `install --vault …` |
+| What you want                       | macOS / Linux                    | Windows           | npx                           |
+| ----------------------------------- | -------------------------------- | ----------------- | ----------------------------- |
+| The latest prerelease               | `bash -s -- --beta`              | `-Beta`           | `install --version <its tag>` |
+| One exact release                   | `bash -s -- --version v4.0.0`    | `-Version v4.0.0` | `install --version v4.0.0`    |
+| The first vault and the service too | `bash -s -- --vault ~/Bookmarks` | `-Vault …`        | asked, or `install --vault …` |
 
 With `curl … | bash`, arguments go after `-s --`:
 
@@ -92,7 +92,7 @@ curl -fsSL https://github.com/farhadeidi/bookmarks-but-better/releases/latest/do
 ```
 
 `npx bookmarks-but-better@latest install --version v4.0.0` also pins the
-*installer* to that release, so both halves come from the same place.
+_installer_ to that release, so both halves come from the same place.
 
 ## What the install scripts do
 
@@ -127,7 +127,10 @@ unless you say `--purge-config`.
 ## Connecting the extension
 
 Once the daemon is running, open the extension's Settings → **Sources**, enter
-the daemon's address (`127.0.0.1:52222` by default) and click **Connect**.
+the daemon's address (`127.0.0.1:52222` by default) and click **Connect**. On a
+fresh profile the setup wizard offers the same step: turn on **Local vault**
+next to Browser bookmarks (or instead of them), and it shows the Daemon Manager
+command and the same Connect form.
 Every Vault the daemon hosts appears as its own source you can enable,
 disable, give a browser-profile-local display label, and switch between —
 Browser bookmarks stay enabled alongside them. The label is only an alias in
