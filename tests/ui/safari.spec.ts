@@ -18,7 +18,7 @@ test("the safari scenario is daemon-only: no Browser Source exists", async ({
   // no source control is drawn above them — no tabs, no badge.
   await expect(page.getByRole("tablist")).toHaveCount(0)
   await expect(page.getByRole("tab")).toHaveCount(0)
-  await expect(page.getByText("reading", { exact: true })).toHaveCount(0)
+  await expect(page.getByRole("tab", { name: "reading" })).toHaveCount(0)
 })
 
 test("a profile with nothing connected shows the daemon-only empty state", async ({

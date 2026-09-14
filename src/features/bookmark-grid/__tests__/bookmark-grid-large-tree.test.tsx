@@ -85,6 +85,7 @@ describe("BookmarkGrid with a 10,000-bookmark tree", () => {
           nestedFolders,
           experimentalCardDrag: true,
           folderOrder: [],
+          isTreeRoot: true,
         })
         shouldGateCards(ROOT)
         const columns = distributeToColumns(folders, 6, {}, new Map())

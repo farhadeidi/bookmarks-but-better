@@ -7,6 +7,15 @@ interface GetVisibleFoldersOptions {
   nestedFolders: boolean
   experimentalCardDrag: boolean
   folderOrder: string[]
+  /**
+   * Whether `displayRoot` is the source's own top-level root (no Root folder
+   * narrowing chosen), as opposed to a folder the user picked. The top-level
+   * root's `title` is a synthetic, adapter-internal label — a Vault's name,
+   * `"Standalone bookmarks"`, or empty for the browser root — never a folder
+   * a person named, so a root card built from it is titled "Bookmarks"
+   * instead of surfacing that internal label as if it were one.
+   */
+  isTreeRoot: boolean
 }
 
 export function getVisibleFolders({
@@ -14,6 +23,7 @@ export function getVisibleFolders({
   nestedFolders,
   experimentalCardDrag,
   folderOrder,
+  isTreeRoot,
 }: GetVisibleFoldersOptions): BookmarkNode[] {
   const rawFolders = nestedFolders
     ? (displayRoot.children ?? []).filter(
@@ -38,6 +48,10 @@ export function getVisibleFolders({
   )
   if (rootBookmarks.length === 0) return folders
 
-  const rootCard: BookmarkNode = { ...displayRoot, children: rootBookmarks }
+  const rootCard: BookmarkNode = {
+    ...displayRoot,
+    title: isTreeRoot ? "Bookmarks" : displayRoot.title,
+    children: rootBookmarks,
+  }
   return [rootCard, ...folders]
 }
