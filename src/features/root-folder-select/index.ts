@@ -6,3 +6,4 @@ export {
   resolveEffectiveCreateParentId,
   resolveCreateParentId,
 } from "./default-parent"
+export { hasRootFolderChoice } from "./has-root-folder-choice"
