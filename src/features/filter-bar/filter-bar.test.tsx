@@ -77,7 +77,11 @@ describe("FilterBar", () => {
 
     const { container } = render(<FilterBar />)
 
-    const switcher = screen.getByRole("button", { name: "Bookmark source" })
+    // The trigger's name carries the active source, not just the control's
+    // purpose, so a screen reader announces what is being looked at.
+    const switcher = screen.getByRole("button", {
+      name: "Bookmark source: Browser bookmarks",
+    })
     const folder = screen.getByRole("button", { name: /All bookmarks/ })
     // One container wraps the row; both controls are within it rather than
     // in separate top-level rows.
@@ -103,7 +107,9 @@ describe("FilterBar", () => {
 
     render(<FilterBar />)
 
-    expect(screen.queryByRole("button", { name: "Bookmark source" })).toBeNull()
+    expect(
+      screen.queryByRole("button", { name: /^Bookmark source/ })
+    ).toBeNull()
     expect(screen.getByRole("button", { name: "All bookmarks" })).not.toBeNull()
   })
 })

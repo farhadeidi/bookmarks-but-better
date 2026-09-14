@@ -44,7 +44,7 @@ export function FilterBar() {
         containerMode === "contained" && "mx-auto max-w-[1440px]"
       )}
     >
-      <div className="flex h-7 min-w-0 flex-wrap items-center gap-1.5 px-1 text-sm">
+      <div className="flex min-h-7 min-w-0 flex-wrap items-center gap-1.5 px-1 text-sm">
         <SourceSwitcher />
         {showSources && showFolders && (
           <span aria-hidden className="text-muted-foreground/40">

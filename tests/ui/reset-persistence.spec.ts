@@ -81,7 +81,8 @@ test("scenario selection is stable through URL navigation", async ({
   // The safari scenario is the reading Vault as the only source: that Vault's
   // bookmark on screen with no switcher above it is its fingerprint. The
   // scenarios that also show this bookmark (multi-vault, slow-daemon) do so
-  // behind a tab strip, and the default scenario opens on Browser bookmarks.
+  // behind a source switcher, and the default scenario opens on Browser
+  // bookmarks.
   const fingerprint = page.getByText("SQLite is not a toy database")
   const switcher = page.getByRole("button", { name: "Bookmark source" })
   await expect(fingerprint).toBeVisible()

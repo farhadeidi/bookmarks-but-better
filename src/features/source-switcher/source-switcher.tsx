@@ -52,7 +52,7 @@ export function SourceSwitcher() {
         render={
           <button
             type="button"
-            aria-label="Bookmark source"
+            aria-label={`Bookmark source: ${activeSource?.label ?? ""}`}
             className="inline-flex min-w-0 items-center gap-1 rounded-md px-1.5 py-0.5 text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
           />
         }
