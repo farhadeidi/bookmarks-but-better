@@ -47,6 +47,7 @@ describe("the scenario registry", () => {
       "empty",
       "large-library",
       "huge-library",
+      "large-tree",
     ])
     expect(DEFAULT_SCENARIO_ID).toBe("browser-daemon")
   })
@@ -105,6 +106,31 @@ describe("initial source configuration", () => {
       countBookmarks(seedBookmarks)
     )
     expect(countBookmarks(scenario.browserTree ?? [])).toBeGreaterThan(250)
+  })
+
+  it("the large tree is exactly 10,000 bookmarks in 300 folders at most four levels deep", () => {
+    const tree = getScenario("large-tree").browserTree ?? []
+
+    type Node = { url?: string; children?: Node[] }
+    type Shape = { bookmarks: number; folders: number; depth: number }
+    const walk = (nodes: Node[], depth: number): Shape =>
+      nodes.reduce<Shape>(
+        (acc, node) => {
+          if (node.url !== undefined)
+            return { ...acc, bookmarks: acc.bookmarks + 1 }
+          const inner = walk(node.children ?? [], depth + 1)
+          return {
+            bookmarks: acc.bookmarks + inner.bookmarks,
+            folders: acc.folders + 1 + inner.folders,
+            depth: Math.max(acc.depth, depth, inner.depth),
+          }
+        },
+        { bookmarks: 0, folders: 0, depth: 0 }
+      )
+
+    expect(walk(tree, 1)).toEqual({ bookmarks: 10_000, folders: 300, depth: 4 })
+    // Seeded, not merely similar: a second read is the identical tree.
+    expect(getScenario("large-tree").browserTree).toEqual(tree)
   })
 
   it("the default scenario connects browser bookmarks plus the reading and archive Vaults", () => {

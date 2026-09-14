@@ -25,6 +25,7 @@ The workbench (bottom-left pill) exposes deterministic, URL-addressable scenario
 | `/?scenario=empty` | Nothing enabled — the dashboard's own empty state |
 | `/?scenario=large-library` | Hundreds of seeded bookmarks |
 | `/?scenario=huge-library` | Over ten thousand bookmarks in nested folders — the collection size that used to hang the tab (issue #75) |
+| `/?scenario=large-tree` | Exactly 10,000 bookmarks in 300 irregular folders up to four levels deep, from a seeded generator — the fixture grid performance is measured against (issue #85) |
 
 - **Scenario state persists** in IndexedDB while you develop: mutations, the active source and preference changes all survive reloads. Navigating without a `?scenario` parameter keeps the persisted scenario; navigating with one applies it.
 - **Reset Scenario** deterministically restores the seed: the revision bumps, every simulated source and the profile's Source Configuration are reseeded, and the page reloads into the scenario's URL.
