@@ -72,8 +72,18 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
   // flow itself, so `addVault` only puts the vault step on the track and
   // `useBrowser` is applied on finish — and only once a vault is there to take
   // over, since the last enabled source cannot be disabled.
-  const [useBrowser, setUseBrowser] = React.useState(true)
-  const [addVault, setAddVault] = React.useState(false)
+  //
+  // Seeded from the saved configuration, so re-opening the wizard from
+  // Settings starts on what is actually on; a fresh profile has Browser
+  // enabled and no connections, which is the same default.
+  const [addVault, setAddVault] = React.useState(
+    () => Object.keys(useSourceStore.getState().config.connections).length > 0
+  )
+  const [useBrowser, setUseBrowser] = React.useState(() => {
+    const { config } = useSourceStore.getState()
+    const browserOn = config.sources[BROWSER_SOURCE_ID]?.enabled ?? true
+    return browserOn || Object.keys(config.connections).length === 0
+  })
   // At least one stays on: switching one off switches the other on.
   const changeUseBrowser = (on: boolean) => {
     setUseBrowser(on)
@@ -197,8 +207,15 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
    * have nothing to show.
    */
   const finish = async () => {
-    if (showSourceStep && !useBrowser && hasConnection) {
-      await setSourceEnabled(BROWSER_SOURCE_ID, false)
+    if (showSourceStep) {
+      const browserOn =
+        useSourceStore.getState().config.sources[BROWSER_SOURCE_ID]?.enabled ??
+        true
+      if (useBrowser && !browserOn) {
+        await setSourceEnabled(BROWSER_SOURCE_ID, true)
+      } else if (!useBrowser && browserOn && hasConnection) {
+        await setSourceEnabled(BROWSER_SOURCE_ID, false)
+      }
     }
 
     const tree = useBookmarkStore.getState().tree

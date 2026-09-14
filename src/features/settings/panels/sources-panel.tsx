@@ -335,12 +335,9 @@ export function SourcesPanel({
   }, [config.connections, daemonSources])
 
   // Which daemons answered the last check, and which one is being re-checked.
-  // Opening Sources with connections checks them all once; `null` means that
-  // first check has not come back yet.
-  const [checkOnOpen] = React.useState(() => daemonGroups.length > 0)
-  const [reachable, setReachable] = React.useState<Set<string> | null>(() =>
-    checkOnOpen ? null : new Set()
-  )
+  // `null` means no check has come back yet, which reads as checking rather
+  // than unreachable.
+  const [reachable, setReachable] = React.useState<Set<string> | null>(null)
   const [checkingOrigin, setCheckingOrigin] = React.useState<string | null>(
     null
   )
@@ -365,9 +362,13 @@ export function SourcesPanel({
     [refreshDaemonVaults]
   )
 
+  // Checked whenever the set of daemons changes, not only at mount: the panel
+  // can render before the source store has loaded, when there is nothing yet
+  // to check.
+  const daemonOriginsKey = daemonGroups.map((group) => group.origin).join("\n")
   React.useEffect(() => {
-    if (checkOnOpen) void checkDaemons()
-  }, [checkOnOpen, checkDaemons])
+    if (daemonOriginsKey !== "") void checkDaemons()
+  }, [daemonOriginsKey, checkDaemons])
 
   const statusOf = (origin: string): DaemonStatus => {
     if (reachable === null || checkingOrigin === origin) return "checking"

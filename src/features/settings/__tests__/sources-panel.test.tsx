@@ -2,6 +2,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -110,6 +111,32 @@ describe("SourcesPanel source management", () => {
     const daemon = screen.getByRole("group", { name: `Daemon ${ORIGIN}` })
     expect(await within(daemon).findByText(/Connected · 1 Vault/)).toBeTruthy()
     expect(within(daemon).queryByRole("button", { name: "Retry" })).toBeNull()
+  })
+
+  it("checks daemons that only arrive once sources have loaded, instead of calling them unreachable", async () => {
+    // The standalone Settings page renders Sources before the store is ready.
+    const loaded = useSourceStore.getState().config
+    useSourceStore.setState({
+      status: "loading",
+      config: {
+        version: 2,
+        connections: {},
+        sources: {},
+        activeSourceId: null,
+      },
+    })
+    render(<SourcesPanel onMigrateStandalone={() => {}} />)
+    expect(refreshDaemonVaults).not.toHaveBeenCalled()
+
+    act(() => {
+      useSourceStore.setState({ status: "ready", config: loaded })
+    })
+
+    const daemon = await screen.findByRole("group", {
+      name: `Daemon ${ORIGIN}`,
+    })
+    expect(await within(daemon).findByText(/Connected · 1 Vault/)).toBeTruthy()
+    expect(within(daemon).queryByText(/Unreachable/)).toBeNull()
   })
 
   it("marks a daemon that does not answer as unreachable and offers Retry", async () => {

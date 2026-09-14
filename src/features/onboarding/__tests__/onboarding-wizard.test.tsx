@@ -306,6 +306,38 @@ describe("OnboardingWizard source step", () => {
     })
   })
 
+  it("re-opened, starts on the sources that are on and can turn Browser bookmarks back on", async () => {
+    const user = userEvent.setup()
+    const setSourceEnabled = vi.fn().mockResolvedValue(true)
+    useSourceStore.setState({
+      setSourceEnabled,
+      config: {
+        ...emptySourceConfig(),
+        connections: { "http://127.0.0.1:52222": {} },
+        sources: { browser: { enabled: false } },
+      },
+    })
+    renderWizard()
+
+    expect(
+      screen
+        .getByRole("switch", { name: "Browser bookmarks" })
+        .getAttribute("aria-checked")
+    ).toBe("false")
+    expect(
+      screen
+        .getByRole("switch", { name: "Local vault" })
+        .getAttribute("aria-checked")
+    ).toBe("true")
+
+    await user.click(screen.getByRole("switch", { name: "Browser bookmarks" }))
+    await user.click(screen.getByRole("button", { name: "Skip setup" }))
+
+    await waitFor(() => {
+      expect(setSourceEnabled).toHaveBeenCalledWith("browser", true)
+    })
+  })
+
   it("leaves Browser bookmarks on when no vault was connected to replace it", async () => {
     const user = userEvent.setup()
     const setSourceEnabled = vi.fn().mockResolvedValue(true)
