@@ -22,7 +22,7 @@ FEATURES
 - Ten color themes plus light, dark and system modes
 - High-quality favicons with a clean letter fallback
 - Browser, standalone and optional daemon bookmark sources
-- Standard HTML import and export
+- Standard HTML import and export, plus CSV import from Raindrop and Pocket
 
 UPGRADING
 

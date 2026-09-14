@@ -7,6 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.3.0] - 2026-09-14
+
+### Added
+
+- **Choose the root folder from the new tab itself.** A header control next to
+  the source switcher shows the folder currently in view and opens the same
+  picker Settings already uses, instead of a fork of it. Narrowing the root
+  adds a one-click reset back to all bookmarks (#88, PR #91).
+- **Import bookmarks from Raindrop and Pocket CSV exports.** A hand-written
+  CSV parser detects the format from the header row — Raindrop's folder paths
+  become nested folders, Pocket's items land under one "Pocket" folder — and
+  reuses the same preview, destination picker and conflict handling as HTML
+  import. Rows without a valid URL are skipped and the count is shown in the
+  preview (#89, PR #90).
+- **A standalone Settings page**, reachable from the browser's extensions
+  page even when the new tab itself is unusable (#83, PR #84).
+- **Safe mode**, a preference that keeps the dashboard from rendering
+  bookmarks until turned off, offered from the crash card and from
+  Settings > General > Recovery (#83, PR #84).
+- **Dev Workbench `large-tree` scenario**: exactly 10,000 bookmarks in 300
+  folders, for keeping the dashboard responsive at that scale (#85, PR #86).
+
+### Fixed
+
+- **A crash while rendering the dashboard no longer leaves a blank new tab.**
+  An error boundary around the grid shows a card with the error text, and
+  buttons to open Settings or reload in safe mode (#83, PR #84).
+- **Mounting cards on a large collection no longer asks the browser for a
+  computed style per card ancestor.** The scroll root is now found once per
+  ancestor and cached, so 1,204 style lookups on a 10,000-bookmark collection
+  became fewer than 50 (#85, PR #86).
+
 ## [4.2.1] - 2026-09-13
 
 ### Fixed
@@ -426,6 +458,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Rewrote README for end users with screenshots and badges
 
+[4.3.0]: https://github.com/farhadeidi/bookmarks-but-better/compare/v4.2.1...v4.3.0
 [4.2.1]: https://github.com/farhadeidi/bookmarks-but-better/compare/v4.2.0...v4.2.1
 [4.2.0]: https://github.com/farhadeidi/bookmarks-but-better/compare/v4.1.1...v4.2.0
 [4.1.1]: https://github.com/farhadeidi/bookmarks-but-better/compare/v4.1.0...v4.1.1
