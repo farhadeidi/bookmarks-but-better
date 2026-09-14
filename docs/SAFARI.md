@@ -13,15 +13,15 @@ same release; 17/14 is the first pairing worth supporting.
 
 ## Capability matrix
 
-| Capability                        | Safari | Chrome / Firefox | Where it is decided                        |
-| --------------------------------- | ------ | ---------------- | ------------------------------------------ |
-| Browser Source (`chrome.bookmarks`) | no     | yes              | `platformCapabilities().browserSource`     |
-| Daemon Sources                    | yes    | yes              | `platformCapabilities().daemonSource`      |
-| Omnibox keyword (`bb`)            | no     | yes              | `platformCapabilities().omnibox`           |
-| New-tab override                  | no     | yes              | manifest — Safari supports no override     |
-| Action popup                      | yes    | yes              | `manifests/manifest.safari.json`           |
-| Optional loopback host permission | yes    | yes              | `optional_host_permissions`, asked on Connect |
-| Native messaging                  | yes    | n/a              | unused; the appex handler is the converter's stub |
+| Capability                          | Safari | Chrome / Firefox | Where it is decided                               |
+| ----------------------------------- | ------ | ---------------- | ------------------------------------------------- |
+| Browser Source (`chrome.bookmarks`) | no     | yes              | `platformCapabilities().browserSource`            |
+| Daemon Sources                      | yes    | yes              | `platformCapabilities().daemonSource`             |
+| Omnibox keyword (`bb`)              | no     | yes              | `platformCapabilities().omnibox`                  |
+| New-tab override                    | no     | yes              | manifest — Safari supports no override            |
+| Action popup                        | yes    | yes              | `manifests/manifest.safari.json`                  |
+| Optional loopback host permission   | yes    | yes              | `optional_host_permissions`, asked on Connect     |
+| Native messaging                    | yes    | n/a              | unused; the appex handler is the converter's stub |
 
 Two consequences the UI has to carry, both driven by capability rather than by
 browser name:
@@ -123,7 +123,7 @@ Then **reapply both corrections** in
 forgotten one fails loudly rather than shipping.
 
 1. **The app target's bundle identifier.** The converter derives it from the
-   *app name* (`dev.but-better.bookmarks.Bookmarks-But-Better`),
+   _app name_ (`dev.but-better.bookmarks.Bookmarks-But-Better`),
    which breaks the required `<app-id>.Extension` relationship — the extension
    target is given `…safari.Extension`, a child of an id nothing has. Set both
    `PRODUCT_BUNDLE_IDENTIFIER` entries of the **app** target (Debug and
@@ -217,9 +217,9 @@ fails is a bug worth filing before the build is called good.
    and a **"Connect a daemon"** button — Safari's own bookmarks are not read,
    and nothing pretends otherwise.
 8. **Onboarding shape.** On a fresh profile the setup wizard runs first. Check
-   it never asks "Where do your bookmarks live?" and that its daemon step says
+   it has no "Your bookmarks" step and opens on "Connect your vault", which says
    the browser does not share its own bookmarks and mentions iCloud Drive.
-9. **Start a daemon.** In a terminal: `npx bookmarks-but-better`, which asks
+9. **Start a daemon.** In a terminal: `npx bookmarks-but-better@latest`, which asks
    where the vault should live and starts the background service — or, without
    a service, `bookmarks-but-better init --vault <path>` and then
    `bookmarks-but-better serve --vault <path>` — see
@@ -227,7 +227,7 @@ fails is a bug worth filing before the build is called good.
 10. **The loopback permission prompt.** In the dashboard, click **"Connect a
     daemon"** → **Sources**, leave the address as `http://127.0.0.1:52222` (or
     correct the port), and click **Connect**. Safari must show a permission
-    prompt for `127.0.0.1` — allow it. This prompt appearing *at Connect*, and
+    prompt for `127.0.0.1` — allow it. This prompt appearing _at Connect_, and
     not at install, is the point: the extension asks for nothing until you
     connect.
 11. **The Vault is the source.** After allowing, the Vault's bookmarks render

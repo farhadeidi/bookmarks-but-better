@@ -65,7 +65,7 @@ async function rootId(): Promise<string> {
  */
 async function completeOnboarding(page: import("@playwright/test").Page) {
   await page
-    .getByRole("button", { name: /^(Skip, use defaults|Start Browsing)$/ })
+    .getByRole("button", { name: /^(Skip setup|Open dashboard)$/ })
     .click()
 }
 

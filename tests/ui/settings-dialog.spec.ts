@@ -140,7 +140,7 @@ test("each daemon connection shows its status, its discovered Vaults and a refre
   await expect(daemon.getByText("reading", { exact: true })).toBeVisible()
   await expect(daemon.getByText("archive", { exact: true })).toBeVisible()
   await expect(daemon).toContainText(
-    "Vaults come from the daemon's configuration"
+    "Add or remove Vaults with npx bookmarks-but-better@latest vault"
   )
 
   await daemon

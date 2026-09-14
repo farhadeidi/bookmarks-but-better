@@ -259,11 +259,19 @@ function DaemonCard({
         </DropdownMenu>
       </div>
 
+      {status === "unreachable" && (
+        <p className="border-b border-border/60 px-4 py-2.5 text-xs text-muted-foreground">
+          Not answering. Run <code>npx bookmarks-but-better@latest status</code>{" "}
+          to see why and how to fix it.
+        </p>
+      )}
+
       <div className="divide-y divide-border/60">{children}</div>
 
       <p className="border-t border-border/60 px-4 py-3 text-xs text-muted-foreground">
-        Vaults come from the daemon's configuration. Refresh after changing it
-        there; disabling a Vault keeps it for later.
+        Add or remove Vaults with{" "}
+        <code>npx bookmarks-but-better@latest vault</code>, then Refresh.
+        Disabling a Vault here keeps it for later.
       </p>
     </section>
   )

@@ -6,6 +6,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useBookmarkStore } from "@/stores/bookmark-store"
+import { StepHeading } from "./step-heading"
 
 interface RootFolderStepProps {
   value: string | null
@@ -47,29 +48,23 @@ export function RootFolderStep({ value, onChange }: RootFolderStepProps) {
   }
 
   return (
-    <div className="flex flex-col gap-6 py-4">
-      <div className="flex flex-col gap-2 text-center">
-        <h2 className="text-2xl font-bold tracking-tight">
-          Choose your bookmark folder
-        </h2>
-        <p className="text-muted-foreground">
-          The dashboard only shows the folders inside this one, so picking a
-          dedicated folder gives you a curated page instead of every bookmark
-          you own. You can change this later in settings.
-        </p>
-      </div>
+    <div className="flex flex-col gap-6">
+      <StepHeading
+        title="Choose your bookmark folder"
+        description="The dashboard shows only what's inside this folder, so a dedicated one gives you a curated page. You can change it later in Settings."
+      />
 
       <RootFolderSelect value={value} onChange={onChange} />
 
       {defaultParentId && (
         <div className="flex flex-col gap-2 rounded-lg border border-dashed border-border/70 p-3">
           <p className="text-xs text-muted-foreground">
-            New here? We recommend creating a dedicated folder — like{" "}
+            Or create a dedicated one — like{" "}
             <span className="font-medium text-foreground">
               Personal Bookmarks
             </span>{" "}
-            or <span className="font-medium text-foreground">Work</span> — for
-            the bookmarks you want to always see on this page.
+            or <span className="font-medium text-foreground">Work</span>. It is
+            added to your bookmarks right away.
           </p>
           <div className="flex gap-2">
             <Input

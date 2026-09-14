@@ -43,10 +43,13 @@ test("a fresh Safari profile is onboarded straight into connecting a daemon", as
   // No welcome screen and no source question: there is only one source here,
   // so the wizard opens on setting it up — and says what Safari does and does
   // not do.
-  await expect(page.getByText("Where do your bookmarks live?")).toHaveCount(0)
   await expect(
-    page.getByRole("heading", { level: 2, name: "Set up the daemon" })
+    page.getByRole("heading", { level: 2, name: "Your bookmarks" })
+  ).toHaveCount(0)
+  await expect(
+    page.getByRole("heading", { level: 2, name: "Connect your vault" })
   ).toBeVisible()
+  await expect(page.getByText("Step 1 of 2")).toBeVisible()
   await expect(
     page.getByText(/does not share its own bookmarks with extensions/)
   ).toBeVisible()
@@ -61,6 +64,8 @@ test("the wizard's last step teaches Safari nothing Safari does not have", async
   page,
 }) => {
   await page.goto("/?scenario=fresh-safari")
+  // Only the current step is rendered: walk past the vault step to the card.
+  await page.getByRole("button", { name: "Skip for now" }).click()
 
   await expect(
     page.getByRole("heading", { level: 2, name: "You're all set" })
@@ -82,11 +87,15 @@ test("the fresh-chrome scenario opens on the source question and teaches the key
   // The wizard owns the dashboard until setup is completed, and its first
   // step is a real question rather than a logo.
   await expect(
-    page.getByRole("heading", {
-      level: 2,
-      name: "Where do your bookmarks live?",
-    })
+    page.getByRole("heading", { level: 2, name: "Your bookmarks" })
   ).toBeVisible()
+
+  // Only the current step is rendered: walk to the card.
+  const tips = page.getByRole("heading", { level: 2, name: "You're all set" })
+  for (let i = 0; i < 3 && !(await tips.isVisible()); i++) {
+    await page.getByRole("button", { name: "Next", exact: true }).click()
+  }
+  await expect(tips).toBeVisible()
 
   // Chrome replaces the new tab page and has an omnibox, so the card says so.
   await expect(page.getByText(/Every new tab is this dashboard/)).toBeVisible()

@@ -1,12 +1,13 @@
 import * as React from "react"
 import { useBookmarkStore } from "@/stores/bookmark-store"
 import { usePreferencesStore } from "@/stores/preferences-store"
-import { SourceStep, type OnboardingSourceChoice } from "./steps/source-step"
+import { useSourceStore } from "@/stores/source-store"
+import { SourceStep } from "./steps/source-step"
 import { DaemonSetupStep } from "./steps/daemon-setup-step"
 import { RootFolderStep } from "./steps/root-folder-step"
 import { TipsStep } from "./steps/tips-step"
 import { Button } from "@/components/ui/button"
-import { cn } from "@/lib/utils"
+import { Dialog, DialogContent } from "@/components/ui/dialog"
 import {
   platformCapabilities,
   type PlatformCapabilities,
@@ -15,6 +16,8 @@ import {
   hasRootFolderChoice,
   resolveEffectiveCreateParentId,
 } from "@/features/root-folder-select"
+import { findNodeById } from "@/lib/bookmark-utils"
+import { BROWSER_SOURCE_ID } from "@/sources/config"
 import { setOnboardingCompleted } from "@/browser/onboarding-preference"
 
 interface OnboardingWizardProps {
@@ -22,14 +25,13 @@ interface OnboardingWizardProps {
 }
 
 /**
- * Whether asking "where do your bookmarks live?" is a question at all here.
+ * Whether there is anything to say about sources at all here.
  *
- * It is one only where this platform offers more than one source: a Browser
- * Source *and* daemon connections. The daemon-served build serves its own
- * same-origin Vault, a platform without the bookmarks API has nothing but the
- * daemon, and a runtime that cannot reach a daemon has nothing but the
- * browser — in each case there is one answer, so the step is omitted rather
- * than shown with a single option.
+ * Only where this platform offers more than one: a Browser Source *and*
+ * daemon connections. The daemon-served build serves its own same-origin
+ * Vault, a platform without the bookmarks API has nothing but the daemon, and
+ * a runtime that cannot reach a daemon has nothing but the browser — in each
+ * case there is nothing to add, so the step is omitted.
  */
 function hasSourceChoice(caps: PlatformCapabilities): boolean {
   return caps.isExtension && caps.browserSource && caps.daemonSource
@@ -37,24 +39,16 @@ function hasSourceChoice(caps: PlatformCapabilities): boolean {
 
 /**
  * Whether connecting a daemon is the only way into this profile, which makes
- * the daemon-setup step part of the track rather than a follow-up to a choice.
- * This is the Safari shape: an extension with daemon connections and no
- * Browser Source.
+ * the vault step part of the track rather than a follow-up to an opt-in. This
+ * is the Safari shape: an extension with daemon connections and no Browser
+ * Source.
  */
 function requiresDaemonSetup(caps: PlatformCapabilities): boolean {
   return caps.isExtension && !caps.browserSource && caps.daemonSource
 }
 
-/**
- * The wizard's source choice, normalized to what this platform offers: the
- * Browser Source when it exists, otherwise the Daemon Source — the only
- * offered source on a capability-only (Safari) platform.
- */
-function initialSourceChoice(
-  caps: PlatformCapabilities
-): OnboardingSourceChoice {
-  return caps.browserSource ? "browser" : "daemon"
-}
+/** Before the first seed: distinct from every adapter, including none. */
+const NOT_SEEDED = Symbol("not seeded")
 
 /**
  * Setup, reduced to the questions this platform actually has to ask, then one
@@ -62,9 +56,10 @@ function initialSourceChoice(
  *
  * There is no welcome step (a logo costs a click and teaches nothing) and no
  * appearance step: Settings owns theme and color mode, and neither is needed
- * to see a bookmark. That also means the wizard now writes no appearance
- * preference at all — re-opening it from Settings and skipping used to reset
- * the user's theme to the defaults.
+ * to see a bookmark. The wizard writes no appearance preference at all.
+ *
+ * It is a real dialog: focus stays inside, Escape skips setup, and only the
+ * current step is rendered, so the dialog is as tall as that step.
  */
 export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
   const [currentStep, setCurrentStep] = React.useState(0)
@@ -72,75 +67,100 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
   // Resolved once per mount: capabilities do not change under a running page.
   const [caps] = React.useState(platformCapabilities)
 
-  // Local wizard state. There is no source choice to persist: the default
-  // profile already has Browser enabled and active, and connecting a
-  // daemon — the only other choice — persists through the connect flow
-  // itself. The choice only gates whether the daemon-setup step appears,
-  // so it starts on the sole offered source: when the Browser Source does
-  // not exist here, daemon is already chosen and Next cannot skip the
-  // daemon setup.
-  const [sourceChoice, setSourceChoice] =
-    React.useState<OnboardingSourceChoice>(() => initialSourceChoice(caps))
+  // Which sources the user wants. The default profile already has Browser
+  // enabled and active, and connecting a vault persists through the connect
+  // flow itself, so `addVault` only puts the vault step on the track and
+  // `useBrowser` is applied on finish — and only once a vault is there to take
+  // over, since the last enabled source cannot be disabled.
+  const [useBrowser, setUseBrowser] = React.useState(true)
+  const [addVault, setAddVault] = React.useState(false)
+  // At least one stays on: switching one off switches the other on.
+  const changeUseBrowser = (on: boolean) => {
+    setUseBrowser(on)
+    if (!on) setAddVault(true)
+  }
+  const changeAddVault = (on: boolean) => {
+    setAddVault(on)
+    if (!on) setUseBrowser(true)
+  }
   const [rootFolderId, setRootFolderId] = React.useState<string | null>(null)
 
-  // Store actions for persisting on completion
   const setStoreRootFolderId = useBookmarkStore((s) => s.setRootFolderId)
+  const setSourceEnabled = useSourceStore((s) => s.setSourceEnabled)
   const adapter = usePreferencesStore((s) => s.adapter)
+  const hasConnection = useSourceStore(
+    (s) => Object.keys(s.config.connections).length > 0
+  )
 
   // Start the root-folder step on something meaningful rather than "Browser
-  // Root (all bookmarks)", which shows every bookmark the user owns. Seeded
-  // once, and only until the user touches the select — `null` is a legitimate
-  // choice there, so this cannot re-run and quietly undo it. An already-saved
-  // root wins, since re-opening the wizard from Settings shouldn't silently
-  // repoint an existing dashboard.
-  const hasSeededRootFolder = React.useRef(false)
+  // Root (all bookmarks)", which shows every bookmark the user owns. An
+  // already-saved root wins, since re-opening the wizard from Settings
+  // shouldn't silently repoint an existing dashboard.
+  //
+  // Seeded per adapter, not once: connecting a vault mid-wizard switches the
+  // Active Source, and a folder id from the browser tree means nothing in the
+  // vault's. A choice that no longer exists in the tree is re-seeded too, which
+  // covers the tree arriving after its adapter.
+  const seededFor = React.useRef<unknown>(NOT_SEEDED)
   const bookmarkTree = useBookmarkStore((s) => s.tree)
   const bookmarkAdapter = useBookmarkStore((s) => s.adapter)
   const rootIsCreatable = bookmarkAdapter?.capabilities.rootIsCreatable ?? false
   React.useEffect(() => {
-    if (hasSeededRootFolder.current || bookmarkTree.length === 0) return
-    hasSeededRootFolder.current = true
+    if (bookmarkTree.length === 0) return
+    const stale =
+      rootFolderId !== null && !findNodeById(bookmarkTree, rootFolderId)
+    if (seededFor.current === bookmarkAdapter && !stale) return
+    seededFor.current = bookmarkAdapter
 
+    const saved = useBookmarkStore.getState().rootFolderId
     setRootFolderId(
-      useBookmarkStore.getState().rootFolderId ??
-        resolveEffectiveCreateParentId(bookmarkTree, rootIsCreatable)
+      saved && findNodeById(bookmarkTree, saved)
+        ? saved
+        : resolveEffectiveCreateParentId(bookmarkTree, rootIsCreatable)
     )
-  }, [bookmarkTree, rootIsCreatable])
+  }, [bookmarkTree, bookmarkAdapter, rootIsCreatable, rootFolderId])
 
   const showSourceStep = hasSourceChoice(caps)
   // Mandatory where the daemon is the only source: it is on the track whatever
-  // the user does, rather than sitting behind a choice they were never given.
+  // the user does, rather than sitting behind an opt-in they were never given.
   const showDaemonSetupStep =
-    requiresDaemonSetup(caps) || (showSourceStep && sourceChoice === "daemon")
+    requiresDaemonSetup(caps) || (showSourceStep && addVault)
   const showRootFolderStep = hasRootFolderChoice(bookmarkTree, rootIsCreatable)
 
   const steps = React.useMemo(() => {
-    const list: React.ReactNode[] = []
+    const list: { key: string; node: React.ReactNode }[] = []
     if (showSourceStep) {
-      list.push(
-        <SourceStep
-          key="source"
-          value={sourceChoice}
-          onChange={setSourceChoice}
-        />
-      )
+      list.push({
+        key: "source",
+        node: (
+          <SourceStep
+            useBrowser={useBrowser}
+            onUseBrowserChange={changeUseBrowser}
+            addVault={addVault}
+            onAddVaultChange={changeAddVault}
+          />
+        ),
+      })
     }
     if (showDaemonSetupStep) {
-      list.push(<DaemonSetupStep key="daemon-setup" />)
+      list.push({
+        key: "daemon-setup",
+        node: <DaemonSetupStep browserOff={showSourceStep && !useBrowser} />,
+      })
     }
     if (showRootFolderStep) {
-      list.push(
-        <RootFolderStep
-          key="root-folder"
-          value={rootFolderId}
-          onChange={setRootFolderId}
-        />
-      )
+      list.push({
+        key: "root-folder",
+        node: (
+          <RootFolderStep value={rootFolderId} onChange={setRootFolderId} />
+        ),
+      })
     }
-    list.push(<TipsStep key="tips" />)
+    list.push({ key: "tips", node: <TipsStep /> })
     return list
   }, [
-    sourceChoice,
+    useBrowser,
+    addVault,
     showSourceStep,
     showDaemonSetupStep,
     showRootFolderStep,
@@ -150,34 +170,41 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
   const TOTAL_STEPS = steps.length
 
   // Toggling a step in or out of the list can leave `currentStep` pointing
-  // past the end (or, if the user is still ahead of it, at the wrong step) —
-  // clamp it back onto the track rather than rendering blank.
+  // past the end — clamp it back onto the track rather than rendering blank.
   React.useEffect(() => {
     setCurrentStep((s) => Math.min(s, TOTAL_STEPS - 1))
   }, [TOTAL_STEPS])
 
+  const step = steps[Math.min(currentStep, TOTAL_STEPS - 1)]
+  const isLastStep = currentStep >= TOTAL_STEPS - 1
+
   const goNext = () => {
-    if (currentStep < TOTAL_STEPS - 1) {
-      setCurrentStep((s) => s + 1)
-    }
+    if (currentStep < TOTAL_STEPS - 1) setCurrentStep((s) => s + 1)
   }
 
   const goBack = () => {
-    if (currentStep > 0) {
-      setCurrentStep((s) => s - 1)
-    }
+    if (currentStep > 0) setCurrentStep((s) => s - 1)
   }
 
   /**
-   * Finishing and skipping are the same write now that appearance is gone:
-   * the only thing the wizard still persists is the root folder, and skipping
-   * keeps whatever it is already on — the seeded default when the user never
-   * reached the step. The source choice needs no write of its own: a fresh
-   * profile already starts on the source its platform offers, and choosing
-   * the daemon persists through the daemon-setup step's Connect flow.
+   * Finishing and skipping are the same write: the only thing the wizard
+   * persists is the root folder, and skipping keeps whatever it is already on
+   * — the seeded default when the user never reached the step. A choice that
+   * is not in the Active Source's tree is never written into it.
+   *
+   * Browser bookmarks switched off is honored only when a vault is connected:
+   * with nothing else enabled the store would refuse, and the dashboard would
+   * have nothing to show.
    */
   const finish = async () => {
-    setStoreRootFolderId(rootFolderId)
+    if (showSourceStep && !useBrowser && hasConnection) {
+      await setSourceEnabled(BROWSER_SOURCE_ID, false)
+    }
+
+    const tree = useBookmarkStore.getState().tree
+    if (rootFolderId === null || findNodeById(tree, rootFolderId)) {
+      setStoreRootFolderId(rootFolderId)
+    }
 
     // The global value survives adapter changes. Keep the legacy adapter value
     // too so a downgrade to v3 does not show onboarding again.
@@ -189,51 +216,45 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
     onComplete()
   }
 
-  const isLastStep = currentStep === TOTAL_STEPS - 1
-
   const handleNextClick = () => {
-    if (isLastStep) {
-      finish()
-    } else {
-      goNext()
-    }
+    if (isLastStep) void finish()
+    else goNext()
   }
 
+  // Before a vault is connected, Connect is the step's action; moving on
+  // without one stays available but reads as the secondary choice.
+  const skippingVault = step.key === "daemon-setup" && !hasConnection
+  const nextLabel = isLastStep
+    ? "Open dashboard"
+    : skippingVault
+      ? "Skip for now"
+      : "Next"
+
   return (
-    // Overlay with blur
-    <div className="fixed inset-0 z-50 flex animate-in items-center justify-center bg-black/50 backdrop-blur-xl duration-200 fade-in">
-      {/* Modal */}
-      <div className="relative w-full max-w-lg animate-in rounded-xl border border-border bg-card p-6 shadow-2xl duration-200 zoom-in-95 fade-in">
-        {/* Skip link — raised above the sliding step content so real-browser
-            hit testing reaches it (the steps are plain in-flow blocks that
-            would otherwise intercept the click). Offered from the very first
-            step: every step before the last one is now a question, and the
-            last one asks nothing to skip. */}
-        {!isLastStep && (
-          <button
-            onClick={finish}
-            className="absolute top-4 right-4 z-10 text-xs text-muted-foreground transition-colors hover:text-foreground"
-          >
-            Skip, use defaults
-          </button>
+    <Dialog
+      open
+      disablePointerDismissal
+      onOpenChange={(open) => {
+        // Escape is the only way to close it from here: it skips setup.
+        if (!open) void finish()
+      }}
+    >
+      <DialogContent
+        showCloseButton={false}
+        aria-label="Set up Bookmarks But Better"
+        className="flex max-h-[calc(100svh-2rem)] flex-col gap-6 overflow-y-auto bg-card sm:max-w-lg"
+      >
+        {TOTAL_STEPS > 1 && (
+          <p className="text-xs font-medium text-muted-foreground">
+            Step {currentStep + 1} of {TOTAL_STEPS}
+          </p>
         )}
 
-        {/* Step content with slide animation */}
-        <div className="overflow-hidden">
-          <div
-            className="flex transition-transform duration-300 ease-in-out"
-            style={{ transform: `translateX(-${currentStep * 100}%)` }}
-          >
-            {steps.map((step, i) => (
-              <div key={i} className="w-full flex-shrink-0 px-1">
-                {step}
-              </div>
-            ))}
-          </div>
+        <div key={step.key} className="animate-in duration-200 fade-in">
+          {step.node}
         </div>
 
-        {/* Navigation */}
-        <div className="mt-6 flex items-center justify-between">
+        <div className="flex items-center justify-between gap-2">
           <div>
             {currentStep > 0 && (
               <Button variant="ghost" onClick={goBack}>
@@ -241,27 +262,24 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
               </Button>
             )}
           </div>
-
-          <Button onClick={handleNextClick}>
-            {isLastStep ? "Start Browsing" : "Next"}
-          </Button>
-        </div>
-
-        {/* Step dots — a single-step wizard is not a track, so it shows none. */}
-        {TOTAL_STEPS > 1 && (
-          <div className="mt-4 flex justify-center gap-2">
-            {Array.from({ length: TOTAL_STEPS }).map((_, i) => (
-              <div
-                key={i}
-                className={cn(
-                  "h-1.5 w-1.5 rounded-full transition-colors",
-                  i === currentStep ? "bg-primary" : "bg-muted-foreground/30"
-                )}
-              />
-            ))}
+          <div className="flex items-center gap-2">
+            {/* On every step but the last, which asks nothing to skip — so
+                exactly one of "Skip setup" and "Open dashboard" exists at a
+                time, the invariant the e2e suites lean on. */}
+            {!isLastStep && (
+              <Button variant="ghost" onClick={() => void finish()}>
+                Skip setup
+              </Button>
+            )}
+            <Button
+              variant={skippingVault ? "outline" : "default"}
+              onClick={handleNextClick}
+            >
+              {nextLabel}
+            </Button>
           </div>
-        )}
-      </div>
-    </div>
+        </div>
+      </DialogContent>
+    </Dialog>
   )
 }

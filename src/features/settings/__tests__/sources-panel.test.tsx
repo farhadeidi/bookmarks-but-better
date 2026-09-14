@@ -90,7 +90,7 @@ describe("SourcesPanel source management", () => {
     const daemon = screen.getByRole("group", { name: `Daemon ${ORIGIN}` })
     expect(within(daemon).getByText(/1 Vault/)).toBeTruthy()
     expect(
-      within(daemon).getByText(/Vaults come from the daemon's configuration/)
+      within(daemon).getByText(/npx bookmarks-but-better@latest vault/)
     ).toBeTruthy()
 
     await user.click(
