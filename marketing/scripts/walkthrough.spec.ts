@@ -2,12 +2,14 @@
  * The product walkthrough video: marketing/output/videos/bookmarks-but-better.mp4
  * (1920×1080, 60 fps, silent).
  *
- * Needs the Dev Workbench running (`bun run dev`). Each scene drives the real
- * app with a visible cursor while a CDP screencast records it at 2x; ffmpeg
- * then places every recording in the brand frame under its caption and joins
- * the scenes with crossfades between a title card and a closing card.
+ * Run it with `bun run video`; Playwright starts the Dev Workbench when it is
+ * not already running. Each scene drives the real app with a visible cursor
+ * while a CDP screencast records it at 2x; ffmpeg then places every recording
+ * in the brand frame under its caption, joins the scenes with crossfades
+ * between a title card and a closing card, and cuts a GIF from it for posts
+ * that do not take video.
  */
-import { chromium, type Locator, type Page } from "@playwright/test"
+import { test, type Locator, type Page } from "@playwright/test"
 import { execFileSync } from "child_process"
 import ffmpeg from "ffmpeg-static"
 import fs from "fs"
@@ -18,6 +20,9 @@ const APP = "http://localhost:5173/?scenario=browser-daemon&screenshot=true"
 const OUT = path.join(ROOT, "marketing/output/videos")
 const WORK = path.join(OUT, "work")
 const FILE = path.join(OUT, "bookmarks-but-better.mp4")
+// Both stay out of git: they are for store and launch posts, and a binary
+// committed once lives in every clone forever.
+const GIF = path.join(OUT, "bookmarks-but-better.gif")
 
 const W = 1920
 const H = 1080
@@ -45,7 +50,7 @@ function run(args: string[]) {
 // Headless Chromium draws no pointer, so the page gets one that follows the
 // real mouse (and native drags) plus a soft ring on every press. It is plain
 // JavaScript in a string: a TypeScript function would be serialized with the
-// helpers tsx compiles into it, which do not exist in the page.
+// helpers the transpiler compiles into it, which do not exist in the page.
 
 const CURSOR_CSS = `
   [aria-label="Open Dev Workbench"] { display: none !important; }
@@ -317,6 +322,28 @@ function joinWithCrossfades(segments: { file: string; seconds: number }[]) {
   ])
 }
 
+/**
+ * The scenes between the title and closing cards, at 960px and 12 fps with a
+ * per-frame-diff palette: about 6 MB and still legible.
+ */
+function makeGif(start: number, end: number) {
+  run([
+    "-ss",
+    start.toFixed(3),
+    "-to",
+    end.toFixed(3),
+    "-i",
+    FILE,
+    "-vf",
+    "fps=12,scale=960:-1:flags=lanczos,split[a][b];" +
+      "[a]palettegen=max_colors=192:stats_mode=diff[p];" +
+      "[b][p]paletteuse=dither=bayer:bayer_scale=5:diff_mode=rectangle",
+    "-loop",
+    "0",
+    GIF,
+  ])
+}
+
 // ─── The story ───────────────────────────────────────────────────────────
 
 const card = (page: Page, title: string) =>
@@ -464,120 +491,111 @@ const CLIPS: Clip[] = [
   },
 ]
 
-async function main() {
+test("record the walkthrough video", async ({ browser }) => {
+  test.setTimeout(600_000)
   fs.rmSync(WORK, { recursive: true, force: true })
   fs.mkdirSync(WORK, { recursive: true })
 
-  const browser = await chromium.launch()
-  try {
-    const context = await browser.newContext({
-      viewport: { width: APP_W, height: APP_H },
-      deviceScaleFactor: 2,
-    })
-    await context.addInitScript(() => localStorage.setItem("theme", "dark"))
-    await context.addInitScript({ content: CURSOR_SCRIPT })
-    const page = await context.newPage()
-    const pointer = new Pointer(page)
-    await page.goto(APP)
-    await page.waitForLoadState("networkidle")
+  const context = await browser.newContext({
+    viewport: { width: APP_W, height: APP_H },
+    deviceScaleFactor: 2,
+  })
+  await context.addInitScript(() => localStorage.setItem("theme", "dark"))
+  await context.addInitScript({ content: CURSOR_SCRIPT })
+  const page = await context.newPage()
+  const pointer = new Pointer(page)
+  await page.goto(APP)
+  await page.waitForLoadState("networkidle")
 
-    // Off camera: the brand theme through the real settings, and every
-    // favicon both sources need, so no take shows an icon loading.
-    await page.getByRole("button", { name: "Settings" }).click()
-    await dialog(page).getByText("Appearance", { exact: true }).click()
-    await dialog(page).getByText("Amber Minimal", { exact: true }).click()
-    await page.keyboard.press("Escape")
-    await page.getByRole("button", { name: /Bookmark source/ }).click()
-    await menuItem(page, "reading").click()
-    await page.waitForLoadState("networkidle")
-    await page.waitForTimeout(1200)
-    await page.getByRole("button", { name: /Bookmark source/ }).click()
-    await menuItem(page, "Browser bookmarks").click()
-    await page.waitForLoadState("networkidle")
-    await page.waitForTimeout(2000)
+  // Off camera: the brand theme through the real settings, and every
+  // favicon both sources need, so no take shows an icon loading.
+  await page.getByRole("button", { name: "Settings" }).click()
+  await dialog(page).getByText("Appearance", { exact: true }).click()
+  await dialog(page).getByText("Amber Minimal", { exact: true }).click()
+  await page.keyboard.press("Escape")
+  await page.getByRole("button", { name: /Bookmark source/ }).click()
+  await menuItem(page, "reading").click()
+  await page.waitForLoadState("networkidle")
+  await page.waitForTimeout(1200)
+  await page.getByRole("button", { name: /Bookmark source/ }).click()
+  await menuItem(page, "Browser bookmarks").click()
+  await page.waitForLoadState("networkidle")
+  await page.waitForTimeout(2000)
 
-    const segments: { file: string; seconds: number }[] = []
+  const segments: { file: string; seconds: number }[] = []
 
-    await render(
-      browser,
-      path.join(WORK, "intro.png"),
-      { width: W, height: H },
-      `<div class="card">
+  await render(
+    browser,
+    path.join(WORK, "intro.png"),
+    { width: W, height: H },
+    `<div class="card">
         <div class="eyebrow">New tab extension · Chrome · Firefox · Safari</div>
         <h1 class="display" style="font-size:150px;margin-top:28px">Bookmarks,<br><em>but better</em></h1>
         <p style="margin-top:32px">Your bookmarks as a beautiful new tab.</p>
       </div>`,
-      VIDEO_CSS
+    VIDEO_CSS
+  )
+  stillSegment(
+    path.join(WORK, "intro.png"),
+    2.6,
+    path.join(WORK, "00-intro.mp4")
+  )
+  segments.push({ file: path.join(WORK, "00-intro.mp4"), seconds: 2.6 })
+
+  for (const [i, clip] of CLIPS.entries()) {
+    await pointer.park()
+    await page.waitForTimeout(500)
+    const seconds = await record(page, clip, pointer)
+    await clip.reset?.(page)
+    await page.evaluate(() =>
+      (document.activeElement as HTMLElement | null)?.blur()
     )
-    stillSegment(
-      path.join(WORK, "intro.png"),
-      2.6,
-      path.join(WORK, "00-intro.mp4")
-    )
-    segments.push({ file: path.join(WORK, "00-intro.mp4"), seconds: 2.6 })
 
-    for (const [i, clip] of CLIPS.entries()) {
-      await pointer.park()
-      await page.waitForTimeout(500)
-      const seconds = await record(page, clip, pointer)
-      await clip.reset?.(page)
-      await page.evaluate(() =>
-        (document.activeElement as HTMLElement | null)?.blur()
-      )
-
-      const backdrop = path.join(WORK, `${clip.name}.png`)
-      await render(
-        browser,
-        backdrop,
-        { width: W, height: H },
-        sceneBackdrop(i + 1, clip.headline, clip.sub),
-        VIDEO_CSS
-      )
-      const file = path.join(
-        WORK,
-        `${String(i + 1).padStart(2, "0")}-${clip.name}.mp4`
-      )
-      sceneSegment(
-        backdrop,
-        path.join(WORK, clip.name, "frames.txt"),
-        seconds,
-        file
-      )
-      segments.push({ file, seconds })
-      console.log(`✓ ${clip.name} (${seconds.toFixed(1)}s)`)
-    }
-
+    const backdrop = path.join(WORK, `${clip.name}.png`)
     await render(
       browser,
-      path.join(WORK, "outro.png"),
+      backdrop,
       { width: W, height: H },
-      `<div class="card">
+      sceneBackdrop(i + 1, clip.headline, clip.sub),
+      VIDEO_CSS
+    )
+    const file = path.join(
+      WORK,
+      `${String(i + 1).padStart(2, "0")}-${clip.name}.mp4`
+    )
+    sceneSegment(
+      backdrop,
+      path.join(WORK, clip.name, "frames.txt"),
+      seconds,
+      file
+    )
+    segments.push({ file, seconds })
+    console.log(`✓ ${clip.name} (${seconds.toFixed(1)}s)`)
+  }
+
+  await render(
+    browser,
+    path.join(WORK, "outro.png"),
+    { width: W, height: H },
+    `<div class="card">
         <h1 class="display" style="font-size:120px">Bookmarks, <em>but better</em></h1>
         <p style="margin-top:28px">Local, private, no account. Free and open source.</p>
         <div class="chips"><span>Chrome</span><span>Firefox</span><span>Safari</span></div>
         <div class="url">bookmarks.but-better.dev</div>
       </div>`,
-      VIDEO_CSS
-    )
-    stillSegment(
-      path.join(WORK, "outro.png"),
-      4,
-      path.join(WORK, "99-outro.mp4")
-    )
-    segments.push({ file: path.join(WORK, "99-outro.mp4"), seconds: 4 })
+    VIDEO_CSS
+  )
+  stillSegment(path.join(WORK, "outro.png"), 4, path.join(WORK, "99-outro.mp4"))
+  segments.push({ file: path.join(WORK, "99-outro.mp4"), seconds: 4 })
 
-    joinWithCrossfades(segments)
-    const total =
-      segments.reduce((sum, s) => sum + s.seconds, 0) -
-      FADE * (segments.length - 1)
-    console.log(`✓ ${path.relative(ROOT, FILE)} (${total.toFixed(1)}s)`)
-  } finally {
-    await browser.close()
-  }
+  joinWithCrossfades(segments)
+  const total =
+    segments.reduce((sum, s) => sum + s.seconds, 0) -
+    FADE * (segments.length - 1)
+  console.log(`✓ ${path.relative(ROOT, FILE)} (${total.toFixed(1)}s)`)
+  makeGif(segments[0].seconds, total - segments[segments.length - 1].seconds)
+  console.log(`✓ ${path.relative(ROOT, GIF)}`)
+  await context.close()
+
   if (!process.env.KEEP_WORK) fs.rmSync(WORK, { recursive: true, force: true })
-}
-
-main().catch((error) => {
-  console.error(error)
-  process.exit(1)
 })

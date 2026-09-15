@@ -24,6 +24,10 @@
   </a>
 </p>
 
+<p align="center">
+  <a href="https://bookmarks.but-better.dev/preview/">Try the live preview</a>
+</p>
+
 ## Features
 
 - **Masonry layout** — Bookmark folders displayed as cards in a responsive grid
