@@ -2,6 +2,11 @@ import * as React from "react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible"
+import {
   DropdownMenu,
   DropdownMenuTrigger,
   DropdownMenuContent,
@@ -209,7 +214,6 @@ export const BookmarkCard = React.memo(function BookmarkCard({
   // rather than the card: it is the one element that exists whatever the
   // card holds, and it already names the folder.
   const gridItem = useGridItem(folder.id)
-  const bodyId = React.useId()
 
   const children = folder.children ?? []
 
@@ -245,11 +249,13 @@ export const BookmarkCard = React.memo(function BookmarkCard({
   const bookmarkCount = isCollapsed ? countBookmarks(folder, nestedFolders) : 0
 
   return (
-    <div
+    <Collapsible
+      open={!isCollapsed}
+      onOpenChange={(open) => setFolderCollapsed(folder.id, !open)}
       ref={dropRef as React.RefObject<HTMLDivElement>}
       data-testid="bookmark-card"
       className={cn(
-        "flex w-full min-w-0 flex-col gap-3 rounded-2xl bg-card p-4 ring-1 ring-border transition-shadow",
+        "group/card flex w-full min-w-0 flex-col rounded-2xl bg-card p-4 ring-1 ring-border transition-shadow",
         nested && "ring-border/50",
         isOver && "shadow-md ring-2 ring-primary/50"
       )}
@@ -272,24 +278,6 @@ export const BookmarkCard = React.memo(function BookmarkCard({
             </svg>
           </button>
         )}
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          aria-label={isCollapsed ? "Expand folder" : "Collapse folder"}
-          aria-expanded={!isCollapsed}
-          aria-controls={isCollapsed ? undefined : bodyId}
-          className="-mx-1 flex-shrink-0 text-muted-foreground"
-          onClick={toggleCollapsed}
-        >
-          <HugeiconsIcon
-            icon={ArrowRight01Icon}
-            size={12}
-            style={{
-              transform: isCollapsed ? "rotate(0deg)" : "rotate(90deg)",
-              transition: "transform 120ms ease",
-            }}
-          />
-        </Button>
         <h3
           {...gridItem}
           onKeyDown={onHeadingKeyDown}
@@ -308,6 +296,34 @@ export const BookmarkCard = React.memo(function BookmarkCard({
             </span>
           </span>
         )}
+        {/* Out of the way until wanted: shown while the card is hovered or
+            holds focus, on touch screens (no hover), and whenever the card is
+            collapsed, so a closed card always says so. */}
+        <CollapsibleTrigger
+          render={
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label={isCollapsed ? "Expand folder" : "Collapse folder"}
+              // Just the chevron: no hover or open-state background from ghost.
+              className={cn(
+                "flex-shrink-0 bg-transparent text-muted-foreground transition-opacity hover:bg-transparent aria-expanded:bg-transparent dark:hover:bg-transparent",
+                isCollapsed
+                  ? "opacity-100"
+                  : "opacity-0 group-focus-within/card:opacity-100 group-hover/card:opacity-100 pointer-coarse:opacity-100"
+              )}
+            />
+          }
+        >
+          <HugeiconsIcon
+            icon={ArrowRight01Icon}
+            size={14}
+            className={cn(
+              "transition-transform duration-200 motion-reduce:transition-none",
+              !isCollapsed && "rotate-90"
+            )}
+          />
+        </CollapsibleTrigger>
         <FolderMenu
           folder={folder}
           childCount={children.length}
@@ -316,10 +332,11 @@ export const BookmarkCard = React.memo(function BookmarkCard({
         />
       </div>
 
-      {/* A collapsed card is its header alone. `contents` keeps the body out
-          of the layout, so the card's own gap still spaces its children. */}
-      {!isCollapsed && (
-        <div id={bodyId} className="contents">
+      {/* The body animates its height and is unmounted once closed. The
+          spacing lives inside it, so nothing jumps when it goes; the negative
+          margin gives focus rings room past the clipping edge. */}
+      <CollapsibleContent className="-mx-1.5 -mb-1.5 h-(--collapsible-panel-height) overflow-hidden px-1.5 pb-1.5 transition-[height] duration-200 ease-out data-ending-style:h-0 data-starting-style:h-0 motion-reduce:transition-none">
+        <div className="flex flex-col gap-3 pt-3">
           {/* Bookmarks */}
           {bookmarks.length > 0 && (
             <div
@@ -358,7 +375,7 @@ export const BookmarkCard = React.memo(function BookmarkCard({
               </LazyCard>
             ))}
         </div>
-      )}
-    </div>
+      </CollapsibleContent>
+    </Collapsible>
   )
 })

@@ -214,15 +214,23 @@ describe("BookmarkGrid card measurement", () => {
     expect(columns(container)).toEqual([["one", "three"], ["two"]])
   })
 
-  it("lets a card shrink once it is collapsed", () => {
+  it("holds the columns still through a collapse, until the inputs change", () => {
     const { container } = mount()
     report(container, { one: 400, two: 100, three: 100 })
 
+    // The collapsing card shrinks and another grows, and neither re-deals:
+    // cards stay in their columns while one animates.
     act(() => {
       usePreferencesStore.setState({ collapsedFolders: { one: true } })
     })
-    report(container, { one: 60 })
+    report(container, { one: 60, two: 500 })
+    expect(columns(container)).toEqual([["one"], ["two", "three"]])
 
+    // A new generation releases the hold and takes the real heights.
+    act(() => {
+      usePreferencesStore.setState({ cardLayouts: { two: "grid" } })
+    })
+    report(container, { one: 60, two: 100, three: 100 })
     expect(columns(container)).toEqual([["one", "three"], ["two"]])
   })
 })

@@ -33,6 +33,12 @@ interface PreferencesState {
    * the look-and-feel preferences: it describes this browser, not a source.
    */
   safeMode: boolean
+  /**
+   * Whether the active source's preferences have loaded. The dashboard waits
+   * for it: drawn before them, a collapsed card paints open and a toggle made
+   * in that window is overwritten when they land.
+   */
+  isReady: boolean
   adapter: BrowserAdapter | null
 
   // Actions
@@ -67,6 +73,7 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
   experimentalCardDrag: false,
   isFoldersOnlyEnabledInTreeEditor: true,
   safeMode: false,
+  isReady: false,
   adapter: null,
 
   async init(adapter: BrowserAdapter, options = {}) {
@@ -74,7 +81,7 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
     // not apply its (source-scoped) preferences over the newer session's.
     const isCurrent = options.isCurrent ?? (() => true)
     if (!isCurrent()) return
-    set({ adapter })
+    set({ adapter, isReady: false })
 
     const [
       cardLayouts,
@@ -104,7 +111,12 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
         adapter.storage
       ),
       readProfilePreference<boolean>("safeMode", adapter.storage),
-    ])
+    ]).catch((error: unknown) => {
+      // The current values stand rather than holding the dashboard on its
+      // loading state; the failure still reaches the transition.
+      if (isCurrent()) set({ isReady: true })
+      throw error
+    })
 
     // A second transition may have started (and finished) during those
     // reads; its values are the live ones, and a superseded session must
@@ -181,6 +193,7 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
           | undefined) ??
         true,
       safeMode: safeMode ?? false,
+      isReady: true,
     })
 
     // Apply color theme to root element

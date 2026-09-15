@@ -9,11 +9,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Collapsible folder cards.** Each dashboard card has a toggle in its
-  header, and Enter on a focused card heading does the same. A collapsed card
+- **Collapsible folder cards.** A chevron appears in a card's header on
+  hover, and Enter on a focused card heading does the same. Cards animate
+  open and closed without the other cards changing columns. A collapsed card
   shows only its name and bookmark count, is a single keyboard stop, and stays
   collapsed across sessions for that source. With Nested folders on, nested
   cards collapse on their own (#3).
+
+### Fixed
+
+- **The dashboard waits for the source's preferences before drawing.**
+  Bookmarks and preferences now load in parallel, and the grid appears once
+  both have loaded. Before, it drew with the defaults first: collapsed cards
+  and grid layouts flashed open or as lists, a toggle made in that moment was
+  overwritten, and safe mode could apply only after the grid had already
+  mounted (#3).
 
 ## [4.3.0] - 2026-09-14
 

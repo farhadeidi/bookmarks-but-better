@@ -170,6 +170,46 @@ describe("usePreferencesStore lifetimes", () => {
     expect(await profile.get("collapsedFolders")).toBeNull()
   })
 
+  it("is not ready while a source's preferences load, and ready once they land", async () => {
+    let releaseReads: () => void = () => {}
+    const readsGate = new Promise<void>((resolve) => {
+      releaseReads = resolve
+    })
+    const backing = new Map<string, unknown>([["folderOrder", []]])
+    const gatedStorage: StorageAdapter = {
+      ...memoryStorage(backing),
+      get: async <T>(key: string): Promise<T | null> => {
+        await readsGate
+        return backing.has(key) ? (backing.get(key) as T) : null
+      },
+    }
+    // As after a previous source's session.
+    usePreferencesStore.setState({ isReady: true })
+
+    const loading = usePreferencesStore
+      .getState()
+      .init(adapterWith(gatedStorage))
+    expect(usePreferencesStore.getState().isReady).toBe(false)
+
+    releaseReads()
+    await loading
+    expect(usePreferencesStore.getState().isReady).toBe(true)
+  })
+
+  it("becomes ready even when the reads fail, so the dashboard is not held on loading", async () => {
+    const failingStorage: StorageAdapter = {
+      ...memoryStorage(),
+      get: async () => {
+        throw new Error("storage unavailable")
+      },
+    }
+
+    await expect(
+      usePreferencesStore.getState().init(adapterWith(failingStorage))
+    ).rejects.toThrow("storage unavailable")
+    expect(usePreferencesStore.getState().isReady).toBe(true)
+  })
+
   it("a superseded session's reads do not overwrite the newer session's values", async () => {
     // Session A starts reading, then a second transition supersedes it and
     // finishes its own init first; A's reads resolve only afterwards.

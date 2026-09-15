@@ -383,7 +383,7 @@ async function performInitialize(
  * 3. Dispose the previous session: unsubscribe its listeners and tear down
  *    its adapter (which closes the SSE stream and its reconnect timers).
  * 4. Re-initialize the bookmark and preferences stores against the new
- *    concrete adapter.
+ *    concrete adapter, together: the dashboard waits for both.
  */
 async function transitionTo(
   id: string,
@@ -400,7 +400,15 @@ async function transitionTo(
   activeCleanup?.()
   activeCleanup = undefined
 
-  const cleanup = await useBookmarkStore.getState().init(adapter, { isCurrent })
+  // In parallel, so waiting for preferences costs the dashboard no extra
+  // time. Settled rather than raced: the bookmark session's cleanup must be
+  // taken whatever the preferences did.
+  const [bookmarks, preferences] = await Promise.allSettled([
+    useBookmarkStore.getState().init(adapter, { isCurrent }),
+    usePreferencesStore.getState().init(adapter, { isCurrent }),
+  ])
+  if (bookmarks.status === "rejected") throw bookmarks.reason
+  const cleanup = bookmarks.value
   if (!isCurrent()) {
     // A newer transition began while this one was initializing: this
     // session's subscriptions and stream never become live, and none of its
@@ -413,7 +421,7 @@ async function transitionTo(
   activeCleanup = cleanup ?? undefined
   set({ activeSourceId: id })
 
-  await usePreferencesStore.getState().init(adapter, { isCurrent })
+  if (preferences.status === "rejected") throw preferences.reason
 }
 
 /** Tears the session down when no usable source remains. */

@@ -98,9 +98,15 @@ const NO_HEIGHTS: ReadonlyMap<string, number> = new Map()
  * that decide the distribution — and after that only upwards, and only by more
  * than the threshold. Each card therefore causes a bounded number of
  * re-balances per generation, and a generation only turns over when the
- * folders, the column count, the card layouts or the collapsed cards change:
- * never in response to our own re-balance. Once no card crosses the threshold
- * there is no state write, so nothing re-renders and the observer falls silent.
+ * folders, the column count or the card layouts change: never in response to
+ * our own re-balance. Once no card crosses the threshold there is no state
+ * write, so nothing re-renders and the observer falls silent.
+ *
+ * Collapsing or expanding a card holds the columns still instead: the card
+ * animates in place rather than sending its neighbours to other columns. Until
+ * the generation turns over, cards that already have a height keep it, and
+ * once it does every card is observed afresh so the next distribution sees
+ * the heights the toggles produced.
  */
 export function useMeasuredCardHeights(
   folders: BookmarkNode[],
@@ -117,16 +123,41 @@ export function useMeasuredCardHeights(
   const observer = React.useRef<ResizeObserver | null>(null)
 
   const generation = React.useMemo(
-    () => ({ folders, columnCount, cardLayouts, collapsedFolders }),
-    [folders, columnCount, cardLayouts, collapsedFolders]
+    () => ({ folders, columnCount, cardLayouts }),
+    [folders, columnCount, cardLayouts]
   )
   const currentGeneration = React.useRef(generation)
+  /** The generation a collapse toggle is holding still, if any. */
+  const heldGeneration = React.useRef<object | null>(null)
+  const lastInputs = React.useRef({ generation, collapsedFolders })
   // A layout effect lands in the commit, before the browser can deliver a
   // resize notification for the layout it just produced; a passive effect
   // could arrive after it and mistake new content for a card that grew.
   React.useLayoutEffect(() => {
+    const last = lastInputs.current
+    lastInputs.current = { generation, collapsedFolders }
     currentGeneration.current = generation
-  }, [generation])
+
+    if (generation === last.generation) {
+      // Only a toggle under unchanged inputs holds. Loading a source's
+      // preferences replaces the card layouts too, so it is a new generation.
+      if (collapsedFolders !== last.collapsedFolders) {
+        heldGeneration.current = generation
+      }
+      return
+    }
+
+    if (heldGeneration.current === null) return
+    heldGeneration.current = null
+    // A card whose size stopped changing during the hold would never report
+    // again; observing it anew delivers its current height.
+    const current = observer.current
+    if (!current) return
+    for (const element of observedElements.current.values()) {
+      current.unobserve(element)
+      current.observe(element)
+    }
+  }, [generation, collapsedFolders])
 
   const getObserver = React.useCallback(() => {
     // jsdom and older Safari have no ResizeObserver; there the estimates stand.
@@ -147,6 +178,10 @@ export function useMeasuredCardHeights(
 
         const previous = records.current.get(folderId)
         if (previous !== undefined) {
+          // Held still by a collapse toggle; a card measured for the first
+          // time (one scrolled into view, say) still counts.
+          if (heldGeneration.current === currentGeneration.current) continue
+
           const seenThisGeneration =
             previous.generation === currentGeneration.current
           const accepted = seenThisGeneration
