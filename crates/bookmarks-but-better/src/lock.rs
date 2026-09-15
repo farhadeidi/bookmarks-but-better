@@ -22,6 +22,11 @@
 //!
 //! `.bookmarks-but-better` is a dot-directory, which the vault scanner already skips, so none of
 //! this appears as content.
+//!
+//! Taking the lock is also where `.bookmarks-but-better` is created for a vault
+//! that predates it, so acquiring the lock ensures a `.gitignore` in it (see
+//! [`fsx::open_or_create_state_dir`]) — a vault a user keeps in a git
+//! repository as a backup never picks up the lock file or staging entries.
 
 use std::fs::TryLockError;
 use std::io;
@@ -58,11 +63,10 @@ impl VaultLock {
     pub(crate) fn acquire(root: &Dir, display_root: &Path) -> Result<(Self, Dir), LockError> {
         let path = display_root.join(STATE_DIRECTORY).join(LOCK_FILE_NAME);
 
-        let state =
-            fsx::open_or_create_dir(root, STATE_DIRECTORY).map_err(|error| LockError::Io {
-                path: display_root.join(STATE_DIRECTORY),
-                error,
-            })?;
+        let state = fsx::open_or_create_state_dir(root).map_err(|error| LockError::Io {
+            path: display_root.join(STATE_DIRECTORY),
+            error,
+        })?;
 
         let file = state
             .open_with(LOCK_FILE_NAME, &fsx::lock_file_options())
@@ -153,6 +157,27 @@ mod tests {
 
         drop(first);
         VaultLock::acquire(&root, directory.path()).expect("the lock is free again");
+    }
+
+    #[test]
+    fn acquiring_the_lock_writes_a_gitignore_for_the_state_directory() {
+        let directory = tempfile::tempdir().expect("temp dir");
+        let root = fsx::open_root(directory.path()).expect("open root");
+
+        VaultLock::acquire(&root, directory.path()).expect("acquire");
+
+        let gitignore = directory.path().join(STATE_DIRECTORY).join(".gitignore");
+        assert!(
+            gitignore.is_file(),
+            "the state directory must ignore itself in git"
+        );
+        assert!(
+            std::fs::read_to_string(&gitignore)
+                .expect("read gitignore")
+                .lines()
+                .any(|line| line == "*"),
+            "a lone `*` also matches the file itself"
+        );
     }
 
     #[cfg(unix)]
