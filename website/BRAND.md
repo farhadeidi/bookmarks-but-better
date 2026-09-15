@@ -30,6 +30,9 @@ proportion carry the design — generous whitespace, one accent color.
 | Display | Fraunces Variable (serif) | Headlines, section titles; tight tracking, slightly low weight (500–600) |
 | UI/Body | Inter Variable          | Body copy, nav, labels, code            |
 
+Both are self-hosted (latin subset) through Astro's Fonts API; the Starlight
+docs use the same pair, with Fraunces for page titles and headings.
+
 ## Color
 
 Light (paper):
@@ -65,5 +68,11 @@ rarely, as small chips only.
   demo).
 - **Ribbon** — retired: the hero title is pure Fraunces typography
   ("Bookmarks, / *but better*") with no attached mark.
-- **The demo is the hero** — a live, theme-switchable replica of the product
-  replaces stock hero imagery.
+- **The demo is the hero** — a static screenshot of the real dashboard, framed
+  as a browser tab, replaces stock hero imagery and is the page's first large
+  paint. A "Try it live" button swaps in the real app (the `/app-preview/`
+  build) in place; the theme dots and the themes gallery launch it too, then
+  steer its theme. Nothing heavy loads until the visitor asks. The full-screen
+  `/preview/` page loads the live app straight away.
+- **Docs** — the Starlight docs at `/docs/` carry the same paper and lamplight
+  palette, amber accent and type pair, and follow the site's dark-mode choice.

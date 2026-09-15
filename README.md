@@ -110,8 +110,8 @@ curl -fsSL https://github.com/farhadeidi/bookmarks-but-better/releases/latest/do
 
 All three install the same thing, from the same GitHub Release, checksum-verified.
 `npx bookmarks-but-better` is also how you check on it later — `status`,
-`vault add`, `uninstall`. See [docs/DAEMON.md](docs/DAEMON.md) for what the
-install scripts do, and how to point the extension at the daemon.
+`vault add`, `uninstall`. See the [daemon docs](https://bookmarks.but-better.dev/docs/daemon/install/)
+for what the install scripts do, and how to point the extension at the daemon.
 
 The daemon binds to loopback only. Connecting from the extension requests
 optional localhost access at that moment, not during extension installation.
@@ -206,7 +206,17 @@ bun run test:e2e:safari   # The Safari bundle end to end against a throwaway dae
 bun run test:npm          # Unit-test the Daemon Manager (npx bookmarks-but-better) in packages/bookmarks-but-better
 bun run test:e2e:manager  # The manager's whole first run against this checkout's daemon, in a throwaway home
 bun run try:manager       # The same setup, then a shell where `bbb` is the manager — poke at it by hand
+bun run site:dev          # Website and docs at localhost:4321 (builds the live preview first)
+bun run site:build        # Website, docs and search index → website/dist/
+bun run site:typecheck    # astro check, plus the live preview's types
+bun run test:website      # Build the website, then Playwright smoke tests against website/dist/
 ```
+
+The website in `website/` is one Astro project: the marketing pages, guides
+(`website/src/content/guides/`) and the Starlight user docs served under
+`/docs/` (`website/src/content/docs/docs/`). Run `bun install --cwd website`
+once first. Astro needs Node.js 22.12 or newer; Bun installs the packages and
+`bun run` starts Astro under Node.
 
 `bun run dev` needs no extension and no daemon: it opens the complete
 application against deterministic, URL-addressable scenarios (`?scenario=safari`,

@@ -36,6 +36,9 @@ private: there is no account, analytics, tracking, or bookmark-content collectio
   release it installs and is what must match a release tag.
 - **Dev Workbench** (`bun run dev`) runs the full app with URL-addressable
   scenarios and no extension or daemon.
+- **Website** (`website/`, Astro + Starlight on Node >= 22.12): marketing
+  pages, guides, and user docs in `website/src/content/docs/docs/` served at
+  `/docs/`.
 
 ## UI components (shadcn/ui)
 
@@ -72,6 +75,8 @@ Single-context: root `CONTEXT.md` plus `docs/adr/`. See `docs/agents/domain.md`.
 ## On-demand docs
 
 - Before publishing a release, read `docs/RELEASING.md` in full.
-- Daemon install and configuration: `docs/DAEMON.md`.
+- Daemon: user-facing docs live on the docs site
+  (`website/src/content/docs/docs/`); `docs/DAEMON.md` is the contributor
+  reference.
 - Dev Workbench scenarios: `docs/DEV_WORKBENCH.md`.
 - Safari build, signing and manual QA: `docs/SAFARI.md`.
