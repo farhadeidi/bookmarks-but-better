@@ -4,6 +4,7 @@
  * the mobile menus.
  */
 export const SITE_LINKS = [
+  { href: "/", label: "Home" },
   { href: "/docs/", label: "Docs" },
   { href: "/docs/guides/", label: "Guides" },
   { href: "/privacy/", label: "Privacy" },
@@ -11,11 +12,15 @@ export const SITE_LINKS = [
 
 /**
  * The link for the section a page belongs to. The last matching prefix wins,
- * so a guide marks Guides rather than Docs.
+ * so a guide marks Guides rather than Docs. Home is the homepage itself, not
+ * the prefix of every path, so it only marks `/`.
  */
 export function currentSiteLink(url: URL): string | undefined {
-  return SITE_LINKS.filter((link) => url.pathname.startsWith(link.href)).at(-1)
-    ?.href
+  return SITE_LINKS.filter((link) =>
+    link.href === "/"
+      ? url.pathname === "/"
+      : url.pathname.startsWith(link.href)
+  ).at(-1)?.href
 }
 
 /**

@@ -49,8 +49,10 @@
 @theme inline {
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
   --font-sans--font-feature-settings: "cv02", "cv03", "cv04", "cv11", "ss01";
-  /* Display only: the hero title, section titles and page titles. */
-  --font-display: var(--font-serif), ui-serif, serif;
+  /* Display: the hero title, section titles and page titles. The same Inter
+     as the body text, drawn at its display optical size and set heavier and
+     tighter by the headings themselves. */
+  --font-display: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -144,9 +146,8 @@ main:has(> .bbb-site) {
 
 /* Long-form HTML the marketing pages cannot class element by element (the
    privacy page). Width comes from a max-w-[*ch] class beside `.prose`.
-   Titles and h2s are the serif display face, like the page title above them;
-   everything else is Inter. Anything inside `.not-prose` keeps its own
-   styling. */
+   Titles and h2s are set like the page title above them, heavier and tighter
+   than the body text. Anything inside `.not-prose` keeps its own styling. */
 @layer components {
   .prose {
     color: var(--color-muted-foreground);
@@ -164,10 +165,10 @@ main:has(> .bbb-site) {
     margin-top: --spacing(14);
     color: var(--color-foreground);
     font-family: var(--font-display);
-    font-size: var(--text-3xl);
-    font-weight: var(--font-weight-normal);
-    line-height: var(--text-3xl--line-height);
-    letter-spacing: var(--tracking-tight);
+    font-size: var(--text-2xl);
+    font-weight: var(--font-weight-semibold);
+    line-height: var(--text-2xl--line-height);
+    letter-spacing: -0.015em;
     text-wrap: balance;
   }
   .prose :where(h3, h4, h5, h6):not(:where(.not-prose *)) {

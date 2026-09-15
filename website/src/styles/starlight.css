@@ -1,12 +1,12 @@
-/* The Starlight docs on the site's own tokens (global.css): Inter body,
-   Instrument Serif page titles and section headings, ink text and one small
+/* The Starlight docs on the site's own tokens (global.css): Inter throughout,
+   body and headings alike, ink text and one small
    amber accent. Every --sl-* color derives from the site variables, which
    already follow the theme, so one block serves light and dark. Both selectors
    are needed to beat Starlight's own light-theme values. */
 :root,
 :root[data-theme="light"] {
   --sl-font: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
-  --bbb-font-display: var(--font-serif), ui-serif, serif;
+  --bbb-font-display: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
 
   --sl-color-white: var(--foreground);
   --sl-color-gray-1: color-mix(
@@ -77,19 +77,23 @@
   --sl-nav-pad-x: 1.5rem;
 }
 
-/* Instrument Serif has one weight and runs small, so titles size up. */
+/* Inter carries the headings: semibold and tighter than the body text, at
+   Starlight's own sizes (the serif needed sizing up, Inter does not). */
 h1#_top,
 .sl-markdown-content h2 {
   font-family: var(--bbb-font-display);
-  font-weight: 400;
-  letter-spacing: -0.015em;
+  font-weight: 600;
 }
 h1#_top {
-  font-size: calc(var(--sl-text-h1) * 1.15);
-  line-height: 1.05;
+  font-size: var(--sl-text-h1);
+  line-height: 1.1;
+  letter-spacing: -0.025em;
 }
+/* Starlight's h1 and h2 sit close together; with one face carrying both, the
+   section headings step down so the page title still leads. */
 .sl-markdown-content h2 {
-  font-size: calc(var(--sl-text-h2) * 1.1);
+  font-size: calc(var(--sl-text-h2) * 0.9);
+  letter-spacing: -0.02em;
 }
 
 .sl-markdown-content a:not(:where(.not-content *)) {

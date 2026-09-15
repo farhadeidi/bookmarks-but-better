@@ -1,32 +1,47 @@
 # Website brand — bookmarks.but-better.dev
 
 The marketing site's visual system, "Modern editorial": a neutral paper and ink
-page, one serif for display, Inter for everything else, and amber as a small
-accent. The product logo (`public/logo.svg`, `logo-dark.svg`) is unchanged.
+page, one face — Inter — from the hero title down to the smallest label, and
+amber as a small accent. The product logo (`public/logo.svg`, `logo-dark.svg`) is unchanged.
 
 **Tone:** calm, precise, trustworthy. **Avoid:** SaaS gradients, glows,
 glassmorphism, large colored panels, decorative icons in tinted boxes.
 
 ## Type
 
-| Role    | Face                             | Use                                                   |
-| ------- | -------------------------------- | ----------------------------------------------------- |
-| Display | Instrument Serif 400, and italic | The hero title, section titles, page titles, prose h2 |
-| Text    | Inter Variable                   | Everything else: body, nav, buttons, labels, h3+      |
+| Role    | Face                    | Use                                                   |
+| ------- | ----------------------- | ----------------------------------------------------- |
+| Display | Inter 600, tracked in   | The hero title, section titles, page titles, prose h2 |
+| Text    | Inter 400/500           | Everything else: body, nav, buttons, labels, h3+      |
 
-- Display sizes: hero `text-7xl`→`text-9xl`; section titles `text-4xl`/`sm:text-5xl`;
-  page titles `text-6xl`/`sm:text-7xl`. Always `tracking-tight`, default line
-  height, `text-balance` (article titles use `text-pretty`). The italic appears
-  only in "but *better*".
-- Eyebrows: Inter `text-sm/6 font-medium` in amber, sentence case.
+One face does both jobs. Headings are told apart from body text by weight,
+tracking and size, not by a second family; `font-display` stays the token for
+display type (`--font-display` in `global.css`, `--bbb-font-display` in the
+docs) and points at Inter.
+
+- Display sizes: hero `text-5xl`→`text-8xl`; section titles
+  `text-3xl`/`sm:text-4xl`; page titles `text-4xl`/`sm:text-5xl`; prose h1/h2
+  `text-2xl`. Docs page titles keep Starlight's own size and its h2s step down
+  to 0.9 of theirs, so the title still leads.
+- Display tuning: `font-semibold` everywhere, with tracking pulled in as the
+  size grows — `-0.035em` on the hero and the 404, `-0.03em` on page titles,
+  `-0.025em` on section titles and docs h1, `-0.02em` on docs h2, `-0.015em`
+  on prose h1/h2. Default line height, `text-balance` (article titles use
+  `text-pretty`).
+- The hero's "but better" sets *better* apart with weight, not a slant:
+  `font-normal` against the semibold line. Inter's italic is a sloped
+  grotesque, not an editorial italic, and it reads as a mistake at hero size.
+- Eyebrows: `text-sm/6 font-medium` in amber, sentence case.
 - Body text is `text-base` on mobile and may step down to `text-sm` at `sm:`.
 
-**Font loading:** both faces are self-hosted, latin only, through Astro's Fonts
-API (`astro.config.ts`), with metric-matched fallbacks and preload links
-(`starlight/Head.astro`). They use `font-display: optional`: a face that misses
-the short block period stays on the fallback for that view instead of swapping
-in later, so text never reflows after first paint. No third-party font
-requests.
+**Font loading:** one self-hosted file, latin only, through Astro's Fonts API
+(`astro.config.ts`), with a metric-matched fallback and a preload link on every
+page (`starlight/Head.astro`). It is Inter's `opsz` build, so the same file
+carries the weight and optical size axes and display sizes get Inter Display's
+drawing without a second download. It uses `font-display: optional`: a face
+that misses the short block period stays on the fallback for that view instead
+of swapping in later, so text never reflows after first paint. No third-party
+font requests.
 
 ## Color tokens
 
@@ -75,7 +90,9 @@ ring, list markers, selection. Buttons are ink.
 - **One header** on every page: the Starlight `Header` override
   (`components/starlight/Header.astro`). It runs full width with 1.5rem side
   padding everywhere, so the logo holds its position between the marketing
-  pages and the docs. Brand, text-only section links (Docs, Guides, Privacy),
+  pages and the docs. Brand, text-only section links (Home, Docs, Guides,
+  Privacy — Home marks the current page on `/` only, and the logo links there
+  too),
   search (a field in the docs, an icon elsewhere), GitHub, the theme toggle and
   the install button.
 - **Mobile menus** put the install button full width at the top of their

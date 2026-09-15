@@ -93,10 +93,13 @@ const current = currentSiteLink(Astro.url)
 </div>
 
 <style>
+  /* Four section links, search, GitHub, the theme toggle and the install
+     button share this row from 50rem up, so the gaps and the link padding are
+     kept tight enough for the whole set to fit without wrapping. */
   .bbb-header {
     display: flex;
     align-items: center;
-    gap: 1.5rem;
+    gap: 1.25rem;
     height: 100%;
   }
 
@@ -107,7 +110,7 @@ const current = currentSiteLink(Astro.url)
   }
   .links a {
     border-radius: 0.375rem;
-    padding: 0.375rem 0.625rem;
+    padding: 0.375rem 0.5rem;
     color: var(--muted-foreground);
     font-size: var(--sl-text-sm);
     font-weight: 500;
@@ -251,7 +254,7 @@ const current = currentSiteLink(Astro.url)
     .field :global(button[data-open-modal]) {
       justify-content: flex-start;
       gap: 0.5rem;
-      width: 15rem;
+      width: 14rem;
       padding-inline: 0.75rem 0.375rem;
       border: 1px solid var(--border);
       background-color: var(--card);

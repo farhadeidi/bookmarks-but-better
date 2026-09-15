@@ -7,7 +7,6 @@ import { SITE, THEME_COLORS } from "./src/lib/site"
 /** Built pages that stay out of the sitemap. */
 const UNLISTED_PATHS = new Set(["/404/", "/daemon/"])
 
-const fontsource = (file: string) => `@fontsource/${file}`
 const fontsourceVariable = (file: string) => `@fontsource-variable/${file}`
 
 export default defineConfig({
@@ -27,36 +26,10 @@ export default defineConfig({
   // links and metric-matched fallbacks. `optional` never swaps faces after
   // first paint: a font that misses the short block period (preloaded, it
   // rarely does) leaves that view on the fallback, and the next page has it.
+  // One face for the whole site. The `opsz` build carries both the weight and
+  // the optical size axes in the single file the `wght` build used, so display
+  // sizes get the Display drawing (tighter spacing, finer joints) for free.
   fonts: [
-    {
-      provider: fontProviders.local(),
-      name: "Instrument Serif",
-      cssVariable: "--font-serif",
-      fallbacks: ["serif"],
-      display: "optional",
-      options: {
-        variants: [
-          {
-            src: [
-              fontsource(
-                "instrument-serif/files/instrument-serif-latin-400-normal.woff2"
-              ),
-            ],
-            weight: "400",
-            style: "normal",
-          },
-          {
-            src: [
-              fontsource(
-                "instrument-serif/files/instrument-serif-latin-400-italic.woff2"
-              ),
-            ],
-            weight: "400",
-            style: "italic",
-          },
-        ],
-      },
-    },
     {
       provider: fontProviders.local(),
       name: "Inter",
@@ -68,7 +41,7 @@ export default defineConfig({
         variants: [
           {
             src: [
-              fontsourceVariable("inter/files/inter-latin-wght-normal.woff2"),
+              fontsourceVariable("inter/files/inter-latin-opsz-normal.woff2"),
             ],
             weight: "100 900",
             style: "normal",
