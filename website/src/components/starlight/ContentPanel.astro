@@ -1,0 +1,15 @@
+---
+// Marketing pages run full width; docs pages keep Starlight's content panel.
+import Default from "@astrojs/starlight/components/ContentPanel.astro"
+import { isDocsPage } from "../../lib/nav"
+---
+
+{
+  isDocsPage(Astro.url) ? (
+    <Default>
+      <slot />
+    </Default>
+  ) : (
+    <slot />
+  )
+}

@@ -1,18 +1,14 @@
 ---
-// The docs header carries the site's own links, so moving between the site and
-// the docs keeps the same navigation. Starlight's GitHub icon follows them.
+// The header's site links, then Starlight's GitHub icon. "Docs" is left out
+// here because the site title already links to it.
 import Default from "@astrojs/starlight/components/SocialIcons.astro"
+import { SITE_LINKS } from "../../lib/nav"
 
-const LINKS = [
-  { href: "/preview/", label: "Live preview" },
-  { href: "/docs/guides/", label: "Guides" },
-  { href: "/privacy/", label: "Privacy" },
-  { href: "/docs/start/install/", label: "Install" },
-]
+const links = SITE_LINKS.filter((link) => link.href !== "/docs/")
 ---
 
 {
-  LINKS.map((link) => (
+  links.map((link) => (
     <a href={link.href} class="site-link">
       {link.label}
     </a>

@@ -1,6 +1,10 @@
-/* The marketing pages' stylesheet ("The Quiet Library", see BRAND.md). The
-   Starlight docs use starlight.css instead. */
-@import "tailwindcss";
+/* The site's stylesheet ("The Quiet Library", see BRAND.md), loaded on every
+   page through Starlight's customCss. Tailwind's theme and utilities sit in
+   layers around Starlight's. Tailwind's preflight is left out so the docs keep
+   Starlight's base styles; marketing pages get a scoped reset (.bbb-site). */
+@layer base, starlight, theme, components, utilities;
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);
 
 @custom-variant dark (&:is(.dark *));
 
@@ -50,7 +54,56 @@
 
 html {
   scroll-behavior: smooth;
-  scroll-padding-top: 5rem;
+}
+
+/* Marketing pages render inside Starlight's <main>; its bottom padding would
+   sit below the site footer. */
+main:has(> .bbb-site) {
+  padding: 0;
+}
+
+/* A scoped stand-in for Tailwind's preflight on the marketing pages. Starlight
+   already resets box-sizing, margins and form fonts. */
+@layer components {
+  .bbb-site {
+    line-height: 1.5;
+  }
+  .bbb-site :where(*),
+  .bbb-site ::before,
+  .bbb-site ::after {
+    border: 0 solid;
+    padding: 0;
+  }
+  .bbb-site :where(h1, h2, h3, h4, h5, h6) {
+    font-size: inherit;
+    font-weight: inherit;
+  }
+  .bbb-site :where(ol, ul, menu) {
+    list-style: none;
+  }
+  .bbb-site :where(a) {
+    color: inherit;
+    text-decoration: inherit;
+  }
+  .bbb-site :where(b, strong) {
+    font-weight: bolder;
+  }
+  .bbb-site :where(img, svg, video, canvas, iframe, picture) {
+    display: block;
+    vertical-align: middle;
+  }
+  .bbb-site :where(img, video) {
+    max-width: 100%;
+    height: auto;
+  }
+  .bbb-site :where(button, input, select, textarea) {
+    color: inherit;
+    background-color: transparent;
+    border-radius: 0;
+  }
+  .bbb-site :where(button) {
+    cursor: pointer;
+  }
 }
 
 ::selection {

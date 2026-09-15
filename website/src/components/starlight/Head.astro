@@ -1,11 +1,13 @@
 ---
 // Starlight's head (title, description, canonical, Open Graph and the
 // og:image / theme-color entries from astro.config.ts), plus the site's
-// self-hosted fonts.
+// self-hosted fonts. Marketing pages open with Fraunces headlines, so they
+// preload it too.
 import Default from "@astrojs/starlight/components/Head.astro"
 import { Font } from "astro:assets"
+import { isDocsPage } from "../../lib/nav"
 ---
 
 <Default />
 <Font cssVariable="--font-inter" preload />
-<Font cssVariable="--font-fraunces" />
+<Font cssVariable="--font-fraunces" preload={!isDocsPage(Astro.url)} />

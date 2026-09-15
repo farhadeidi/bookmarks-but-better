@@ -1,5 +1,5 @@
 ---
-import BaseLayout from "../layouts/BaseLayout.astro"
+import SiteLayout from "../layouts/SiteLayout.astro"
 
 const LINKS = [
   { href: "/", label: "Home" },
@@ -8,11 +8,11 @@ const LINKS = [
 ]
 ---
 
-<BaseLayout
+<SiteLayout
   title="Page not found — Bookmarks But Better"
   description="This page does not exist."
   noindex
-  canonical={false}
+  searchable={false}
 >
   <div class="mx-auto max-w-xl px-6 py-24 text-center md:py-32">
     <p class="font-display text-sm text-primary italic">404</p>
@@ -39,4 +39,4 @@ const LINKS = [
       }
     </ul>
   </div>
-</BaseLayout>
+</SiteLayout>

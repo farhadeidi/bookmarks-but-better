@@ -1,0 +1,7 @@
+---
+// Marketing pages render their own h1.
+import Default from "@astrojs/starlight/components/PageTitle.astro"
+import { isDocsPage } from "../../lib/nav"
+---
+
+{isDocsPage(Astro.url) && <Default />}

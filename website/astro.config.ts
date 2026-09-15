@@ -75,7 +75,7 @@ export default defineConfig({
       favicon: "/favicon.svg",
       // The site's own 404 page serves every missing URL, docs included.
       disable404Route: true,
-      customCss: ["./src/styles/starlight.css"],
+      customCss: ["./src/styles/global.css", "./src/styles/starlight.css"],
       social: [{ icon: "github", label: "GitHub", href: SITE.repository }],
       editLink: { baseUrl: `${SITE.repository}/edit/main/website/` },
       sidebar: [
@@ -123,6 +123,11 @@ export default defineConfig({
       ],
       components: {
         Head: "./src/components/starlight/Head.astro",
+        Header: "./src/components/starlight/Header.astro",
+        PageTitle: "./src/components/starlight/PageTitle.astro",
+        ContentPanel: "./src/components/starlight/ContentPanel.astro",
+        MarkdownContent: "./src/components/starlight/MarkdownContent.astro",
+        Footer: "./src/components/starlight/Footer.astro",
         ThemeProvider: "./src/components/starlight/ThemeProvider.astro",
         ThemeSelect: "./src/components/starlight/ThemeSelect.astro",
         SiteTitle: "./src/components/starlight/SiteTitle.astro",

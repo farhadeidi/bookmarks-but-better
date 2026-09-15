@@ -6,15 +6,16 @@ import PrivacyPledge from "../components/PrivacyPledge.astro"
 import Sources from "../components/Sources.astro"
 import ThemesGallery from "../components/ThemesGallery.astro"
 import TrustStrip from "../components/TrustStrip.astro"
-import BaseLayout from "../layouts/BaseLayout.astro"
+import SiteLayout from "../layouts/SiteLayout.astro"
 import { FAQ_ITEMS } from "../lib/faq-items"
 import { PAGES } from "../lib/pages"
 import { faqPage, softwareApplication } from "../lib/seo"
 ---
 
-<BaseLayout
+<SiteLayout
   title={PAGES.home.title}
   description={PAGES.home.description}
+  searchable={false}
   jsonLd={[softwareApplication(), faqPage(FAQ_ITEMS)]}
 >
   <Hero />
@@ -24,4 +25,4 @@ import { faqPage, softwareApplication } from "../lib/seo"
   <ThemesGallery />
   <PrivacyPledge />
   <Faq items={FAQ_ITEMS} />
-</BaseLayout>
+</SiteLayout>

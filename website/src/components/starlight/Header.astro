@@ -1,0 +1,112 @@
+---
+// Starlight's header on every page. Docs pages open their mobile menu from the
+// sidebar toggle; pages without a sidebar (the marketing pages) get the same
+// round button, opening the site links instead.
+import { Icon } from "@astrojs/starlight/components"
+import Default from "@astrojs/starlight/components/Header.astro"
+import { SITE_LINKS } from "../../lib/nav"
+import { SITE } from "../../lib/site"
+import ThemeToggle from "../ThemeToggle.astro"
+
+const { hasSidebar } = Astro.locals.starlightRoute
+---
+
+<Default />
+{
+  !hasSidebar && (
+    <>
+      <button
+        type="button"
+        popovertarget="bbb-site-menu"
+        class="menu-button md:sl-hidden print:hidden"
+      >
+        <Icon name="bars" class="open-menu" />
+        <Icon name="close" class="close-menu" />
+        <span class="sr-only">Menu</span>
+      </button>
+      <nav popover="" id="bbb-site-menu" class="site-menu" aria-label="Site">
+        <ul role="list">
+          {SITE_LINKS.map((link) => (
+            <li>
+              <a href={link.href}>{link.label}</a>
+            </li>
+          ))}
+        </ul>
+        <div class="site-menu-footer">
+          <a href={SITE.repository}>GitHub</a>
+          <ThemeToggle />
+        </div>
+      </nav>
+    </>
+  )
+}
+
+<style>
+  .menu-button {
+    position: fixed;
+    top: calc((var(--sl-nav-height) - var(--sl-menu-button-size)) / 2);
+    inset-inline-end: var(--sl-nav-pad-x);
+    z-index: var(--sl-z-index-navbar);
+    width: var(--sl-menu-button-size);
+    height: var(--sl-menu-button-size);
+    padding: 0.5rem;
+    border: 0;
+    border-radius: 50%;
+    background-color: var(--sl-color-white);
+    color: var(--sl-color-black);
+    box-shadow: var(--sl-shadow-md);
+    cursor: pointer;
+  }
+  .menu-button:has(~ :popover-open) {
+    background-color: var(--sl-color-gray-2);
+    box-shadow: none;
+  }
+  .menu-button:has(~ :popover-open) .open-menu,
+  .menu-button:not(:has(~ :popover-open)) .close-menu {
+    display: none;
+  }
+
+  .site-menu {
+    position: fixed;
+    inset: var(--sl-nav-height) 0 auto;
+    width: 100%;
+    margin: 0;
+    padding: 0.5rem var(--sl-nav-pad-x) 1rem;
+    border: 0;
+    border-bottom: 1px solid var(--sl-color-hairline-shade);
+    background-color: var(--sl-color-black);
+    color: var(--sl-color-text);
+  }
+  .site-menu ul {
+    padding: 0;
+    list-style: none;
+  }
+  .site-menu a {
+    display: block;
+    padding-block: 0.75rem;
+    color: var(--sl-color-white);
+    font-size: var(--sl-text-lg);
+    text-decoration: none;
+  }
+  .site-menu-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 0.5rem;
+    border-top: 1px solid var(--sl-color-gray-6);
+    padding-top: 0.5rem;
+  }
+  .site-menu-footer a {
+    color: var(--sl-color-gray-2);
+    font-size: var(--sl-text-base);
+  }
+
+  /* Keep the header's contents clear of the fixed menu button. */
+  @media (max-width: 49.99rem) {
+    :global(:root:not([data-has-sidebar]) .page > header) {
+      padding-inline-end: calc(
+        var(--sl-nav-gap) + var(--sl-nav-pad-x) + var(--sl-menu-button-size)
+      );
+    }
+  }
+</style>

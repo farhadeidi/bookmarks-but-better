@@ -1,0 +1,59 @@
+---
+// Marketing pages render through Starlight as splash pages, so the whole site
+// shares one header: title, search, links, theme toggle and mobile menu. The
+// overrides in components/starlight/ step aside on these pages and let the
+// content run full width.
+import StarlightPage from "@astrojs/starlight/components/StarlightPage.astro"
+import SiteFooter from "../components/SiteFooter.astro"
+import { serializeJsonLd, type JsonLd } from "../lib/seo"
+
+interface Props {
+  /** The full document title. */
+  title: string
+  description: string
+  noindex?: boolean
+  /** Include the page in the site search. */
+  searchable?: boolean
+  jsonLd?: JsonLd[]
+}
+
+const {
+  title,
+  description,
+  noindex = false,
+  searchable = true,
+  jsonLd = [],
+} = Astro.props
+
+const head = [
+  // Replaces Starlight's "title — site name" with the full title as given.
+  { tag: "title" as const, content: title },
+  ...(noindex
+    ? [{ tag: "meta" as const, attrs: { name: "robots", content: "noindex" } }]
+    : []),
+  ...jsonLd.map((data) => ({
+    tag: "script" as const,
+    attrs: { type: "application/ld+json" },
+    content: serializeJsonLd(data),
+  })),
+]
+---
+
+<StarlightPage
+  frontmatter={{
+    title,
+    description,
+    template: "splash",
+    pagefind: searchable,
+    head,
+  }}
+>
+  <div
+    id="_top"
+    tabindex="-1"
+    class="bbb-site bg-background font-sans text-foreground antialiased outline-none"
+  >
+    <slot />
+    <SiteFooter />
+  </div>
+</StarlightPage>
