@@ -1,0 +1,92 @@
+---
+import { SITE } from "../lib/site"
+
+const COLUMNS = [
+  {
+    title: "Install",
+    links: [
+      { href: SITE.chromeStore, label: "Chrome Web Store" },
+      { href: SITE.firefoxStore, label: "Firefox Add-ons" },
+      { href: "/daemon/", label: "Markdown vault daemon" },
+      { href: "/preview/", label: "Live preview" },
+    ],
+  },
+  {
+    title: "Learn",
+    links: [
+      { href: "/docs/", label: "Documentation" },
+      { href: "/guides/", label: "Guides" },
+      { href: SITE.daemonDocs, label: "Install the daemon" },
+      { href: "/privacy/", label: "Privacy" },
+    ],
+  },
+  {
+    title: "Project",
+    links: [
+      { href: SITE.repository, label: "GitHub" },
+      { href: SITE.issues, label: "Report an issue" },
+      { href: SITE.releases, label: "Releases" },
+    ],
+  },
+]
+---
+
+<footer class="border-t border-border">
+  <div
+    class="mx-auto grid max-w-6xl gap-10 px-6 py-14 md:grid-cols-[1.5fr_repeat(3,1fr)]"
+  >
+    <div>
+      <div class="flex items-center gap-2.5">
+        <img
+          src="/logo-dark.svg"
+          alt=""
+          width="20"
+          height="20"
+          class="size-5 dark:hidden"
+        />
+        <img
+          src="/logo.svg"
+          alt=""
+          width="20"
+          height="20"
+          class="hidden size-5 dark:block"
+        />
+        <span class="font-display font-semibold">{SITE.name}</span>
+      </div>
+      <p
+        class="mt-3 max-w-xs text-base/7 text-pretty text-muted-foreground sm:text-sm/6"
+      >
+        Your bookmarks as a beautiful new tab. Local, private, no account. Free
+        and open source (MIT).
+      </p>
+    </div>
+    {
+      COLUMNS.map((column) => (
+        <nav aria-label={column.title}>
+          <h2 class="text-sm font-medium">{column.title}</h2>
+          <ul role="list" class="mt-3 space-y-2">
+            {column.links.map((link) => (
+              <li>
+                <a
+                  href={link.href}
+                  class="text-sm text-muted-foreground hover:text-foreground hover:underline"
+                >
+                  {link.label}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </nav>
+      ))
+    }
+  </div>
+  <div class="border-t border-border">
+    <div
+      class="mx-auto flex max-w-6xl flex-wrap items-center gap-x-6 gap-y-2 px-6 py-5 text-sm text-muted-foreground"
+    >
+      <span>MIT License</span>
+      <span class="tabular-nums">v{SITE.version}</span>
+      <span class="sm:ml-auto">This site is static and loads no analytics.</span>
+    </div>
+  </div>
+</footer>

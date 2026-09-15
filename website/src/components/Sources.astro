@@ -1,0 +1,62 @@
+---
+import Section from "./Section.astro"
+
+const SOURCES = [
+  {
+    name: "Browser bookmarks",
+    tag: "Default",
+    description:
+      "Shows and edits the bookmarks you already have, through the browser's built-in bookmarks API. Nothing to set up and nothing copied.",
+  },
+  {
+    name: "Markdown vault",
+    tag: "Optional",
+    description:
+      "Your bookmarks as plain Markdown files in a folder you choose, served by a small local daemon. Use it next to browser bookmarks or on its own; in Safari it is the only source.",
+  },
+]
+---
+
+<Section
+  index="02"
+  title="Browser bookmarks or Markdown files. Never mixed."
+  id="sources"
+>
+  <ul role="list" class="grid gap-4 md:grid-cols-2">
+    {
+      SOURCES.map((source) => (
+        <li class="rounded-lg bg-card p-6 ring-1 ring-border">
+          <h3 class="flex flex-wrap items-center gap-3">
+            <span class="font-display text-lg font-medium tracking-tight">
+              {source.name}
+            </span>
+            <span class="rounded-full border border-primary/30 bg-primary/5 px-2.5 py-1 text-sm text-primary">
+              {source.tag}
+            </span>
+          </h3>
+          <p class="mt-2 text-base/7 text-pretty text-muted-foreground sm:text-sm/6">
+            {source.description}
+          </p>
+        </li>
+      ))
+    }
+  </ul>
+  <p
+    class="mt-6 flex items-start gap-3 rounded-lg bg-muted/40 p-4 text-base/7 text-pretty text-muted-foreground ring-1 ring-border sm:text-sm/6"
+  >
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke-width="1.8"
+      class="mt-1 size-4 shrink-0 stroke-primary"
+      aria-hidden="true"
+    >
+      <path d="M12 3 4 6v5c0 4.4 3.2 8.4 8 10 4.8-1.6 8-5.6 8-10V6l-8-3Z"
+      ></path>
+    </svg>
+    <span>
+      Operations affect only the active source. Switching sources never merges
+      or moves bookmarks, so what lives where is always your decision.
+    </span>
+  </p>
+</Section>

@@ -11,7 +11,18 @@ export default defineConfig([
   // every file, under the root config rather than the config that copy would
   // use — `website/src/entries/**` overrides, for one, are relative and stop
   // matching once the path is prefixed.
-  globalIgnores(['dist', 'dist-*', 'target', '.claude', '.delta', '.worktrees']),
+  globalIgnores([
+    'dist',
+    'dist-*',
+    'target',
+    '.claude',
+    '.delta',
+    '.worktrees',
+    // Website build output and Astro's generated content types.
+    'website/dist',
+    'website/.astro',
+    'website/public/app-preview',
+  ]),
   {
     files: ['**/*.{ts,tsx}'],
     extends: [

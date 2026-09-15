@@ -1,0 +1,10 @@
+---
+// Replaces Starlight's theme script so the docs follow the same preference as
+// the rest of the site (see lib/theme-init.ts). The stub keeps anything that
+// still calls Starlight's picker API harmless; ThemeSelect is replaced too.
+import { THEME_INIT_SCRIPT } from "../../lib/theme-init"
+
+const script = `window.StarlightThemeProvider={updatePickers:function(){}};${THEME_INIT_SCRIPT}`
+---
+
+<script is:inline set:html={script}></script>

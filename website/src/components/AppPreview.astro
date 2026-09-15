@@ -1,0 +1,129 @@
+---
+import { Picture } from "astro:assets"
+import dashboard from "../assets/screenshots/dashboard.png"
+import { DEFAULT_DEMO_THEME, DEMO_THEMES } from "../lib/themes"
+
+interface Props {
+  /** Load the live app right away (the full-screen /preview/ page). */
+  autoload?: boolean
+  tall?: boolean
+}
+
+const { autoload = false, tall = false } = Astro.props
+const defaultTheme = DEMO_THEMES.find((theme) => theme.id === DEFAULT_DEMO_THEME)
+---
+
+<figure
+  id="demo"
+  class="relative isolate scroll-mt-24"
+  data-app-preview
+  data-default-theme={DEFAULT_DEMO_THEME}
+  data-autoload={autoload ? "" : undefined}
+  data-tall={tall ? "" : undefined}
+>
+  <div
+    class="pointer-events-none absolute inset-x-8 top-24 bottom-0 -z-10 bg-primary/10 blur-3xl"
+    aria-hidden="true"
+  >
+  </div>
+  <div
+    class="relative overflow-hidden rounded-xl bg-card shadow-2xl ring-1 shadow-foreground/10 ring-foreground/10 dark:shadow-none"
+  >
+    <div
+      class="flex items-center gap-3 border-b border-border bg-muted/60 px-4 py-2.5"
+      aria-hidden="true"
+    >
+      <div class="flex gap-1.5">
+        <span class="size-2.5 rounded-full bg-foreground/15"></span>
+        <span class="size-2.5 rounded-full bg-foreground/15"></span>
+        <span class="size-2.5 rounded-full bg-foreground/15"></span>
+      </div>
+      <div
+        class="flex h-7 max-w-xs flex-1 items-center rounded-md border border-border bg-background px-3 text-sm text-muted-foreground"
+      >
+        New Tab
+      </div>
+    </div>
+    <div class="relative" data-preview-stage>
+      {
+        autoload ? (
+          <div class="grid h-[75vh] min-h-[560px] place-items-center bg-background p-6 text-center text-sm text-muted-foreground">
+            <noscript>
+              The live preview runs the real app, which needs JavaScript.
+            </noscript>
+          </div>
+        ) : (
+          <>
+            <Picture
+              src={dashboard}
+              formats={["avif"]}
+              fallbackFormat="webp"
+              widths={[640, 960, 1280, 1400]}
+              sizes="(min-width: 1152px) 1104px, calc(100vw - 48px)"
+              alt="The Bookmarks But Better dashboard in dark mode: bookmark folders as cards in a masonry grid"
+              loading="eager"
+              fetchpriority="high"
+              class="block h-auto w-full"
+            />
+            <div class="absolute inset-0 grid place-items-center bg-linear-to-t from-black/45 via-black/10 to-transparent">
+              <button
+                type="button"
+                data-preview-launch
+                class="inline-flex h-12 items-center gap-2.5 rounded-full bg-primary pr-6 pl-5 text-base font-medium text-primary-foreground shadow-lg shadow-black/25 hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-primary"
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="currentColor"
+                  class="size-4"
+                  aria-hidden="true"
+                >
+                  <path d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5Z" />
+                </svg>
+                Try it live
+              </button>
+            </div>
+          </>
+        )
+      }
+    </div>
+  </div>
+
+  <figcaption
+    class="mt-4 flex flex-wrap items-center justify-center gap-x-4 gap-y-2"
+  >
+    <span class="text-sm text-muted-foreground">
+      {
+        autoload
+          ? "This is the real app, live. Switch themes:"
+          : "The real app runs right here. Pick a theme:"
+      }
+    </span>
+    <span class="flex flex-wrap items-center gap-2">
+      {
+        DEMO_THEMES.map((theme) => (
+          <button
+            type="button"
+            title={theme.name}
+            aria-label={`Preview the ${theme.name} theme`}
+            aria-pressed={theme.id === DEFAULT_DEMO_THEME ? "true" : "false"}
+            data-preview-theme={theme.id}
+            class="relative size-4 rounded-full border border-border ring-offset-2 ring-offset-background transition-transform hover:scale-125 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary aria-pressed:ring-2 aria-pressed:ring-primary"
+            style={`background-color: ${theme.accent}`}
+          />
+        ))
+      }
+    </span>
+    <span
+      class="font-display text-sm text-muted-foreground italic"
+      data-preview-theme-name
+    >
+      {defaultTheme?.name}
+    </span>
+  </figcaption>
+</figure>
+
+<script>
+  import { initAppPreviews } from "../scripts/app-preview"
+
+  initAppPreviews()
+</script>

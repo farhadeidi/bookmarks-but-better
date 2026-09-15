@@ -1,0 +1,71 @@
+---
+import { getCollection } from "astro:content"
+import BaseLayout from "../../layouts/BaseLayout.astro"
+import { byNewest, formatDate } from "../../lib/guides"
+import { PAGES } from "../../lib/pages"
+import { breadcrumbs } from "../../lib/seo"
+
+const guides = (await getCollection("guides")).sort(byNewest)
+---
+
+<BaseLayout
+  title={PAGES.guides.title}
+  description={PAGES.guides.description}
+  jsonLd={[
+    breadcrumbs([
+      { name: "Home", path: "/" },
+      { name: "Guides", path: PAGES.guides.path },
+    ]),
+  ]}
+>
+  <div class="mx-auto max-w-3xl px-6 py-16 md:py-24">
+    <p class="font-display text-sm text-primary italic">Bookmarks But Better</p>
+    <h1
+      class="font-display mt-2 text-4xl font-medium tracking-tight text-balance md:text-5xl"
+    >
+      Guides
+    </h1>
+    <p
+      class="mt-5 max-w-[56ch] text-base/7 text-pretty text-muted-foreground sm:text-lg/8"
+    >
+      Practical guides to a private bookmarks new tab: leaving Pocket or
+      Raindrop, keeping bookmarks as Markdown, Safari, and more. For
+      step-by-step setup, see the <a
+        href="/docs/"
+        class="text-foreground underline decoration-primary/60 underline-offset-4 hover:text-primary"
+        >documentation</a
+      >.
+    </p>
+
+    {
+      guides.length > 0 ? (
+        <ol role="list" class="mt-12 divide-y divide-border border-y border-border">
+          {guides.map((guide) => (
+            <li>
+              <article class="py-6">
+                <h2 class="font-display text-xl font-medium tracking-tight text-balance">
+                  <a
+                    href={`/guides/${guide.id}/`}
+                    class="hover:text-primary hover:underline hover:decoration-primary/60 hover:underline-offset-4"
+                  >
+                    {guide.data.title}
+                  </a>
+                </h2>
+                <p class="mt-2 text-base/7 text-pretty text-muted-foreground sm:text-sm/6">
+                  {guide.data.description}
+                </p>
+                <p class="mt-2 text-sm text-muted-foreground">
+                  <time datetime={guide.data.publishedAt.toISOString()}>
+                    {formatDate(guide.data.publishedAt)}
+                  </time>
+                </p>
+              </article>
+            </li>
+          ))}
+        </ol>
+      ) : (
+        <p class="mt-12 text-muted-foreground">No guides published yet.</p>
+      )
+    }
+  </div>
+</BaseLayout>

@@ -1,0 +1,49 @@
+/* Brings the Starlight docs close to the marketing site ("The Quiet Library",
+   see BRAND.md): Inter body, Fraunces headings, paper and lamplight
+   backgrounds, one amber accent. Starlight's :root is its dark theme. */
+:root {
+  --sl-font: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --bbb-font-display: var(--font-fraunces), ui-serif, Georgia, serif;
+
+  --sl-color-accent-low: oklch(0.32 0.06 70);
+  --sl-color-accent: oklch(0.72 0.13 70);
+  --sl-color-accent-high: oklch(0.86 0.09 75);
+  --sl-color-white: oklch(0.97 0.004 90);
+  --sl-color-gray-1: oklch(0.92 0.005 90);
+  --sl-color-gray-2: oklch(0.84 0.006 85);
+  --sl-color-gray-3: oklch(0.68 0.01 85);
+  --sl-color-gray-4: oklch(0.5 0.01 80);
+  --sl-color-gray-5: oklch(0.33 0.008 80);
+  --sl-color-gray-6: oklch(0.215 0.007 80);
+  --sl-color-black: oklch(0.17 0.006 80);
+}
+
+:root[data-theme="light"] {
+  --sl-color-accent-low: oklch(0.93 0.04 80);
+  --sl-color-accent: oklch(0.55 0.12 60);
+  --sl-color-accent-high: oklch(0.38 0.09 55);
+  --sl-color-white: oklch(0.205 0.01 80);
+  --sl-color-gray-1: oklch(0.26 0.01 80);
+  --sl-color-gray-2: oklch(0.34 0.01 80);
+  --sl-color-gray-3: oklch(0.46 0.01 80);
+  --sl-color-gray-4: oklch(0.6 0.01 80);
+  --sl-color-gray-5: oklch(0.84 0.008 85);
+  --sl-color-gray-6: oklch(0.95 0.005 90);
+  --sl-color-gray-7: oklch(0.97 0.004 90);
+  --sl-color-black: oklch(0.985 0.004 95);
+}
+
+h1#_top,
+.sl-markdown-content :is(h1, h2, h3) {
+  font-family: var(--bbb-font-display);
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+
+.sl-markdown-content a:not(:where(.not-content *)) {
+  text-underline-offset: 3px;
+}
+
+::selection {
+  background: color-mix(in oklch, var(--sl-color-accent) 25%, transparent);
+}

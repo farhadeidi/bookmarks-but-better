@@ -1,0 +1,11 @@
+---
+// Starlight's head (title, description, canonical, Open Graph and the
+// og:image / theme-color entries from astro.config.ts), plus the site's
+// self-hosted fonts.
+import Default from "@astrojs/starlight/components/Head.astro"
+import { Font } from "astro:assets"
+---
+
+<Default />
+<Font cssVariable="--font-inter" preload />
+<Font cssVariable="--font-fraunces" />

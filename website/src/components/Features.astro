@@ -1,0 +1,152 @@
+---
+import type { ImageMetadata } from "astro"
+import { Picture } from "astro:assets"
+import dashboard from "../assets/screenshots/dashboard.png"
+import organizer from "../assets/screenshots/organizer.png"
+import search from "../assets/screenshots/search.png"
+import sources from "../assets/screenshots/sources.png"
+import themes from "../assets/screenshots/themes.png"
+import Section from "./Section.astro"
+
+interface Cell {
+  title: string
+  description: string
+  /** Grid columns out of six on medium screens and up. */
+  wide: boolean
+  image?: { src: ImageMetadata; alt: string }
+}
+
+const CELLS: Cell[] = [
+  {
+    title: "Your bookmarks dashboard on every new tab",
+    description:
+      "Every bookmark folder becomes a card in a masonry grid. Open a new tab and your library is right there, not a search box.",
+    wide: true,
+    image: {
+      src: dashboard,
+      alt: "The dashboard in dark mode, with bookmark folders as cards",
+    },
+  },
+  {
+    title: "Import from anywhere",
+    description:
+      "Bring a bookmarks HTML file from any browser, or CSV exports from Raindrop and Pocket. Export to HTML whenever you like.",
+    wide: false,
+  },
+  {
+    title: "Quick capture",
+    description:
+      "Save the page you are on from the toolbar popup, straight into the active source.",
+    wide: false,
+  },
+  {
+    title: "A real organizer, with drag and drop",
+    description:
+      "Drag bookmarks between folders, reorder, rename, create and delete in a full tree editor.",
+    wide: true,
+    image: {
+      src: organizer,
+      alt: "The bookmark organizer tree editor with folders expanded",
+    },
+  },
+  {
+    title: "Your sources, your root folder",
+    description:
+      "Switch between browser bookmarks and Markdown vaults from the header, and start the dashboard from any folder.",
+    wide: false,
+    image: {
+      src: sources,
+      alt: "The source menu listing browser bookmarks and two vaults",
+    },
+  },
+  {
+    title: "Find any bookmark in a keystroke",
+    description:
+      "The search palette finds bookmarks in the active source by title or URL.",
+    wide: false,
+    image: { src: search, alt: "The search palette showing results for “git”" },
+  },
+  {
+    title: "Ten color themes",
+    description: "Ten color themes, each with light, dark and system modes.",
+    wide: false,
+    image: {
+      src: themes,
+      alt: "The dashboard in six color themes, light and dark",
+    },
+  },
+]
+
+const MINI = [
+  {
+    title: "Search from the address bar",
+    description:
+      "In Chrome and Firefox, type bb in the address bar to search the active source without opening the dashboard.",
+  },
+  {
+    title: "Safari, through a Markdown vault",
+    description:
+      "Safari has no bookmarks API for extensions and no new-tab override. There the extension works with a vault served by the local daemon, and the dashboard opens from the popup.",
+  },
+]
+
+const BODY = "text-base/7 text-pretty text-muted-foreground sm:text-sm/6"
+---
+
+<Section
+  index="01"
+  title="A bookmarks dashboard that earns your new tab"
+  id="features"
+>
+  <ul role="list" class="grid gap-4 md:grid-cols-6">
+    {
+      CELLS.map((cell) => (
+        <li class={cell.wide ? "md:col-span-4" : "md:col-span-2"}>
+          {cell.image ? (
+            <article class="h-full overflow-hidden rounded-lg bg-card ring-1 ring-border">
+              <Picture
+                src={cell.image.src}
+                formats={["avif"]}
+                fallbackFormat="webp"
+                widths={[480, 800, 1200]}
+                sizes={
+                  cell.wide
+                    ? "(min-width: 1152px) 728px, (min-width: 768px) 66vw, calc(100vw - 48px)"
+                    : "(min-width: 1152px) 360px, (min-width: 768px) 33vw, calc(100vw - 48px)"
+                }
+                alt={cell.image.alt}
+                loading="lazy"
+                class="block h-auto w-full"
+              />
+              <div class="p-5">
+                <h3 class="font-display text-lg font-medium tracking-tight">
+                  {cell.title}
+                </h3>
+                <p class:list={["mt-2", BODY]}>{cell.description}</p>
+              </div>
+            </article>
+          ) : (
+            <article class="flex h-full flex-col justify-center gap-2 rounded-lg bg-muted/40 p-6 ring-1 ring-border">
+              <h3 class="font-display text-lg font-medium tracking-tight">
+                {cell.title}
+              </h3>
+              <p class={BODY}>{cell.description}</p>
+            </article>
+          )}
+        </li>
+      ))
+    }
+    {
+      MINI.map((cell) => (
+        <li class="md:col-span-3">
+          <article class="flex h-full flex-col justify-center gap-2 rounded-lg bg-muted/40 p-6 ring-1 ring-border">
+            <h3 class="font-display text-lg font-medium tracking-tight">
+              {cell.title}
+            </h3>
+            <p class={BODY}>{cell.description}</p>
+          </article>
+        </li>
+      ))
+    }
+  </ul>
+</Section>

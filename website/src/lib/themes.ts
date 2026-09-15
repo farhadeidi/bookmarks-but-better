@@ -26,4 +26,5 @@ export const DEMO_THEMES: DemoTheme[] = COLOR_THEME_IDS.map((id) => ({
   ...THEME_DETAILS[id],
 }))
 
-export const PICK_THEME_EVENT = "bbb:pick-theme"
+/** The theme the hero screenshot shows and the live preview starts in. */
+export const DEFAULT_DEMO_THEME: ColorTheme = "amber-minimal"

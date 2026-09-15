@@ -7,7 +7,8 @@
  * - marketing/output/store/  captioned 1280×800 screenshots (Chrome uses the
  *                            first five; AMO takes all six)
  * - marketing/output/        promo-small (440×280), promo-marquee (1400×560)
- * - website/public/          og.png (1200×630) and uncaptioned screenshots/
+ * - website/public/          og.png (1200×630)
+ * - website/src/assets/screenshots/  uncaptioned website screenshots
  *
  * Captions and visual language follow website/BRAND.md ("The Quiet Library").
  */
@@ -294,7 +295,9 @@ test("capture store, promo and website images", async ({ browser }) => {
 
   // ─── Website screenshots (uncaptioned, the site supplies the copy) ────
   await test.step("website screenshots", async () => {
-    const dir = `${SITE}/screenshots`
+    // Imported by the site through astro:assets, which emits responsive
+    // AVIF/WebP variants at build time.
+    const dir = path.join(ROOT, "website/src/assets/screenshots")
     fs.rmSync(dir, { recursive: true, force: true })
     const SIZE = { width: 1400, height: 875 }
     const cropTo = (scene: string, region: Region) =>

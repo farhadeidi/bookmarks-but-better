@@ -1,0 +1,33 @@
+---
+const ITEMS = [
+  "No account",
+  "No analytics or tracking",
+  "Local-first data",
+  "Optional Markdown vaults",
+  "Free and open source (MIT)",
+]
+---
+
+<div class="border-t border-border">
+  <ul
+    role="list"
+    class="mx-auto flex max-w-6xl flex-wrap items-center justify-center gap-x-8 gap-y-3 px-6 py-6"
+  >
+    {
+      ITEMS.map((item) => (
+        <li class="flex items-center gap-2 text-muted-foreground">
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke-width="2"
+            class="size-4 shrink-0 stroke-primary"
+            aria-hidden="true"
+          >
+            <path d="m20 6-11 11-5-5" />
+          </svg>
+          <span class="text-sm font-medium">{item}</span>
+        </li>
+      ))
+    }
+  </ul>
+</div>

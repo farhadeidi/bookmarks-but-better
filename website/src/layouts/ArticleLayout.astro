@@ -1,0 +1,37 @@
+---
+import type { JsonLd } from "../lib/seo"
+import BaseLayout from "./BaseLayout.astro"
+
+interface Props {
+  /** The full document title. */
+  title: string
+  description: string
+  eyebrow: string
+  heading: string
+  intro: string
+  jsonLd?: JsonLd[]
+}
+
+const { title, description, eyebrow, heading, intro, jsonLd } = Astro.props
+---
+
+<BaseLayout title={title} description={description} jsonLd={jsonLd}>
+  <article class="mx-auto max-w-3xl px-6 py-16 md:py-24">
+    <header>
+      <p class="font-display text-sm text-primary italic">{eyebrow}</p>
+      <h1
+        class="font-display mt-2 max-w-[30ch] text-4xl font-medium tracking-tight text-balance md:text-5xl"
+      >
+        {heading}
+      </h1>
+      <p
+        class="mt-5 max-w-[56ch] text-base/7 text-pretty text-muted-foreground sm:text-lg/8"
+      >
+        {intro}
+      </p>
+    </header>
+    <div class="prose mt-12">
+      <slot />
+    </div>
+  </article>
+</BaseLayout>

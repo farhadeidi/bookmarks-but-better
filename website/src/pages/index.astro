@@ -1,0 +1,29 @@
+---
+import DaemonCta from "../components/DaemonCta.astro"
+import Faq from "../components/Faq.astro"
+import Features from "../components/Features.astro"
+import Hero from "../components/Hero.astro"
+import PrivacyPledge from "../components/PrivacyPledge.astro"
+import Sources from "../components/Sources.astro"
+import ThemesGallery from "../components/ThemesGallery.astro"
+import TrustStrip from "../components/TrustStrip.astro"
+import BaseLayout from "../layouts/BaseLayout.astro"
+import { FAQ_ITEMS } from "../lib/faq-items"
+import { PAGES } from "../lib/pages"
+import { faqPage, softwareApplication } from "../lib/seo"
+---
+
+<BaseLayout
+  title={PAGES.home.title}
+  description={PAGES.home.description}
+  jsonLd={[softwareApplication(), faqPage(FAQ_ITEMS)]}
+>
+  <Hero />
+  <TrustStrip />
+  <Features />
+  <Sources />
+  <DaemonCta />
+  <ThemesGallery />
+  <PrivacyPledge />
+  <Faq items={FAQ_ITEMS} />
+</BaseLayout>

@@ -41,6 +41,8 @@ test-results/
 
 # Website live-preview build artifact (the real app, built for the hero iframe)
 website/public/app-preview/
+# Astro's generated types for the website's content collections
+website/.astro/
 
 # Rust
 /target

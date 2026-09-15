@@ -1,0 +1,42 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro"
+
+const LINKS = [
+  { href: "/", label: "Home" },
+  { href: "/docs/", label: "Docs" },
+  { href: "/guides/", label: "Guides" },
+]
+---
+
+<BaseLayout
+  title="Page not found — Bookmarks But Better"
+  description="This page does not exist."
+  noindex
+  canonical={false}
+>
+  <div class="mx-auto max-w-xl px-6 py-24 text-center md:py-32">
+    <p class="font-display text-sm text-primary italic">404</p>
+    <h1
+      class="font-display mt-2 text-5xl font-medium tracking-tight md:text-7xl"
+    >
+      Nothing here.
+    </h1>
+    <p class="mt-6 text-base/7 text-pretty text-muted-foreground">
+      The page you were looking for has wandered off the shelf.
+    </p>
+    <ul role="list" class="mt-8 flex flex-wrap justify-center gap-x-6 gap-y-2">
+      {
+        LINKS.map((link) => (
+          <li>
+            <a
+              href={link.href}
+              class="text-foreground underline decoration-primary/60 underline-offset-4 hover:text-primary"
+            >
+              {link.label}
+            </a>
+          </li>
+        ))
+      }
+    </ul>
+  </div>
+</BaseLayout>
