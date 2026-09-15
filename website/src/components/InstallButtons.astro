@@ -1,52 +1,46 @@
 ---
+// The install buttons, named for the visitor's browser from <html
+// data-browser> (set in Head.astro). Chromium browsers, and visitors without
+// JavaScript, get Chrome as the primary (ink) button and Firefox beside it.
+// Firefox moves its own button first and primary. Safari, which is
+// daemon-only and built from source, gets its setup guide as the primary,
+// with both stores after it.
 import { SITE } from "../lib/site"
+import { BUTTON, PRIMARY } from "../lib/ui"
+import BrowserIcon from "./BrowserIcon.astro"
 
-interface Props {
-  class?: string
-}
-
-const { class: className } = Astro.props
-const FOCUS =
-  "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+const ITEM = [BUTTON, "min-w-44 pr-4 pl-3"]
+const ICON = "size-5 shrink-0 sm:size-4"
 ---
 
-<div class:list={["flex flex-wrap items-center gap-3", className]}>
+<div
+  class="flex w-full max-w-xs flex-col gap-3 sm:w-auto sm:max-w-none sm:flex-row sm:flex-wrap sm:justify-center"
+>
+  <a
+    href="/docs/start/safari/"
+    class:list={[ITEM, PRIMARY, "order-first not-safari:hidden"]}
+  >
+    <BrowserIcon name="safari" class={ICON} />
+    Get it for Safari
+  </a>
   <a
     href={SITE.chromeStore}
     class:list={[
-      "inline-flex h-11 items-center gap-2 rounded-md bg-primary pr-4 pl-3 text-sm font-medium text-primary-foreground hover:opacity-90",
-      FOCUS,
+      ITEM,
+      "bg-primary text-primary-foreground ring-primary hover:bg-primary/90 firefox:bg-card firefox:text-foreground firefox:ring-border firefox:hover:bg-muted safari:bg-card safari:text-foreground safari:ring-border safari:hover:bg-muted",
     ]}
   >
-    <svg
-      viewBox="0 0 24 24"
-      class="size-4 shrink-0"
-      fill="currentColor"
-      aria-hidden="true"
-    >
-      <path
-        d="M12 2a10 10 0 0 1 9.5 6.9h-9.9a3.6 3.6 0 0 0-3.4 2.4L4.3 5.5A10 10 0 0 1 12 2ZM2.2 9.1l4.4 3.6a3.6 3.6 0 0 0 .8 3.9l-3.3 4A10 10 0 0 1 2 12c0-1 .1-2 .2-2.9ZM12 22a10 10 0 0 1-6.7-2.6l4-2.4a3.6 3.6 0 0 0 4.7-1.7h6A10 10 0 0 1 12 22Z"
-      ></path>
-    </svg>
+    <BrowserIcon name="chrome" class={ICON} />
     Add to Chrome
   </a>
   <a
     href={SITE.firefoxStore}
     class:list={[
-      "inline-flex h-11 items-center gap-2 rounded-md border border-border bg-card pr-4 pl-3 text-sm font-medium text-card-foreground hover:bg-muted",
-      FOCUS,
+      ITEM,
+      "bg-card text-foreground ring-border hover:bg-muted firefox:order-first firefox:bg-primary firefox:text-primary-foreground firefox:ring-primary firefox:hover:bg-primary/90",
     ]}
   >
-    <svg
-      viewBox="0 0 24 24"
-      class="size-4 shrink-0"
-      fill="currentColor"
-      aria-hidden="true"
-    >
-      <path
-        d="M21.3 6.9c-.5-1.2-1.5-2.5-2.3-2.9.6 1.1.9 2 1 2.7v.1c-1.2-2.9-3.2-4-4.8-6.4-.1-.1-.1-.2-.2-.4 0 0-.1-.1-.1-.2-.4 2.4-1.6 4.4-3.5 5.9-1.2.9-2.6 2.4-2.6 4.5v.2A4.6 4.6 0 0 1 9.4 7a4.7 4.7 0 0 0-1.5 3.6c0 1.1.3 2.1.9 3-1.7-.9-4.6-1.8-4.6-6.2C2.5 10 4 12.9 6.5 15c1.2 1 2.2 2.3 2.2 2.3s-.7-1-1-2.3c1.8 1.3 4.2 2.9 5.3 5.4-.3-2-1-4.1-2.1-5.8-.9-1.4-1.9-2.7-1.7-4.5.9 1.4 2 2.2 3.4 2.8 3.6 1.6 4.5 3.4 4.7 4.3.9-1.4.4-3.9-.3-5.2v-.1c.9.8 2 2.3 2.2 4.7.4-2.9-.7-5.8-2.2-7.6.8.4 1.8 1.3 2.4 2.3-.2-1.2-.7-2.5-1.6-3.6l.1.1c.8.7 1.8 1.8 2.2 2.9Z"
-      ></path>
-    </svg>
+    <BrowserIcon name="firefox" class={ICON} />
     Add to Firefox
   </a>
 </div>

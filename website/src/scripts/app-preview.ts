@@ -1,15 +1,13 @@
 /**
  * The live preview launcher. The home page ships a static screenshot; the real
  * app (the /preview/ build) is only loaded into an iframe when the visitor
- * asks for it — the "Try it live" button, a theme dot, or a theme in the
- * gallery.
+ * asks for it: the "Try it live" button, a theme dot, or a "live demo" link
+ * (`data-demo-link`) elsewhere on the page.
  *
  * Once loaded, the frame follows the site's dark/light mode and the chosen
  * color theme over postMessage, and reports its actual theme back so the
  * dots always show the truth.
  */
-
-export const PICK_THEME_EVENT = "bbb:pick-theme"
 
 const PREVIEW_MESSAGE = "bbb-preview/appearance"
 const PREVIEW_STATE = "bbb-preview/state"
@@ -58,7 +56,7 @@ function setup(root: HTMLElement) {
     stage.replaceChildren(frame)
     root.dataset.state = "live"
     markActive(theme)
-    if (focus) frame.focus()
+    if (focus) frame.focus({ preventScroll: true })
   }
 
   const pick = (id: string | undefined) => {
@@ -77,9 +75,19 @@ function setup(root: HTMLElement) {
   for (const dot of dots) {
     dot.addEventListener("click", () => pick(dot.dataset.previewTheme))
   }
-  window.addEventListener(PICK_THEME_EVENT, (event) =>
-    pick((event as CustomEvent<string>).detail)
-  )
+
+  // "Try the live demo" links start the preview and scroll to it. Without
+  // JavaScript they still jump to the screenshot.
+  for (const link of document.querySelectorAll<HTMLAnchorElement>(
+    `[data-demo-link][href="#${root.id}"]`
+  )) {
+    link.addEventListener("click", (event) => {
+      event.preventDefault()
+      launch(active, true)
+      const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches
+      root.scrollIntoView({ behavior: reduce ? "auto" : "smooth" })
+    })
+  }
 
   // Follow the site's dark/light toggle.
   new MutationObserver(() => send({ mode: siteMode() })).observe(

@@ -1,0 +1,43 @@
+---
+import { TEXT_LINK } from "../lib/ui"
+import HeadingGroup from "./HeadingGroup.astro"
+import Section from "./Section.astro"
+
+const PLEDGES = [
+  { title: "No account", text: "Nothing to register, nothing to log into." },
+  {
+    title: "No analytics",
+    text: "No telemetry, no fingerprinting, no funnels.",
+  },
+  { title: "No tracking", text: "No ads, no trackers, no third-party scripts." },
+  {
+    title: "No content collection",
+    text: "Your bookmarks stay in your browser or in your own files.",
+  },
+]
+---
+
+<Section id="privacy" labelledby="privacy-title">
+  <HeadingGroup
+    id="privacy-title"
+    eyebrow="Privacy"
+    title="Private by design, not by policy update"
+    description="The only network calls the extension makes are to a public favicon service, with origins only and never full URLs, and to your own local daemon if you connect one."
+  >
+    <p class="mt-6 text-base/7 sm:text-sm/6">
+      <a href="/privacy/" class={TEXT_LINK}>Read the privacy page</a>
+    </p>
+  </HeadingGroup>
+  <dl class="mt-16 grid gap-x-12 gap-y-8 sm:grid-cols-2 lg:grid-cols-4">
+    {
+      PLEDGES.map((pledge) => (
+        <div class="flex flex-col gap-2 border-t border-foreground/25 pt-6">
+          <dt class="text-lg/7 font-medium text-foreground">{pledge.title}</dt>
+          <dd class="text-base/7 text-pretty text-muted-foreground sm:text-sm/6">
+            {pledge.text}
+          </dd>
+        </div>
+      ))
+    }
+  </dl>
+</Section>

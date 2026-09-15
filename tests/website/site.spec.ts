@@ -30,13 +30,7 @@ const PAGES = [
   },
 ] as const
 
-const MAIN_NAV = [
-  "/preview/",
-  "/docs/",
-  "/docs/guides/",
-  "/privacy/",
-  "/docs/start/install/",
-]
+const MAIN_NAV = ["/docs/", "/docs/guides/", "/privacy/"]
 
 /** The text of every <h1> in raw HTML, tags stripped and whitespace collapsed. */
 function headings(html: string): string[] {

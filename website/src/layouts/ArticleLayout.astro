@@ -16,22 +16,22 @@ const { title, description, eyebrow, heading, intro, jsonLd } = Astro.props
 ---
 
 <SiteLayout title={title} description={description} jsonLd={jsonLd}>
-  <article class="mx-auto max-w-3xl px-6 py-16 md:py-24">
-    <header>
-      <p class="font-display text-sm text-primary italic">{eyebrow}</p>
-      <h1
-        class="font-display mt-2 max-w-[30ch] text-4xl font-medium tracking-tight text-balance md:text-5xl"
-      >
-        {heading}
-      </h1>
-      <p
-        class="mt-5 max-w-[56ch] text-base/7 text-pretty text-muted-foreground sm:text-lg/8"
-      >
-        {intro}
-      </p>
-    </header>
-    <div class="prose mt-12">
-      <slot />
+  <article class="px-6 pt-16 pb-24 md:pt-24 md:pb-32">
+    <div class="mx-auto max-w-2xl">
+      <header class="border-b border-border pb-12">
+        <p class="text-sm/6 font-medium text-accent">{eyebrow}</p>
+        <h1
+          class="font-display mt-3 text-6xl tracking-tight text-pretty sm:text-7xl"
+        >
+          {heading}
+        </h1>
+        <p class="mt-6 max-w-[48ch] text-lg/8 text-pretty text-muted-foreground">
+          {intro}
+        </p>
+      </header>
+      <div class="prose mt-12 max-w-[70ch]">
+        <slot />
+      </div>
     </div>
   </article>
 </SiteLayout>

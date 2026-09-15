@@ -1,65 +1,184 @@
 ---
-// Starlight's header on every page. Docs pages open their mobile menu from the
-// sidebar toggle; pages without a sidebar (the marketing pages) get the same
-// round button, opening the site links instead.
+// One header on every page, marketing and docs: the brand, the section links,
+// Starlight's search, GitHub, the theme toggle and the install button. It runs
+// full width with the same padding everywhere (starlight.css), so nothing
+// shifts between the marketing pages and the docs. Below
+// 50rem, pages without a sidebar (the marketing pages) open the links from
+// their own menu; docs pages keep Starlight's sidebar toggle, restyled in
+// starlight.css to match.
 import { Icon } from "@astrojs/starlight/components"
-import Default from "@astrojs/starlight/components/Header.astro"
-import { SITE_LINKS } from "../../lib/nav"
+import Search from "@astrojs/starlight/components/Search.astro"
+import { currentSiteLink, SITE_LINKS } from "../../lib/nav"
 import { SITE } from "../../lib/site"
+import InstallCta from "../InstallCta.astro"
 import ThemeToggle from "../ThemeToggle.astro"
+import SiteTitle from "./SiteTitle.astro"
 
 const { hasSidebar } = Astro.locals.starlightRoute
+const current = currentSiteLink(Astro.url)
 ---
 
-<Default />
-{
-  !hasSidebar && (
-    <>
-      <button
-        type="button"
-        popovertarget="bbb-site-menu"
-        class="menu-button md:sl-hidden print:hidden"
-      >
-        <Icon name="bars" class="open-menu" />
-        <Icon name="close" class="close-menu" />
-        <span class="sr-only">Menu</span>
-      </button>
-      <nav popover="" id="bbb-site-menu" class="site-menu" aria-label="Site">
-        <ul role="list">
-          {SITE_LINKS.map((link) => (
-            <li>
-              <a href={link.href}>{link.label}</a>
-            </li>
-          ))}
-        </ul>
-        <div class="site-menu-footer">
-          <a href={SITE.repository}>GitHub</a>
-          <ThemeToggle />
-        </div>
-      </nav>
-    </>
-  )
-}
+<div class="bbb-header">
+  <SiteTitle />
+  <nav class="links" aria-label="Site">
+    {
+      SITE_LINKS.map((link) => (
+        <a
+          href={link.href}
+          aria-current={link.href === current ? "page" : undefined}
+        >
+          {link.label}
+        </a>
+      ))
+    }
+  </nav>
+  <div class="actions print:hidden">
+    {/* A compact field in the docs; an icon on the marketing pages. */}
+    <div class:list={["search", { field: hasSidebar }]}>
+      <Search />
+    </div>
+    <div class="wide">
+      <a href={SITE.repository} class="icon-button">
+        <Icon name="github" size="1.125rem" />
+        <span class="sr-only">GitHub</span>
+      </a>
+      <ThemeToggle />
+      <InstallCta />
+    </div>
+    {
+      !hasSidebar && (
+        <>
+          <button
+            type="button"
+            popovertarget="bbb-site-menu"
+            class="icon-button menu-button"
+          >
+            <Icon name="bars" size="1.25rem" class="open-menu" />
+            <Icon name="close" size="1.25rem" class="close-menu" />
+            <span class="sr-only">Menu</span>
+          </button>
+          <nav
+            popover=""
+            id="bbb-site-menu"
+            class="site-menu"
+            aria-label="Site"
+          >
+            <ul role="list">
+              {SITE_LINKS.map((link) => (
+                <li>
+                  <a
+                    href={link.href}
+                    aria-current={link.href === current ? "page" : undefined}
+                  >
+                    {link.label}
+                  </a>
+                </li>
+              ))}
+            </ul>
+            <div class="menu-cta">
+              <InstallCta block />
+            </div>
+            <div class="site-menu-footer">
+              <a href={SITE.repository} class="menu-github">
+                <Icon name="github" size="1.125rem" />
+                GitHub
+              </a>
+              <ThemeToggle />
+            </div>
+          </nav>
+        </>
+      )
+    }
+  </div>
+</div>
 
 <style>
-  .menu-button {
-    position: fixed;
-    top: calc((var(--sl-nav-height) - var(--sl-menu-button-size)) / 2);
-    inset-inline-end: var(--sl-nav-pad-x);
-    z-index: var(--sl-z-index-navbar);
-    width: var(--sl-menu-button-size);
-    height: var(--sl-menu-button-size);
-    padding: 0.5rem;
+  .bbb-header {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    height: 100%;
+  }
+
+  .links {
+    display: none;
+    align-items: center;
+    gap: 0.25rem;
+  }
+  .links a {
+    border-radius: 0.375rem;
+    padding: 0.375rem 0.625rem;
+    color: var(--muted-foreground);
+    font-size: var(--sl-text-sm);
+    font-weight: 500;
+    text-decoration: none;
+    white-space: nowrap;
+  }
+  .links a:hover,
+  .links a[aria-current="page"] {
+    color: var(--foreground);
+  }
+  .links a[aria-current="page"] {
+    background-color: var(--muted);
+  }
+
+  .actions,
+  .wide {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+  }
+  .actions {
+    margin-inline-start: auto;
+  }
+  .wide {
+    display: none;
+  }
+  .wide :global(.install-cta) {
+    margin-inline-start: 0.5rem;
+  }
+
+  .icon-button {
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    width: 2.5rem;
+    height: 2.5rem;
     border: 0;
-    border-radius: 50%;
-    background-color: var(--sl-color-white);
-    color: var(--sl-color-black);
-    box-shadow: var(--sl-shadow-md);
+    border-radius: 0.5rem;
+    background: transparent;
+    color: var(--muted-foreground);
     cursor: pointer;
   }
+  .icon-button:hover {
+    background-color: var(--muted);
+    color: var(--foreground);
+  }
+
+  /* Starlight's search button, reduced to an icon button. */
+  .search :global(button[data-open-modal]) {
+    justify-content: center;
+    width: 2.5rem;
+    height: 2.5rem;
+    padding: 0;
+    border: 0;
+    border-radius: 0.5rem;
+    background-color: transparent;
+    color: var(--muted-foreground);
+    font-size: 1.125rem;
+  }
+  .search :global(button[data-open-modal]:hover) {
+    background-color: var(--muted);
+    color: var(--foreground);
+  }
+  .search :global(button[data-open-modal] > :not(svg)) {
+    display: none;
+  }
+
   .menu-button:has(~ :popover-open) {
-    background-color: var(--sl-color-gray-2);
-    box-shadow: none;
+    background-color: var(--muted);
+    color: var(--foreground);
   }
   .menu-button:has(~ :popover-open) .open-menu,
   .menu-button:not(:has(~ :popover-open)) .close-menu {
@@ -73,40 +192,81 @@ const { hasSidebar } = Astro.locals.starlightRoute
     margin: 0;
     padding: 0.5rem var(--sl-nav-pad-x) 1rem;
     border: 0;
-    border-bottom: 1px solid var(--sl-color-hairline-shade);
-    background-color: var(--sl-color-black);
-    color: var(--sl-color-text);
+    border-bottom: 1px solid var(--border);
+    background-color: var(--background);
+    color: var(--foreground);
   }
   .site-menu ul {
     padding: 0;
     list-style: none;
   }
-  .site-menu a {
+  .site-menu li a {
     display: block;
     padding-block: 0.75rem;
-    color: var(--sl-color-white);
+    color: var(--foreground);
     font-size: var(--sl-text-lg);
+    font-weight: 500;
     text-decoration: none;
+  }
+  .site-menu li a[aria-current="page"] {
+    text-decoration: underline;
+    text-decoration-color: var(--accent);
+    text-underline-offset: 6px;
+  }
+  .menu-cta {
+    margin-top: 0.75rem;
   }
   .site-menu-footer {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-top: 0.5rem;
-    border-top: 1px solid var(--sl-color-gray-6);
-    padding-top: 0.5rem;
+    margin-top: 1rem;
+    border-top: 1px solid var(--border);
+    padding-top: 0.75rem;
   }
-  .site-menu-footer a {
-    color: var(--sl-color-gray-2);
+  .menu-github {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--muted-foreground);
     font-size: var(--sl-text-base);
+    text-decoration: none;
+  }
+  .menu-github:hover {
+    color: var(--foreground);
   }
 
-  /* Keep the header's contents clear of the fixed menu button. */
-  @media (max-width: 49.99rem) {
-    :global(:root:not([data-has-sidebar]) .page > header) {
-      padding-inline-end: calc(
-        var(--sl-nav-gap) + var(--sl-nav-pad-x) + var(--sl-menu-button-size)
-      );
+  @media (min-width: 50rem) {
+    .links,
+    .wide {
+      display: flex;
+    }
+    .menu-button {
+      display: none;
+    }
+  }
+
+  /* The docs keep a compact search field once there is room for it. */
+  @media (min-width: 64rem) {
+    .field :global(button[data-open-modal]) {
+      justify-content: flex-start;
+      gap: 0.5rem;
+      width: 15rem;
+      padding-inline: 0.75rem 0.375rem;
+      border: 1px solid var(--border);
+      background-color: var(--card);
+      font-size: var(--sl-text-sm);
+    }
+    .field :global(button[data-open-modal]:hover) {
+      border-color: color-mix(in oklch, var(--foreground) 25%, transparent);
+      background-color: var(--card);
+    }
+    .field :global(button[data-open-modal] > span) {
+      display: block;
+    }
+    .field :global(button[data-open-modal] > kbd) {
+      display: flex;
+      margin-inline-start: auto;
     }
   }
 </style>

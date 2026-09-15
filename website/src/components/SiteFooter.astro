@@ -5,10 +5,10 @@ const COLUMNS = [
   {
     title: "Product",
     links: [
-      { href: "/docs/start/install/", label: "Install" },
-      { href: "/preview/", label: "Live preview" },
       { href: SITE.chromeStore, label: "Chrome Web Store" },
       { href: SITE.firefoxStore, label: "Firefox Add-ons" },
+      { href: "/docs/start/safari/", label: "Safari" },
+      { href: "/preview/", label: "Live demo" },
     ],
   },
   {
@@ -16,40 +16,34 @@ const COLUMNS = [
     links: [
       { href: "/docs/", label: "Documentation" },
       { href: "/docs/daemon/", label: "Markdown vaults" },
-      { href: "/docs/daemon/backups/", label: "Back up your vault" },
+      { href: "/docs/guides/", label: "Guides" },
       { href: "/docs/daemon/troubleshooting/", label: "Troubleshooting" },
-    ],
-  },
-  {
-    title: "Guides",
-    links: [
-      { href: "/docs/guides/pocket-alternative/", label: "Pocket alternative" },
-      {
-        href: "/docs/guides/raindrop-alternative/",
-        label: "Raindrop alternative",
-      },
-      { href: "/docs/guides/obsidian-bookmarks/", label: "Obsidian bookmarks" },
-      { href: "/docs/guides/", label: "All guides" },
     ],
   },
   {
     title: "Project",
     links: [
-      { href: "/privacy/", label: "Privacy" },
       { href: SITE.repository, label: "GitHub" },
-      { href: SITE.issues, label: "Report an issue" },
       { href: SITE.releases, label: "Releases" },
+      { href: SITE.issues, label: "Report an issue" },
+      { href: "/privacy/", label: "Privacy" },
     ],
   },
 ]
+
+const LINK =
+  "text-muted-foreground underline-offset-4 hover:text-foreground hover:underline hover:decoration-accent"
 ---
 
 <footer class="border-t border-border">
   <div
-    class="mx-auto grid max-w-6xl gap-10 px-6 py-14 sm:grid-cols-2 lg:grid-cols-[1.5fr_repeat(4,1fr)]"
+    class="mx-auto grid max-w-6xl grid-cols-2 gap-x-6 gap-y-10 px-6 py-14 sm:grid-cols-3 lg:grid-cols-[2fr_repeat(3,1fr)]"
   >
-    <div class="sm:col-span-2 lg:col-span-1">
-      <div class="flex items-center gap-2.5">
+    <div class="col-span-2 sm:col-span-3 lg:col-span-1">
+      <a
+        href="/"
+        class="inline-flex items-center gap-2.5 text-[0.9375rem] font-semibold tracking-tight"
+      >
         <img
           src="/logo-dark.svg"
           alt=""
@@ -64,26 +58,25 @@ const COLUMNS = [
           height="20"
           class="hidden size-5 dark:block"
         />
-        <span class="font-display font-semibold">{SITE.name}</span>
-      </div>
+        {SITE.name}
+      </a>
       <p
-        class="mt-3 max-w-xs text-base/7 text-pretty text-muted-foreground sm:text-sm/6"
+        class="mt-4 max-w-[40ch] text-base/7 text-pretty text-muted-foreground sm:text-sm/6"
       >
-        Your bookmarks as a beautiful new tab. Local, private, no account. Free
-        and open source (MIT).
+        A calm, private dashboard for your bookmarks, kept in your browser or in
+        Markdown files you own.
       </p>
     </div>
     {
       COLUMNS.map((column) => (
         <nav aria-label={column.title}>
-          <h2 class="text-sm font-medium">{column.title}</h2>
-          <ul role="list" class="mt-3 space-y-2">
+          <h2 class="text-base/7 font-medium text-foreground sm:text-sm/6">
+            {column.title}
+          </h2>
+          <ul role="list" class="mt-4 space-y-3 text-base/7 sm:text-sm/6">
             {column.links.map((link) => (
               <li>
-                <a
-                  href={link.href}
-                  class="text-sm text-muted-foreground hover:text-foreground hover:underline"
-                >
+                <a href={link.href} class={LINK}>
                   {link.label}
                 </a>
               </li>
@@ -95,10 +88,12 @@ const COLUMNS = [
   </div>
   <div class="border-t border-border">
     <div
-      class="mx-auto flex max-w-6xl flex-wrap items-center gap-x-6 gap-y-2 px-6 py-5 text-sm text-muted-foreground"
+      class="mx-auto flex max-w-6xl flex-wrap items-center gap-x-6 gap-y-2 px-6 py-6 text-base/7 text-muted-foreground sm:text-sm/6"
     >
-      <span>MIT License</span>
-      <span class="tabular-nums">v{SITE.version}</span>
+      <a href={SITE.license} class={LINK}>MIT License</a>
+      <a href={SITE.releases} class:list={[LINK, "tabular-nums"]}>
+        v{SITE.version}
+      </a>
       <span class="sm:ml-auto">This site is static and loads no analytics.</span>
     </div>
   </div>

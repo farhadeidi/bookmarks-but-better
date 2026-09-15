@@ -1,13 +1,34 @@
 ---
 // Starlight's head (title, description, canonical, Open Graph and the
 // og:image / theme-color entries from astro.config.ts), plus the site's
-// self-hosted fonts. Marketing pages open with Fraunces headlines, so they
-// preload it too.
+// self-hosted fonts and the browser check for the install buttons.
+//
+// The fonts use `font-display: optional`, so a face that is not preloaded
+// would likely miss first paint. Every page opens with Inter and an Instrument
+// Serif title; only the home hero uses the serif italic.
 import Default from "@astrojs/starlight/components/Head.astro"
 import { Font } from "astro:assets"
-import { isDocsPage } from "../../lib/nav"
+
+const isHome = Astro.url.pathname === "/"
 ---
 
 <Default />
 <Font cssVariable="--font-inter" preload />
-<Font cssVariable="--font-fraunces" preload={!isDocsPage(Astro.url)} />
+<Font
+  cssVariable="--font-serif"
+  preload={isHome ? true : [{ style: "normal" }]}
+/>
+<script is:inline>
+  // Marks Firefox and Safari on <html data-browser> before first paint, so
+  // the install buttons name the visitor's browser. Chromium browsers, and
+  // visitors without JavaScript, keep the Chrome default.
+  ;(function () {
+    var ua = navigator.userAgent
+    var browser = /Firefox\//.test(ua)
+      ? "firefox"
+      : /Safari\//.test(ua) && !/Chrom|CriOS|FxiOS|EdgiOS|Android/.test(ua)
+        ? "safari"
+        : null
+    if (browser) document.documentElement.dataset.browser = browser
+  })()
+</script>

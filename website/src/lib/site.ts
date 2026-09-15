@@ -27,5 +27,5 @@ export const SITE = {
   license: `${REPOSITORY}/blob/main/LICENSE`,
 } as const
 
-/** Browser UI colors for the paper (light) and lamplight (dark) palettes. */
-export const THEME_COLORS = { light: "#faf9f5", dark: "#1b1a17" } as const
+/** Browser UI colors: the light and dark page backgrounds (global.css). */
+export const THEME_COLORS = { light: "#fcfcfa", dark: "#121210" } as const

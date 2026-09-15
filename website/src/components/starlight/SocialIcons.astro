@@ -1,29 +1,42 @@
 ---
-// The header's site links, then Starlight's GitHub icon. "Docs" is left out
-// here because the site title already links to it.
-import Default from "@astrojs/starlight/components/SocialIcons.astro"
-import { SITE_LINKS } from "../../lib/nav"
+// Starlight shows these at the foot of the docs' mobile menu, beside the theme
+// toggle: the site's section links, then GitHub. (The header renders its own
+// on wider screens.)
+import { Icon } from "@astrojs/starlight/components"
+import { currentSiteLink, SITE_LINKS } from "../../lib/nav"
+import { SITE } from "../../lib/site"
 
-const links = SITE_LINKS.filter((link) => link.href !== "/docs/")
+const current = currentSiteLink(Astro.url)
 ---
 
 {
-  links.map((link) => (
-    <a href={link.href} class="site-link">
+  SITE_LINKS.map((link) => (
+    <a
+      href={link.href}
+      class="site-link"
+      aria-current={link.href === current ? "page" : undefined}
+    >
       {link.label}
     </a>
   ))
 }
-<Default />
+<a href={SITE.repository} class="site-link">
+  <Icon name="github" size="1.125rem" />
+  <span class="sr-only">GitHub</span>
+</a>
 
 <style>
   .site-link {
-    color: var(--sl-color-gray-2);
+    display: inline-flex;
+    align-items: center;
+    color: var(--muted-foreground);
     font-size: var(--sl-text-sm);
+    font-weight: 500;
     text-decoration: none;
     white-space: nowrap;
   }
-  .site-link:hover {
-    color: var(--sl-color-white);
+  .site-link:hover,
+  .site-link[aria-current="page"] {
+    color: var(--foreground);
   }
 </style>

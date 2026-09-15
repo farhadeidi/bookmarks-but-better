@@ -1,11 +1,11 @@
 ---
+import ClosingCta from "../components/ClosingCta.astro"
 import Faq from "../components/Faq.astro"
 import Features from "../components/Features.astro"
 import Hero from "../components/Hero.astro"
-import PrivacyPledge from "../components/PrivacyPledge.astro"
+import Privacy from "../components/Privacy.astro"
 import Sources from "../components/Sources.astro"
-import ThemesGallery from "../components/ThemesGallery.astro"
-import TrustStrip from "../components/TrustStrip.astro"
+import Themes from "../components/Themes.astro"
 import SiteLayout from "../layouts/SiteLayout.astro"
 import { FAQ_ITEMS } from "../lib/faq-items"
 import { PAGES } from "../lib/pages"
@@ -19,10 +19,10 @@ import { faqPage, softwareApplication } from "../lib/seo"
   jsonLd={[softwareApplication(), faqPage(FAQ_ITEMS)]}
 >
   <Hero />
-  <TrustStrip />
   <Features />
   <Sources />
-  <ThemesGallery />
-  <PrivacyPledge />
+  <Themes />
+  <Privacy />
   <Faq items={FAQ_ITEMS} />
+  <ClosingCta />
 </SiteLayout>

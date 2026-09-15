@@ -1,0 +1,18 @@
+---
+// The foot of the docs' mobile menu, in the same order as the marketing
+// pages' menu: the install button, then the site links, GitHub and the theme
+// toggle (SocialIcons.astro and ThemeSelect.astro).
+import Default from "@astrojs/starlight/components/MobileMenuFooter.astro"
+import InstallCta from "../InstallCta.astro"
+---
+
+<div class="menu-cta">
+  <InstallCta block />
+</div>
+<Default />
+
+<style>
+  .menu-cta {
+    padding-block: 0.5rem 1rem;
+  }
+</style>

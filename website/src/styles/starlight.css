@@ -1,62 +1,126 @@
-/* Brings the Starlight docs close to the marketing site ("The Quiet Library",
-   see BRAND.md): Inter body, Fraunces headings, paper and lamplight
-   backgrounds, one amber accent. Starlight's :root is its dark theme. */
-:root {
-  --sl-font: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
-  --bbb-font-display: var(--font-fraunces), ui-serif, Georgia, serif;
-
-  --sl-color-accent-low: oklch(0.32 0.06 70);
-  --sl-color-accent: oklch(0.72 0.13 70);
-  --sl-color-accent-high: oklch(0.86 0.09 75);
-  --sl-color-white: oklch(0.97 0.004 90);
-  --sl-color-gray-1: oklch(0.92 0.005 90);
-  --sl-color-gray-2: oklch(0.84 0.006 85);
-  --sl-color-gray-3: oklch(0.68 0.01 85);
-  --sl-color-gray-4: oklch(0.5 0.01 80);
-  --sl-color-gray-5: oklch(0.33 0.008 80);
-  --sl-color-gray-6: oklch(0.215 0.007 80);
-  --sl-color-black: oklch(0.17 0.006 80);
-}
-
-:root[data-theme="light"] {
-  --sl-color-accent-low: oklch(0.93 0.04 80);
-  --sl-color-accent: oklch(0.55 0.12 60);
-  --sl-color-accent-high: oklch(0.38 0.09 55);
-  --sl-color-white: oklch(0.205 0.01 80);
-  --sl-color-gray-1: oklch(0.26 0.01 80);
-  --sl-color-gray-2: oklch(0.34 0.01 80);
-  --sl-color-gray-3: oklch(0.46 0.01 80);
-  --sl-color-gray-4: oklch(0.6 0.01 80);
-  --sl-color-gray-5: oklch(0.84 0.008 85);
-  --sl-color-gray-6: oklch(0.95 0.005 90);
-  --sl-color-gray-7: oklch(0.97 0.004 90);
-  --sl-color-black: oklch(0.985 0.004 95);
-}
-
-/* Amber stays the only accent: tip asides (purple) take the accent and note
-   asides (blue) go neutral. Caution and danger keep their semantic colors.
-   Both selectors are needed to beat Starlight's own light-theme values. */
+/* The Starlight docs on the site's own tokens (global.css): Inter body,
+   Instrument Serif page titles and section headings, ink text and one small
+   amber accent. Every --sl-* color derives from the site variables, which
+   already follow the theme, so one block serves light and dark. Both selectors
+   are needed to beat Starlight's own light-theme values. */
 :root,
 :root[data-theme="light"] {
+  --sl-font: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --bbb-font-display: var(--font-serif), ui-serif, serif;
+
+  --sl-color-white: var(--foreground);
+  --sl-color-gray-1: color-mix(
+    in oklch,
+    var(--foreground) 88%,
+    var(--background)
+  );
+  --sl-color-gray-2: color-mix(
+    in oklch,
+    var(--foreground) 76%,
+    var(--background)
+  );
+  --sl-color-gray-3: var(--muted-foreground);
+  --sl-color-gray-4: color-mix(
+    in oklch,
+    var(--foreground) 40%,
+    var(--background)
+  );
+  --sl-color-gray-5: color-mix(
+    in oklch,
+    var(--foreground) 16%,
+    var(--background)
+  );
+  --sl-color-gray-6: var(--muted);
+  --sl-color-gray-7: color-mix(in oklch, var(--muted) 50%, var(--background));
+  --sl-color-black: var(--background);
+
+  --sl-color-accent-low: color-mix(
+    in oklch,
+    var(--accent) 16%,
+    var(--background)
+  );
+  --sl-color-accent: var(--accent);
+  --sl-color-accent-high: color-mix(
+    in oklch,
+    var(--accent) 55%,
+    var(--foreground)
+  );
+
+  /* Links, the table of contents and the skip link stay ink. */
+  --sl-color-text-accent: var(--foreground);
+  --sl-color-text-invert: var(--background);
+  --sl-color-bg: var(--background);
+  --sl-color-bg-nav: var(--background);
+  --sl-color-bg-sidebar: var(--background);
+  --sl-color-bg-inline-code: var(--muted);
+  --sl-color-bg-accent: var(--primary);
+  --sl-color-hairline-light: var(--border);
+  --sl-color-hairline: var(--border);
+  --sl-color-hairline-shade: var(--border);
+
+  /* Tip asides (purple) take the accent and note asides (blue) go neutral.
+     Caution and danger keep their semantic colors. */
   --sl-color-purple-low: var(--sl-color-accent-low);
   --sl-color-purple: var(--sl-color-accent);
   --sl-color-purple-high: var(--sl-color-accent-high);
   --sl-color-blue-low: var(--sl-color-gray-6);
   --sl-color-blue: var(--sl-color-gray-3);
   --sl-color-blue-high: var(--sl-color-gray-1);
+
+  /* The docs' menu button matches the header's 40px icon buttons. */
+  --sl-menu-button-size: 2.5rem;
 }
 
+/* One header row on every page: full width, with the marketing pages'
+   1.5rem gutter at every size, so the logo never moves between pages. */
+:root {
+  --sl-nav-pad-x: 1.5rem;
+}
+
+/* Instrument Serif has one weight and runs small, so titles size up. */
 h1#_top,
-.sl-markdown-content :is(h1, h2, h3) {
+.sl-markdown-content h2 {
   font-family: var(--bbb-font-display);
-  font-weight: 500;
-  letter-spacing: -0.01em;
+  font-weight: 400;
+  letter-spacing: -0.015em;
+}
+h1#_top {
+  font-size: calc(var(--sl-text-h1) * 1.15);
+  line-height: 1.05;
+}
+.sl-markdown-content h2 {
+  font-size: calc(var(--sl-text-h2) * 1.1);
 }
 
 .sl-markdown-content a:not(:where(.not-content *)) {
+  text-decoration-color: var(--accent);
   text-underline-offset: 3px;
 }
+.sl-markdown-content a:not(:where(.not-content *)):hover {
+  text-decoration-color: currentColor;
+}
 
-::selection {
-  background: color-mix(in oklch, var(--sl-color-accent) 25%, transparent);
+/* The current sidebar page: a quiet muted row, not an accent block. */
+#starlight__sidebar .top-level a[aria-current="page"],
+#starlight__sidebar .top-level a[aria-current="page"]:hover,
+#starlight__sidebar .top-level a[aria-current="page"]:focus {
+  background-color: var(--muted);
+  color: var(--foreground);
+}
+
+/* Starlight's mobile sidebar toggle: a plain icon button in the header row. */
+.sl-menu-button {
+  border-radius: 0.5rem;
+  padding: 0.625rem;
+  background-color: transparent;
+  color: var(--foreground);
+  box-shadow: none;
+}
+.sl-menu-button svg {
+  width: 1.25rem;
+  height: 1.25rem;
+}
+.sl-menu-button:hover,
+.sl-menu-button:has(~ :popover-open) {
+  background-color: var(--muted);
 }

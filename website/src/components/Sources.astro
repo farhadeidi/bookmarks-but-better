@@ -1,70 +1,60 @@
 ---
+import { TEXT_LINK } from "../lib/ui"
+import HeadingGroup from "./HeadingGroup.astro"
 import Section from "./Section.astro"
 
-const SOURCES = [
-  {
-    name: "Browser bookmarks",
-    tag: "Default",
-    description:
-      "Shows and edits the bookmarks you already have, through the browser's built-in bookmarks API. Nothing to set up and nothing copied.",
-    link: { href: "/docs/start/sources/", label: "How sources work" },
-  },
-  {
-    name: "Markdown vault",
-    tag: "Optional",
-    description:
-      "Your bookmarks as plain Markdown files in a folder you choose, served by a small daemon that only accepts connections from your own computer. The files stay usable in a text editor, in Obsidian and in Git. In Safari it is the only source.",
-    link: { href: "/docs/daemon/", label: "How Markdown vaults work" },
-  },
-]
+const DETAIL = "text-base/7 text-pretty text-muted-foreground sm:text-sm/6"
 ---
 
-<Section
-  index="02"
-  title="Browser bookmarks or Markdown files. Never mixed."
-  id="sources"
->
-  <ul role="list" class="grid gap-4 md:grid-cols-2">
-    {
-      SOURCES.map((source) => (
-        <li class="flex flex-col rounded-lg bg-card p-6 ring-1 ring-border">
-          <h3 class="flex flex-wrap items-center gap-3">
-            <span class="font-display text-lg font-medium tracking-tight">
-              {source.name}
-            </span>
-            <span class="rounded-full border border-primary/30 bg-primary/5 px-2.5 py-1 text-sm text-primary">
-              {source.tag}
-            </span>
-          </h3>
-          <p class="mt-2 text-base/7 text-pretty text-muted-foreground sm:text-sm/6">
-            {source.description}
-          </p>
-          <a
-            href={source.link.href}
-            class="mt-4 self-start text-sm font-medium text-foreground underline decoration-primary/60 underline-offset-4 hover:text-primary"
+<Section id="sources" labelledby="sources-title">
+  <div class="grid gap-x-12 gap-y-14 lg:grid-cols-2">
+    <HeadingGroup
+      id="sources-title"
+      eyebrow="Sources"
+      title="Browser bookmarks or Markdown files. Never mixed."
+      description="Operations affect only the active source. Switching sources never merges or moves bookmarks, so what lives where is always your decision."
+    />
+    <dl class="divide-y divide-border">
+      <div class="pb-10">
+        <dt class="flex flex-wrap items-center gap-3 text-lg/7 font-medium">
+          Browser bookmarks
+          <span
+            class="inline-flex rounded-full bg-muted px-2.5 text-sm/6 font-medium text-muted-foreground"
           >
-            {source.link.label}
-          </a>
-        </li>
-      ))
-    }
-  </ul>
-  <p
-    class="mt-6 flex items-start gap-3 rounded-lg bg-muted/40 p-4 text-base/7 text-pretty text-muted-foreground ring-1 ring-border sm:text-sm/6"
-  >
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke-width="1.8"
-      class="mt-1 size-4 shrink-0 stroke-primary"
-      aria-hidden="true"
-    >
-      <path d="M12 3 4 6v5c0 4.4 3.2 8.4 8 10 4.8-1.6 8-5.6 8-10V6l-8-3Z"
-      ></path>
-    </svg>
-    <span>
-      Operations affect only the active source. Switching sources never merges
-      or moves bookmarks, so what lives where is always your decision.
-    </span>
-  </p>
+            Default
+          </span>
+        </dt>
+        <dd class:list={["mt-3", DETAIL]}>
+          Shows and edits the bookmarks you already have, through the browser's
+          built-in bookmarks API. Nothing to set up and nothing copied.
+        </dd>
+        <dd class="mt-4 text-base/7 sm:text-sm/6">
+          <a href="/docs/start/sources/" class={TEXT_LINK}>How sources work</a>
+        </dd>
+      </div>
+      <div class="pt-10">
+        <dt class="flex flex-wrap items-center gap-3 text-lg/7 font-medium">
+          Markdown vault
+          <span
+            class="inline-flex rounded-full bg-muted px-2.5 text-sm/6 font-medium text-muted-foreground"
+          >
+            Optional
+          </span>
+        </dt>
+        <dd class:list={["mt-3", DETAIL]}>
+          Your bookmarks as plain Markdown files in a folder you choose, served
+          by a small daemon that only accepts connections from your own
+          computer. The files stay usable in a text editor, in Obsidian and in
+          Git. In Safari it is the only source.
+        </dd>
+        <dd class="mt-5">
+          <pre
+            class="overflow-x-auto rounded-lg bg-muted px-4 py-3 text-sm/6 text-foreground"><code class="font-mono">npx bookmarks-but-better@latest</code></pre>
+        </dd>
+        <dd class="mt-4 text-base/7 sm:text-sm/6">
+          <a href="/docs/daemon/" class={TEXT_LINK}>How Markdown vaults work</a>
+        </dd>
+      </div>
+    </dl>
+  </div>
 </Section>

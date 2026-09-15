@@ -1,15 +1,22 @@
 /**
- * The site's header links. Every page renders through Starlight, so one header
- * serves the marketing pages and the docs: its title links home and to /docs/,
- * and these links follow it (and fill the mobile menu).
+ * The header's section links. Every page renders through Starlight, so one
+ * header serves the marketing pages and the docs, and these links also fill
+ * the mobile menus.
  */
 export const SITE_LINKS = [
-  { href: "/preview/", label: "Live preview" },
   { href: "/docs/", label: "Docs" },
   { href: "/docs/guides/", label: "Guides" },
   { href: "/privacy/", label: "Privacy" },
-  { href: "/docs/start/install/", label: "Install" },
 ] as const
+
+/**
+ * The link for the section a page belongs to. The last matching prefix wins,
+ * so a guide marks Guides rather than Docs.
+ */
+export function currentSiteLink(url: URL): string | undefined {
+  return SITE_LINKS.filter((link) => url.pathname.startsWith(link.href)).at(-1)
+    ?.href
+}
 
 /**
  * Pages under /docs/ use Starlight's own content layout. Everything else is a

@@ -1,7 +1,8 @@
 ---
 /**
- * The dark/light toggle for both the marketing pages and the Starlight header,
- * so it is styled with plain CSS that falls back to Starlight's variables.
+ * The dark/light toggle for the header and the mobile menus. It renders
+ * outside the marketing pages' Tailwind scope too, so it is plain CSS on the
+ * site's tokens.
  */
 ---
 
@@ -77,25 +78,25 @@
     flex-shrink: 0;
     align-items: center;
     justify-content: center;
-    width: 2.25rem;
-    height: 2.25rem;
-    border: 1px solid var(--border, var(--sl-color-gray-5));
-    border-radius: 0.375rem;
+    width: 2.5rem;
+    height: 2.5rem;
+    border: 0;
+    border-radius: 0.5rem;
     background: transparent;
-    color: var(--muted-foreground, var(--sl-color-gray-2));
+    color: var(--muted-foreground);
     cursor: pointer;
   }
   .theme-toggle:hover {
-    background: var(--muted, var(--sl-color-gray-6));
-    color: var(--foreground, var(--sl-color-white));
+    background: var(--muted);
+    color: var(--foreground);
   }
   .theme-toggle:focus-visible {
-    outline: 2px solid var(--ring, var(--sl-color-accent));
+    outline: 2px solid var(--ring);
     outline-offset: 2px;
   }
   svg {
-    width: 1rem;
-    height: 1rem;
+    width: 1.125rem;
+    height: 1.125rem;
   }
   .icon-sun,
   :global(.dark) .icon-moon {

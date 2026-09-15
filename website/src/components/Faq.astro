@@ -1,5 +1,9 @@
 ---
+import { Icon } from "@astrojs/starlight/components"
 import type { FaqItem } from "../lib/faq-items"
+import { SITE } from "../lib/site"
+import { TEXT_LINK } from "../lib/ui"
+import HeadingGroup from "./HeadingGroup.astro"
 import Section from "./Section.astro"
 
 interface Props {
@@ -9,39 +13,44 @@ interface Props {
 const { items } = Astro.props
 ---
 
-<Section index="05" title="Questions, answered" id="faq">
-  <div class="divide-y divide-border rounded-lg bg-card ring-1 ring-border">
-    {
-      items.map((item) => (
-        <details class="group px-5">
-          <summary class="flex cursor-pointer list-none items-center justify-between gap-4 py-4 text-base font-medium marker:hidden focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary sm:text-sm [&::-webkit-details-marker]:hidden">
-            {item.question}
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke-width="1.8"
-              class="size-4 shrink-0 stroke-muted-foreground transition-transform group-open:rotate-45"
-              aria-hidden="true"
-            >
-              <path d="M12 5v14M5 12h14" />
-            </svg>
-          </summary>
-          <p class="pb-4 text-base/7 text-pretty text-muted-foreground sm:text-sm/6">
-            {item.answer}
-            {item.link && (
-              <>
-                {" "}
-                <a
-                  href={item.link.href}
-                  class="text-foreground underline decoration-primary/60 underline-offset-4 hover:text-primary"
-                >
-                  {item.link.label}
-                </a>
-              </>
-            )}
-          </p>
-        </details>
-      ))
-    }
+<Section id="faq" labelledby="faq-title">
+  <div class="grid gap-x-12 gap-y-12 lg:grid-cols-3">
+    <div class="lg:sticky lg:top-24 lg:self-start">
+      <HeadingGroup id="faq-title" eyebrow="FAQ" title="Questions, answered">
+        <p
+          class="mt-5 max-w-[48ch] text-lg/8 text-pretty text-muted-foreground"
+        >
+          Anything else? The <a href="/docs/" class={TEXT_LINK}>docs</a> cover
+          every setup step, and you can ask on{" "}
+          <a href={SITE.issues} class={TEXT_LINK}>GitHub</a>.
+        </p>
+      </HeadingGroup>
+    </div>
+    <div class="divide-y divide-border lg:col-span-2">
+      {
+        items.map((item) => (
+          <details class="group py-6 first:pt-0 last:pb-0">
+            <summary class="flex cursor-pointer list-none items-start justify-between gap-6 rounded-sm text-lg/7 font-medium marker:hidden focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring sm:text-base/7 [&::-webkit-details-marker]:hidden">
+              {item.question}
+              <Icon
+                name="down-caret"
+                class="h-lh w-6 shrink-0 text-muted-foreground transition-transform group-open:rotate-180"
+              />
+            </summary>
+            <p class="mt-3 max-w-[65ch] text-base/7 text-pretty text-muted-foreground">
+              {item.answer}
+              {item.link && (
+                <>
+                  {" "}
+                  <a href={item.link.href} class={TEXT_LINK}>
+                    {item.link.label}
+                  </a>
+                </>
+              )}
+            </p>
+          </details>
+        ))
+      }
+    </div>
   </div>
 </Section>

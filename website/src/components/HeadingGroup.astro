@@ -1,0 +1,40 @@
+---
+// The eyebrow, serif title and subheadline that open a landing page section.
+// Anything in the slot (links, a longer description) follows them.
+interface Props {
+  id: string
+  eyebrow: string
+  title: string
+  description?: string
+  align?: "left" | "center"
+}
+
+const { id, eyebrow, title, description, align = "left" } = Astro.props
+const center = align === "center"
+---
+
+<div class:list={[center && "text-center"]}>
+  <p class="text-sm/6 font-medium text-accent">{eyebrow}</p>
+  <h2
+    id={id}
+    class:list={[
+      "font-display mt-3 max-w-[35ch] text-4xl tracking-tight text-balance sm:max-w-[30ch] sm:text-5xl",
+      center && "mx-auto",
+    ]}
+  >
+    {title}
+  </h2>
+  {
+    description && (
+      <p
+        class:list={[
+          "mt-5 max-w-[48ch] text-lg/8 text-pretty text-muted-foreground",
+          center && "mx-auto",
+        ]}
+      >
+        {description}
+      </p>
+    )
+  }
+  <slot />
+</div>

@@ -1,51 +1,47 @@
 ---
 import { SITE } from "../lib/site"
+import { TEXT_LINK } from "../lib/ui"
 import AppPreview from "./AppPreview.astro"
 import InstallButtons from "./InstallButtons.astro"
-
-const LINK =
-  "text-muted-foreground underline decoration-border underline-offset-4 hover:text-foreground"
 ---
 
-<section class="relative overflow-hidden" aria-labelledby="hero-title">
-  <div
-    class="pointer-events-none absolute inset-x-0 top-0 h-64 bg-linear-to-b from-primary/8 to-transparent"
-    aria-hidden="true"
-  >
-  </div>
-  <div
-    class="relative mx-auto max-w-6xl px-6 pt-16 pb-16 text-center md:pt-24 md:pb-24"
-  >
-    <p
-      class="inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1 text-sm text-muted-foreground"
-    >
-      <span class="size-1.5 rounded-full bg-primary" aria-hidden="true"></span>
-      Free and open source (MIT) · Chrome and Firefox
+<section aria-labelledby="hero-title" class="pt-16 pb-20 md:pt-24 md:pb-28">
+  <div class="mx-auto max-w-6xl px-6 text-center">
+    <p class="text-sm/6 font-medium text-accent">
+      Free and open source, for Chrome, Firefox and Safari
     </p>
     <h1
       id="hero-title"
-      class="font-display mx-auto mt-8 max-w-[20ch] text-6xl font-medium tracking-tight md:text-8xl"
+      class="font-display mx-auto mt-5 max-w-[20ch] text-7xl tracking-tight text-balance sm:text-8xl md:text-9xl"
     >
-      Bookmarks,{" "}<br /><span class="italic">but better</span>
+      Bookmarks,{" "}<br />but <em class="italic">better</em>
     </h1>
     <p
-      class="mx-auto mt-8 max-w-[52ch] text-lg/8 text-pretty text-muted-foreground md:text-xl/9"
+      class="mx-auto mt-8 max-w-[48ch] text-lg/8 text-pretty text-muted-foreground"
     >
       {SITE.tagline}
     </p>
-    <div class="mt-8 flex flex-col items-center gap-4">
-      <InstallButtons class="justify-center" />
+    <div class="mt-10 flex flex-col items-center gap-6">
+      <InstallButtons />
       <p
-        class="flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-sm"
+        class="max-w-[56ch] text-base/7 text-pretty text-muted-foreground not-safari:hidden sm:text-sm/6"
       >
-        <a href="/preview/" class={LINK}>Open the full-screen preview</a>
-        <span class="hidden text-border sm:inline" aria-hidden="true">·</span>
-        <a href="/docs/start/safari/" class={LINK}>Using Safari?</a>
-        <span class="hidden text-border sm:inline" aria-hidden="true">·</span>
-        <a href={SITE.repository} class={LINK}>Source on GitHub</a>
+        In Safari it works with a Markdown vault served by the local daemon, and
+        for now you build it from source.
+      </p>
+      <p
+        class="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-base/7 sm:text-sm/6"
+      >
+        <a href="#demo" class={TEXT_LINK} data-demo-link>Try the live demo</a>
+        <a
+          href="/docs/start/safari/"
+          class:list={[TEXT_LINK, "safari:hidden"]}
+        >
+          Using Safari?
+        </a>
       </p>
     </div>
-    <div class="mt-14 md:mt-20">
+    <div class="mt-16 md:mt-20">
       <AppPreview />
     </div>
   </div>

@@ -7,7 +7,8 @@ import { SITE, THEME_COLORS } from "./src/lib/site"
 /** Built pages that stay out of the sitemap. */
 const UNLISTED_PATHS = new Set(["/404/", "/daemon/"])
 
-const fontsource = (file: string) => `@fontsource-variable/${file}`
+const fontsource = (file: string) => `@fontsource/${file}`
+const fontsourceVariable = (file: string) => `@fontsource-variable/${file}`
 
 export default defineConfig({
   site: SITE.url,
@@ -22,28 +23,35 @@ export default defineConfig({
   // JavaScript beyond its few interactive controls.
   prefetch: false,
 
-  // Self-hosted, latin-only variable fonts. Astro emits the @font-face rules,
-  // preload links and metric-matched fallbacks.
+  // Self-hosted, latin-only fonts. Astro emits the @font-face rules, preload
+  // links and metric-matched fallbacks. `optional` never swaps faces after
+  // first paint: a font that misses the short block period (preloaded, it
+  // rarely does) leaves that view on the fallback, and the next page has it.
   fonts: [
     {
       provider: fontProviders.local(),
-      name: "Fraunces",
-      cssVariable: "--font-fraunces",
-      fallbacks: ["Georgia", "serif"],
+      name: "Instrument Serif",
+      cssVariable: "--font-serif",
+      fallbacks: ["serif"],
+      display: "optional",
       options: {
         variants: [
           {
             src: [
-              fontsource("fraunces/files/fraunces-latin-wght-normal.woff2"),
+              fontsource(
+                "instrument-serif/files/instrument-serif-latin-400-normal.woff2"
+              ),
             ],
-            weight: "100 900",
+            weight: "400",
             style: "normal",
           },
           {
             src: [
-              fontsource("fraunces/files/fraunces-latin-wght-italic.woff2"),
+              fontsource(
+                "instrument-serif/files/instrument-serif-latin-400-italic.woff2"
+              ),
             ],
-            weight: "100 900",
+            weight: "400",
             style: "italic",
           },
         ],
@@ -53,11 +61,15 @@ export default defineConfig({
       provider: fontProviders.local(),
       name: "Inter",
       cssVariable: "--font-inter",
-      fallbacks: ["sans-serif"],
+      // The system UI face (SF, Segoe UI, Roboto) is closer to Inter than Arial.
+      fallbacks: ["system-ui"],
+      display: "optional",
       options: {
         variants: [
           {
-            src: [fontsource("inter/files/inter-latin-wght-normal.woff2")],
+            src: [
+              fontsourceVariable("inter/files/inter-latin-wght-normal.woff2"),
+            ],
             weight: "100 900",
             style: "normal",
           },
@@ -132,6 +144,7 @@ export default defineConfig({
         ThemeSelect: "./src/components/starlight/ThemeSelect.astro",
         SiteTitle: "./src/components/starlight/SiteTitle.astro",
         SocialIcons: "./src/components/starlight/SocialIcons.astro",
+        MobileMenuFooter: "./src/components/starlight/MobileMenuFooter.astro",
       },
     }),
     sitemap({
