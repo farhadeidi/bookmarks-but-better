@@ -23,14 +23,18 @@ export const PAGES = {
     name: "Home",
     summary: "product overview, features and installation links",
   },
-  /** The live app itself (built from app-frame/), not an Astro page. */
+  /**
+   * The site header, a strip of theme dots, and the real app filling the rest
+   * of the viewport in a frame. The app itself is a separate Vite build served
+   * at /preview/app/ (app-frame/), embedded here and nowhere else.
+   */
   preview: {
     path: "/preview/",
     title: "Live preview — Bookmarks But Better",
     description:
-      "Try the real Bookmarks But Better new tab in your browser: a live bookmarks dashboard with demo data.",
+      "Try the real Bookmarks But Better new tab in your browser: a live bookmarks dashboard with demo data and all ten themes.",
     name: "Live preview",
-    summary: "the real app, full screen, running against seeded demo data",
+    summary: "the real app running on seeded demo data, with every theme",
   },
   privacy: {
     path: "/privacy/",

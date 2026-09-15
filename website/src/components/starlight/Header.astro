@@ -2,10 +2,13 @@
 // One header on every page, marketing and docs: the brand, the section links,
 // Starlight's search, GitHub, the theme toggle and the install button. It runs
 // full width with the same padding everywhere (starlight.css), so nothing
-// shifts between the marketing pages and the docs. Below
-// 50rem, pages without a sidebar (the marketing pages) open the links from
-// their own menu; docs pages keep Starlight's sidebar toggle, restyled in
-// starlight.css to match.
+// shifts between the marketing pages and the docs.
+//
+// Below 68.75rem the row collapses and every page opens the links from this
+// menu instead — except docs pages below 50rem, where Starlight's own sidebar
+// toggle is showing (restyled in starlight.css) and the foot of its menu
+// already lists the same links, so this button stands down rather than
+// doubling up.
 import { Icon } from "@astrojs/starlight/components"
 import Search from "@astrojs/starlight/components/Search.astro"
 import { currentSiteLink, SITE_LINKS } from "../../lib/nav"
@@ -43,59 +46,54 @@ const current = currentSiteLink(Astro.url)
         <span class="sr-only">GitHub</span>
       </a>
       <ThemeToggle />
+    </div>
+    {/* The row's one action. It appears as soon as there is room for it, long
+        before the links do, so the collapsed header still leads somewhere. */}
+    <div class="cta">
       <InstallCta />
     </div>
-    {
-      !hasSidebar && (
-        <>
-          <button
-            type="button"
-            popovertarget="bbb-site-menu"
-            class="icon-button menu-button"
-          >
-            <Icon name="bars" size="1.25rem" class="open-menu" />
-            <Icon name="close" size="1.25rem" class="close-menu" />
-            <span class="sr-only">Menu</span>
-          </button>
-          <nav
-            popover=""
-            id="bbb-site-menu"
-            class="site-menu"
-            aria-label="Site"
-          >
-            <ul role="list">
-              {SITE_LINKS.map((link) => (
-                <li>
-                  <a
-                    href={link.href}
-                    aria-current={link.href === current ? "page" : undefined}
-                  >
-                    {link.label}
-                  </a>
-                </li>
-              ))}
-            </ul>
-            <div class="menu-cta">
-              <InstallCta block />
-            </div>
-            <div class="site-menu-footer">
-              <a href={SITE.repository} class="menu-github">
-                <Icon name="github" size="1.125rem" />
-                GitHub
+    <button
+      type="button"
+      popovertarget="bbb-site-menu"
+      class:list={["icon-button", "menu-button", { docs: hasSidebar }]}
+    >
+      <Icon name="bars" size="1.25rem" class="open-menu" />
+      <Icon name="close" size="1.25rem" class="close-menu" />
+      <span class="sr-only">Menu</span>
+    </button>
+    <nav popover="" id="bbb-site-menu" class="site-menu" aria-label="Site">
+      <ul role="list">
+        {
+          SITE_LINKS.map((link) => (
+            <li>
+              <a
+                href={link.href}
+                aria-current={link.href === current ? "page" : undefined}
+              >
+                {link.label}
               </a>
-              <ThemeToggle />
-            </div>
-          </nav>
-        </>
-      )
-    }
+            </li>
+          ))
+        }
+      </ul>
+      <div class="menu-cta">
+        <InstallCta block />
+      </div>
+      <div class="site-menu-footer">
+        <a href={SITE.repository} class="menu-github">
+          <Icon name="github" size="1.125rem" />
+          GitHub
+        </a>
+        <ThemeToggle />
+      </div>
+    </nav>
   </div>
 </div>
 
 <style>
-  /* Four section links, search, GitHub, the theme toggle and the install
-     button share this row from 50rem up, so the gaps and the link padding are
-     kept tight enough for the whole set to fit without wrapping. */
+  /* Five section links, search, GitHub, the theme toggle and the install
+     button share this row from 68.75rem up, so the gaps and the link padding
+     are kept tight enough for the whole set to fit without wrapping. */
   .bbb-header {
     display: flex;
     align-items: center;
@@ -137,8 +135,29 @@ const current = currentSiteLink(Astro.url)
   .wide {
     display: none;
   }
-  .wide :global(.install-cta) {
+
+  /* Below 50rem the install button is the full-width one at the top of the
+     menu instead; there is no room for both. */
+  .cta {
+    display: none;
+  }
+  .cta :global(.install-cta) {
     margin-inline-start: 0.5rem;
+  }
+  @media (min-width: 50rem) {
+    .cta {
+      display: flex;
+    }
+  }
+
+  /* Docs pages below 50rem already carry Starlight's sidebar toggle, and its
+     menu lists every site link (starlight/SocialIcons.astro), so this button
+     would duplicate it. From 50rem the sidebar is permanent and that toggle is
+     gone — which is exactly the band this button exists to cover. */
+  @media (max-width: 49.999rem) {
+    .menu-button.docs {
+      display: none;
+    }
   }
 
   .icon-button {
@@ -239,7 +258,12 @@ const current = currentSiteLink(Astro.url)
     color: var(--foreground);
   }
 
-  @media (min-width: 50rem) {
+  /* One switch, not two: below this the header is compact — brand, the search
+     icon, the install button and the menu — and at it the whole row appears at
+     once. Five links beside the brand, search, GitHub, the theme toggle and
+     the install button need about 1100px, and the project would rather move
+     the set into the menu than shrink the type or drop a link. */
+  @media (min-width: 68.75rem) {
     .links,
     .wide {
       display: flex;
@@ -247,10 +271,8 @@ const current = currentSiteLink(Astro.url)
     .menu-button {
       display: none;
     }
-  }
 
-  /* The docs keep a compact search field once there is room for it. */
-  @media (min-width: 64rem) {
+    /* The docs keep a compact search field once the row is there to hold it. */
     .field :global(button[data-open-modal]) {
       justify-content: flex-start;
       gap: 0.5rem;

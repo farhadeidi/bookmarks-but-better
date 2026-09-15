@@ -1,0 +1,83 @@
+---
+// The live preview: the site header, a slim strip of theme dots, and the real
+// app filling the rest of the viewport in a frame (/preview/app/). The strip
+// sits above the frame rather than over it, so it never covers app content,
+// and the page itself does not scroll — the app does its own scrolling.
+//
+// Light and dark come from the header's own toggle, which the frame follows
+// (scripts/app-preview.ts); there is deliberately no second mode control here.
+import SiteLayout from "../layouts/SiteLayout.astro"
+import { PAGES } from "../lib/pages"
+import { DEMO_THEMES } from "../lib/themes"
+import { TEXT_LINK } from "../lib/ui"
+---
+
+<SiteLayout
+  title={PAGES.preview.title}
+  description={PAGES.preview.description}
+  searchable={false}
+  fill
+>
+  <div class="flex h-full flex-col" data-preview>
+    {/* The page is one frame, so its heading is for assistive technology
+        only — there is no room, and nothing to say, on screen. */}
+    <h1 class="sr-only">Live preview</h1>
+    <div
+      data-preview-strip
+      role="group"
+      aria-labelledby="preview-theme-label"
+      class="flex shrink-0 items-center gap-0.5 overflow-x-auto border-b border-border px-6 py-2"
+    >
+      <span id="preview-theme-label" class="sr-only">Preview theme</span>
+      {
+        DEMO_THEMES.map((theme) => (
+          <button
+            type="button"
+            title={theme.name}
+            aria-label={`Preview the ${theme.name} theme`}
+            aria-pressed="false"
+            data-preview-theme={theme.id}
+            class="group relative grid size-7 shrink-0 place-items-center rounded-full focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-ring"
+          >
+            <span
+              class="size-4 rounded-full bg-(--swatch) ring-1 ring-foreground/15 ring-offset-2 ring-offset-background transition-transform group-hover:scale-110 group-aria-pressed:ring-2 group-aria-pressed:ring-foreground"
+              style={`--swatch: ${theme.accent}`}
+            />
+            <span
+              class="absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2 pointer-fine:hidden"
+              aria-hidden="true"
+            />
+          </button>
+        ))
+      }
+    </div>
+
+    <div class="min-h-0 flex-1" data-preview-stage>
+      <noscript>
+        <p class="px-6 py-16 text-center text-base/7 text-muted-foreground">
+          The live preview runs the real extension in your browser, so it needs
+          JavaScript. The{" "}
+          <a href="/docs/" class={TEXT_LINK}>documentation</a> describes
+          everything it does instead.
+        </p>
+      </noscript>
+    </div>
+  </div>
+
+  {/* The dots only reach the app over postMessage, so without JavaScript they
+      would be ten controls that do nothing. Hide them rather than show them
+      broken; the frame itself is replaced by the note above. */}
+  <noscript>
+    <style is:inline>
+      [data-preview-strip] {
+        display: none;
+      }
+    </style>
+  </noscript>
+</SiteLayout>
+
+<script>
+  import { initPreview } from "../scripts/app-preview"
+
+  initPreview()
+</script>

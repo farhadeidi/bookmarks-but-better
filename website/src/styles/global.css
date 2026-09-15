@@ -76,6 +76,19 @@ main:has(> .bbb-site) {
   padding: 0;
 }
 
+/* A page that is one full-height frame (/preview/): it fills what the header
+   leaves, carries no footer and does not scroll — the app inside does its own
+   scrolling, so there is never a second scrollbar. Starlight reserves room
+   below the header for a mobile table of contents on every page under 72rem;
+   a splash page has none, so the frame takes the whole remainder. */
+html:has(.bbb-fill) {
+  --sl-mobile-toc-height: 0rem;
+  overflow: hidden;
+}
+.bbb-fill {
+  height: calc(100dvh - var(--sl-nav-height));
+}
+
 /* A scoped stand-in for Tailwind's preflight on the marketing pages. Starlight
    already resets box-sizing, margins and form fonts. */
 @layer components {

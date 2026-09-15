@@ -1,18 +1,15 @@
 ---
+// The hero's product shot: a real screenshot framed as a browser tab, with a
+// play affordance over it. It is a static figure and ships no JavaScript —
+// clicking through opens /preview/, where the real app runs below the site
+// header. (The screenshot itself is the Amber Minimal theme.)
 import dashboardDark from "../assets/screenshots/dashboard-dark.png"
 import dashboardLight from "../assets/screenshots/dashboard-light.png"
-import { DEFAULT_DEMO_THEME, DEMO_THEMES } from "../lib/themes"
+import { PAGES } from "../lib/pages"
 import ModeImage from "./ModeImage.astro"
-
-const defaultTheme = DEMO_THEMES.find((theme) => theme.id === DEFAULT_DEMO_THEME)
 ---
 
-<figure
-  id="demo"
-  class="relative isolate scroll-mt-20"
-  data-app-preview
-  data-default-theme={DEFAULT_DEMO_THEME}
->
+<figure id="demo" class="relative isolate scroll-mt-20">
   <div
     class="relative overflow-hidden rounded-xl bg-card shadow-2xl ring-1 shadow-foreground/10 ring-foreground/10 dark:shadow-none"
   >
@@ -31,7 +28,7 @@ const defaultTheme = DEMO_THEMES.find((theme) => theme.id === DEFAULT_DEMO_THEME
         New Tab
       </div>
     </div>
-    <div class="relative" data-preview-stage>
+    <div class="relative">
       <ModeImage
         light={dashboardLight}
         dark={dashboardDark}
@@ -45,9 +42,8 @@ const defaultTheme = DEMO_THEMES.find((theme) => theme.id === DEFAULT_DEMO_THEME
       <div
         class="absolute inset-0 grid place-items-center bg-linear-to-t from-black/45 via-black/10 to-transparent"
       >
-        <button
-          type="button"
-          data-preview-launch
+        <a
+          href={PAGES.preview.path}
           class="inline-flex items-center gap-2 rounded-lg bg-white py-3 pr-5 pl-4 text-base/6 font-medium text-neutral-950 shadow-lg shadow-black/25 hover:bg-neutral-100 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white"
         >
           <svg
@@ -60,48 +56,15 @@ const defaultTheme = DEMO_THEMES.find((theme) => theme.id === DEFAULT_DEMO_THEME
             ></path>
           </svg>
           Try it live
-        </button>
+        </a>
       </div>
     </div>
   </div>
 
   <figcaption
-    class="mt-4 flex flex-wrap items-center justify-center gap-x-4 gap-y-2"
+    class="mt-4 text-center text-base/7 text-pretty text-muted-foreground sm:text-sm/6"
   >
-    <p class="text-base/7 text-muted-foreground sm:text-sm/6">
-      The real app runs right here. Pick a theme:
-    </p>
-    <div class="flex flex-wrap items-center justify-center gap-0.5">
-      {
-        DEMO_THEMES.map((theme) => (
-          <button
-            type="button"
-            title={theme.name}
-            aria-label={`Preview the ${theme.name} theme`}
-            aria-pressed={theme.id === DEFAULT_DEMO_THEME ? "true" : "false"}
-            data-preview-theme={theme.id}
-            class="group relative grid size-7 place-items-center rounded-full focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-ring"
-          >
-            <span
-              class="size-4 rounded-full bg-(--swatch) ring-1 ring-foreground/15 ring-offset-2 ring-offset-background transition-transform group-hover:scale-110 group-aria-pressed:ring-2 group-aria-pressed:ring-foreground"
-              style={`--swatch: ${theme.accent}`}
-            />
-            <span
-              class="absolute top-1/2 left-1/2 size-[max(100%,3rem)] -translate-1/2 pointer-fine:hidden"
-              aria-hidden="true"
-            />
-          </button>
-        ))
-      }
-    </div>
-    <p class="text-base/7 font-medium text-foreground sm:text-sm/6">
-      <span data-preview-theme-name>{defaultTheme?.name}</span>
-    </p>
+    The real app, running on demo bookmarks. Nothing to install, and all ten
+    themes are there to try.
   </figcaption>
 </figure>
-
-<script>
-  import { initAppPreviews } from "../scripts/app-preview"
-
-  initAppPreviews()
-</script>

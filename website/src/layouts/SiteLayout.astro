@@ -14,6 +14,11 @@ interface Props {
   noindex?: boolean
   /** Include the page in the site search. */
   searchable?: boolean
+  /**
+   * Fill the viewport below the header instead of scrolling, and leave the
+   * site footer off: for a page that is one full-height frame (/preview/).
+   */
+  fill?: boolean
   jsonLd?: JsonLd[]
 }
 
@@ -22,6 +27,7 @@ const {
   description,
   noindex = false,
   searchable = true,
+  fill = false,
   jsonLd = [],
 } = Astro.props
 
@@ -51,9 +57,12 @@ const head = [
   <div
     id="_top"
     tabindex="-1"
-    class="bbb-site bg-background font-sans text-foreground antialiased outline-none"
+    class:list={[
+      "bbb-site bg-background font-sans text-foreground antialiased outline-none",
+      fill && "bbb-fill",
+    ]}
   >
     <slot />
-    <SiteFooter />
+    {!fill && <SiteFooter />}
   </div>
 </StarlightPage>

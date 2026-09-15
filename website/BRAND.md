@@ -76,8 +76,11 @@ ring, list markers, selection. Buttons are ink.
   command.
 - **Screenshots** are real app captures (`src/assets/screenshots/`), framed by
   a 1px `foreground/10` outline and a radius of `min(1.5vw, radius-xl)`. The
-  hero's live preview is framed as a browser tab and is the only element with
-  a shadow (removed in dark mode). Dark screenshots stay dark in both modes.
+  hero's is framed as a browser tab and is the only element with a shadow
+  (removed in dark mode). Dark screenshots stay dark in both modes, so one
+  whose own backdrop would merge with the page — the themes montage, which is
+  dark on dark — sits on a `card` mat instead (`SCREENSHOT_MAT`), which takes
+  over the hairline and lifts the block off the page in both modes.
 - **Varied, disciplined layouts:** centered hero and closing call to action;
   left-aligned everything between — stacked (features, privacy), split
   (sources, FAQ with a sticky heading) and image-led (themes).
@@ -90,11 +93,24 @@ ring, list markers, selection. Buttons are ink.
 - **One header** on every page: the Starlight `Header` override
   (`components/starlight/Header.astro`). It runs full width with 1.5rem side
   padding everywhere, so the logo holds its position between the marketing
-  pages and the docs. Brand, text-only section links (Home, Docs, Guides,
-  Privacy — Home marks the current page on `/` only, and the logo links there
-  too),
-  search (a field in the docs, an icon elsewhere), GitHub, the theme toggle and
-  the install button.
+  pages and the docs. Brand, text-only section links (Home, Demo, Docs,
+  Guides, Privacy — Home marks the current page on `/` only, and the logo links
+  there too), search (a field in the docs, an icon elsewhere), GitHub, the
+  theme toggle and the install button. The links are text, not buttons: the
+  install button is the header's one button, and a second button beside it
+  would compete with it.
+- **One switch at 68.75rem (1100px).** Five links plus the brand, search,
+  GitHub, the theme toggle and the install button need about that much, and the
+  set does not shrink and does not lose a link — Privacy is a core promise, and
+  the footer does not render on docs pages, so the header is the only place it
+  is reachable from the docs. Below 1100px the whole row moves into the menu
+  and the header is compact: brand, the search icon, the install button and the
+  menu button. `/preview/` is "Demo" because even in the full row it is the
+  widest label that fits.
+- **Two menus, never both.** Every page carries the header's own menu below
+  1100px, except docs pages below 50rem: there Starlight's sidebar toggle is
+  showing and its foot already lists the same links
+  (`starlight/SocialIcons.astro`), so the header's button stands down.
 - **Mobile menus** put the install button full width at the top of their
   footer: the marketing pages' own menu and the docs sidebar
   (`starlight/MobileMenuFooter.astro`).
@@ -118,9 +134,23 @@ from source. Marks are Simple Icons (CC0) in `BrowserIcon.astro`.
 
 ## Live demo
 
-The hero shows a static screenshot. "Try it live", a theme dot, or any
-"live demo" link (`data-demo-link`) loads the real app (`/preview/`) in place;
-nothing heavy loads before that. `/preview/` alone is the app full screen.
+**One page runs the app: `/preview/`.** It carries the same header as every
+other page — so nobody lands there with no way back — then a slim strip of the
+ten theme dots, then the real application filling the rest of the viewport in a
+frame. The page itself never scrolls; the app inside does, so there is never a
+second scrollbar. The dots say which theme the app is actually on, including
+one chosen inside the app's own settings, and `?theme=` both opens on a theme
+and follows the dots, so a view can be shared. Light and dark come from the
+header's existing toggle, which the frame follows; the strip adds no second
+mode control.
+
+The bare application is a separate Vite build served at `/preview/app/`
+(`vite.preview.config.ts`). It is only ever embedded, and it carries `noindex`,
+so `/preview/` is the single indexable URL for the demo.
+
+**The home page ships no app.** The hero is a static screenshot framed as a
+browser tab; "Try it live", "Try the live demo" and the themes section's link
+all simply navigate to `/preview/`.
 
 ## Privacy
 

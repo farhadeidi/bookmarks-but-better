@@ -5,7 +5,7 @@ import AppPreview from "./AppPreview.astro"
 import InstallButtons from "./InstallButtons.astro"
 ---
 
-<section aria-labelledby="hero-title" class="pt-16 pb-20 md:pt-24 md:pb-28">
+<section aria-labelledby="hero-title" class="pt-12 pb-14 md:pt-24 md:pb-28">
   <div class="mx-auto max-w-6xl px-6 text-center">
     <p class="text-sm/6 font-medium text-accent">
       Free and open source, for Chrome and Firefox
@@ -17,16 +17,16 @@ import InstallButtons from "./InstallButtons.astro"
       Bookmarks,{" "}<br />but <em class="font-normal not-italic">better</em>
     </h1>
     <p
-      class="mx-auto mt-8 max-w-[48ch] text-lg/8 text-pretty text-muted-foreground"
+      class="mx-auto mt-6 max-w-[48ch] text-lg/8 text-pretty text-muted-foreground md:mt-8"
     >
       {SITE.tagline}
     </p>
-    <div class="mt-10 flex flex-col items-center gap-6">
+    <div class="mt-8 flex flex-col items-center gap-6 md:mt-10">
       <InstallButtons />
       <p
         class="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-base/7 sm:text-sm/6"
       >
-        <a href="#demo" class={TEXT_LINK} data-demo-link>Try the live demo</a>
+        <a href="/preview/" class={TEXT_LINK}>Try the live demo</a>
         <a
           href="/docs/start/safari/"
           class:list={[TEXT_LINK, "safari:hidden"]}
@@ -35,7 +35,7 @@ import InstallButtons from "./InstallButtons.astro"
         </a>
       </p>
     </div>
-    <div class="mt-16 md:mt-20">
+    <div class="mt-12 md:mt-20">
       <AppPreview />
     </div>
   </div>

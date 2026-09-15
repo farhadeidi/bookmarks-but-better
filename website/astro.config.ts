@@ -129,14 +129,18 @@ export default defineConfig({
     plugins: [
       tailwindcss(),
       {
-        // Dev-only: the dev server does not resolve public/preview/ to its
-        // index.html, which GitHub Pages and the built site do.
+        // Dev-only: the dev server does not resolve public/preview/app/ to its
+        // index.html, which GitHub Pages and the built site do. (/preview/
+        // itself is an Astro page and needs no help.)
         name: "serve-preview-index",
         apply: "serve",
         configureServer(server) {
           server.middlewares.use((req, _res, next) => {
-            if (req.url && /^\/preview\/(\?.*)?$/.test(req.url)) {
-              req.url = req.url.replace("/preview/", "/preview/index.html")
+            if (req.url && /^\/preview\/app\/(\?.*)?$/.test(req.url)) {
+              req.url = req.url.replace(
+                "/preview/app/",
+                "/preview/app/index.html"
+              )
             }
             next()
           })

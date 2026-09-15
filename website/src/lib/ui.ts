@@ -21,3 +21,16 @@ export const TEXT_LINK =
 /** Screenshots: a hairline edge and a radius that shrinks with the viewport. */
 export const SCREENSHOT =
   "rounded-[min(1.5vw,var(--radius-xl))] outline-1 -outline-offset-1 outline-foreground/10"
+
+/**
+ * A mat for a screenshot whose own backdrop would merge with the page — the
+ * themes montage, which is dark on dark. The card surface sits one step off
+ * the page in both modes, so the block reads as an object instead of a hole,
+ * and the hairline moves out to the mat. Pair with `SCREENSHOT_MATTED` on the
+ * image: the outer radius is the screenshot radius grown by the padding.
+ */
+export const SCREENSHOT_MAT =
+  "rounded-[calc(min(1.5vw,var(--radius-xl))+--spacing(2))] bg-card p-2 outline-1 -outline-offset-1 outline-foreground/10"
+
+/** A screenshot inside `SCREENSHOT_MAT`: the mat already draws the edge. */
+export const SCREENSHOT_MATTED = "rounded-[min(1.5vw,var(--radius-xl))]"

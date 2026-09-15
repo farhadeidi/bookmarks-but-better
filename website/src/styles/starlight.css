@@ -77,6 +77,18 @@
   --sl-nav-pad-x: 1.5rem;
 }
 
+/* Below 50rem Starlight keeps a 1rem content gutter while the header above it
+   uses 1.5rem, so docs body text started 8px inside the logo. Match them, and
+   pin --sl-nav-gap, which Starlight derives from the content gutter, to the
+   value it had — it sets the docs header's right-hand padding, which should
+   not move either. Above 50rem Starlight's own gutters already agree. */
+@media (max-width: 49.999rem) {
+  :root {
+    --sl-content-pad-x: 1.5rem;
+    --sl-nav-gap: 1rem;
+  }
+}
+
 /* Inter carries the headings: semibold and tighter than the body text, at
    Starlight's own sizes (the serif needed sizing up, Inter does not). */
 h1#_top,

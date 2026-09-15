@@ -1,110 +1,94 @@
 /**
- * The live preview launcher. The home page ships a static screenshot; the real
- * app (the /preview/ build) is only loaded into an iframe when the visitor
- * asks for it: the "Try it live" button, a theme dot, or a "live demo" link
- * (`data-demo-link`) elsewhere on the page.
+ * The live preview page (/preview/). The real application is built separately
+ * and served at /preview/app/; this puts it in a frame below the site header,
+ * and wires the strip of theme dots above it.
  *
- * Once loaded, the frame follows the site's dark/light mode and the chosen
- * color theme over postMessage, and reports its actual theme back so the
- * dots always show the truth.
+ * The frame is created here rather than written into the markup so its first
+ * paint already matches the site: the mode and the colour theme travel as URL
+ * parameters, which the app reads before it renders. After that the two sides
+ * talk over postMessage — a dot sends a colour theme, the header's dark/light
+ * toggle sends a mode, and the app reports whichever theme it actually settled
+ * on, so the dots stay truthful when the visitor changes it inside the app.
  */
 
+const APP_URL = "/preview/app/"
 const PREVIEW_MESSAGE = "bbb-preview/appearance"
 const PREVIEW_STATE = "bbb-preview/state"
 
-const FRAME_CLASS =
-  "block w-full border-0 bg-background h-[560px] md:h-auto md:aspect-[16/10]"
+const FRAME_CLASS = "block h-full w-full border-0 bg-background"
+const FRAME_TITLE = "Bookmarks But Better — the live app, running on demo data"
 
 function siteMode(): "dark" | "light" {
   return document.documentElement.classList.contains("dark") ? "dark" : "light"
 }
 
-function setup(root: HTMLElement) {
-  const stage = root.querySelector<HTMLElement>("[data-preview-stage]")
-  if (!stage) return
+export function initPreview(): void {
+  const root = document.querySelector<HTMLElement>("[data-preview]")
+  const stage = root?.querySelector<HTMLElement>("[data-preview-stage]")
+  if (!root || !stage) return
+
   const dots = [
     ...root.querySelectorAll<HTMLButtonElement>("[data-preview-theme]"),
   ]
-  const themeName = root.querySelector<HTMLElement>("[data-preview-theme-name]")
-  const themeIds = new Set(dots.map((dot) => dot.dataset.previewTheme))
-  let active = root.dataset.defaultTheme ?? ""
-  let frame: HTMLIFrameElement | null = null
+  const known = new Set(dots.map((dot) => dot.dataset.previewTheme))
 
-  const markActive = (id: string) => {
-    active = id
-    for (const dot of dots) {
-      const selected = dot.dataset.previewTheme === id
-      dot.setAttribute("aria-pressed", String(selected))
-      if (selected && themeName) themeName.textContent = dot.title
-    }
-  }
+  // A shared /preview/?theme= link opens on that theme. Without one the app
+  // keeps whatever the visitor last chose, and reports it back below.
+  const requested = new URLSearchParams(window.location.search).get("theme")
+  const initial = requested && known.has(requested) ? requested : ""
+
+  const params = new URLSearchParams({ mode: siteMode() })
+  if (initial) params.set("theme", initial)
+
+  const frame = document.createElement("iframe")
+  frame.src = `${APP_URL}?${params}`
+  frame.title = FRAME_TITLE
+  frame.className = FRAME_CLASS
+  stage.replaceChildren(frame)
 
   const send = (appearance: { mode?: string; colorTheme?: string }) => {
-    frame?.contentWindow?.postMessage(
+    frame.contentWindow?.postMessage(
       { type: PREVIEW_MESSAGE, ...appearance },
       window.location.origin
     )
   }
 
-  const launch = (theme: string, focus: boolean) => {
-    if (frame) return
-    const params = new URLSearchParams({ mode: siteMode(), theme })
-    frame = document.createElement("iframe")
-    frame.src = `/preview/?${params}`
-    frame.title = "Bookmarks But Better — live preview of the real extension"
-    frame.className = FRAME_CLASS
-    stage.replaceChildren(frame)
-    root.dataset.state = "live"
-    markActive(theme)
-    if (focus) frame.focus({ preventScroll: true })
-  }
-
-  const pick = (id: string | undefined) => {
-    if (!id || !themeIds.has(id)) return
-    if (frame) {
-      send({ colorTheme: id })
-      markActive(id)
-    } else {
-      launch(id, false)
+  /** Show which theme the app is on. */
+  const markActive = (id: string) => {
+    for (const dot of dots) {
+      dot.setAttribute("aria-pressed", String(dot.dataset.previewTheme === id))
     }
   }
 
-  root
-    .querySelector("[data-preview-launch]")
-    ?.addEventListener("click", () => launch(active, true))
-  for (const dot of dots) {
-    dot.addEventListener("click", () => pick(dot.dataset.previewTheme))
-  }
+  if (initial) markActive(initial)
 
-  // "Try the live demo" links start the preview and scroll to it. Without
-  // JavaScript they still jump to the screenshot.
-  for (const link of document.querySelectorAll<HTMLAnchorElement>(
-    `[data-demo-link][href="#${root.id}"]`
-  )) {
-    link.addEventListener("click", (event) => {
-      event.preventDefault()
-      launch(active, true)
-      const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches
-      root.scrollIntoView({ behavior: reduce ? "auto" : "smooth" })
+  for (const dot of dots) {
+    dot.addEventListener("click", () => {
+      const id = dot.dataset.previewTheme
+      if (!id) return
+      send({ colorTheme: id })
+      markActive(id)
+      // Keep the address bar on what is actually shown, so the view can be
+      // shared and survives a reload. Replace, so Back still leaves the page.
+      const url = new URL(window.location.href)
+      url.searchParams.set("theme", id)
+      history.replaceState(null, "", url)
     })
   }
 
-  // Follow the site's dark/light toggle.
+  // Follow the header's dark/light toggle, which flips the class on <html>.
   new MutationObserver(() => send({ mode: siteMode() })).observe(
     document.documentElement,
     { attributes: true, attributeFilter: ["class"] }
   )
 
-  // Follow the app's actual theme, whichever side changed it.
+  // Follow the app's own theme, whichever side changed it.
   window.addEventListener("message", (event) => {
-    if (!frame || event.source !== frame.contentWindow) return
+    if (event.source !== frame.contentWindow) return
+    if (event.origin !== window.location.origin) return
     const data = event.data as { type?: string; colorTheme?: unknown }
     if (data?.type === PREVIEW_STATE && typeof data.colorTheme === "string") {
       markActive(data.colorTheme)
     }
   })
-}
-
-export function initAppPreviews() {
-  document.querySelectorAll<HTMLElement>("[data-app-preview]").forEach(setup)
 }

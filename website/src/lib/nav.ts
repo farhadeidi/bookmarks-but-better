@@ -2,9 +2,15 @@
  * The header's section links. Every page renders through Starlight, so one
  * header serves the marketing pages and the docs, and these links also fill
  * the mobile menus.
+ *
+ * Five labels beside the brand, search, GitHub, the theme toggle and the
+ * install button need about 1100px, so that — not Starlight's 50rem — is where
+ * the row appears; below it every link lives in the menu instead
+ * (Header.astro). "Demo" is the widest label /preview/ can afford even there.
  */
 export const SITE_LINKS = [
   { href: "/", label: "Home" },
+  { href: "/preview/", label: "Demo" },
   { href: "/docs/", label: "Docs" },
   { href: "/docs/guides/", label: "Guides" },
   { href: "/privacy/", label: "Privacy" },
