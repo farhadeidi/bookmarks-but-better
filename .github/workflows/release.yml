@@ -300,7 +300,7 @@ jobs:
           retention-days: 7
 
       # Uploaded separately because every daemon archive embeds a copy: building
-      # it once here is what makes all five archives serve the identical UI.
+      # it once here is what makes every daemon archive serve the identical UI.
       - name: Upload the daemon UI
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
@@ -410,6 +410,12 @@ jobs:
           - target: x86_64-pc-windows-msvc
             runner: windows-latest
             archive: zip
+          # Cross-compiled on the x64 runner, whose Visual Studio already
+          # carries the ARM64 MSVC tools and libraries. No dependency builds C
+          # code, so the target is the only thing this row needs added.
+          - target: aarch64-pc-windows-msvc
+            runner: windows-latest
+            archive: zip
     defaults:
       run:
         # Git Bash on the Windows runner, so the packaging steps below are one
@@ -467,9 +473,9 @@ jobs:
           set -euo pipefail
           name="bookmarks-but-better-$VERSION-$TARGET"
           binary="bookmarks-but-better"
-          if [ "$TARGET" = "x86_64-pc-windows-msvc" ]; then
-            binary="bookmarks-but-better.exe"
-          fi
+          case "$TARGET" in
+            *-pc-windows-msvc) binary="bookmarks-but-better.exe" ;;
+          esac
 
           mkdir -p "staging/$name"
           cp "target/$TARGET/release/$binary" "staging/$name/$binary"
