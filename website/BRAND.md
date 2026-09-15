@@ -70,9 +70,9 @@ rarely, as small chips only.
   ("Bookmarks, / *but better*") with no attached mark.
 - **The demo is the hero** — a static screenshot of the real dashboard, framed
   as a browser tab, replaces stock hero imagery and is the page's first large
-  paint. A "Try it live" button swaps in the real app (the `/app-preview/`
-  build) in place; the theme dots and the themes gallery launch it too, then
-  steer its theme. Nothing heavy loads until the visitor asks. The full-screen
-  `/preview/` page loads the live app straight away.
+  paint. A "Try it live" button swaps in the real app (the `/preview/` build)
+  in place; the theme dots and the themes gallery launch it too, then steer
+  its theme. Nothing heavy loads until the visitor asks. `/preview/` on its own
+  is the live app alone, full screen, with no site header, text or frame.
 - **Docs** — the Starlight docs at `/docs/` carry the same paper and lamplight
   palette, amber accent and type pair, and follow the site's dark-mode choice.

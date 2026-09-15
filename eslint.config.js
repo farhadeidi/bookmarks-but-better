@@ -21,7 +21,7 @@ export default defineConfig([
     // Website build output and Astro's generated content types.
     'website/dist',
     'website/.astro',
-    'website/public/app-preview',
+    'website/public/preview',
   ]),
   {
     files: ['**/*.{ts,tsx}'],

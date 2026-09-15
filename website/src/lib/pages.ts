@@ -23,22 +23,14 @@ export const PAGES = {
     name: "Home",
     summary: "product overview, features and installation links",
   },
+  /** The live app itself (built from app-frame/), not an Astro page. */
   preview: {
     path: "/preview/",
     title: "Live preview — Bookmarks But Better",
     description:
-      "Try the real Bookmarks But Better new tab in your browser: a live bookmarks dashboard with demo data. Drag, edit, search and switch themes.",
+      "Try the real Bookmarks But Better new tab in your browser: a live bookmarks dashboard with demo data.",
     name: "Live preview",
-    summary: "the real app running in the browser against seeded demo data",
-  },
-  daemon: {
-    path: "/daemon/",
-    title: "Markdown vault & local daemon — Bookmarks But Better",
-    description:
-      "Keep bookmarks as plain Markdown files you own, served by a small daemon on 127.0.0.1 only. Usable in Obsidian and Git, with multiple vaults and Safari support.",
-    name: "Markdown vault & daemon",
-    summary:
-      "what a Markdown vault is, how the local daemon serves it, install",
+    summary: "the real app, full screen, running against seeded demo data",
   },
   privacy: {
     path: "/privacy/",
@@ -52,8 +44,8 @@ export const PAGES = {
     path: "/guides/",
     title: "Guides — Bookmarks But Better",
     description:
-      "Guides to a private bookmarks new tab: moving from Pocket or Raindrop, keeping bookmarks as Markdown in Obsidian, using Safari, and more.",
+      "Articles for choosing a private bookmark manager: moving from Pocket or Raindrop, keeping bookmarks as Markdown in Obsidian, and going without an account.",
     name: "Guides",
-    summary: "index of guides",
+    summary: "articles on choosing and switching bookmark managers",
   },
 } as const satisfies Record<string, PageMeta>

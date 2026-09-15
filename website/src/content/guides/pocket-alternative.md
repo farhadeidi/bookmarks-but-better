@@ -1,5 +1,5 @@
 ---
-title: "A Pocket Alternative for Your Saved Links"
+title: "A Pocket alternative for your saved links"
 description: "Looking for a Pocket alternative? Import your Pocket CSV into a private new-tab bookmarks dashboard. What carries over, what doesn't, and no account needed."
 publishedAt: 2026-09-15
 ---
@@ -66,9 +66,9 @@ Pocket was often a place to find a link you half remembered. On the dashboard:
 
 ## If you want your saves as files
 
-Pocket kept your list on its servers. If you would rather own the files, turn on a Markdown vault. Each bookmark is one Markdown file with the URL and title in its front matter, inside ordinary folders on your disk. You can open, back up or version those files with any tool. Setup is one command, `npx bookmarks-but-better@latest`, and the [daemon page](/daemon/) explains what it installs.
+Pocket kept your list on its servers. If you would rather own the files, turn on a Markdown vault. Each bookmark is one Markdown file with the URL and title in its front matter, inside ordinary folders on your disk. You can open, back up or version those files with any tool. Setup is one command, `npx bookmarks-but-better@latest`, and [Markdown vaults](/docs/daemon/) explains how it works.
 
-This is also how the extension works in Safari, which does not give extensions access to its bookmarks. See the [Safari guide](/guides/safari-bookmarks-dashboard/).
+This is also how the extension works in Safari, which does not give extensions access to its bookmarks. See [Safari](/docs/start/safari/).
 
 ## When this is not the right replacement
 

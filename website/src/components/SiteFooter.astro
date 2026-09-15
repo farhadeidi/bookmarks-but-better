@@ -3,26 +3,36 @@ import { SITE } from "../lib/site"
 
 const COLUMNS = [
   {
-    title: "Install",
+    title: "Product",
     links: [
+      { href: "/docs/start/install/", label: "Install" },
+      { href: "/preview/", label: "Live preview" },
       { href: SITE.chromeStore, label: "Chrome Web Store" },
       { href: SITE.firefoxStore, label: "Firefox Add-ons" },
-      { href: "/daemon/", label: "Markdown vault daemon" },
-      { href: "/preview/", label: "Live preview" },
     ],
   },
   {
-    title: "Learn",
+    title: "Docs",
     links: [
       { href: "/docs/", label: "Documentation" },
-      { href: "/guides/", label: "Guides" },
-      { href: SITE.daemonDocs, label: "Install the daemon" },
-      { href: "/privacy/", label: "Privacy" },
+      { href: "/docs/daemon/", label: "Markdown vaults" },
+      { href: "/docs/daemon/backups/", label: "Back up your vault" },
+      { href: "/docs/daemon/troubleshooting/", label: "Troubleshooting" },
+    ],
+  },
+  {
+    title: "Guides",
+    links: [
+      { href: "/guides/pocket-alternative/", label: "Pocket alternative" },
+      { href: "/guides/raindrop-alternative/", label: "Raindrop alternative" },
+      { href: "/guides/obsidian-bookmarks/", label: "Obsidian bookmarks" },
+      { href: "/guides/", label: "All guides" },
     ],
   },
   {
     title: "Project",
     links: [
+      { href: "/privacy/", label: "Privacy" },
       { href: SITE.repository, label: "GitHub" },
       { href: SITE.issues, label: "Report an issue" },
       { href: SITE.releases, label: "Releases" },
@@ -33,9 +43,9 @@ const COLUMNS = [
 
 <footer class="border-t border-border">
   <div
-    class="mx-auto grid max-w-6xl gap-10 px-6 py-14 md:grid-cols-[1.5fr_repeat(3,1fr)]"
+    class="mx-auto grid max-w-6xl gap-10 px-6 py-14 sm:grid-cols-2 lg:grid-cols-[1.5fr_repeat(4,1fr)]"
   >
-    <div>
+    <div class="sm:col-span-2 lg:col-span-1">
       <div class="flex items-center gap-2.5">
         <img
           src="/logo-dark.svg"

@@ -2,18 +2,16 @@
 import { SITE } from "../lib/site"
 import ThemeToggle from "./ThemeToggle.astro"
 
+// Every item is its own page; the home page's sections are not navigation.
 const NAV = [
-  { href: "/#features", label: "Features" },
   { href: "/preview/", label: "Live preview" },
-  { href: "/daemon/", label: "Markdown vaults" },
   { href: "/docs/", label: "Docs" },
-  { href: "/guides/", label: "Guides" },
   { href: "/privacy/", label: "Privacy" },
 ]
 
 const pathname = Astro.url.pathname
 const current = (href: string) =>
-  !href.includes("#") && pathname.startsWith(href) ? "page" : undefined
+  pathname.startsWith(href) ? "page" : undefined
 
 const FOCUS =
   "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
@@ -43,7 +41,7 @@ const FOCUS =
       </span>
     </a>
 
-    <nav class="ml-auto hidden items-center gap-6 lg:flex" aria-label="Main">
+    <nav class="ml-auto hidden items-center gap-6 md:flex" aria-label="Main">
       {
         NAV.map((item) => (
           <a
@@ -60,7 +58,7 @@ const FOCUS =
       }
     </nav>
 
-    <div class="ml-auto flex shrink-0 items-center gap-2 lg:ml-0">
+    <div class="ml-auto flex shrink-0 items-center gap-2 md:ml-0">
       <a
         href={SITE.repository}
         class:list={[
@@ -82,7 +80,8 @@ const FOCUS =
       </a>
       <ThemeToggle />
       <a
-        href="/#install"
+        href="/docs/start/install/"
+        aria-current={current("/docs/start/install/")}
         class:list={[
           "inline-flex h-9 items-center rounded-md border border-border bg-card px-4 text-sm font-medium text-card-foreground hover:bg-muted",
           FOCUS,
@@ -93,7 +92,7 @@ const FOCUS =
     </div>
   </div>
 
-  <details class="group border-t border-border lg:hidden">
+  <details class="group border-t border-border md:hidden">
     <summary
       class:list={[
         "mx-auto flex max-w-6xl cursor-pointer list-none items-center justify-between px-6 py-2.5 text-sm text-muted-foreground marker:hidden [&::-webkit-details-marker]:hidden",

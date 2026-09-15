@@ -39,8 +39,8 @@ dist-safari
 marketing/output/videos/
 test-results/
 
-# Website live-preview build artifact (the real app, built for the hero iframe)
-website/public/app-preview/
+# Website live-preview build artifact (the real app at /preview/)
+website/public/preview/
 # Astro's generated types for the website's content collections
 website/.astro/
 

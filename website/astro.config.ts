@@ -5,7 +5,7 @@ import { defineConfig, fontProviders } from "astro/config"
 import { SITE, THEME_COLORS } from "./src/lib/site"
 
 /** Built pages that stay out of the sitemap. */
-const UNLISTED_PATHS = new Set(["/preview/", "/404/"])
+const UNLISTED_PATHS = new Set(["/404/", "/daemon/"])
 
 const fontsource = (file: string) => `@fontsource-variable/${file}`
 
@@ -13,6 +13,11 @@ export default defineConfig({
   site: SITE.url,
   trailingSlash: "always",
   build: { format: "directory" },
+  // Pages that moved. GitHub Pages has no server redirects, so these build as
+  // small pages with a meta refresh and a canonical link to the new URL.
+  redirects: {
+    "/daemon": "/docs/daemon/",
+  },
   // Starlight turns on prefetch-on-hover by default; the site ships no client
   // JavaScript beyond its few interactive controls.
   prefetch: false,
@@ -128,17 +133,14 @@ export default defineConfig({
     plugins: [
       tailwindcss(),
       {
-        // Dev-only: the dev server does not resolve public/app-preview/ to its
+        // Dev-only: the dev server does not resolve public/preview/ to its
         // index.html, which GitHub Pages and the built site do.
-        name: "serve-app-preview-index",
+        name: "serve-preview-index",
         apply: "serve",
         configureServer(server) {
           server.middlewares.use((req, _res, next) => {
-            if (req.url && /^\/app-preview\/(\?.*)?$/.test(req.url)) {
-              req.url = req.url.replace(
-                "/app-preview/",
-                "/app-preview/index.html"
-              )
+            if (req.url && /^\/preview\/(\?.*)?$/.test(req.url)) {
+              req.url = req.url.replace("/preview/", "/preview/index.html")
             }
             next()
           })

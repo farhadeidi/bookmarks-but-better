@@ -9,19 +9,9 @@ const PAGES = [
     h1: "Bookmarks, but better",
   },
   {
-    path: "/daemon/",
-    title: "Markdown vault & local daemon — Bookmarks But Better",
-    h1: "Your bookmarks as Markdown files you own",
-  },
-  {
     path: "/privacy/",
     title: "Privacy — Bookmarks But Better",
     h1: "Privacy",
-  },
-  {
-    path: "/preview/",
-    title: "Live preview — Bookmarks But Better",
-    h1: "The real thing, running right now",
   },
   {
     path: "/guides/",
@@ -33,9 +23,14 @@ const PAGES = [
     title: "Documentation — Bookmarks But Better",
     h1: "Documentation",
   },
+  {
+    path: "/docs/daemon/",
+    title: "Markdown vaults — Bookmarks But Better",
+    h1: "Markdown vaults",
+  },
 ] as const
 
-const MAIN_NAV = ["/docs/", "/guides/", "/daemon/", "/privacy/"]
+const MAIN_NAV = ["/preview/", "/docs/", "/privacy/", "/docs/start/install/"]
 
 /** The text of every <h1> in raw HTML, tags stripped and whitespace collapsed. */
 function headings(html: string): string[] {
@@ -48,7 +43,7 @@ function headings(html: string): string[] {
   )
 }
 
-async function expectLiveApp(page: Page, app: FrameLocator) {
+async function expectLiveApp(page: Page, app: Page | FrameLocator) {
   await app.getByRole("button", { name: "Bookmark source" }).click()
   await expect(app.getByRole("menuitem", { name: "archive" })).toBeVisible()
   await page.keyboard.press("Escape")
@@ -114,8 +109,18 @@ test.describe("marketing website artifact", () => {
         for (const href of MAIN_NAV) {
           expect(html, `${path} links ${href}`).toContain(`href="${href}"`)
         }
+        // Header links are pages, never sections of the home page.
+        expect(html, path).not.toMatch(
+          /<nav[^>]*aria-label="Main"[\s\S]*?href="\/#/
+        )
       }
     }
+  })
+
+  test("redirects the retired daemon page to the docs", async ({ page }) => {
+    await page.goto("/daemon/")
+    await expect(page).toHaveURL(/\/docs\/daemon\/$/)
+    await expect(page.locator("h1")).toHaveText("Markdown vaults")
   })
 
   test("hero shows a screenshot and loads the live app only on request", async ({
@@ -123,7 +128,7 @@ test.describe("marketing website artifact", () => {
   }) => {
     const appRequests: string[] = []
     page.on("request", (request) => {
-      if (request.url().includes("/app-preview/")) {
+      if (new URL(request.url()).pathname.startsWith("/preview/")) {
         appRequests.push(request.url())
       }
     })
@@ -138,22 +143,18 @@ test.describe("marketing website artifact", () => {
     expect(appRequests).toEqual([])
 
     await demo.getByRole("button", { name: "Try it live" }).click()
-    await expect(demo.locator("iframe")).toHaveAttribute(
-      "src",
-      /\/app-preview\//
-    )
+    await expect(demo.locator("iframe")).toHaveAttribute("src", /\/preview\//)
     await expectLiveApp(page, page.frameLocator("#demo iframe"))
   })
 
-  test("the full-screen preview page loads the live app directly", async ({
+  test("the preview page is the live app alone, full screen", async ({
     page,
   }) => {
     await page.goto("/preview/")
-    await expect(page.locator("#demo iframe")).toHaveAttribute(
-      "src",
-      /\/app-preview\//
-    )
-    await expectLiveApp(page, page.frameLocator("#demo iframe"))
+    await expect(page).toHaveTitle("Live preview — Bookmarks But Better")
+    await expect(page.locator("header nav")).toHaveCount(0)
+    await expect(page.locator("iframe")).toHaveCount(0)
+    await expectLiveApp(page, page)
   })
 
   test("docs render and Pagefind search finds a docs page", async ({
@@ -183,12 +184,15 @@ test.describe("marketing website artifact", () => {
       )
     ).join("\n")
     expect(urls).toContain(`<loc>${SITE}/docs/</loc>`)
+    expect(urls).toContain(`<loc>${SITE}/docs/daemon/</loc>`)
     expect(urls).toContain(`<loc>${SITE}/guides/</loc>`)
     expect(urls).not.toContain(`<loc>${SITE}/preview/</loc>`)
+    expect(urls).not.toContain(`<loc>${SITE}/daemon/</loc>`)
 
     const llms = await (await request.get("/llms.txt")).text()
     expect(llms).toContain(`(${SITE}/docs/)`)
-    expect(llms).toContain(`(${SITE}/daemon/)`)
+    expect(llms).toContain(`(${SITE}/docs/daemon/)`)
+    expect(llms).not.toContain(`(${SITE}/daemon/)`)
     expect(llms).toContain("## Product constraints")
   })
 

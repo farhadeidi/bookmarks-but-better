@@ -44,6 +44,10 @@ Safari turns **Allow Unsigned Extensions** off every time it quits. If the
 extension disappears after you restart Safari, allow unsigned extensions again.
 :::
 
+GitHub releases also include a zip of the Safari extension files. That zip is
+not an app you can install. It still has to be built into one with the steps
+above.
+
 ## First run
 
 1. Install the daemon, and choose where your Vault should live:
@@ -84,6 +88,15 @@ which Vault the bookmark goes to.
 
 Safari has no address-bar keyword, so `bb` does not work there. To search, open
 the dashboard and start typing.
+
+## Bringing your Safari bookmarks
+
+The extension never reads Safari's bookmarks, so moving them into a Vault is an
+explicit step. Safari's **File → Export Browsing Data to File**
+[saves your browsing data as a .zip file](https://support.apple.com/guide/safari/ibrwebf10132/mac).
+The dashboard's **Settings → Data & Migration → Import** needs an HTML
+bookmarks file, not the .zip itself. See
+[Import and export](/docs/start/import-export/).
 
 ## Differences from Chrome and Firefox
 

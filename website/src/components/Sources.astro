@@ -7,12 +7,14 @@ const SOURCES = [
     tag: "Default",
     description:
       "Shows and edits the bookmarks you already have, through the browser's built-in bookmarks API. Nothing to set up and nothing copied.",
+    link: { href: "/docs/start/sources/", label: "How sources work" },
   },
   {
     name: "Markdown vault",
     tag: "Optional",
     description:
-      "Your bookmarks as plain Markdown files in a folder you choose, served by a small local daemon. Use it next to browser bookmarks or on its own; in Safari it is the only source.",
+      "Your bookmarks as plain Markdown files in a folder you choose, served by a small daemon that only accepts connections from your own computer. The files stay usable in a text editor, in Obsidian and in Git. In Safari it is the only source.",
+    link: { href: "/docs/daemon/", label: "How Markdown vaults work" },
   },
 ]
 ---
@@ -25,7 +27,7 @@ const SOURCES = [
   <ul role="list" class="grid gap-4 md:grid-cols-2">
     {
       SOURCES.map((source) => (
-        <li class="rounded-lg bg-card p-6 ring-1 ring-border">
+        <li class="flex flex-col rounded-lg bg-card p-6 ring-1 ring-border">
           <h3 class="flex flex-wrap items-center gap-3">
             <span class="font-display text-lg font-medium tracking-tight">
               {source.name}
@@ -37,6 +39,12 @@ const SOURCES = [
           <p class="mt-2 text-base/7 text-pretty text-muted-foreground sm:text-sm/6">
             {source.description}
           </p>
+          <a
+            href={source.link.href}
+            class="mt-4 self-start text-sm font-medium text-foreground underline decoration-primary/60 underline-offset-4 hover:text-primary"
+          >
+            {source.link.label}
+          </a>
         </li>
       ))
     }

@@ -1,8 +1,8 @@
 /**
- * The live preview launcher. The page ships a static screenshot; the real app
- * (the /app-preview/ build) is only loaded into an iframe when the visitor
+ * The live preview launcher. The home page ships a static screenshot; the real
+ * app (the /preview/ build) is only loaded into an iframe when the visitor
  * asks for it — the "Try it live" button, a theme dot, or a theme in the
- * gallery — or right away on the full-screen /preview/ page.
+ * gallery.
  *
  * Once loaded, the frame follows the site's dark/light mode and the chosen
  * color theme over postMessage, and reports its actual theme back so the
@@ -14,9 +14,8 @@ export const PICK_THEME_EVENT = "bbb:pick-theme"
 const PREVIEW_MESSAGE = "bbb-preview/appearance"
 const PREVIEW_STATE = "bbb-preview/state"
 
-const FRAME_CLASS = "block w-full border-0 bg-background"
-const FRAME_HEIGHT = "h-[560px] md:h-auto md:aspect-[16/10]"
-const FRAME_HEIGHT_TALL = "h-[75vh] min-h-[560px]"
+const FRAME_CLASS =
+  "block w-full border-0 bg-background h-[560px] md:h-auto md:aspect-[16/10]"
 
 function siteMode(): "dark" | "light" {
   return document.documentElement.classList.contains("dark") ? "dark" : "light"
@@ -53,11 +52,9 @@ function setup(root: HTMLElement) {
     if (frame) return
     const params = new URLSearchParams({ mode: siteMode(), theme })
     frame = document.createElement("iframe")
-    frame.src = `/app-preview/?${params}`
+    frame.src = `/preview/?${params}`
     frame.title = "Bookmarks But Better — live preview of the real extension"
-    frame.className = `${FRAME_CLASS} ${
-      root.hasAttribute("data-tall") ? FRAME_HEIGHT_TALL : FRAME_HEIGHT
-    }`
+    frame.className = FRAME_CLASS
     stage.replaceChildren(frame)
     root.dataset.state = "live"
     markActive(theme)
@@ -98,8 +95,6 @@ function setup(root: HTMLElement) {
       markActive(data.colorTheme)
     }
   })
-
-  if (root.hasAttribute("data-autoload")) launch(active, false)
 }
 
 export function initAppPreviews() {

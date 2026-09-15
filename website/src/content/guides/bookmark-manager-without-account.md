@@ -1,5 +1,5 @@
 ---
-title: "A Bookmark Manager Without an Account"
+title: "A bookmark manager without an account"
 description: "When a bookmark manager without an account makes sense: what local means in practice, the exact network requests, and the trade-offs for sync and backup."
 publishedAt: 2026-09-15
 ---
@@ -65,7 +65,7 @@ Account-based managers such as Raindrop.io offer cross-device access, mobile app
 ## Getting set up
 
 1. Install the extension. The browser source works immediately, with nothing else to install.
-2. Optionally, run `npx bookmarks-but-better@latest` to install the daemon and choose a folder for a Markdown vault. See the [daemon page](/daemon/).
+2. Optionally, run `npx bookmarks-but-better@latest` to install the daemon and choose a folder for a Markdown vault. See [Markdown vaults](/docs/daemon/).
 3. Import from an HTML file, or a Raindrop or Pocket CSV, under **Settings → Data & Migration**.
 
 ## Get started

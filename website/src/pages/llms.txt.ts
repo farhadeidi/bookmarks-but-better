@@ -32,7 +32,7 @@ export const GET: APIRoute = async () => {
     "",
     "## Pages",
     "",
-    ...[PAGES.home, PAGES.preview, PAGES.daemon, PAGES.privacy].map((page) =>
+    ...[PAGES.home, PAGES.preview, PAGES.privacy].map((page) =>
       link(page.name, page.path, page.summary)
     ),
     "",

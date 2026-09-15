@@ -1,5 +1,5 @@
 ---
-title: "A Raindrop Alternative That Needs No Account"
+title: "A Raindrop alternative that needs no account"
 description: "A factual Raindrop alternative comparison: cloud account vs local bookmarks, where your data lives, supported platforms, and importing a Raindrop CSV or HTML."
 publishedAt: 2026-09-15
 ---
@@ -80,4 +80,4 @@ Bookmarks But Better is likely the better choice if you want no account, bookmar
 
 - Install for [Chrome](https://chromewebstore.google.com/detail/nflojekghnganlcjncbepnnnkgakghif?utm_source=website) or [Firefox](https://addons.mozilla.org/firefox/addon/bookmarks-but-better/?utm_source=website).
 - Try the [live preview](/preview/) with demo bookmarks, no install needed.
-- Want bookmarks as files? Read about the [vault daemon](/daemon/).
+- Want bookmarks as files? Read about [Markdown vaults](/docs/daemon/).

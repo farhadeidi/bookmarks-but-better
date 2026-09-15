@@ -9,7 +9,7 @@ interface Props {
 const { items } = Astro.props
 ---
 
-<Section index="06" title="Questions, answered" id="faq">
+<Section index="05" title="Questions, answered" id="faq">
   <div class="divide-y divide-border rounded-lg bg-card ring-1 ring-border">
     {
       items.map((item) => (
@@ -28,6 +28,17 @@ const { items } = Astro.props
           </summary>
           <p class="pb-4 text-base/7 text-pretty text-muted-foreground sm:text-sm/6">
             {item.answer}
+            {item.link && (
+              <>
+                {" "}
+                <a
+                  href={item.link.href}
+                  class="text-foreground underline decoration-primary/60 underline-offset-4 hover:text-primary"
+                >
+                  {item.link.label}
+                </a>
+              </>
+            )}
           </p>
         </details>
       ))

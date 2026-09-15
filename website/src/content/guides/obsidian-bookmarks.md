@@ -1,5 +1,5 @@
 ---
-title: "Obsidian Bookmarks as Markdown Files"
+title: "Obsidian bookmarks as Markdown files"
 description: "Keep bookmarks as Markdown files in or next to your Obsidian vault, shown on your browser's new tab. What the files look like and how to set it up safely."
 publishedAt: 2026-09-15
 ---
@@ -82,7 +82,7 @@ My Notes/            Obsidian vault
 ## Setting it up
 
 1. Install the extension for [Chrome](https://chromewebstore.google.com/detail/nflojekghnganlcjncbepnnnkgakghif?utm_source=website) or [Firefox](https://addons.mozilla.org/firefox/addon/bookmarks-but-better/?utm_source=website).
-2. In a terminal, run `npx bookmarks-but-better@latest`. It installs the daemon, asks where your bookmarks should live (give it your `Bookmarks` folder), and starts it as a background service. Without Node.js, use the install scripts on the [daemon page](/daemon/).
+2. In a terminal, run `npx bookmarks-but-better@latest`. It installs the daemon, asks where your bookmarks should live (give it your `Bookmarks` folder), and starts it as a background service. Without Node.js, use the install scripts in [install the daemon](/docs/daemon/install/).
 3. In the extension, open **Settings → Sources**, enter `127.0.0.1:52222` and click **Connect**. The browser asks for localhost permission at that moment, not at install.
 
 Full steps: [install the daemon](/docs/daemon/install/) and [connect the extension](/docs/daemon/connect/).
