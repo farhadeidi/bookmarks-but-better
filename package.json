@@ -37,9 +37,9 @@
     "check": "bun run format:check && bun run lint && bun run typecheck && bun run site:typecheck && bun run test && bun run build && bun run site:build && bun run build:daemon && bun run build:safari",
     "preview": "vite preview",
     "screenshots": "playwright test marketing/scripts/capture.spec.ts --config marketing/scripts/playwright.config.ts",
-    "video:features": "tsx marketing/scripts/feature-walkthrough.ts",
+    "video": "tsx marketing/scripts/walkthrough.ts",
     "video:themes": "tsx marketing/scripts/theme-showcase.ts",
-    "assets": "bun run screenshots && bun run video:features && bun run video:themes"
+    "assets": "bun run screenshots && bun run video && bun run video:themes"
   },
   "dependencies": {
     "@atlaskit/pragmatic-drag-and-drop": "^1.7.9",
