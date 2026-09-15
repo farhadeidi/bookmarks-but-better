@@ -212,9 +212,9 @@ bun run site:typecheck    # astro check, plus the live preview's types
 bun run test:website      # Build the website, then Playwright smoke tests against website/dist/
 ```
 
-The website in `website/` is one Astro project: the marketing pages, guides
-(`website/src/content/guides/`) and the Starlight user docs served under
-`/docs/` (`website/src/content/docs/docs/`). Run `bun install --cwd website`
+The website in `website/` is one Astro project: the marketing pages, and the
+Starlight user docs and guides served under `/docs/`
+(`website/src/content/docs/docs/`). Run `bun install --cwd website`
 once first. Astro needs Node.js 22.12 or newer; Bun installs the packages and
 `bun run` starts Astro under Node.
 

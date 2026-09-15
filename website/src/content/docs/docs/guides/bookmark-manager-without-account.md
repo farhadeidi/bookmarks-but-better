@@ -1,7 +1,9 @@
 ---
 title: "A bookmark manager without an account"
 description: "When a bookmark manager without an account makes sense: what local means in practice, the exact network requests, and the trade-offs for sync and backup."
-publishedAt: 2026-09-15
+sidebar:
+  label: Without an account
+  order: 4
 ---
 
 A bookmark manager without an account keeps your bookmarks on your own devices instead of on a company's server. Nobody else holds a copy, nothing needs a password, and there's no service that can shut down under you. The costs: no built-in sync between devices, and backups are up to you. This guide explains when that trade makes sense, and exactly what "local" means for Bookmarks But Better.
@@ -60,7 +62,7 @@ Without an account, there's no "restore from the cloud". The upside is that noth
 
 ## How it compares to account-based tools
 
-Account-based managers such as Raindrop.io offer cross-device access, mobile apps and extra features in exchange for storing your bookmarks on their service. If you're weighing that choice, the [Raindrop comparison](/guides/raindrop-alternative/) sets out the differences using Raindrop's own pages. If you keep notes in Obsidian, the [Obsidian guide](/guides/obsidian-bookmarks/) shows how a vault fits next to your notes.
+Account-based managers such as Raindrop.io offer cross-device access, mobile apps and extra features in exchange for storing your bookmarks on their service. If you're weighing that choice, the [Raindrop comparison](/docs/guides/raindrop-alternative/) sets out the differences using Raindrop's own pages. If you keep notes in Obsidian, the [Obsidian guide](/docs/guides/obsidian-bookmarks/) shows how a vault fits next to your notes.
 
 ## Getting set up
 

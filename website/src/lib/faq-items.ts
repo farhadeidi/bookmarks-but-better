@@ -32,7 +32,7 @@ export const FAQ_ITEMS: FaqItem[] = [
     answer:
       "The optional daemon keeps your bookmarks as plain Markdown files in a folder you choose, with no hidden database. That folder stays usable in a text editor, in Obsidian and in Git.",
     link: {
-      href: "/guides/obsidian-bookmarks/",
+      href: "/docs/guides/obsidian-bookmarks/",
       label: "Obsidian bookmarks as Markdown files",
     },
   },

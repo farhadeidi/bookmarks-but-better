@@ -1,7 +1,9 @@
 ---
 title: "A Pocket alternative for your saved links"
 description: "Looking for a Pocket alternative? Import your Pocket CSV into a private new-tab bookmarks dashboard. What carries over, what doesn't, and no account needed."
-publishedAt: 2026-09-15
+sidebar:
+  label: Pocket alternative
+  order: 1
 ---
 
 If you used Pocket mainly to keep links you wanted to find again, Bookmarks But Better can take over that job. It imports the CSV file from a Pocket export and shows those links on your new tab page, with no account. It is not a read-later app, though. It does not save article text, offer a reading view, or work offline with saved pages, so if that is what you miss, read the last section first.

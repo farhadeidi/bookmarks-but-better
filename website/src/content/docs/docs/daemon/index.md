@@ -20,7 +20,7 @@ or edit with your own tools. A Vault turns that around:
 - Each bookmark is one Markdown file, and each bookmark folder is a folder on
   disk. There is no hidden database.
 - The files stay usable in a text editor, in Obsidian and in Git. See
-  [Obsidian bookmarks as Markdown files](/guides/obsidian-bookmarks/).
+  [Obsidian bookmarks as Markdown files](/docs/guides/obsidian-bookmarks/).
 - The backup tools you already use work for it. See
   [Back up your vault](/docs/daemon/backups/).
 

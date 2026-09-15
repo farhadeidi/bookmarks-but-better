@@ -14,7 +14,7 @@ const PAGES = [
     h1: "Privacy",
   },
   {
-    path: "/guides/",
+    path: "/docs/guides/",
     title: "Guides — Bookmarks But Better",
     h1: "Guides",
   },
@@ -30,7 +30,13 @@ const PAGES = [
   },
 ] as const
 
-const MAIN_NAV = ["/preview/", "/docs/", "/privacy/", "/docs/start/install/"]
+const MAIN_NAV = [
+  "/preview/",
+  "/docs/",
+  "/docs/guides/",
+  "/privacy/",
+  "/docs/start/install/",
+]
 
 /** The text of every <h1> in raw HTML, tags stripped and whitespace collapsed. */
 function headings(html: string): string[] {
@@ -185,7 +191,7 @@ test.describe("marketing website artifact", () => {
     ).join("\n")
     expect(urls).toContain(`<loc>${SITE}/docs/</loc>`)
     expect(urls).toContain(`<loc>${SITE}/docs/daemon/</loc>`)
-    expect(urls).toContain(`<loc>${SITE}/guides/</loc>`)
+    expect(urls).toContain(`<loc>${SITE}/docs/guides/</loc>`)
     expect(urls).not.toContain(`<loc>${SITE}/preview/</loc>`)
     expect(urls).not.toContain(`<loc>${SITE}/daemon/</loc>`)
 
@@ -207,7 +213,7 @@ test.describe("marketing website artifact", () => {
   test("has no horizontal overflow on a narrow viewport", async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 })
 
-    for (const path of ["/", "/docs/", "/guides/"]) {
+    for (const path of ["/", "/docs/", "/docs/guides/"]) {
       await page.goto(path)
       expect(await hasNoHorizontalOverflow(page), path).toBe(true)
     }

@@ -37,8 +37,8 @@ private: there is no account, analytics, tracking, or bookmark-content collectio
 - **Dev Workbench** (`bun run dev`) runs the full app with URL-addressable
   scenarios and no extension or daemon.
 - **Website** (`website/`, Astro + Starlight on Node >= 22.12): marketing
-  pages, guides, and user docs in `website/src/content/docs/docs/` served at
-  `/docs/`.
+  pages, plus user docs and guides in `website/src/content/docs/docs/` served
+  at `/docs/`.
 
 ## UI components (shadcn/ui)
 

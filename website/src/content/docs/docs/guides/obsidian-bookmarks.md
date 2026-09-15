@@ -1,7 +1,9 @@
 ---
 title: "Obsidian bookmarks as Markdown files"
 description: "Keep bookmarks as Markdown files in or next to your Obsidian vault, shown on your browser's new tab. What the files look like and how to set it up safely."
-publishedAt: 2026-09-15
+sidebar:
+  label: Obsidian bookmarks
+  order: 3
 ---
 
 Bookmarks But Better can keep your bookmarks as plain Markdown files, one file per bookmark and one folder per bookmark folder, and show them on your browser's new tab page. Because they are ordinary Markdown files with YAML front matter, Obsidian can open them. The simplest setup is a dedicated bookmarks folder, either next to your Obsidian vault or as a subfolder inside it. Pointing it at the root of an existing Obsidian vault technically works, but you probably won't like the result. Details below.

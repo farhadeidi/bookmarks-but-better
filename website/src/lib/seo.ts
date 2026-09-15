@@ -44,39 +44,3 @@ export function faqPage(items: FaqItem[]): JsonLd {
     })),
   }
 }
-
-export function article(input: {
-  title: string
-  description: string
-  url: string
-  publishedAt: Date
-  updatedAt?: Date
-}): JsonLd {
-  return {
-    "@context": "https://schema.org",
-    "@type": "Article",
-    headline: input.title,
-    description: input.description,
-    url: input.url,
-    mainEntityOfPage: input.url,
-    image: SITE.ogImage,
-    datePublished: input.publishedAt.toISOString(),
-    dateModified: (input.updatedAt ?? input.publishedAt).toISOString(),
-    author: AUTHOR,
-    publisher: AUTHOR,
-  }
-}
-
-/** `items` run from the site root to the current page; paths are site-relative. */
-export function breadcrumbs(items: { name: string; path: string }[]): JsonLd {
-  return {
-    "@context": "https://schema.org",
-    "@type": "BreadcrumbList",
-    itemListElement: items.map((item, index) => ({
-      "@type": "ListItem",
-      position: index + 1,
-      name: item.name,
-      item: new URL(item.path, SITE.url).href,
-    })),
-  }
-}

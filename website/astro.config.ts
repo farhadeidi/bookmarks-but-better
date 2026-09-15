@@ -87,6 +87,10 @@ export default defineConfig({
           label: "Markdown vaults",
           items: [{ autogenerate: { directory: "docs/daemon" } }],
         },
+        {
+          label: "Guides",
+          items: [{ autogenerate: { directory: "docs/guides" } }],
+        },
       ],
       head: [
         { tag: "meta", attrs: { property: "og:image", content: SITE.ogImage } },

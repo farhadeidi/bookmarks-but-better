@@ -40,12 +40,4 @@ export const PAGES = {
     name: "Privacy",
     summary: "data location, network requests and permissions",
   },
-  guides: {
-    path: "/guides/",
-    title: "Guides — Bookmarks But Better",
-    description:
-      "Articles for choosing a private bookmark manager: moving from Pocket or Raindrop, keeping bookmarks as Markdown in Obsidian, and going without an account.",
-    name: "Guides",
-    summary: "articles on choosing and switching bookmark managers",
-  },
 } as const satisfies Record<string, PageMeta>
