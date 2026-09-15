@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **A native ARM64 daemon for Windows.** Releases now carry an
+  `aarch64-pc-windows-msvc` archive, and `install.ps1` picks the build for the
+  machine's architecture instead of always taking x64. On an ARM64 machine
+  installing a release from before this build existed, it falls back to the
+  x64 build, which Windows runs under emulation (#68).
+
 ## [4.3.0] - 2026-09-14
 
 ### Added

@@ -10,15 +10,18 @@
 
 .DESCRIPTION
   Every release is a GitHub Release built by .github/workflows/release.yml,
-  which uploads one .zip archive and one .sha256 checksum for
-  x86_64-pc-windows-msvc, plus this script itself under a fixed name. This
-  script:
+  which uploads one .zip archive and one .sha256 checksum per Windows target
+  (x86_64-pc-windows-msvc and aarch64-pc-windows-msvc), plus this script
+  itself under a fixed name. This script:
 
     1. Resolves which release to install: the latest *stable* release by
        default, the latest prerelease with -Beta, or an exact tag with
        -Version. A stable release that carries no daemon build -- every stable
        release up to and including v3.2.0 was extension-only -- falls back to
        the latest prerelease that does have a Windows build, and says so.
+       The build is the one for this machine's architecture: an ARM64 machine
+       takes the native ARM64 build, and falls back to the x64 one -- which
+       Windows runs under emulation -- for a release that predates it.
     2. Downloads that archive and its .sha256 sidecar from the GitHub
        Release, and refuses to install unless the archive's hash matches it.
     3. Unpacks into a versioned directory under $InstallRoot and only then
@@ -79,7 +82,19 @@ Set-StrictMode -Version Latest
 
 $Repo = "farhadeidi/bookmarks-but-better"
 $Exe = "bookmarks-but-better"
-$Target = "x86_64-pc-windows-msvc"
+# The architecture of Windows itself rather than of this PowerShell process: a
+# 32-bit PowerShell sees its own x86 in PROCESSOR_ARCHITECTURE and the real
+# architecture in PROCESSOR_ARCHITEW6432, so that one wins when it is set.
+$Arch = if ($env:PROCESSOR_ARCHITEW6432) { $env:PROCESSOR_ARCHITEW6432 } else { $env:PROCESSOR_ARCHITECTURE }
+# The builds this machine runs, best first. x64 stays on the ARM64 list because
+# releases from before the ARM64 build existed carry only the x64 one, and
+# Windows on ARM runs it under emulation -- slower, but installed rather than
+# refused. @() keeps a one-element list a list rather than a bare string.
+$Targets = @(switch ($Arch) {
+  "AMD64" { "x86_64-pc-windows-msvc" }
+  "ARM64" { "aarch64-pc-windows-msvc", "x86_64-pc-windows-msvc" }
+  default { throw "unsupported architecture: $Arch (release builds exist for AMD64 and ARM64)" }
+})
 $InstallRoot = $InstallDir
 $CurrentLink = Join-Path $InstallRoot "current"
 # Attempts for a filesystem step an antivirus handle can transiently block, at
@@ -96,13 +111,13 @@ $GitHubBase = if ($env:BOOKMARKS_BUT_BETTER_INSTALL_GITHUB_BASE) {
 }
 $ReleasesBase = "$GitHubBase/$Repo/releases"
 
-# The archive this platform needs from a given release. Every release names it
+# The archive for one target from a given release. Every release names it
 # after its own version, so this can only be computed per release -- which is
 # exactly why the fallback below has to probe each candidate rather than just
 # taking the newest thing it finds.
 function Get-ArchiveName {
-  param([string]$Tag)
-  "$Exe-$($Tag.TrimStart('v'))-$Target.zip"
+  param([string]$Tag, [string]$Triple)
+  "$Exe-$($Tag.TrimStart('v'))-$Triple.zip"
 }
 
 function Get-AssetUrl {
@@ -118,19 +133,28 @@ function Test-PrereleaseTag {
   return $Tag -like "*-beta.*"
 }
 
-# True when a release actually ships a daemon build for Windows. An
+# The best of $Targets a release actually ships, or $null when it ships none.
+# Probed per release, because a release from before the ARM64 build existed
+# carries only the x64 one.
+function Get-ReleaseTarget {
+  param([string]$Tag)
+  if (-not $Tag) { return $null }
+  foreach ($candidate in $Targets) {
+    try {
+      $null = Invoke-WebRequest -Uri (Get-AssetUrl $Tag (Get-ArchiveName $Tag $candidate)) `
+        -Method Head -UseBasicParsing
+      return $candidate
+    } catch { }
+  }
+  return $null
+}
+
+# True when a release actually ships a daemon build this machine runs. An
 # extension-only release (every stable release up to and including v3.2.0)
 # does not, and installing from one is not a thing that can succeed.
 function Test-ReleaseHasDaemon {
   param([string]$Tag)
-  if (-not $Tag) { return $false }
-  try {
-    $null = Invoke-WebRequest -Uri (Get-AssetUrl $Tag (Get-ArchiveName $Tag)) `
-      -Method Head -UseBasicParsing
-    return $true
-  } catch {
-    return $false
-  }
+  return [bool](Get-ReleaseTarget $Tag)
 }
 
 # The tag /releases/latest redirects to -- GitHub's "latest" is by definition
@@ -214,7 +238,7 @@ function Remove-Junction {
   [System.IO.Directory]::Delete($Path)
 }
 
-Write-Host "platform: $Target"
+Write-Host "platform: $($Targets[0])"
 
 # ---------------------------------------------------------------------------
 # 1. Which release: an explicit tag, the latest prerelease, or the latest
@@ -229,7 +253,7 @@ if ($Version) {
   Write-Host "resolving the latest prerelease"
   $tag = Get-LatestBetaTagWithDaemon
   if (-not $tag) {
-    throw "no prerelease has a $Exe build for $Target; pass -Version to install a specific one"
+    throw "no prerelease has a $Exe build for Windows $Arch; pass -Version to install a specific one"
   }
 } else {
   Write-Host "resolving the latest stable release"
@@ -243,11 +267,11 @@ if ($Version) {
   # normally something you have to ask for, and this is the one case where the
   # alternative is not installing at all.
   if (-not (Test-ReleaseHasDaemon $tag)) {
-    Write-Host "the latest stable release ($tag) ships no $Exe daemon build for $Target"
+    Write-Host "the latest stable release ($tag) ships no $Exe daemon build for Windows $Arch"
     Write-Host "falling back to the latest prerelease; pass -Version <tag> to pin a specific release"
     $tag = Get-LatestBetaTagWithDaemon
     if (-not $tag) {
-      throw "no stable or prerelease release has a $Exe build for $Target yet"
+      throw "no stable or prerelease release has a $Exe build for Windows $Arch yet"
     }
   }
 }
@@ -258,7 +282,17 @@ if (-not $tag.StartsWith("v")) {
 $version = $tag.TrimStart("v")
 Write-Host "installing $tag (version $version)"
 
-$archiveName = Get-ArchiveName $tag
+$Target = Get-ReleaseTarget $tag
+if (-not $Target) {
+  # No build answered the probe -- most likely an explicit -Version that does
+  # not exist. Carry on with the preferred build, so the download below fails
+  # naming exactly which asset is missing.
+  $Target = $Targets[0]
+} elseif ($Target -ne $Targets[0]) {
+  Write-Host "$tag ships no $($Targets[0]) build; installing $Target, which Windows runs under emulation"
+}
+
+$archiveName = Get-ArchiveName $tag $Target
 $checksumName = "$archiveName.sha256"
 
 # ---------------------------------------------------------------------------
