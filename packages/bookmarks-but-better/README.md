@@ -98,7 +98,7 @@ curl -fsSL https://github.com/farhadeidi/bookmarks-but-better/releases/latest/do
 & ([scriptblock]::Create((irm https://github.com/farhadeidi/bookmarks-but-better/releases/latest/download/install.ps1))) -Vault "$env:USERPROFILE\Bookmarks"
 ```
 
-See [docs/DAEMON.md](https://github.com/farhadeidi/bookmarks-but-better/blob/main/docs/DAEMON.md).
+See the [daemon documentation](https://bookmarks.but-better.dev/docs/daemon/install/).
 
 ## License
 
