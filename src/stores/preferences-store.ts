@@ -8,6 +8,8 @@ import {
 } from "@/stores/profile-storage"
 
 export type CardLayout = "list" | "grid"
+/** Each folder's card layout; absent = list. */
+export type CardLayouts = Record<string, CardLayout>
 /** Folder ids whose dashboard card shows only its header; absent = open. */
 export type CollapsedFolders = Record<string, true>
 export type ColorTheme = ColorThemeId
@@ -18,7 +20,7 @@ export type ColorTheme = ColorThemeId
  */
 export interface CardDisplay {
   nestedFolders: boolean
-  cardLayouts: Record<string, CardLayout>
+  cardLayouts: CardLayouts
   collapsedFolders: CollapsedFolders
 }
 
@@ -27,7 +29,7 @@ export const COLOR_THEMES: ColorTheme[] = [...COLOR_THEME_IDS]
 interface PreferencesState {
   // Source-scoped: keyed to one source's folder ids, read and written
   // through the active source's storage adapter.
-  cardLayouts: Record<string, CardLayout>
+  cardLayouts: CardLayouts
   collapsedFolders: CollapsedFolders
   folderOrder: string[]
   // Profile-wide: this browser profile's look and feel, independent of the
@@ -116,7 +118,7 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
       isFoldersOnlyEnabledInTreeEditor,
       safeMode,
     ] = await Promise.all([
-      adapter.storage.get<Record<string, CardLayout>>("cardLayouts"),
+      adapter.storage.get<CardLayouts>("cardLayouts"),
       adapter.storage.get<CollapsedFolders>("collapsedFolders"),
       readProfilePreference<boolean>("nestedFolders", adapter.storage),
       readProfilePreference<ColorTheme>("colorTheme", adapter.storage),
@@ -182,9 +184,7 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
     set({
       cardLayouts:
         cardLayouts ??
-        (seedPrefDefaults?.cardLayouts as
-          | Record<string, CardLayout>
-          | undefined) ??
+        (seedPrefDefaults?.cardLayouts as CardLayouts | undefined) ??
         {},
       collapsedFolders: collapsedFolders ?? {},
       nestedFolders:

@@ -180,7 +180,9 @@ export function useMeasuredCardHeights(
 
       // Cards only change width when the grid does, and a hold ends there:
       // the heights kept through it describe cards of another width, so every
-      // card is measured anew.
+      // card may move freely again on its next measurement. A card that does
+      // not report (one unmounted far from the viewport) keeps its last real
+      // height rather than falling back to an estimate.
       if (
         heldGeneration.current !== null &&
         entries.some((entry) => {
@@ -195,8 +197,10 @@ export function useMeasuredCardHeights(
         })
       ) {
         heldGeneration.current = null
-        records.current.clear()
-        changed = true
+        const released = {}
+        for (const [folderId, record] of records.current) {
+          records.current.set(folderId, { ...record, generation: released })
+        }
       }
 
       for (const entry of entries) {
