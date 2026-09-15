@@ -2,8 +2,8 @@
 /**
  * The header's install button, also at the top of both mobile menus. It names
  * the visitor's browser from <html data-browser> (set in Head.astro): Chrome
- * by default and without JavaScript, Firefox, or Safari, which links to its
- * setup guide. It renders outside the marketing pages' Tailwind scope, so it
+ * by default and without JavaScript, Firefox, or Safari, whose version is
+ * coming soon and links to its guide. It renders outside the marketing pages' Tailwind scope, so it
  * is plain CSS on the site's tokens.
  */
 import { SITE } from "../lib/site"
@@ -28,7 +28,7 @@ const classes = ["install-cta", { block }]
 </a>
 <a href="/docs/start/safari/" class:list={classes} data-for="safari">
   <BrowserIcon name="safari" />
-  Get it for Safari
+  Safari: coming soon
 </a>
 
 <style>

@@ -17,7 +17,7 @@ Facts about Raindrop.io below come from Raindrop's own pages, as of September 20
 | Account | Sign in with email or username and password, Google, or Apple ([Raindrop help](https://help.raindrop.io/authentication)) | None |
 | Where bookmarks live | Raindrop describes a "100% cloud-based architecture" ([raindrop.io](https://raindrop.io/)) | Your browser's bookmark store, or Markdown files in a folder you choose |
 | Across devices | "Access your bookmarks seamlessly across all your devices" ([raindrop.io](https://raindrop.io/)) | No built-in sync; a vault folder can be carried by a file sync tool you already use |
-| Platforms | Extensions for Chrome, Firefox, Safari and Edge; apps for Windows, Mac, iPad, iPhone and Android ([raindrop.io](https://raindrop.io/)) | Extensions for Chrome and Firefox; Safari built from source, using a local daemon; daemon for macOS, Linux and Windows; no phone apps |
+| Platforms | Extensions for Chrome, Firefox, Safari and Edge; apps for Windows, Mac, iPad, iPhone and Android ([raindrop.io](https://raindrop.io/)) | Extensions for Chrome and Firefox; Safari coming soon (build it from source today), using a local daemon; daemon for macOS, Linux and Windows; no phone apps |
 | Plans | A free plan and a paid Pro plan ([Raindrop plans](https://raindrop.io/pro/buy)) | Free and open source (MIT) |
 | Export | HTML, CSV and TXT ([Raindrop help](https://help.raindrop.io/export-backup)) | HTML bookmarks file; vault bookmarks are already plain files |
 

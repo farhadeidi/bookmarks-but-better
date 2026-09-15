@@ -1,12 +1,18 @@
 ---
 title: Safari
-description: Using Bookmarks But Better in Safari on macOS 14 or later, which needs the local daemon, opens from the toolbar popup, and has no address-bar keyword.
+description: The Safari version of Bookmarks But Better is coming soon. Until then you can build it from source on macOS 14 or later; it needs the local daemon, opens from the toolbar popup, and has no address-bar keyword.
 sidebar:
   order: 4
 ---
 
-Safari is supported, but it works differently from Chrome and Firefox. This
-page explains what is different and how to get started.
+:::note[Coming soon]
+The Safari version is not released yet. It is not in the Mac App Store, and
+there is no signed download. If you need it now, you can
+[build it from source](#build-it-from-source).
+:::
+
+Safari works differently from Chrome and Firefox. This page explains what is
+different and how to build and set it up yourself.
 
 ## Requirements
 
@@ -17,10 +23,10 @@ page explains what is different and how to get started.
   [Vault](/docs/start/sources/) served by the daemon on your Mac instead. See
   [Install the daemon](/docs/daemon/install/).
 
-## Getting the extension
+## Build it from source
 
-The Safari version is **not yet in the Mac App Store**, and there is no signed
-download. For now, you can build it yourself on your Mac. This needs Xcode,
+Until the Safari version is released, you can build it yourself on your Mac.
+This needs Xcode,
 [Bun](https://bun.sh), and a copy of the
 [source code](https://github.com/farhadeidi/bookmarks-but-better).
 

@@ -21,7 +21,7 @@ It is a weaker fit if you want bookmarks on your phone, instant sync across many
 
 ## What "local" means here, concretely
 
-Bookmarks But Better is a free and open source (MIT) extension for Chrome and Firefox, with Safari support through a local daemon. There is no sign-up, and nothing to log into. Bookmarks live in one of these places:
+Bookmarks But Better is a free and open source (MIT) extension for Chrome and Firefox. A Safari version, which works through a local daemon, is coming soon, and you can build it from source today. There is no sign-up, and nothing to log into. Bookmarks live in one of these places:
 
 - **Browser source.** Your browser's own bookmark store. The extension reads and changes bookmarks only through the browser's built-in bookmark APIs.
 - **Vault.** A folder of Markdown files on your disk. A small optional program, the daemon, serves the folder to the extension over `127.0.0.1`/`localhost` only. It binds to loopback and makes no outbound requests of its own.

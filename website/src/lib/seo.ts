@@ -22,7 +22,7 @@ export function softwareApplication(): JsonLd {
     url: `${SITE.url}/`,
     description: SITE.tagline,
     applicationCategory: "BrowserApplication",
-    operatingSystem: "Chrome, Firefox, Safari (with the local daemon)",
+    operatingSystem: "Chrome, Firefox",
     softwareVersion: SITE.version,
     isAccessibleForFree: true,
     license: SITE.license,

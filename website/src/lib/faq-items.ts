@@ -39,8 +39,11 @@ export const FAQ_ITEMS: FaqItem[] = [
   {
     question: "Does it work in Safari?",
     answer:
-      "Yes, with differences. Safari gives extensions no access to its bookmarks and no new-tab override, so there the extension works with a Markdown vault served by the local daemon, and you open the dashboard from the toolbar popup. It is not in the Mac App Store yet; for now you build it from the source code.",
-    link: { href: "/docs/start/safari/", label: "Safari setup" },
+      "The Safari version is coming soon. If you need it now, you can build it yourself from the source code. It works differently: Safari gives extensions no access to its bookmarks and no new-tab override, so there the extension works with a Markdown vault served by the local daemon, and you open the dashboard from the toolbar popup.",
+    link: {
+      href: "/docs/start/safari/",
+      label: "Safari: status and building from source",
+    },
   },
   {
     question: "Where do my bookmarks actually live?",

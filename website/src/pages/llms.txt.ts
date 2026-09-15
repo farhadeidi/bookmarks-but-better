@@ -26,7 +26,7 @@ export const GET: APIRoute = async () => {
     "",
     `> ${SITE.tagline}`,
     "",
-    "Bookmarks But Better is a free and open-source (MIT) browser extension for Chrome, Firefox and Safari that replaces the new-tab page with a private bookmarks dashboard. It has no account, analytics, tracking, ads, or bookmark-content collection. An optional local daemon keeps bookmarks as Markdown files in vaults you own.",
+    "Bookmarks But Better is a free and open-source (MIT) browser extension for Chrome and Firefox that replaces the new-tab page with a private bookmarks dashboard. A Safari version is coming soon and can be built from source today. It has no account, analytics, tracking, ads, or bookmark-content collection. An optional local daemon keeps bookmarks as Markdown files in vaults you own.",
     "",
     "## Pages",
     "",

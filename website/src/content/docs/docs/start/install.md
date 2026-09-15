@@ -23,9 +23,11 @@ and none of your bookmarks.
 
 ## Safari
 
-Safari is supported, but it works differently. It needs the local daemon, and it
-is not yet available from the Mac App Store or as a signed download. See
-[Safari](/docs/start/safari/) for what that means and how to run it today.
+The Safari version is coming soon. It is not yet available from the Mac App
+Store or as a signed download. If you need it now, you can build it from
+source. It works differently from Chrome and Firefox and needs the local
+daemon. See [Safari](/docs/start/safari/) for what that means and how to build
+it.
 
 ## The setup wizard
 
