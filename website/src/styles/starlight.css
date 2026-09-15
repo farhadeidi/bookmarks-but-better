@@ -33,6 +33,19 @@
   --sl-color-black: oklch(0.985 0.004 95);
 }
 
+/* Amber stays the only accent: tip asides (purple) take the accent and note
+   asides (blue) go neutral. Caution and danger keep their semantic colors.
+   Both selectors are needed to beat Starlight's own light-theme values. */
+:root,
+:root[data-theme="light"] {
+  --sl-color-purple-low: var(--sl-color-accent-low);
+  --sl-color-purple: var(--sl-color-accent);
+  --sl-color-purple-high: var(--sl-color-accent-high);
+  --sl-color-blue-low: var(--sl-color-gray-6);
+  --sl-color-blue: var(--sl-color-gray-3);
+  --sl-color-blue-high: var(--sl-color-gray-1);
+}
+
 h1#_top,
 .sl-markdown-content :is(h1, h2, h3) {
   font-family: var(--bbb-font-display);
