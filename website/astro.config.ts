@@ -125,6 +125,25 @@ export default defineConfig({
   ],
 
   vite: {
-    plugins: [tailwindcss()],
+    plugins: [
+      tailwindcss(),
+      {
+        // Dev-only: the dev server does not resolve public/app-preview/ to its
+        // index.html, which GitHub Pages and the built site do.
+        name: "serve-app-preview-index",
+        apply: "serve",
+        configureServer(server) {
+          server.middlewares.use((req, _res, next) => {
+            if (req.url && /^\/app-preview\/(\?.*)?$/.test(req.url)) {
+              req.url = req.url.replace(
+                "/app-preview/",
+                "/app-preview/index.html"
+              )
+            }
+            next()
+          })
+        },
+      },
+    ],
   },
 })
