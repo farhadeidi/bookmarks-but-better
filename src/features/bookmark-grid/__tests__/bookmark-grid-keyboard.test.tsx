@@ -1,7 +1,14 @@
 // @vitest-environment jsdom
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { act, cleanup, render, screen } from "@testing-library/react"
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from "@testing-library/react"
 import type { BookmarkNode, BrowserAdapter } from "@/browser"
 import { useBookmarkStore } from "@/stores/bookmark-store"
 import { usePreferencesStore } from "@/stores/preferences-store"
@@ -94,6 +101,7 @@ function mount(
     nestedFolders: true,
     folderOrder: [],
     cardLayouts: {},
+    collapsedFolders: {},
     // Two columns is what makes the layout order and the folder-list order
     // disagree; the jsdom viewport would otherwise ask for four.
     maxColumns: 2,
@@ -108,6 +116,16 @@ function bookmark(title: string): HTMLElement {
 
 function heading(title: string): HTMLElement {
   return screen.getByRole("heading", { name: title })
+}
+
+function card(title: string): HTMLElement {
+  return heading(title).closest('[data-testid="bookmark-card"]') as HTMLElement
+}
+
+function collapseToggle(title: string): HTMLElement {
+  return within(card(title)).getAllByRole("button", {
+    name: /^(Collapse|Expand) folder$/,
+  })[0]
 }
 
 function press(key: string, modifier?: "alt") {
@@ -212,6 +230,48 @@ describe("BookmarkGrid keyboard navigation", () => {
     })
 
     expect(event.defaultPrevented).toBe(false)
+  })
+
+  it("collapses a card with Enter on its heading, leaving it one stop", () => {
+    mount()
+    act(() => heading("alpha").focus())
+
+    press("Enter")
+
+    expect(screen.queryByRole("link", { name: /^a one/ })).toBeNull()
+    expect(collapseToggle("alpha").getAttribute("aria-expanded")).toBe("false")
+    expect(card("alpha").textContent).toContain("2 bookmarks")
+    expect(document.activeElement).toBe(heading("alpha"))
+
+    // The collapsed card's bookmarks are no longer stops on the way down.
+    press("ArrowDown")
+    expect(document.activeElement).toBe(heading("gamma"))
+  })
+
+  it("takes the tab stop to the heading when its card collapses around it", () => {
+    mount()
+    act(() => bookmark("a two").focus())
+    expect(bookmark("a two")).toHaveProperty("tabIndex", 0)
+
+    fireEvent.click(collapseToggle("alpha"))
+
+    // "a two" sat second in the first column; left to the position, the tab
+    // stop would land on gamma's heading, in another card.
+    expect(heading("alpha")).toHaveProperty("tabIndex", 0)
+  })
+
+  it("opens a collapsed card again from its toggle", () => {
+    mount()
+    act(() => {
+      usePreferencesStore.setState({ collapsedFolders: { alpha: true } })
+    })
+    expect(screen.queryByRole("link", { name: /^a one/ })).toBeNull()
+
+    fireEvent.click(collapseToggle("alpha"))
+
+    expect(bookmark("a one")).toBeTruthy()
+    expect(collapseToggle("alpha").getAttribute("aria-expanded")).toBe("true")
+    expect(usePreferencesStore.getState().collapsedFolders).toEqual({})
   })
 
   it("still lets a typed character reach the search palette", () => {

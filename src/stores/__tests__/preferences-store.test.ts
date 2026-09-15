@@ -135,6 +135,104 @@ describe("usePreferencesStore lifetimes", () => {
     expect(backing.get("cardLayouts")).toEqual({ folderA: "list" })
   })
 
+  it("collapsed folders are source-scoped, and opening a card drops its entry", async () => {
+    const backing = new Map<string, unknown>([
+      ["folderOrder", []],
+      ["collapsedFolders", { folderA: true }],
+    ])
+    await usePreferencesStore
+      .getState()
+      .init(adapterWith(memoryStorage(backing)))
+
+    expect(usePreferencesStore.getState().collapsedFolders).toEqual({
+      folderA: true,
+    })
+
+    usePreferencesStore.getState().setFolderCollapsed("folderB", true)
+    expect(backing.get("collapsedFolders")).toEqual({
+      folderA: true,
+      folderB: true,
+    })
+
+    usePreferencesStore.getState().setFolderCollapsed("folderA", false)
+    expect(backing.get("collapsedFolders")).toEqual({ folderB: true })
+    expect(usePreferencesStore.getState().collapsedFolders).toEqual({
+      folderB: true,
+    })
+
+    // Another source starts with every card open, and nothing reached the
+    // profile namespace.
+    await usePreferencesStore
+      .getState()
+      .init(adapterWith(memoryStorage(new Map([["folderOrder", []]]))))
+    expect(usePreferencesStore.getState().collapsedFolders).toEqual({})
+    const profile = new ProfileStorageAdapter()
+    expect(await profile.get("collapsedFolders")).toBeNull()
+  })
+
+  it("is loading while a source's preferences load, and done once they land", async () => {
+    let releaseReads: () => void = () => {}
+    const readsGate = new Promise<void>((resolve) => {
+      releaseReads = resolve
+    })
+    const backing = new Map<string, unknown>([["folderOrder", []]])
+    const gatedStorage: StorageAdapter = {
+      ...memoryStorage(backing),
+      get: async <T>(key: string): Promise<T | null> => {
+        await readsGate
+        return backing.has(key) ? (backing.get(key) as T) : null
+      },
+    }
+    // As after a previous source's session.
+    usePreferencesStore.setState({ isLoading: false })
+
+    const loading = usePreferencesStore
+      .getState()
+      .init(adapterWith(gatedStorage))
+    expect(usePreferencesStore.getState().isLoading).toBe(true)
+
+    releaseReads()
+    await loading
+    expect(usePreferencesStore.getState().isLoading).toBe(false)
+  })
+
+  it("starts from the defaults and writes nothing when a source's preferences fail to load", async () => {
+    await usePreferencesStore.getState().init(
+      adapterWith(
+        memoryStorage(
+          new Map<string, unknown>([
+            ["folderOrder", []],
+            ["collapsedFolders", { previousSourceFolder: true }],
+          ])
+        )
+      )
+    )
+
+    const set = vi.fn()
+    const failingStorage: StorageAdapter = {
+      get: async () => {
+        throw new Error("storage unavailable")
+      },
+      set,
+      remove: vi.fn(),
+    }
+    await expect(
+      usePreferencesStore.getState().init(adapterWith(failingStorage))
+    ).rejects.toThrow("storage unavailable")
+
+    // Not held on the loading state, and nothing of the previous source's.
+    const state = usePreferencesStore.getState()
+    expect(state.isLoading).toBe(false)
+    expect(state.collapsedFolders).toEqual({})
+
+    // What this source saved could not be read, so it is not written over.
+    state.setFolderCollapsed("folder", true)
+    expect(usePreferencesStore.getState().collapsedFolders).toEqual({
+      folder: true,
+    })
+    expect(set).not.toHaveBeenCalled()
+  })
+
   it("a superseded session's reads do not overwrite the newer session's values", async () => {
     // Session A starts reading, then a second transition supersedes it and
     // finishes its own init first; A's reads resolve only afterwards.

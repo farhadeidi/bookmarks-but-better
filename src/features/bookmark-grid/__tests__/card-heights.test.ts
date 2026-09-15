@@ -15,6 +15,7 @@ function folder(id: string, bookmarkCount: number): BookmarkNode {
 }
 
 const NO_HEIGHTS = new Map<string, number>()
+const NO_DISPLAY = { cardLayouts: {}, collapsedFolders: {} }
 
 function ids(columns: BookmarkNode[][]): string[][] {
   return columns.map((column) => column.map((f) => f.id))
@@ -24,10 +25,9 @@ describe("distributeToColumns", () => {
   it("fills the shortest column first from the estimates", () => {
     const folders = [folder("a", 10), folder("b", 1), folder("c", 1)]
 
-    expect(ids(distributeToColumns(folders, 2, {}, NO_HEIGHTS))).toEqual([
-      ["a"],
-      ["b", "c"],
-    ])
+    expect(
+      ids(distributeToColumns(folders, 2, NO_DISPLAY, NO_HEIGHTS))
+    ).toEqual([["a"], ["b", "c"]])
   })
 
   it("charges a taller card to the grid estimate when the layout says grid", () => {
@@ -36,7 +36,31 @@ describe("distributeToColumns", () => {
     // "a" as a grid is 168px against "b"'s 384px as a list, so the third card
     // stacks on "a" rather than alternating.
     expect(
-      ids(distributeToColumns(folders, 2, { a: "grid" }, NO_HEIGHTS))
+      ids(
+        distributeToColumns(
+          folders,
+          2,
+          { cardLayouts: { a: "grid" }, collapsedFolders: {} },
+          NO_HEIGHTS
+        )
+      )
+    ).toEqual([["a", "c"], ["b"]])
+  })
+
+  it("charges a collapsed card only its header", () => {
+    const folders = [folder("a", 10), folder("b", 1), folder("c", 1)]
+
+    // Open, "a" is the tallest card and "c" joins "b"; collapsed, "a" is
+    // shorter than "b", so "c" stacks on it instead.
+    expect(
+      ids(
+        distributeToColumns(
+          folders,
+          2,
+          { cardLayouts: {}, collapsedFolders: { a: true } },
+          NO_HEIGHTS
+        )
+      )
     ).toEqual([["a", "c"], ["b"]])
   })
 
@@ -46,7 +70,7 @@ describe("distributeToColumns", () => {
     // On estimates alone all three cards are 96px and "c" would alternate back
     // to the first column; measuring "a" as the tall card it really is moves it.
     expect(
-      ids(distributeToColumns(folders, 2, {}, new Map([["a", 400]])))
+      ids(distributeToColumns(folders, 2, NO_DISPLAY, new Map([["a", 400]])))
     ).toEqual([["a"], ["b", "c"]])
   })
 
@@ -56,7 +80,7 @@ describe("distributeToColumns", () => {
     // "b" has no measurement, so its 704px estimate still has to hold the
     // second column open for "c".
     expect(
-      ids(distributeToColumns(folders, 2, {}, new Map([["a", 96]])))
+      ids(distributeToColumns(folders, 2, NO_DISPLAY, new Map([["a", 96]])))
     ).toEqual([["a", "c"], ["b"]])
   })
 
@@ -76,14 +100,14 @@ describe("distributeToColumns", () => {
 
     // Two short cards plus their gaps stand taller than one 70px card, which is
     // what sends the last card to the second column.
-    expect(ids(distributeToColumns(folders, 2, {}, measured))).toEqual([
+    expect(ids(distributeToColumns(folders, 2, NO_DISPLAY, measured))).toEqual([
       ["a", "c"],
       ["b", "d"],
     ])
   })
 
   it("returns the requested number of columns even when there is nothing to place", () => {
-    expect(ids(distributeToColumns([], 3, {}, NO_HEIGHTS))).toEqual([
+    expect(ids(distributeToColumns([], 3, NO_DISPLAY, NO_HEIGHTS))).toEqual([
       [],
       [],
       [],

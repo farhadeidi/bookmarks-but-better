@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Collapsible folder cards.** A chevron appears in a card's header on
+  hover, and Enter on a focused card heading does the same. Cards animate
+  open and closed without the other cards changing columns. A collapsed card
+  shows only its name and bookmark count, is a single keyboard stop, and stays
+  collapsed across sessions for that source. With Nested folders on, nested
+  cards collapse on their own (#3).
 - **A native ARM64 daemon for Windows.** Releases now carry an
   `aarch64-pc-windows-msvc` archive, and `install.ps1` picks the build for the
   machine's architecture instead of always taking x64. On an ARM64 machine
@@ -22,6 +28,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The dashboard waits for the source's preferences before drawing.**
+  Bookmarks and preferences now load in parallel, and the grid appears once
+  both have loaded. Before, it drew with the defaults first: collapsed cards
+  and grid layouts flashed open or as lists, a toggle made in that moment was
+  overwritten, and safe mode could apply only after the grid had already
+  mounted (#3).
 - **Typing "d" on the dashboard only starts a search.** It used to also flip
   between light and dark, because a single-letter D shortcut predated
   type-ahead search. The shortcut and its hint in Settings > Appearance are

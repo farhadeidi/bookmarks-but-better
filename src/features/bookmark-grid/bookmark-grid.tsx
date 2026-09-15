@@ -1,6 +1,6 @@
 import * as React from "react"
 import { useBookmarkStore } from "@/stores/bookmark-store"
-import { usePreferencesStore } from "@/stores/preferences-store"
+import { useCardDisplay, usePreferencesStore } from "@/stores/preferences-store"
 import { BookmarkCard } from "@/features/bookmark-card"
 import { useSortableFolder, DropIndicator } from "@/features/dnd"
 import type { BookmarkNode } from "@/browser"
@@ -86,10 +86,10 @@ export function BookmarkGrid() {
       (s.adapter?.capabilities.reorder ?? true) ||
       (s.adapter?.capabilities.setChildOrder ?? false)
   )
-  const nestedFolders = usePreferencesStore((s) => s.nestedFolders)
+  const display = useCardDisplay()
+  const { nestedFolders } = display
   const maxColumns = usePreferencesStore((s) => s.maxColumns)
   const containerMode = usePreferencesStore((s) => s.containerMode)
-  const cardLayouts = usePreferencesStore((s) => s.cardLayouts)
   const folderOrder = usePreferencesStore((s) => s.folderOrder)
   const experimentalCardDrag =
     usePreferencesStore((s) => s.experimentalCardDrag) && canOrder
@@ -129,12 +129,12 @@ export function BookmarkGrid() {
   const { heights, measureRefs } = useMeasuredCardHeights(
     folders,
     columnCount,
-    cardLayouts
+    display
   )
 
   const columns = React.useMemo(
-    () => distributeToColumns(folders, columnCount, cardLayouts, heights),
-    [folders, columnCount, cardLayouts, heights]
+    () => distributeToColumns(folders, columnCount, display, heights),
+    [folders, columnCount, display, heights]
   )
 
   // The grid is one composite widget: `columns` is the visual order the arrow
@@ -142,7 +142,7 @@ export function BookmarkGrid() {
   // the layout is.
   const { navigation, containerProps } = useGridNavigation({
     columns,
-    nestedFolders,
+    display,
   })
 
   if (isLoading) {
@@ -183,8 +183,8 @@ export function BookmarkGrid() {
                   <LazyCard
                     key={folder.id}
                     folder={folder}
-                    nestedFolders={nestedFolders}
-                    estimatedHeight={estimateCardHeight(folder, cardLayouts)}
+                    display={display}
+                    estimatedHeight={estimateCardHeight(folder, display)}
                     measureRef={measureRefs.get(folder.id)}
                   >
                     {experimentalCardDrag ? (

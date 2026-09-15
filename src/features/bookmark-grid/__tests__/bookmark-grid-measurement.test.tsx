@@ -36,15 +36,17 @@ class StubResizeObserver {
     this.targets.clear()
   }
 
-  report(heights: Map<Element, number>) {
+  report(heights: Map<Element, number>, width: number) {
     const entries = Array.from(this.targets)
       .filter((target) => heights.has(target))
       .map(
         (target) =>
           ({
             target,
-            borderBoxSize: [{ blockSize: heights.get(target), inlineSize: 0 }],
-            contentRect: { height: heights.get(target) },
+            borderBoxSize: [
+              { blockSize: heights.get(target), inlineSize: width },
+            ],
+            contentRect: { height: heights.get(target), width },
           }) as unknown as ResizeObserverEntry
       )
 
@@ -90,6 +92,7 @@ function mount() {
     nestedFolders: true,
     folderOrder: [],
     cardLayouts: {},
+    collapsedFolders: {},
     maxColumns: 2,
     containerMode: "fluid",
   })
@@ -116,7 +119,12 @@ function cardsByTitle(container: HTMLElement): Map<string, Element> {
   return cards
 }
 
-function report(container: HTMLElement, heights: Record<string, number>) {
+/** Reports card heights, at a card width that stands in for the window's. */
+function report(
+  container: HTMLElement,
+  heights: Record<string, number>,
+  width = 300
+) {
   const cards = cardsByTitle(container)
   const byElement = new Map<Element, number>()
   for (const [title, height] of Object.entries(heights)) {
@@ -126,7 +134,7 @@ function report(container: HTMLElement, heights: Record<string, number>) {
 
   act(() => {
     for (const instance of StubResizeObserver.instances) {
-      instance.report(byElement)
+      instance.report(byElement, width)
     }
   })
 }
@@ -210,6 +218,42 @@ describe("BookmarkGrid card measurement", () => {
     })
     report(container, { one: 100, two: 100, three: 100 })
 
+    expect(columns(container)).toEqual([["one", "three"], ["two"]])
+  })
+
+  it("holds the columns still through a collapse, until the inputs change", () => {
+    const { container } = mount()
+    report(container, { one: 400, two: 100, three: 100 })
+
+    // The collapsing card shrinks and another grows, and neither re-deals:
+    // cards stay in their columns while one animates.
+    act(() => {
+      usePreferencesStore.setState({ collapsedFolders: { one: true } })
+    })
+    report(container, { one: 60, two: 500 })
+    expect(columns(container)).toEqual([["one"], ["two", "three"]])
+
+    // A new generation releases the hold and takes the real heights.
+    act(() => {
+      usePreferencesStore.setState({ cardLayouts: { two: "grid" } })
+    })
+    report(container, { one: 60, two: 100, three: 100 })
+    expect(columns(container)).toEqual([["one", "three"], ["two"]])
+  })
+
+  it("lets a resize end the hold and measure every card afresh", () => {
+    const { container } = mount()
+    report(container, { one: 400, two: 100, three: 100 })
+
+    act(() => {
+      usePreferencesStore.setState({ collapsedFolders: { one: true } })
+    })
+    report(container, { one: 60 })
+    expect(columns(container)).toEqual([["one"], ["two", "three"]])
+
+    // The window narrows: every card changes width, and the collapsed card's
+    // real height counts even though the inputs are the same.
+    report(container, { one: 60, two: 100, three: 100 }, 240)
     expect(columns(container)).toEqual([["one", "three"], ["two"]])
   })
 })
