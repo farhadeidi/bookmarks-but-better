@@ -1,0 +1,32 @@
+---
+// The docs header carries the site's own links, so moving between the site and
+// the docs keeps the same navigation. Starlight's GitHub icon follows them.
+import Default from "@astrojs/starlight/components/SocialIcons.astro"
+
+const LINKS = [
+  { href: "/preview/", label: "Live preview" },
+  { href: "/privacy/", label: "Privacy" },
+  { href: "/docs/start/install/", label: "Install" },
+]
+---
+
+{
+  LINKS.map((link) => (
+    <a href={link.href} class="site-link">
+      {link.label}
+    </a>
+  ))
+}
+<Default />
+
+<style>
+  .site-link {
+    color: var(--sl-color-gray-2);
+    font-size: var(--sl-text-sm);
+    text-decoration: none;
+    white-space: nowrap;
+  }
+  .site-link:hover {
+    color: var(--sl-color-white);
+  }
+</style>

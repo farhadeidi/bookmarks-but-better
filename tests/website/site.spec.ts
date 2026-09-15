@@ -102,13 +102,13 @@ test.describe("marketing website artifact", () => {
       )
       expect(html, path).toContain(`content="${SITE}/og.png"`)
 
-      if (path.startsWith("/docs/")) {
-        // Starlight's header leads back to the main site.
-        expect(html, path).toContain('href="/"')
-      } else {
-        for (const href of MAIN_NAV) {
-          expect(html, `${path} links ${href}`).toContain(`href="${href}"`)
-        }
+      // The site and the docs share the same header links, and the docs'
+      // header leads back to the main site.
+      expect(html, path).toContain('href="/"')
+      for (const href of MAIN_NAV) {
+        expect(html, `${path} links ${href}`).toContain(`href="${href}"`)
+      }
+      if (!path.startsWith("/docs/")) {
         // Header links are pages, never sections of the home page.
         expect(html, path).not.toMatch(
           /<nav[^>]*aria-label="Main"[\s\S]*?href="\/#/
