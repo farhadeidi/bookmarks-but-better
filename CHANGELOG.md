@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **A native ARM64 daemon for Windows.** Releases now carry an
+  `aarch64-pc-windows-msvc` archive, and `install.ps1` picks the build for the
+  machine's architecture instead of always taking x64. On an ARM64 machine
+  installing a release from before this build existed, it falls back to the
+  x64 build, which Windows runs under emulation (#68).
+- **A vault's daemon-owned directory ignores itself in git.** `serve` writes
+  `<vault>/.bookmarks-but-better/.gitignore` when it takes the vault lock —
+  on a new vault and on one that predates this file — so a vault a user keeps
+  in a git repository as a backup never commits the lock file or staging
+  entries (#29).
+
 ### Fixed
 
 - **Typing "d" on the dashboard only starts a search.** It used to also flip
