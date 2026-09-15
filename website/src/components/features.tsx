@@ -12,36 +12,36 @@ const FEATURES: Feature[] = [
     title: "A masonry dashboard for your new tab",
     description:
       "Bookmark folders become cards in a responsive masonry grid. Open a new tab and see your library instead of a search page.",
-    image: "/screenshots/01-dashboard.png",
+    image: "/screenshots/dashboard.png",
     alt: "The Bookmarks But Better dashboard in dark mode",
   },
   {
     title: "A real organizer",
     description:
-      "Drag bookmarks between folders, reorder, rename, create and delete — in a full tree editor, not a nested settings page.",
-    image: "/screenshots/02-organizer.png",
-    alt: "The Bookmark Organizer tree editor",
+      "Drag bookmarks between folders, reorder, rename, create and delete — in a full tree editor, not a nested settings page. Import HTML from any browser or CSV from Raindrop and Pocket.",
+    image: "/screenshots/organizer.png",
+    alt: "The Bookmark Organizer tree editor with folders expanded",
   },
   {
-    title: "Edit everything inline",
+    title: "Your sources, your root",
     description:
-      "Rename a bookmark, change its URL, or retitle a folder without leaving the dashboard.",
-    image: "/screenshots/05-inline-edit.png",
-    alt: "Inline editing of a bookmark title",
+      "Switch between browser bookmarks and Markdown vaults from the header, and start the dashboard from any folder.",
+    image: "/screenshots/sources.png",
+    alt: "The source menu listing browser bookmarks and two vaults",
+  },
+  {
+    title: "Find it in a keystroke",
+    description:
+      "Search every bookmark in the active source by title or URL, then open it or reveal it in the organizer.",
+    image: "/screenshots/search.png",
+    alt: "The search palette showing results for “git”",
   },
   {
     title: "Ten themes, light to cyberpunk",
     description:
       "Ten color themes with light, dark and system modes — pick per taste, not per trend.",
-    image: "/screenshots/03-themes.png",
-    alt: "The theme picker showing all ten color themes",
-  },
-  {
-    title: "Your rules, your root",
-    description:
-      "Choose any folder as the dashboard root, switch list and icon views per folder, and import or export standard bookmark HTML.",
-    image: "/screenshots/04-settings.png",
-    alt: "The settings dialog",
+    image: "/screenshots/themes.png",
+    alt: "The dashboard in six color themes, light and dark",
   },
 ]
 

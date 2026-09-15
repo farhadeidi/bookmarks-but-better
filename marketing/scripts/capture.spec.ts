@@ -1,207 +1,470 @@
-import { test } from "@playwright/test"
+/**
+ * Store, promo and website images, captured from the Dev Workbench.
+ *
+ * Every scene is the real app at 1280×800, captured at 2x so the composed
+ * images stay sharp when scaled. Scenes are then composed into:
+ *
+ * - marketing/output/store/  captioned 1280×800 screenshots (Chrome uses the
+ *                            first five; AMO takes all six)
+ * - marketing/output/        promo-small (440×280), promo-marquee (1400×560)
+ * - website/public/          og.png (1200×630) and uncaptioned screenshots/
+ *
+ * Captions and visual language follow website/BRAND.md ("The Quiet Library").
+ */
+import { test, type Browser } from "@playwright/test"
+import fs from "fs"
 import path from "path"
 import { fileURLToPath } from "url"
 
-const __filename = fileURLToPath(import.meta.url)
-const __dirname = path.dirname(__filename)
-const OUT = path.resolve(__dirname, "../output")
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
+const ROOT = path.resolve(__dirname, "../..")
+const OUT = path.join(ROOT, "marketing/output")
+const STORE = path.join(OUT, "store")
+const SITE = path.join(ROOT, "website/public")
+const APP = "http://localhost:5173"
 
-test("capture store screenshots and promo tiles", async ({ page }) => {
-  // Force dark mode for all captures
-  await page.addInitScript(() => localStorage.setItem("theme", "dark"))
+const APP_W = 1280
+const APP_H = 800
 
-  // ─── 01-dashboard.png (1280×800) ──────────────────────────────────
-  // Shows the dashboard with a hovered bookmark and HoverCard popup visible
-  await test.step("01-dashboard", async () => {
-    await page.setViewportSize({ width: 1280, height: 800 })
-    await page.goto("/?screenshot=true")
+type Mode = "dark" | "light"
+
+interface Scene {
+  mode: Mode
+  colorTheme: string
+  /** Puts the app into the state the image shows. */
+  act?: (page: import("@playwright/test").Page) => Promise<void>
+}
+
+function b64(file: string) {
+  return fs.readFileSync(file).toString("base64")
+}
+
+async function captureScene(browser: Browser, scene: Scene): Promise<string> {
+  const context = await browser.newContext({
+    viewport: { width: APP_W, height: APP_H },
+    deviceScaleFactor: 2,
+  })
+  const page = await context.newPage()
+  await page.addInitScript(
+    (mode) => localStorage.setItem("theme", mode),
+    scene.mode
+  )
+  await page.goto(`${APP}/?scenario=browser-daemon&screenshot=true`)
+  await page.waitForLoadState("networkidle")
+  await page.addStyleTag({
+    content: `[aria-label="Open Dev Workbench"]{display:none!important}`,
+  })
+  await page.evaluate((theme) => {
+    if (theme === "default") {
+      document.documentElement.removeAttribute("data-color-theme")
+    } else {
+      document.documentElement.setAttribute("data-color-theme", theme)
+    }
+  }, scene.colorTheme)
+  // Favicons load after the first paint.
+  await page.waitForTimeout(1500)
+  if (scene.act) {
+    await scene.act(page)
     await page.waitForLoadState("networkidle")
-    await page.locator('a[href*="youtube.com"]').first().hover()
-    await page.waitForSelector('[data-slot="hover-card-content"]', {
-      timeout: 3_000,
-    })
-    await page.waitForTimeout(200) // let entry animation finish
-    // Inject a visible pointer cursor (Cursor02Icon from hugeicons) —
-    // headless Playwright doesn't render the OS cursor
-    const linkBox = await page
-      .locator('a[href*="youtube.com"]')
-      .first()
-      .boundingBox()
-    if (linkBox) {
-      // Cursor tip is at approx (5, 2) in the 24×24 viewBox
-      const tipX = linkBox.x + 42
-      const tipY = linkBox.y + linkBox.height / 2 + 2
-      await page.evaluate(
-        ({ x, y }) => {
-          const ns = "http://www.w3.org/2000/svg"
-          const svg = document.createElementNS(ns, "svg")
-          svg.setAttribute("width", "22")
-          svg.setAttribute("height", "22")
-          svg.setAttribute("viewBox", "0 0 24 24")
-          svg.style.cssText = `position:fixed;left:${x - 3}px;top:${y - 3}px;pointer-events:none;z-index:999999;overflow:visible;`
+    await page.waitForTimeout(700)
+  }
+  const png = await page.screenshot({ type: "png" })
+  await context.close()
+  return png.toString("base64")
+}
 
-          const path = document.createElementNS(ns, "path")
-          path.setAttribute(
-            "d",
-            "M9.80282 4.62973L15.8364 6.99069C19.3164 8.35243 21.0564 9.03329 20.9987 10.1133C20.941 11.1934 19.1251 11.6886 15.4933 12.6791C14.412 12.974 13.8713 13.1215 13.4964 13.4963C13.1215 13.8712 12.9741 14.4119 12.6791 15.4933C11.6887 19.125 11.1934 20.9409 10.1134 20.9986C9.03335 21.0563 8.35249 19.3163 6.99075 15.8363L4.62979 9.80276C3.20411 6.15934 2.49127 4.33764 3.41448 3.41442C4.3377 2.49121 6.15941 3.20405 9.80282 4.62973Z"
-          )
-          path.setAttribute("fill", "white")
-          path.setAttribute("stroke", "#888888")
-          path.setAttribute("stroke-width", "1")
-          path.setAttribute("stroke-linejoin", "round")
-          svg.appendChild(path)
-          document.body.appendChild(svg)
-        },
-        { x: tipX, y: tipY }
+// ─── Composition ─────────────────────────────────────────────────────────
+
+const FONTS = path.join(ROOT, "website/node_modules/@fontsource-variable")
+
+function fontFaces() {
+  const face = (family: string, file: string, style: string) =>
+    `@font-face{font-family:"${family}";font-style:${style};font-weight:100 900;src:url(data:font/woff2;base64,${b64(path.join(FONTS, file))}) format("woff2")}`
+  return [
+    face(
+      "Fraunces",
+      "fraunces/files/fraunces-latin-wght-normal.woff2",
+      "normal"
+    ),
+    face(
+      "Fraunces",
+      "fraunces/files/fraunces-latin-wght-italic.woff2",
+      "italic"
+    ),
+    face("Inter", "inter/files/inter-latin-wght-normal.woff2", "normal"),
+  ].join("")
+}
+
+const BASE_CSS = `
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --bg: oklch(0.17 0.006 80);
+    --fg: oklch(0.94 0.004 90);
+    --muted: oklch(0.72 0.008 80);
+    --primary: oklch(0.72 0.13 70);
+    --hairline: oklch(1 0 0 / 11%);
+  }
+  body {
+    position: relative; overflow: hidden;
+    background: var(--bg); color: var(--fg);
+    font-family: Inter, system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .glow {
+    position: absolute; inset: 0; pointer-events: none;
+    background: radial-gradient(60% 55% at 50% 0%, oklch(0.72 0.13 70 / 0.16), transparent 70%);
+  }
+  .display { font-family: Fraunces, serif; font-weight: 500; letter-spacing: -0.02em; }
+  .display em { font-style: italic; color: var(--primary); }
+  .window {
+    position: absolute; overflow: hidden; border-radius: 14px;
+    background: #0b0b0b;
+    box-shadow:
+      0 0 0 1px oklch(1 0 0 / 10%),
+      0 40px 90px -30px rgb(0 0 0 / 0.8),
+      0 0 140px -40px oklch(0.72 0.13 70 / 0.45);
+  }
+  .bar {
+    position: relative; height: 34px; display: flex; align-items: center; gap: 7px; padding: 0 14px;
+    background: oklch(0.23 0.006 80); border-bottom: 1px solid oklch(1 0 0 / 7%);
+  }
+  .bar i { width: 10px; height: 10px; border-radius: 50%; background: oklch(1 0 0 / 16%); }
+  .bar span {
+    position: absolute; left: 50%; transform: translateX(-50%);
+    width: min(260px, calc(100% - 150px)); text-align: center; font-size: 12px; color: var(--muted);
+    padding: 4px 12px; border-radius: 7px; background: oklch(1 0 0 / 6%);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .crop { position: relative; overflow: hidden; }
+  .crop img { position: absolute; display: block; }
+`
+
+interface Region {
+  x: number
+  y: number
+  w: number
+  h: number
+}
+
+const FULL: Region = { x: 0, y: 0, w: APP_W, h: APP_H }
+
+/** A region of a scene, scaled to `width` CSS pixels. */
+function crop(scene: string, width: number, region: Region = FULL) {
+  const s = width / region.w
+  return `<div class="crop" style="width:${width}px;height:${region.h * s}px">
+    <img src="data:image/png;base64,${scene}" style="width:${APP_W * s}px;left:${-region.x * s}px;top:${-region.y * s}px">
+  </div>`
+}
+
+function browserWindow(
+  scene: string,
+  box: { left: number; top: number; width: number },
+  label = "New Tab",
+  region: Region = FULL
+) {
+  return `<div class="window" style="left:${box.left}px;top:${box.top}px;width:${box.width}px">
+    <div class="bar"><i></i><i></i><i></i><span>${label}</span></div>
+    ${crop(scene, box.width, region)}
+  </div>`
+}
+
+async function render(
+  browser: Browser,
+  file: string,
+  size: { width: number; height: number },
+  body: string,
+  css = ""
+) {
+  const page = await browser.newPage({ viewport: size, deviceScaleFactor: 1 })
+  await page.setContent(
+    `<!doctype html><html><head><meta charset="utf-8"><style>${fontFaces()}${BASE_CSS}
+      body{width:${size.width}px;height:${size.height}px}${css}</style></head>
+      <body><div class="glow"></div>${body}</body></html>`,
+    { waitUntil: "load" }
+  )
+  await page.evaluate(() => document.fonts.ready)
+  fs.mkdirSync(path.dirname(file), { recursive: true })
+  await page.screenshot({ path: file })
+  await page.close()
+}
+
+const CAPTION_CSS = `
+  .caption { position: absolute; left: 0; right: 0; top: 58px; text-align: center; }
+  .caption .index { font-family: Fraunces, serif; font-style: italic; font-size: 19px; color: var(--primary); }
+  .caption h1 { margin-top: 10px; font-size: 52px; line-height: 1.08; }
+  .caption p { margin: 16px auto 0; max-width: 780px; font-size: 19px; line-height: 1.5; color: var(--muted); }
+`
+
+function caption(index: number, headline: string, sub: string) {
+  return `<div class="caption">
+    <div class="index">${String(index).padStart(2, "0")} —</div>
+    <h1 class="display">${headline}</h1>
+    <p>${sub}</p>
+  </div>`
+}
+
+/** A captioned store screenshot: headline above, the app below, bleeding off the bottom. */
+function storeShot(
+  index: number,
+  headline: string,
+  sub: string,
+  scene: string
+) {
+  return (
+    caption(index, headline, sub) +
+    browserWindow(scene, { left: 80, top: 262, width: 1120 })
+  )
+}
+
+const THEME_LABEL: Record<string, string> = {
+  "amber-minimal": "Amber Minimal",
+  bubblegum: "Bubblegum",
+  cyberpunk: "Cyberpunk",
+  "vintage-paper": "Vintage Paper",
+  claude: "Claude",
+  "t3-chat": "T3 Chat",
+}
+
+// ─── The run ─────────────────────────────────────────────────────────────
+
+test("capture store, promo and website images", async ({ browser }) => {
+  test.setTimeout(300_000)
+
+  const dashboard = await captureScene(browser, {
+    mode: "dark",
+    colorTheme: "amber-minimal",
+  })
+  const sources = await captureScene(browser, {
+    mode: "light",
+    colorTheme: "amber-minimal",
+    act: (page) =>
+      page.getByRole("button", { name: /Bookmark source/ }).click(),
+  })
+  const search = await captureScene(browser, {
+    mode: "dark",
+    colorTheme: "amber-minimal",
+    act: async (page) => {
+      await page.getByRole("button", { name: "Search bookmarks" }).click()
+      await page.keyboard.type("git", { delay: 40 })
+    },
+  })
+  const organizer = await captureScene(browser, {
+    mode: "light",
+    colorTheme: "amber-minimal",
+    act: async (page) => {
+      await page.getByRole("button", { name: "Bookmark tree" }).click()
+      await page.getByText("Folders Only").click()
+      await page.getByRole("button", { name: "Expand All" }).click()
+    },
+  })
+  const importPanel = await captureScene(browser, {
+    mode: "dark",
+    colorTheme: "amber-minimal",
+    act: async (page) => {
+      await page.getByRole("button", { name: "Settings" }).click()
+      await page
+        .locator('[role="dialog"]')
+        .getByText("Data & Migration", { exact: true })
+        .click()
+    },
+  })
+  const themeScenes: [string, Mode][] = [
+    ["amber-minimal", "dark"],
+    ["bubblegum", "light"],
+    ["cyberpunk", "dark"],
+    ["vintage-paper", "light"],
+    ["claude", "dark"],
+    ["t3-chat", "light"],
+  ]
+  const themes: { label: string; scene: string }[] = []
+  for (const [colorTheme, mode] of themeScenes) {
+    themes.push({
+      label: `${THEME_LABEL[colorTheme]} · ${mode === "dark" ? "Dark" : "Light"}`,
+      scene: await captureScene(browser, { mode, colorTheme }),
+    })
+  }
+
+  const STORE_SIZE = { width: 1280, height: 800 }
+  const THEME_REGION: Region = { x: 0, y: 0, w: 720, h: 405 }
+  const themeGrid = (left: number, top: number, cell: number, gap: number) =>
+    themes
+      .map(({ label, scene }, i) =>
+        browserWindow(
+          scene,
+          {
+            left: left + (i % 3) * (cell + gap),
+            top: top + Math.floor(i / 3) * (cell * (405 / 720) + 34 + gap),
+            width: cell,
+          },
+          label,
+          THEME_REGION
+        )
       )
-      // Wait two animation frames to ensure the element is painted before screenshotting
-      await page.evaluate(
-        () =>
-          new Promise<void>((r) =>
-            requestAnimationFrame(() => requestAnimationFrame(r))
-          )
+      .join("")
+
+  // ─── Store screenshots ──────────────────────────────────────────────
+  await test.step("store screenshots", async () => {
+    fs.rmSync(STORE, { recursive: true, force: true })
+    const shots: [string, string, string, string][] = [
+      [
+        "01-new-tab",
+        "Your bookmarks, <em>as a beautiful new tab</em>",
+        "Every folder becomes a card. Local and private: no account, no tracking.",
+        dashboard,
+      ],
+      [
+        "02-sources",
+        "Browser or Markdown vault. <em>Never mixed.</em>",
+        "Switch sources from the top of the dashboard, and start from any folder you like.",
+        sources,
+      ],
+      [
+        "03-search",
+        "Find any bookmark <em>in a keystroke</em>",
+        "Search titles and URLs from the new tab, or type bb in the address bar.",
+        search,
+      ],
+      [
+        "04-organizer",
+        "A real organizer, <em>right in the new tab</em>",
+        "Drag, reorder, rename, create and delete across your whole bookmark tree.",
+        organizer,
+      ],
+    ]
+    for (const [name, headline, sub, scene] of shots) {
+      await render(
+        browser,
+        `${STORE}/${name}.png`,
+        STORE_SIZE,
+        storeShot(
+          shots.findIndex((s) => s[0] === name) + 1,
+          headline,
+          sub,
+          scene
+        ),
+        CAPTION_CSS
       )
     }
-    await page.screenshot({ path: `${OUT}/01-dashboard.png` })
-  })
-
-  // ─── 02-organizer.png (1280×800) ──────────────────────────────────
-  await test.step("02-organizer", async () => {
-    await page.goto("/?screenshot=true")
-    await page.waitForLoadState("networkidle")
-    await page.getByRole("button", { name: "Bookmark Organizer" }).click()
-    await page.waitForSelector('[role="dialog"]', { timeout: 5_000 })
-    await page.waitForTimeout(400)
-    await page.screenshot({ path: `${OUT}/02-organizer.png` })
-  })
-
-  // ─── 03-themes.png — 4 diagonal theme strips (1280×800) ─────────────
-  // Same layout, 4 themes, diagonal cuts like the four-seasons photo style
-  await test.step("03-themes", async () => {
-    const themes = [
-      "default",
-      "cyberpunk",
-      "bubblegum",
-      "solar-dusk",
-      "t3-chat",
-    ] as const
-    const captures: string[] = []
-    const W = 1280,
-      H = 800,
-      SLANT = Math.round(H * Math.tan((20 * Math.PI) / 180)) // 20° from vertical ≈ 291px
-    const n = themes.length,
-      sw = W / n // 5 strips, nominal width = 256px
-
-    for (const theme of themes) {
-      await page.setViewportSize({ width: W, height: H })
-      await page.goto("/?screenshot=true")
-      await page.waitForLoadState("networkidle")
-      await page.evaluate((t) => {
-        if (t === "default") {
-          document.documentElement.removeAttribute("data-color-theme")
-        } else {
-          document.documentElement.setAttribute("data-color-theme", t)
-        }
-      }, theme)
-      await page.waitForTimeout(200)
-      captures.push((await page.screenshot({ type: "png" })).toString("base64"))
-    }
-
-    // Compose via SVG <image> + <clipPath>
-    // Geometry: equal top spacing, bottoms shifted right by SLANT, outer edges vertical
-    // "start lines from 100px left" → shift each divider 100px left from natural position
-    const LINE_OFFSET = -150
-    const divTops = Array.from(
-      { length: n - 1 },
-      (_, i) => (i + 1) * sw - LINE_OFFSET
+    await render(
+      browser,
+      `${STORE}/05-themes.png`,
+      STORE_SIZE,
+      caption(
+        5,
+        "Ten themes, <em>light and dark</em>",
+        "Pick the look that suits you. Preferences stay in your browser profile."
+      ) + themeGrid(80, 262, 360, 20),
+      CAPTION_CSS
     )
-    const divBots = divTops.map((t) => t - SLANT)
-
-    const pts = captures.map((_, i) => {
-      const tl = i === 0 ? 0 : divTops[i - 1]
-      const tr = i === n - 1 ? W : divTops[i]
-      const bl = i === 0 ? 0 : divBots[i - 1]
-      const br = i === n - 1 ? W : divBots[i]
-      return `${tl},0 ${tr},0 ${br},${H} ${bl},${H}`
-    })
-
-    const defs = pts
-      .map((p, i) => `<clipPath id="c${i}"><polygon points="${p}"/></clipPath>`)
-      .join("")
-    const images = captures
-      .map(
-        (b64, i) =>
-          `<image href="data:image/png;base64,${b64}" clip-path="url(#c${i})" width="${W}" height="${H}"/>`
-      )
-      .join("")
-    const dividers = Array.from(
-      { length: n - 1 },
-      (_, i) =>
-        `<line x1="${divTops[i]}" y1="0" x2="${divBots[i]}" y2="${H}" stroke="rgba(255,255,255,0.55)" stroke-width="2"/>`
-    ).join("")
-
-    await page.setViewportSize({ width: W, height: H })
-    await page.setContent(
-      `<!DOCTYPE html><html><head><meta charset="UTF-8">
-      <style>* { margin:0; padding:0; } body { width:${W}px; height:${H}px; overflow:hidden; background:#0a0a0a; }</style>
-      </head><body>
-      <svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}">
-        <rect width="${W}" height="${H}" fill="#0a0a0a"/>
-        <defs>${defs}</defs>
-        ${images}
-        ${dividers}
-      </svg>
-      </body></html>`,
-      { waitUntil: "load" }
+    await render(
+      browser,
+      `${STORE}/06-import.png`,
+      STORE_SIZE,
+      storeShot(
+        6,
+        "Bring your bookmarks <em>with you</em>",
+        "Import HTML from any browser, or CSV from Raindrop and Pocket. Export any time.",
+        importPanel
+      ),
+      CAPTION_CSS
     )
-    await page.screenshot({ path: `${OUT}/03-themes.png` })
   })
 
-  // ─── 04-settings.png (1280×800) ───────────────────────────────────
-  await test.step("04-settings", async () => {
-    await page.goto("/?screenshot=true")
-    await page.waitForLoadState("networkidle")
-    await page.getByRole("button", { name: "Settings" }).click()
-    await page.waitForSelector('[role="dialog"]', { timeout: 5_000 })
-    await page.waitForTimeout(400)
-    await page.screenshot({ path: `${OUT}/04-settings.png` })
+  // ─── Promo tiles and social card ─────────────────────────────────────
+  await test.step("promo tiles", async () => {
+    const heroCss = (h1: number, sub: number) => `
+      .hero { position: absolute; }
+      .hero .eyebrow { font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
+      .hero h1 { font-size: ${h1}px; line-height: 1.0; margin-top: 18px; }
+      .hero p { font-size: ${sub}px; line-height: 1.5; color: var(--muted); margin-top: 20px; }
+      .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 26px; }
+      .chips span { font-size: 13px; color: var(--fg); padding: 6px 12px; border-radius: 999px; border: 1px solid var(--hairline); background: oklch(1 0 0 / 4%); }
+      .glow { background: radial-gradient(50% 70% at 75% 10%, oklch(0.72 0.13 70 / 0.18), transparent 70%); }
+    `
+    const chips = `<div class="chips"><span>No account</span><span>No tracking</span><span>Markdown vaults</span><span>Open source</span></div>`
+
+    await render(
+      browser,
+      `${OUT}/promo-marquee.png`,
+      { width: 1400, height: 560 },
+      `<div class="hero" style="left:72px;top:92px;width:520px">
+        <div class="eyebrow">New tab extension · Chrome · Firefox · Safari</div>
+        <h1 class="display">Bookmarks,<br><em>but better</em></h1>
+        <p>Your bookmarks as a beautiful new tab.<br>Local, private, no account.</p>
+        ${chips}
+      </div>` + browserWindow(dashboard, { left: 640, top: 72, width: 900 }),
+      heroCss(84, 20)
+    )
+
+    await render(
+      browser,
+      `${SITE}/og.png`,
+      { width: 1200, height: 630 },
+      `<div class="hero" style="left:64px;top:118px;width:500px">
+        <div class="eyebrow">New tab extension · Chrome · Firefox · Safari</div>
+        <h1 class="display">Bookmarks,<br><em>but better</em></h1>
+        <p>Your bookmarks as a beautiful new tab.<br>Local, private, no account.</p>
+        ${chips}
+      </div>` + browserWindow(dashboard, { left: 580, top: 84, width: 820 }),
+      heroCss(80, 20)
+    )
+
+    await render(
+      browser,
+      `${OUT}/promo-small.png`,
+      { width: 440, height: 280 },
+      `<div class="hero" style="left:28px;top:52px;width:250px">
+        <h1 class="display">Bookmarks,<br><em>but better</em></h1>
+        <p>A beautiful, private<br>new tab for your bookmarks.</p>
+      </div>` + browserWindow(dashboard, { left: 250, top: 40, width: 420 }),
+      heroCss(38, 13) +
+        `.hero h1{margin-top:0} .hero p{margin-top:14px} .bar{height:22px;padding:0 9px;gap:5px} .bar i{width:6px;height:6px} .bar span{display:none}`
+    )
   })
 
-  // ─── 05-inline-edit.png (1280×800) ───────────────────────────────────
-  await test.step("05-inline-edit", async () => {
-    await page.setViewportSize({ width: 1280, height: 800 })
-    await page.goto("/?screenshot=true")
-    await page.waitForLoadState("networkidle")
-    await page.locator('a[href*="youtube.com"]').first().hover()
-    await page.waitForSelector('[data-slot="hover-card-content"]', {
-      timeout: 3_000,
-    })
-    await page.waitForTimeout(200)
-    // Click the edit button (first icon button in the HoverCard: pencil/edit)
-    await page
-      .locator('[data-slot="hover-card-content"] button')
-      .first()
-      .click()
-    await page.waitForSelector('[role="dialog"]', { timeout: 5_000 })
-    await page.waitForTimeout(400)
-    await page.screenshot({ path: `${OUT}/05-inline-edit.png` })
-  })
+  // ─── Website screenshots (uncaptioned, the site supplies the copy) ────
+  await test.step("website screenshots", async () => {
+    const dir = `${SITE}/screenshots`
+    fs.rmSync(dir, { recursive: true, force: true })
+    const SIZE = { width: 1400, height: 875 }
+    const cropTo = (scene: string, region: Region) =>
+      crop(scene, SIZE.width, region)
+    const flat = `.glow{display:none} body{background:#0b0b0b}`
 
-  // ─── promo-small.png (440×280) ────────────────────────────────────
-  await test.step("promo-small", async () => {
-    await page.setViewportSize({ width: 440, height: 280 })
-    await page.goto("/?screenshot=true")
-    await page.waitForLoadState("networkidle")
-    await page.waitForTimeout(500)
-    await page.screenshot({ path: `${OUT}/promo-small.png` })
-  })
-
-  // ─── promo-marquee.png (1400×560) ─────────────────────────────────
-  await test.step("promo-marquee", async () => {
-    await page.setViewportSize({ width: 1400, height: 560 })
-    await page.goto("/?screenshot=true")
-    await page.waitForLoadState("networkidle")
-    await page.waitForTimeout(500)
-    await page.screenshot({ path: `${OUT}/promo-marquee.png` })
+    await render(
+      browser,
+      `${dir}/dashboard.png`,
+      SIZE,
+      cropTo(dashboard, FULL),
+      flat
+    )
+    await render(
+      browser,
+      `${dir}/organizer.png`,
+      SIZE,
+      cropTo(organizer, { x: 400, y: 0, w: 880, h: 550 }),
+      flat
+    )
+    await render(
+      browser,
+      `${dir}/sources.png`,
+      SIZE,
+      cropTo(sources, { x: 0, y: 0, w: 640, h: 400 }),
+      flat
+    )
+    await render(
+      browser,
+      `${dir}/search.png`,
+      SIZE,
+      cropTo(search, { x: 320, y: 60, w: 640, h: 400 }),
+      flat
+    )
+    await render(
+      browser,
+      `${dir}/themes.png`,
+      SIZE,
+      themeGrid(70, 163, 400, 30),
+      `body{background:var(--bg)}`
+    )
   })
 })

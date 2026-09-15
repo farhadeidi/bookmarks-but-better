@@ -4,7 +4,9 @@
   "version": "4.3.0",
   "type": "module",
   "packageManager": "bun@1.3.14",
-  "workspaces": ["packages/bookmarks-but-better"],
+  "workspaces": [
+    "packages/bookmarks-but-better"
+  ],
   "scripts": {
     "dev": "vite",
     "site:dev": "bun run --cwd website dev",
@@ -37,8 +39,7 @@
     "screenshots": "playwright test marketing/scripts/capture.spec.ts --config marketing/scripts/playwright.config.ts",
     "video:features": "tsx marketing/scripts/feature-walkthrough.ts",
     "video:themes": "tsx marketing/scripts/theme-showcase.ts",
-    "promo": "tsx marketing/scripts/promo.ts",
-    "assets": "bun run screenshots && bun run video:features && bun run video:themes && bun run promo"
+    "assets": "bun run screenshots && bun run video:features && bun run video:themes"
   },
   "dependencies": {
     "@atlaskit/pragmatic-drag-and-drop": "^1.7.9",
