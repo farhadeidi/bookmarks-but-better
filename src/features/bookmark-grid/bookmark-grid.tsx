@@ -90,6 +90,7 @@ export function BookmarkGrid() {
   const maxColumns = usePreferencesStore((s) => s.maxColumns)
   const containerMode = usePreferencesStore((s) => s.containerMode)
   const cardLayouts = usePreferencesStore((s) => s.cardLayouts)
+  const collapsedFolders = usePreferencesStore((s) => s.collapsedFolders)
   const folderOrder = usePreferencesStore((s) => s.folderOrder)
   const experimentalCardDrag =
     usePreferencesStore((s) => s.experimentalCardDrag) && canOrder
@@ -129,12 +130,20 @@ export function BookmarkGrid() {
   const { heights, measureRefs } = useMeasuredCardHeights(
     folders,
     columnCount,
-    cardLayouts
+    cardLayouts,
+    collapsedFolders
   )
 
   const columns = React.useMemo(
-    () => distributeToColumns(folders, columnCount, cardLayouts, heights),
-    [folders, columnCount, cardLayouts, heights]
+    () =>
+      distributeToColumns(
+        folders,
+        columnCount,
+        cardLayouts,
+        collapsedFolders,
+        heights
+      ),
+    [folders, columnCount, cardLayouts, collapsedFolders, heights]
   )
 
   // The grid is one composite widget: `columns` is the visual order the arrow
@@ -143,6 +152,7 @@ export function BookmarkGrid() {
   const { navigation, containerProps } = useGridNavigation({
     columns,
     nestedFolders,
+    collapsedFolders,
   })
 
   if (isLoading) {
@@ -184,7 +194,11 @@ export function BookmarkGrid() {
                     key={folder.id}
                     folder={folder}
                     nestedFolders={nestedFolders}
-                    estimatedHeight={estimateCardHeight(folder, cardLayouts)}
+                    estimatedHeight={estimateCardHeight(
+                      folder,
+                      cardLayouts,
+                      collapsedFolders
+                    )}
                     measureRef={measureRefs.get(folder.id)}
                   >
                     {experimentalCardDrag ? (

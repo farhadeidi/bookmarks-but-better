@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Collapsible folder cards.** Each dashboard card has a toggle in its
+  header, and Enter on a focused card heading does the same. A collapsed card
+  shows only its name and bookmark count, is a single keyboard stop, and stays
+  collapsed across sessions for that source. With Nested folders on, nested
+  cards collapse on their own (#3).
+
 ## [4.3.0] - 2026-09-14
 
 ### Added

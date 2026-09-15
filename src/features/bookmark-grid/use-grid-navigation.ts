@@ -83,14 +83,15 @@ interface GridNavigationOptions {
   /** The cards as `distributeToColumns` laid them out, i.e. in visual order. */
   columns: BookmarkNode[][]
   nestedFolders: boolean
+  collapsedFolders: Record<string, true>
 }
 
 export function useGridNavigation(options: GridNavigationOptions) {
-  const { columns, nestedFolders } = options
+  const { columns, nestedFolders, collapsedFolders } = options
 
   const navigationColumns = React.useMemo(
-    () => buildNavigationColumns(columns, nestedFolders),
-    [columns, nestedFolders]
+    () => buildNavigationColumns(columns, nestedFolders, collapsedFolders),
+    [columns, nestedFolders, collapsedFolders]
   )
 
   const tree = useBookmarkStore((s) => s.tree)
@@ -244,7 +245,8 @@ export function useGridNavigation(options: GridNavigationOptions) {
 
         // Enter is deliberately absent: a bookmark row is an `<a href>`, so
         // opening it is the browser's own default, and claiming the key here
-        // would only reimplement it.
+        // would only reimplement it. On a card heading it toggles the card,
+        // which `BookmarkCard` handles before this runs.
         const targetId = resolveNavigationTarget({
           columns: state.navigationColumns,
           activeId: id,

@@ -27,14 +27,17 @@ export interface GridPosition {
 /**
  * The items one card contributes, in the order `BookmarkCard` paints them:
  * its heading, then its direct bookmarks, then — in nested mode only — each
- * sub-folder card in full.
+ * sub-folder card in full. A collapsed card paints only its heading, so it is
+ * a single stop.
  */
 export function collectCardItems(
   folder: BookmarkNode,
-  nestedFolders: boolean
+  nestedFolders: boolean,
+  collapsedFolders: Record<string, true>
 ): GridNavigationItem[] {
   const children = folder.children ?? []
   const items: GridNavigationItem[] = [{ kind: "folder", id: folder.id }]
+  if (collapsedFolders[folder.id]) return items
 
   for (const child of children) {
     if (child.url !== undefined) {
@@ -45,7 +48,7 @@ export function collectCardItems(
   if (nestedFolders) {
     for (const child of children) {
       if (child.url === undefined && child.children !== undefined) {
-        items.push(...collectCardItems(child, nestedFolders))
+        items.push(...collectCardItems(child, nestedFolders, collapsedFolders))
       }
     }
   }
@@ -56,10 +59,13 @@ export function collectCardItems(
 /** Flattens each rendered column into the sequence Up/Down walks. */
 export function buildNavigationColumns(
   columns: BookmarkNode[][],
-  nestedFolders: boolean
+  nestedFolders: boolean,
+  collapsedFolders: Record<string, true>
 ): GridNavigationItem[][] {
   return columns.map((column) =>
-    column.flatMap((folder) => collectCardItems(folder, nestedFolders))
+    column.flatMap((folder) =>
+      collectCardItems(folder, nestedFolders, collapsedFolders)
+    )
   )
 }
 

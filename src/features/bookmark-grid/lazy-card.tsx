@@ -1,5 +1,6 @@
 import * as React from "react"
 import type { BookmarkNode } from "@/browser"
+import { usePreferencesStore } from "@/stores/preferences-store"
 import { collectCardItems } from "./grid-navigation"
 import { GridNavigationContext, NO_SUBSCRIPTION } from "./use-grid-navigation"
 import { LazyCardsContext } from "./lazy-cards-gate"
@@ -172,10 +173,16 @@ function GatedCard({
   children,
 }: LazyCardProps) {
   const navigation = React.useContext(GridNavigationContext)
+  const collapsedFolders = usePreferencesStore((s) => s.collapsedFolders)
 
   const itemIds = React.useMemo(
-    () => new Set(collectCardItems(folder, nestedFolders).map((i) => i.id)),
-    [folder, nestedFolders]
+    () =>
+      new Set(
+        collectCardItems(folder, nestedFolders, collapsedFolders).map(
+          (i) => i.id
+        )
+      ),
+    [folder, nestedFolders, collapsedFolders]
   )
   const holdsActiveItem = React.useSyncExternalStore(
     navigation?.subscribe ?? NO_SUBSCRIPTION,

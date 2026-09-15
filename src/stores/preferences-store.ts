@@ -15,6 +15,8 @@ interface PreferencesState {
   // Source-scoped: keyed to one source's folder ids, read and written
   // through the active source's storage adapter.
   cardLayouts: Record<string, CardLayout>
+  /** Folder ids whose dashboard card shows only its header; absent = open. */
+  collapsedFolders: Record<string, true>
   folderOrder: string[]
   // Profile-wide: this browser profile's look and feel, independent of the
   // active source. Stored in the fixed profile namespace.
@@ -39,6 +41,7 @@ interface PreferencesState {
     options?: { isCurrent?: () => boolean }
   ): Promise<void>
   setCardLayout(folderId: string, layout: CardLayout): void
+  setFolderCollapsed(folderId: string, collapsed: boolean): void
   setNestedFolders(value: boolean): void
   setColorTheme(theme: ColorTheme): void
   setMaxColumns(value: number): void
@@ -55,6 +58,7 @@ const profileStorage = new ProfileStorageAdapter()
 
 export const usePreferencesStore = create<PreferencesState>((set, get) => ({
   cardLayouts: {},
+  collapsedFolders: {},
   nestedFolders: false,
   colorTheme: "default",
   maxColumns: 4,
@@ -74,6 +78,7 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
 
     const [
       cardLayouts,
+      collapsedFolders,
       nestedFolders,
       colorTheme,
       maxColumns,
@@ -84,6 +89,7 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
       safeMode,
     ] = await Promise.all([
       adapter.storage.get<Record<string, CardLayout>>("cardLayouts"),
+      adapter.storage.get<Record<string, true>>("collapsedFolders"),
       readProfilePreference<boolean>("nestedFolders", adapter.storage),
       readProfilePreference<ColorTheme>("colorTheme", adapter.storage),
       readProfilePreference<number>("maxColumns", adapter.storage),
@@ -138,6 +144,7 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
           | Record<string, CardLayout>
           | undefined) ??
         {},
+      collapsedFolders: collapsedFolders ?? {},
       nestedFolders:
         nestedFolders ??
         (seedPrefDefaults?.nestedFolders as boolean | undefined) ??
@@ -185,6 +192,17 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
     const updated = { ...cardLayouts, [folderId]: layout }
     set({ cardLayouts: updated })
     adapter?.storage.set("cardLayouts", updated)
+  },
+
+  setFolderCollapsed(folderId: string, collapsed: boolean) {
+    const { collapsedFolders, adapter } = get()
+    // An open card is the default, so expanding drops the entry rather than
+    // storing `false` for every folder that was ever collapsed.
+    const updated = { ...collapsedFolders }
+    if (collapsed) updated[folderId] = true
+    else delete updated[folderId]
+    set({ collapsedFolders: updated })
+    adapter?.storage.set("collapsedFolders", updated)
   },
 
   setNestedFolders(value: boolean) {

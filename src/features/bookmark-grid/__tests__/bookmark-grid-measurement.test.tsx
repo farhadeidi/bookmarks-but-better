@@ -90,6 +90,7 @@ function mount() {
     nestedFolders: true,
     folderOrder: [],
     cardLayouts: {},
+    collapsedFolders: {},
     maxColumns: 2,
     containerMode: "fluid",
   })
@@ -209,6 +210,18 @@ describe("BookmarkGrid card measurement", () => {
       usePreferencesStore.setState({ cardLayouts: { one: "grid" } })
     })
     report(container, { one: 100, two: 100, three: 100 })
+
+    expect(columns(container)).toEqual([["one", "three"], ["two"]])
+  })
+
+  it("lets a card shrink once it is collapsed", () => {
+    const { container } = mount()
+    report(container, { one: 400, two: 100, three: 100 })
+
+    act(() => {
+      usePreferencesStore.setState({ collapsedFolders: { one: true } })
+    })
+    report(container, { one: 60 })
 
     expect(columns(container)).toEqual([["one", "three"], ["two"]])
   })

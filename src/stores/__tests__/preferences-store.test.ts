@@ -135,6 +135,41 @@ describe("usePreferencesStore lifetimes", () => {
     expect(backing.get("cardLayouts")).toEqual({ folderA: "list" })
   })
 
+  it("collapsed folders are source-scoped, and opening a card drops its entry", async () => {
+    const backing = new Map<string, unknown>([
+      ["folderOrder", []],
+      ["collapsedFolders", { folderA: true }],
+    ])
+    await usePreferencesStore
+      .getState()
+      .init(adapterWith(memoryStorage(backing)))
+
+    expect(usePreferencesStore.getState().collapsedFolders).toEqual({
+      folderA: true,
+    })
+
+    usePreferencesStore.getState().setFolderCollapsed("folderB", true)
+    expect(backing.get("collapsedFolders")).toEqual({
+      folderA: true,
+      folderB: true,
+    })
+
+    usePreferencesStore.getState().setFolderCollapsed("folderA", false)
+    expect(backing.get("collapsedFolders")).toEqual({ folderB: true })
+    expect(usePreferencesStore.getState().collapsedFolders).toEqual({
+      folderB: true,
+    })
+
+    // Another source starts with every card open, and nothing reached the
+    // profile namespace.
+    await usePreferencesStore
+      .getState()
+      .init(adapterWith(memoryStorage(new Map([["folderOrder", []]]))))
+    expect(usePreferencesStore.getState().collapsedFolders).toEqual({})
+    const profile = new ProfileStorageAdapter()
+    expect(await profile.get("collapsedFolders")).toBeNull()
+  })
+
   it("a superseded session's reads do not overwrite the newer session's values", async () => {
     // Session A starts reading, then a second transition supersedes it and
     // finishes its own init first; A's reads resolve only afterwards.

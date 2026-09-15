@@ -22,7 +22,8 @@ const HEIGHT_CHANGE_THRESHOLD = 8
  */
 export function estimateCardHeight(
   folder: BookmarkNode,
-  cardLayouts: Record<string, string>
+  cardLayouts: Record<string, string>,
+  collapsedFolders: Record<string, true>
 ): number {
   const bookmarks = (folder.children ?? []).filter((c) => c.url !== undefined)
   const count = bookmarks.length
@@ -30,6 +31,9 @@ export function estimateCardHeight(
 
   // Header (~40px) + padding (~24px)
   const chrome = 64
+
+  // A collapsed card is its header and nothing else.
+  if (collapsedFolders[folder.id]) return chrome
 
   if (layout === "grid") {
     // Grid: ~48px cells, ~5 per row in a typical column width, ~52px per row
@@ -50,6 +54,7 @@ export function distributeToColumns(
   folders: BookmarkNode[],
   columnCount: number,
   cardLayouts: Record<string, string>,
+  collapsedFolders: Record<string, true>,
   measuredHeights: ReadonlyMap<string, number>
 ): BookmarkNode[][] {
   const columns: BookmarkNode[][] = Array.from(
@@ -60,7 +65,8 @@ export function distributeToColumns(
 
   for (const folder of folders) {
     const height =
-      measuredHeights.get(folder.id) ?? estimateCardHeight(folder, cardLayouts)
+      measuredHeights.get(folder.id) ??
+      estimateCardHeight(folder, cardLayouts, collapsedFolders)
 
     // Find the shortest column
     let shortest = 0
@@ -92,14 +98,15 @@ const NO_HEIGHTS: ReadonlyMap<string, number> = new Map()
  * that decide the distribution — and after that only upwards, and only by more
  * than the threshold. Each card therefore causes a bounded number of
  * re-balances per generation, and a generation only turns over when the
- * folders, the column count or the card layouts change: never in response to
- * our own re-balance. Once no card crosses the threshold there is no state
- * write, so nothing re-renders and the observer falls silent.
+ * folders, the column count, the card layouts or the collapsed cards change:
+ * never in response to our own re-balance. Once no card crosses the threshold
+ * there is no state write, so nothing re-renders and the observer falls silent.
  */
 export function useMeasuredCardHeights(
   folders: BookmarkNode[],
   columnCount: number,
-  cardLayouts: Record<string, string>
+  cardLayouts: Record<string, string>,
+  collapsedFolders: Record<string, true>
 ) {
   const [heights, setHeights] =
     React.useState<ReadonlyMap<string, number>>(NO_HEIGHTS)
@@ -110,8 +117,8 @@ export function useMeasuredCardHeights(
   const observer = React.useRef<ResizeObserver | null>(null)
 
   const generation = React.useMemo(
-    () => ({ folders, columnCount, cardLayouts }),
-    [folders, columnCount, cardLayouts]
+    () => ({ folders, columnCount, cardLayouts, collapsedFolders }),
+    [folders, columnCount, cardLayouts, collapsedFolders]
   )
   const currentGeneration = React.useRef(generation)
   // A layout effect lands in the commit, before the browser can deliver a
