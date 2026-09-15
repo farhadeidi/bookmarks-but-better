@@ -1,0 +1,88 @@
+---
+title: Uninstall the daemon
+description: Remove the daemon and its background service with npx bookmarks-but-better uninstall, or by hand. Your Vault folders are never deleted.
+sidebar:
+  order: 6
+---
+
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
+Uninstalling removes the daemon program and its background service. **Your Vault
+folders are never deleted.** They are ordinary folders of Markdown files, and
+they stay where they are.
+
+## Uninstall with the Daemon Manager
+
+```bash
+npx bookmarks-but-better@latest uninstall
+```
+
+1. It asks: **Remove the daemon and its background service? Your vaults stay
+   where they are.**
+2. It stops and removes the background service.
+3. It deletes the installed daemon versions. On macOS and Linux, it also removes
+   the `~/.local/bin/bookmarks-but-better` command. On Windows, it removes the
+   install folder from your user `Path`.
+4. It asks whether to remove the configuration file too. The answer defaults to
+   **no**. The file is small, and a later install uses it again, so your Vaults
+   are already set up.
+5. It lists each Vault as `Untouched`.
+
+To remove the configuration file without being asked, use `--purge-config`:
+
+```bash
+npx bookmarks-but-better@latest uninstall --purge-config
+```
+
+## In the extension
+
+Open **Settings → Sources**, open the daemon's menu, and click
+**Forget daemon**. Otherwise, the extension keeps showing the daemon as
+unreachable.
+
+## Uninstall by hand
+
+Remove the service first, while the daemon program is still installed:
+
+<Tabs syncKey="os">
+  <TabItem label="macOS and Linux">
+
+```bash
+bookmarks-but-better service uninstall
+rm -rf ~/.local/share/bookmarks-but-better
+rm ~/.local/bin/bookmarks-but-better
+```
+
+To also remove the configuration file:
+
+```bash
+rm ~/.config/bookmarks-but-better/config.toml
+```
+
+  </TabItem>
+  <TabItem label="Windows">
+
+1. Remove the service:
+
+   ```powershell
+   bookmarks-but-better service uninstall
+   ```
+
+2. Delete the folder `%LOCALAPPDATA%\bookmarks-but-better`.
+3. Remove `%LOCALAPPDATA%\bookmarks-but-better\current` from your user `Path`
+   environment variable.
+4. To also remove the configuration file, delete
+   `%USERPROFILE%\.config\bookmarks-but-better\config.toml`.
+
+  </TabItem>
+</Tabs>
+
+`service uninstall` stops the service and removes its definition. It reports
+`your vault was not touched`, or `nothing to remove: no service definition is installed`
+if there was no service to remove.
+
+## Removing your bookmarks too
+
+The uninstaller never deletes a Vault. If you no longer want your bookmarks,
+delete the Vault folders yourself. Consider [making a backup](/docs/daemon/backups/)
+first.
