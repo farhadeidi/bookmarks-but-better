@@ -1,5 +1,12 @@
 import type { BookmarkNode } from "@/browser"
 import { buildChildOrderForBookmarkReorder } from "@/features/dnd"
+import type { CardDisplay } from "@/stores/preferences-store"
+
+/** What decides which items a card paints. */
+export type CardItemsDisplay = Pick<
+  CardDisplay,
+  "nestedFolders" | "collapsedFolders"
+>
 
 /**
  * The grid's keyboard model, as pure functions over what the grid renders.
@@ -32,12 +39,11 @@ export interface GridPosition {
  */
 export function collectCardItems(
   folder: BookmarkNode,
-  nestedFolders: boolean,
-  collapsedFolders: Record<string, true>
+  display: CardItemsDisplay
 ): GridNavigationItem[] {
   const children = folder.children ?? []
   const items: GridNavigationItem[] = [{ kind: "folder", id: folder.id }]
-  if (collapsedFolders[folder.id]) return items
+  if (display.collapsedFolders[folder.id]) return items
 
   for (const child of children) {
     if (child.url !== undefined) {
@@ -45,10 +51,10 @@ export function collectCardItems(
     }
   }
 
-  if (nestedFolders) {
+  if (display.nestedFolders) {
     for (const child of children) {
       if (child.url === undefined && child.children !== undefined) {
-        items.push(...collectCardItems(child, nestedFolders, collapsedFolders))
+        items.push(...collectCardItems(child, display))
       }
     }
   }
@@ -59,13 +65,10 @@ export function collectCardItems(
 /** Flattens each rendered column into the sequence Up/Down walks. */
 export function buildNavigationColumns(
   columns: BookmarkNode[][],
-  nestedFolders: boolean,
-  collapsedFolders: Record<string, true>
+  display: CardItemsDisplay
 ): GridNavigationItem[][] {
   return columns.map((column) =>
-    column.flatMap((folder) =>
-      collectCardItems(folder, nestedFolders, collapsedFolders)
-    )
+    column.flatMap((folder) => collectCardItems(folder, display))
   )
 }
 

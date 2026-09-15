@@ -35,13 +35,16 @@ const COLUMNS: BookmarkNode[][] = [
   [folder("beta", ["b1", "b2"]), folder("delta", ["d1", "d2"])],
 ]
 
+const FLAT = { nestedFolders: false, collapsedFolders: {} }
+const NESTED = { nestedFolders: true, collapsedFolders: {} }
+
 function ids(columns: GridNavigationItem[][]): string[][] {
   return columns.map((column) => column.map((item) => item.id))
 }
 
 function move(activeId: string, key: string): string | null {
   return resolveNavigationTarget({
-    columns: buildNavigationColumns(COLUMNS, false, {}),
+    columns: buildNavigationColumns(COLUMNS, FLAT),
     activeId,
     key,
   })
@@ -49,7 +52,7 @@ function move(activeId: string, key: string): string | null {
 
 describe("buildNavigationColumns", () => {
   it("walks each column card by card, heading before its bookmarks", () => {
-    expect(ids(buildNavigationColumns(COLUMNS, false, {}))).toEqual([
+    expect(ids(buildNavigationColumns(COLUMNS, FLAT))).toEqual([
       ["alpha", "a1", "a2", "gamma", "g1", "g2"],
       ["beta", "b1", "b2", "delta", "d1", "d2"],
     ])
@@ -69,10 +72,10 @@ describe("buildNavigationColumns", () => {
       ],
     ]
 
-    expect(ids(buildNavigationColumns(nested, true, {}))).toEqual([
+    expect(ids(buildNavigationColumns(nested, NESTED))).toEqual([
       ["parent", "p1", "child", "c1"],
     ])
-    expect(ids(buildNavigationColumns(nested, false, {}))).toEqual([
+    expect(ids(buildNavigationColumns(nested, FLAT))).toEqual([
       ["parent", "p1"],
     ])
   })
@@ -92,12 +95,22 @@ describe("buildNavigationColumns", () => {
       ],
     ]
 
-    expect(ids(buildNavigationColumns(nested, true, { parent: true }))).toEqual(
-      [["parent", "next", "n1"]]
-    )
-    expect(ids(buildNavigationColumns(nested, true, { child: true }))).toEqual([
-      ["parent", "p1", "child", "next", "n1"],
-    ])
+    expect(
+      ids(
+        buildNavigationColumns(nested, {
+          nestedFolders: true,
+          collapsedFolders: { parent: true },
+        })
+      )
+    ).toEqual([["parent", "next", "n1"]])
+    expect(
+      ids(
+        buildNavigationColumns(nested, {
+          nestedFolders: true,
+          collapsedFolders: { child: true },
+        })
+      )
+    ).toEqual([["parent", "p1", "child", "next", "n1"]])
   })
 })
 
@@ -130,7 +143,7 @@ describe("resolveNavigationTarget", () => {
 
     expect(
       resolveNavigationTarget({
-        columns: buildNavigationColumns(ragged, false, {}),
+        columns: buildNavigationColumns(ragged, FLAT),
         activeId: "a2",
         key: "ArrowRight",
       })
@@ -146,7 +159,7 @@ describe("resolveNavigationTarget", () => {
 
     expect(
       resolveNavigationTarget({
-        columns: buildNavigationColumns(withGap, false, {}),
+        columns: buildNavigationColumns(withGap, FLAT),
         activeId: "alpha",
         key: "ArrowRight",
       })
@@ -176,7 +189,7 @@ describe("resolveNavigationTarget", () => {
 })
 
 describe("itemAtPosition", () => {
-  const columns = buildNavigationColumns(COLUMNS, false, {})
+  const columns = buildNavigationColumns(COLUMNS, FLAT)
 
   it("clamps a row past the end of its column", () => {
     expect(itemAtPosition(columns, { column: 0, row: 99 })?.id).toBe("g2")

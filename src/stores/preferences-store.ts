@@ -1,13 +1,26 @@
 import { create } from "zustand"
-import type { BrowserAdapter } from "@/browser"
+import { useShallow } from "zustand/react/shallow"
+import type { BrowserAdapter, StorageAdapter } from "@/browser"
 import { COLOR_THEME_IDS, type ColorThemeId } from "@/lib/color-themes"
 import {
   ProfileStorageAdapter,
   readProfilePreference,
 } from "@/stores/profile-storage"
 
-type CardLayout = "list" | "grid"
+export type CardLayout = "list" | "grid"
+/** Folder ids whose dashboard card shows only its header; absent = open. */
+export type CollapsedFolders = Record<string, true>
 export type ColorTheme = ColorThemeId
+
+/**
+ * How the dashboard draws its cards. The grid's layout, its height estimates
+ * and its keyboard model all read these together.
+ */
+export interface CardDisplay {
+  nestedFolders: boolean
+  cardLayouts: Record<string, CardLayout>
+  collapsedFolders: CollapsedFolders
+}
 
 export const COLOR_THEMES: ColorTheme[] = [...COLOR_THEME_IDS]
 
@@ -15,8 +28,7 @@ interface PreferencesState {
   // Source-scoped: keyed to one source's folder ids, read and written
   // through the active source's storage adapter.
   cardLayouts: Record<string, CardLayout>
-  /** Folder ids whose dashboard card shows only its header; absent = open. */
-  collapsedFolders: Record<string, true>
+  collapsedFolders: CollapsedFolders
   folderOrder: string[]
   // Profile-wide: this browser profile's look and feel, independent of the
   // active source. Stored in the fixed profile namespace.
@@ -33,13 +45,21 @@ interface PreferencesState {
    * the look-and-feel preferences: it describes this browser, not a source.
    */
   safeMode: boolean
-  /**
-   * Whether the active source's preferences have loaded. The dashboard waits
-   * for it: drawn before them, a collapsed card paints open and a toggle made
-   * in that window is overwritten when they land.
-   */
-  isReady: boolean
+
+  // Session state, not preferences.
   adapter: BrowserAdapter | null
+  /**
+   * Whether the active source's preferences are still loading. The dashboard
+   * waits for them: drawn before them, a collapsed card paints open and a
+   * toggle made in that window is overwritten when they land.
+   */
+  isLoading: boolean
+  /**
+   * Where source-scoped writes go: the active source's storage, once its
+   * values have been read. Until then, or when reading failed, nothing is
+   * written, so a source's saved values are never overwritten unseen.
+   */
+  sourceStorage: StorageAdapter | null
 
   // Actions
   init(
@@ -73,15 +93,16 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
   experimentalCardDrag: false,
   isFoldersOnlyEnabledInTreeEditor: true,
   safeMode: false,
-  isReady: false,
   adapter: null,
+  isLoading: true,
+  sourceStorage: null,
 
   async init(adapter: BrowserAdapter, options = {}) {
     // See bookmark-store.init: a superseded Source Session transition must
     // not apply its (source-scoped) preferences over the newer session's.
     const isCurrent = options.isCurrent ?? (() => true)
     if (!isCurrent()) return
-    set({ adapter, isReady: false })
+    set({ adapter, isLoading: true, sourceStorage: null })
 
     const [
       cardLayouts,
@@ -96,7 +117,7 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
       safeMode,
     ] = await Promise.all([
       adapter.storage.get<Record<string, CardLayout>>("cardLayouts"),
-      adapter.storage.get<Record<string, true>>("collapsedFolders"),
+      adapter.storage.get<CollapsedFolders>("collapsedFolders"),
       readProfilePreference<boolean>("nestedFolders", adapter.storage),
       readProfilePreference<ColorTheme>("colorTheme", adapter.storage),
       readProfilePreference<number>("maxColumns", adapter.storage),
@@ -112,9 +133,18 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
       ),
       readProfilePreference<boolean>("safeMode", adapter.storage),
     ]).catch((error: unknown) => {
-      // The current values stand rather than holding the dashboard on its
-      // loading state; the failure still reaches the transition.
-      if (isCurrent()) set({ isReady: true })
+      // Without this source's values, its cards start from the defaults
+      // rather than the previous source's, `sourceStorage` stays unset so
+      // nothing is written over what it saved, and the dashboard is not held
+      // on its loading state. The failure still reaches the transition.
+      if (isCurrent()) {
+        set({
+          cardLayouts: {},
+          collapsedFolders: {},
+          folderOrder: [],
+          isLoading: false,
+        })
+      }
       throw error
     })
 
@@ -193,7 +223,8 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
           | undefined) ??
         true,
       safeMode: safeMode ?? false,
-      isReady: true,
+      isLoading: false,
+      sourceStorage: adapter.storage,
     })
 
     // Apply color theme to root element
@@ -201,21 +232,21 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
   },
 
   setCardLayout(folderId: string, layout: CardLayout) {
-    const { cardLayouts, adapter } = get()
+    const { cardLayouts, sourceStorage } = get()
     const updated = { ...cardLayouts, [folderId]: layout }
     set({ cardLayouts: updated })
-    adapter?.storage.set("cardLayouts", updated)
+    sourceStorage?.set("cardLayouts", updated)
   },
 
   setFolderCollapsed(folderId: string, collapsed: boolean) {
-    const { collapsedFolders, adapter } = get()
+    const { collapsedFolders, sourceStorage } = get()
     // An open card is the default, so expanding drops the entry rather than
     // storing `false` for every folder that was ever collapsed.
     const updated = { ...collapsedFolders }
     if (collapsed) updated[folderId] = true
     else delete updated[folderId]
     set({ collapsedFolders: updated })
-    adapter?.storage.set("collapsedFolders", updated)
+    sourceStorage?.set("collapsedFolders", updated)
   },
 
   setNestedFolders(value: boolean) {
@@ -242,7 +273,7 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
 
   setFolderOrder(order: string[]) {
     set({ folderOrder: order })
-    get().adapter?.storage.set("folderOrder", order)
+    get().sourceStorage?.set("folderOrder", order)
   },
 
   setExperimentalCardDrag(value: boolean) {
@@ -260,6 +291,20 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
     await profileStorage.set("safeMode", value)
   },
 }))
+
+/**
+ * The card display preferences as one object, whose identity only changes
+ * when one of them does — so it can sit in memo dependencies directly.
+ */
+export function useCardDisplay(): CardDisplay {
+  return usePreferencesStore(
+    useShallow((s) => ({
+      nestedFolders: s.nestedFolders,
+      cardLayouts: s.cardLayouts,
+      collapsedFolders: s.collapsedFolders,
+    }))
+  )
+}
 
 function applyColorTheme(theme: ColorTheme) {
   const root = document.documentElement

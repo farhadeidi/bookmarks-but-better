@@ -1,7 +1,6 @@
 import * as React from "react"
 import type { BookmarkNode } from "@/browser"
-import { usePreferencesStore } from "@/stores/preferences-store"
-import { collectCardItems } from "./grid-navigation"
+import { collectCardItems, type CardItemsDisplay } from "./grid-navigation"
 import { GridNavigationContext, NO_SUBSCRIPTION } from "./use-grid-navigation"
 import { LazyCardsContext } from "./lazy-cards-gate"
 
@@ -127,7 +126,8 @@ function observeNear(element: Element, onNear: OnNear): () => void {
 
 interface LazyCardProps {
   folder: BookmarkNode
-  nestedFolders: boolean
+  /** Which items the card paints, for pinning it open under the tab stop. */
+  display: CardItemsDisplay
   /** The card's height before it has ever been rendered. */
   estimatedHeight: number
   /**
@@ -140,7 +140,7 @@ interface LazyCardProps {
 
 export function LazyCard({
   folder,
-  nestedFolders,
+  display,
   estimatedHeight,
   measureRef,
   children,
@@ -156,7 +156,7 @@ export function LazyCard({
   return (
     <GatedCard
       folder={folder}
-      nestedFolders={nestedFolders}
+      display={display}
       estimatedHeight={estimatedHeight}
       measureRef={measureRef}
     >
@@ -167,22 +167,16 @@ export function LazyCard({
 
 function GatedCard({
   folder,
-  nestedFolders,
+  display,
   estimatedHeight,
   measureRef,
   children,
 }: LazyCardProps) {
   const navigation = React.useContext(GridNavigationContext)
-  const collapsedFolders = usePreferencesStore((s) => s.collapsedFolders)
 
   const itemIds = React.useMemo(
-    () =>
-      new Set(
-        collectCardItems(folder, nestedFolders, collapsedFolders).map(
-          (i) => i.id
-        )
-      ),
-    [folder, nestedFolders, collapsedFolders]
+    () => new Set(collectCardItems(folder, display).map((i) => i.id)),
+    [folder, display]
   )
   const holdsActiveItem = React.useSyncExternalStore(
     navigation?.subscribe ?? NO_SUBSCRIPTION,

@@ -1,5 +1,9 @@
 import * as React from "react"
 import type { BookmarkNode } from "@/browser"
+import type { CardDisplay } from "@/stores/preferences-store"
+
+/** What decides how tall a card is. */
+type CardHeightDisplay = Pick<CardDisplay, "cardLayouts" | "collapsedFolders">
 
 /** Vertical gap between stacked cards, matching the column's `gap-4`. */
 const CARD_GAP = 16
@@ -22,18 +26,17 @@ const HEIGHT_CHANGE_THRESHOLD = 8
  */
 export function estimateCardHeight(
   folder: BookmarkNode,
-  cardLayouts: Record<string, string>,
-  collapsedFolders: Record<string, true>
+  display: CardHeightDisplay
 ): number {
   const bookmarks = (folder.children ?? []).filter((c) => c.url !== undefined)
   const count = bookmarks.length
-  const layout = cardLayouts[folder.id] ?? "list"
+  const layout = display.cardLayouts[folder.id] ?? "list"
 
   // Header (~40px) + padding (~24px)
   const chrome = 64
 
   // A collapsed card is its header and nothing else.
-  if (collapsedFolders[folder.id]) return chrome
+  if (display.collapsedFolders[folder.id]) return chrome
 
   if (layout === "grid") {
     // Grid: ~48px cells, ~5 per row in a typical column width, ~52px per row
@@ -53,8 +56,7 @@ export function estimateCardHeight(
 export function distributeToColumns(
   folders: BookmarkNode[],
   columnCount: number,
-  cardLayouts: Record<string, string>,
-  collapsedFolders: Record<string, true>,
+  display: CardHeightDisplay,
   measuredHeights: ReadonlyMap<string, number>
 ): BookmarkNode[][] {
   const columns: BookmarkNode[][] = Array.from(
@@ -65,8 +67,7 @@ export function distributeToColumns(
 
   for (const folder of folders) {
     const height =
-      measuredHeights.get(folder.id) ??
-      estimateCardHeight(folder, cardLayouts, collapsedFolders)
+      measuredHeights.get(folder.id) ?? estimateCardHeight(folder, display)
 
     // Find the shortest column
     let shortest = 0
@@ -83,8 +84,18 @@ export function distributeToColumns(
 
 interface HeightRecord {
   height: number
+  /** The card's width when measured; a change means the grid was resized. */
+  width: number
   /** The distribution inputs this height was measured under. */
   generation: object
+}
+
+function sizeOf(entry: ResizeObserverEntry): { height: number; width: number } {
+  const box = entry.borderBoxSize?.[0]
+  return {
+    height: Math.round(box?.blockSize ?? entry.contentRect.height),
+    width: Math.round(box?.inlineSize ?? entry.contentRect.width),
+  }
 }
 
 const NO_HEIGHTS: ReadonlyMap<string, number> = new Map()
@@ -104,16 +115,17 @@ const NO_HEIGHTS: ReadonlyMap<string, number> = new Map()
  *
  * Collapsing or expanding a card holds the columns still instead: the card
  * animates in place rather than sending its neighbours to other columns. Until
- * the generation turns over, cards that already have a height keep it, and
- * once it does every card is observed afresh so the next distribution sees
- * the heights the toggles produced.
+ * the generation turns over or the grid is resized, cards that already have a
+ * height keep it. A new generation observes every card afresh, and a resize
+ * (cards changing width) measures every card anew, so the next distribution
+ * sees the heights the toggles produced.
  */
 export function useMeasuredCardHeights(
   folders: BookmarkNode[],
   columnCount: number,
-  cardLayouts: Record<string, string>,
-  collapsedFolders: Record<string, true>
+  display: CardHeightDisplay
 ) {
+  const { cardLayouts, collapsedFolders } = display
   const [heights, setHeights] =
     React.useState<ReadonlyMap<string, number>>(NO_HEIGHTS)
 
@@ -166,13 +178,32 @@ export function useMeasuredCardHeights(
     observer.current ??= new ResizeObserver((entries) => {
       let changed = false
 
+      // Cards only change width when the grid does, and a hold ends there:
+      // the heights kept through it describe cards of another width, so every
+      // card is measured anew.
+      if (
+        heldGeneration.current !== null &&
+        entries.some((entry) => {
+          const folderId = observedIds.current.get(entry.target)
+          const previous =
+            folderId === undefined ? undefined : records.current.get(folderId)
+          return (
+            previous !== undefined &&
+            Math.abs(sizeOf(entry).width - previous.width) >=
+              HEIGHT_CHANGE_THRESHOLD
+          )
+        })
+      ) {
+        heldGeneration.current = null
+        records.current.clear()
+        changed = true
+      }
+
       for (const entry of entries) {
         const folderId = observedIds.current.get(entry.target)
         if (folderId === undefined) continue
 
-        const height = Math.round(
-          entry.borderBoxSize?.[0]?.blockSize ?? entry.contentRect.height
-        )
+        const { height, width } = sizeOf(entry)
         // A hidden or detached card measures zero, which is not its height.
         if (height <= 0) continue
 
@@ -193,6 +224,7 @@ export function useMeasuredCardHeights(
             // generation, so from here on it may only grow.
             records.current.set(folderId, {
               height: previous.height,
+              width,
               generation: currentGeneration.current,
             })
             continue
@@ -201,6 +233,7 @@ export function useMeasuredCardHeights(
 
         records.current.set(folderId, {
           height,
+          width,
           generation: currentGeneration.current,
         })
         changed = true

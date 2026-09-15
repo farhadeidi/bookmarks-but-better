@@ -248,6 +248,18 @@ describe("BookmarkGrid keyboard navigation", () => {
     expect(document.activeElement).toBe(heading("gamma"))
   })
 
+  it("takes the tab stop to the heading when its card collapses around it", () => {
+    mount()
+    act(() => bookmark("a two").focus())
+    expect(bookmark("a two")).toHaveProperty("tabIndex", 0)
+
+    fireEvent.click(collapseToggle("alpha"))
+
+    // "a two" sat second in the first column; left to the position, the tab
+    // stop would land on gamma's heading, in another card.
+    expect(heading("alpha")).toHaveProperty("tabIndex", 0)
+  })
+
   it("opens a collapsed card again from its toggle", () => {
     mount()
     act(() => {

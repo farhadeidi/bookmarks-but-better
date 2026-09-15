@@ -29,10 +29,14 @@ import { BookmarkItem } from "@/features/bookmark-item"
 import { useFolderDropTarget } from "@/features/dnd"
 // Past the grid's barrel on purpose: importing it would pull `BookmarkGrid`,
 // which renders this card, back into the card's own module graph.
-import { useGridItem } from "@/features/bookmark-grid/use-grid-navigation"
+import {
+  GridNavigationContext,
+  useGridItem,
+} from "@/features/bookmark-grid/use-grid-navigation"
+import { collectCardItems } from "@/features/bookmark-grid/grid-navigation"
 import { LazyCard } from "@/features/bookmark-grid/lazy-card"
 import { estimateCardHeight } from "@/features/bookmark-grid/card-heights"
-import { usePreferencesStore } from "@/stores/preferences-store"
+import { useCardDisplay, usePreferencesStore } from "@/stores/preferences-store"
 import { useBookmarkStore } from "@/stores/bookmark-store"
 import { useUIStore } from "@/stores/ui-store"
 import type { BookmarkNode } from "@/browser"
@@ -173,33 +177,18 @@ interface BookmarkCardProps {
   dragHandleRef?: React.RefObject<HTMLElement | null>
 }
 
-/**
- * The bookmarks a card holds: its own, plus — in nested mode, where its
- * sub-folder cards are drawn inside it — every bookmark below it.
- */
-function countBookmarks(folder: BookmarkNode, deep: boolean): number {
-  let count = 0
-  for (const child of folder.children ?? []) {
-    if (child.url !== undefined) count += 1
-    else if (deep) count += countBookmarks(child, deep)
-  }
-  return count
-}
-
 export const BookmarkCard = React.memo(function BookmarkCard({
   folder,
   nested = false,
   dragHandleRef,
 }: BookmarkCardProps) {
-  const layout = usePreferencesStore((s) => s.cardLayouts[folder.id] ?? "list")
-  const cardLayouts = usePreferencesStore((s) => s.cardLayouts)
+  const display = useCardDisplay()
+  const { nestedFolders } = display
+  const layout = display.cardLayouts[folder.id] ?? "list"
+  const isCollapsed = display.collapsedFolders[folder.id] ?? false
   const setCardLayout = usePreferencesStore((s) => s.setCardLayout)
-  const isCollapsed = usePreferencesStore(
-    (s) => s.collapsedFolders[folder.id] ?? false
-  )
-  const collapsedFolders = usePreferencesStore((s) => s.collapsedFolders)
   const setFolderCollapsed = usePreferencesStore((s) => s.setFolderCollapsed)
-  const nestedFolders = usePreferencesStore((s) => s.nestedFolders)
+  const navigation = React.useContext(GridNavigationContext)
   const adapter = useBookmarkStore((s) => s.adapter)
   // Dropping a bookmark onto a folder card moves it there (cross-folder),
   // which the daemon allows — this isn't a same-parent reorder.
@@ -210,10 +199,33 @@ export const BookmarkCard = React.memo(function BookmarkCard({
     disabled: !moveEnabled,
   })
 
+  const setOpen = React.useCallback(
+    (open: boolean) => {
+      // Closing takes the grid's tab stop along when it was on something the
+      // card is about to hide; otherwise it would land on whatever sits in
+      // that place next, possibly in another card.
+      const active = navigation?.activeId()
+      if (
+        !open &&
+        active &&
+        active !== folder.id &&
+        collectCardItems(folder, display).some((item) => item.id === active)
+      ) {
+        navigation?.activate(folder.id)
+      }
+      setFolderCollapsed(folder.id, !open)
+    },
+    [navigation, folder, display, setFolderCollapsed]
+  )
+  const toggleOpen = React.useCallback(
+    () => setOpen(isCollapsed),
+    [setOpen, isCollapsed]
+  )
+
   // The card's stop in the grid's roving tab order. The heading carries it
   // rather than the card: it is the one element that exists whatever the
-  // card holds, and it already names the folder.
-  const gridItem = useGridItem(folder.id)
+  // card holds, and it already names the folder. Enter on it toggles the card.
+  const gridItem = useGridItem(folder.id, { onEnter: toggleOpen })
 
   const children = folder.children ?? []
 
@@ -227,35 +239,22 @@ export const BookmarkCard = React.memo(function BookmarkCard({
     setCardLayout(folder.id, layout === "list" ? "grid" : "list")
   }, [folder.id, layout, setCardLayout])
 
-  const toggleCollapsed = React.useCallback(() => {
-    setFolderCollapsed(folder.id, !isCollapsed)
-  }, [folder.id, isCollapsed, setFolderCollapsed])
-
-  const { onKeyDown: onGridKeyDown } = gridItem
-  const onHeadingKeyDown = React.useCallback(
-    (event: React.KeyboardEvent<HTMLElement>) => {
-      const plain =
-        !event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey
-      if (event.key === "Enter" && plain) {
-        event.preventDefault()
-        toggleCollapsed()
-        return
-      }
-      onGridKeyDown(event)
-    },
-    [onGridKeyDown, toggleCollapsed]
-  )
-
-  const bookmarkCount = isCollapsed ? countBookmarks(folder, nestedFolders) : 0
+  // The bookmarks the card holds when open: the keyboard model's own walk of
+  // the card, with nothing inside it collapsed.
+  const bookmarkCount = isCollapsed
+    ? collectCardItems(folder, { nestedFolders, collapsedFolders: {} }).filter(
+        (item) => item.kind === "bookmark"
+      ).length
+    : 0
 
   return (
     <Collapsible
       open={!isCollapsed}
-      onOpenChange={(open) => setFolderCollapsed(folder.id, !open)}
+      onOpenChange={setOpen}
       ref={dropRef as React.RefObject<HTMLDivElement>}
       data-testid="bookmark-card"
       className={cn(
-        "group/card flex w-full min-w-0 flex-col rounded-2xl bg-card p-4 ring-1 ring-border transition-shadow",
+        "flex w-full min-w-0 flex-col rounded-2xl bg-card p-4 ring-1 ring-border transition-shadow",
         nested && "ring-border/50",
         isOver && "shadow-md ring-2 ring-primary/50"
       )}
@@ -280,7 +279,6 @@ export const BookmarkCard = React.memo(function BookmarkCard({
         )}
         <h3
           {...gridItem}
-          onKeyDown={onHeadingKeyDown}
           className={cn(
             "min-w-0 flex-1 truncate rounded-md border border-transparent font-medium outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50",
             nested ? "text-base sm:text-xs" : "text-base sm:text-sm"
@@ -296,9 +294,14 @@ export const BookmarkCard = React.memo(function BookmarkCard({
             </span>
           </span>
         )}
-        {/* Out of the way until wanted: shown while the card is hovered or
-            holds focus, on touch screens (no hover), and whenever the card is
-            collapsed, so a closed card always says so. */}
+        {/* Tucked against the menu, and out of the way until wanted: shown
+            while the card is hovered or holds keyboard focus, on touch screens
+            (no hover), and whenever the card is collapsed, so a closed card
+            always says so. Keyboard focus only (`:focus-visible`), so a mouse
+            click does not leave it showing once the pointer moves on. The card
+            is this button's grandparent (card > header > button); matching
+            that rather than any ancestor card keeps a nested card's chevron
+            hidden while only its parent is hovered. */}
         <CollapsibleTrigger
           render={
             <Button
@@ -307,10 +310,10 @@ export const BookmarkCard = React.memo(function BookmarkCard({
               aria-label={isCollapsed ? "Expand folder" : "Collapse folder"}
               // Just the chevron: no hover or open-state background from ghost.
               className={cn(
-                "flex-shrink-0 bg-transparent text-muted-foreground transition-opacity hover:bg-transparent aria-expanded:bg-transparent dark:hover:bg-transparent",
+                "-mr-2 flex-shrink-0 bg-transparent text-muted-foreground transition-opacity hover:bg-transparent aria-expanded:bg-transparent dark:hover:bg-transparent",
                 isCollapsed
                   ? "opacity-100"
-                  : "opacity-0 group-focus-within/card:opacity-100 group-hover/card:opacity-100 pointer-coarse:opacity-100"
+                  : "opacity-0 pointer-coarse:opacity-100 [:has(:focus-visible)>*>&]:opacity-100 [:hover>*>&]:opacity-100"
               )}
             />
           }
@@ -364,12 +367,8 @@ export const BookmarkCard = React.memo(function BookmarkCard({
               <LazyCard
                 key={subfolder.id}
                 folder={subfolder}
-                nestedFolders
-                estimatedHeight={estimateCardHeight(
-                  subfolder,
-                  cardLayouts,
-                  collapsedFolders
-                )}
+                display={display}
+                estimatedHeight={estimateCardHeight(subfolder, display)}
               >
                 <BookmarkCard folder={subfolder} nested />
               </LazyCard>

@@ -4,6 +4,7 @@ import { useBookmarkStore } from "@/stores/bookmark-store"
 import { findNodeById } from "@/lib/bookmark-utils"
 import {
   buildNavigationColumns,
+  type CardItemsDisplay,
   findItem,
   findItemPosition,
   itemAtPosition,
@@ -49,8 +50,16 @@ export const NO_SUBSCRIPTION = () => () => {}
 /**
  * Outside a grid there is no roving order to join, so the item reports itself
  * plainly tabbable — a card rendered on its own still behaves.
+ *
+ * `onEnter` gives the item an Enter action of its own (a card heading toggles
+ * its card). Without one, Enter is left to the element: a bookmark row is an
+ * `<a href>`, and opening it is the browser's default.
  */
-export function useGridItem(id: string): GridItemProps {
+export function useGridItem(
+  id: string,
+  options: { onEnter?: () => void } = {}
+): GridItemProps {
+  const { onEnter } = options
   const navigation = React.useContext(GridNavigationContext)
 
   // Each item subscribes to its *own* active flag rather than reading a
@@ -71,9 +80,17 @@ export function useGridItem(id: string): GridItemProps {
     [navigation, id]
   )
   const onKeyDown = React.useCallback(
-    (event: React.KeyboardEvent<HTMLElement>) =>
-      navigation?.handleKeyDown(id, event),
-    [navigation, id]
+    (event: React.KeyboardEvent<HTMLElement>) => {
+      const plain =
+        !event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey
+      if (onEnter && plain && event.key === "Enter") {
+        event.preventDefault()
+        onEnter()
+        return
+      }
+      navigation?.handleKeyDown(id, event)
+    },
+    [navigation, id, onEnter]
   )
 
   return { ref, tabIndex: isActive ? 0 : -1, onFocus, onKeyDown }
@@ -82,16 +99,15 @@ export function useGridItem(id: string): GridItemProps {
 interface GridNavigationOptions {
   /** The cards as `distributeToColumns` laid them out, i.e. in visual order. */
   columns: BookmarkNode[][]
-  nestedFolders: boolean
-  collapsedFolders: Record<string, true>
+  display: CardItemsDisplay
 }
 
 export function useGridNavigation(options: GridNavigationOptions) {
-  const { columns, nestedFolders, collapsedFolders } = options
+  const { columns, display } = options
 
   const navigationColumns = React.useMemo(
-    () => buildNavigationColumns(columns, nestedFolders, collapsedFolders),
-    [columns, nestedFolders, collapsedFolders]
+    () => buildNavigationColumns(columns, display),
+    [columns, display]
   )
 
   const tree = useBookmarkStore((s) => s.tree)
@@ -245,8 +261,8 @@ export function useGridNavigation(options: GridNavigationOptions) {
 
         // Enter is deliberately absent: a bookmark row is an `<a href>`, so
         // opening it is the browser's own default, and claiming the key here
-        // would only reimplement it. On a card heading it toggles the card,
-        // which `BookmarkCard` handles before this runs.
+        // would only reimplement it. An item with an Enter action of its own
+        // claims the key in `useGridItem`, before this runs.
         const targetId = resolveNavigationTarget({
           columns: state.navigationColumns,
           activeId: id,

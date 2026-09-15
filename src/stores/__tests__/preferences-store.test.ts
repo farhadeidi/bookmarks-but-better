@@ -170,7 +170,7 @@ describe("usePreferencesStore lifetimes", () => {
     expect(await profile.get("collapsedFolders")).toBeNull()
   })
 
-  it("is not ready while a source's preferences load, and ready once they land", async () => {
+  it("is loading while a source's preferences load, and done once they land", async () => {
     let releaseReads: () => void = () => {}
     const readsGate = new Promise<void>((resolve) => {
       releaseReads = resolve
@@ -184,30 +184,53 @@ describe("usePreferencesStore lifetimes", () => {
       },
     }
     // As after a previous source's session.
-    usePreferencesStore.setState({ isReady: true })
+    usePreferencesStore.setState({ isLoading: false })
 
     const loading = usePreferencesStore
       .getState()
       .init(adapterWith(gatedStorage))
-    expect(usePreferencesStore.getState().isReady).toBe(false)
+    expect(usePreferencesStore.getState().isLoading).toBe(true)
 
     releaseReads()
     await loading
-    expect(usePreferencesStore.getState().isReady).toBe(true)
+    expect(usePreferencesStore.getState().isLoading).toBe(false)
   })
 
-  it("becomes ready even when the reads fail, so the dashboard is not held on loading", async () => {
+  it("starts from the defaults and writes nothing when a source's preferences fail to load", async () => {
+    await usePreferencesStore.getState().init(
+      adapterWith(
+        memoryStorage(
+          new Map<string, unknown>([
+            ["folderOrder", []],
+            ["collapsedFolders", { previousSourceFolder: true }],
+          ])
+        )
+      )
+    )
+
+    const set = vi.fn()
     const failingStorage: StorageAdapter = {
-      ...memoryStorage(),
       get: async () => {
         throw new Error("storage unavailable")
       },
+      set,
+      remove: vi.fn(),
     }
-
     await expect(
       usePreferencesStore.getState().init(adapterWith(failingStorage))
     ).rejects.toThrow("storage unavailable")
-    expect(usePreferencesStore.getState().isReady).toBe(true)
+
+    // Not held on the loading state, and nothing of the previous source's.
+    const state = usePreferencesStore.getState()
+    expect(state.isLoading).toBe(false)
+    expect(state.collapsedFolders).toEqual({})
+
+    // What this source saved could not be read, so it is not written over.
+    state.setFolderCollapsed("folder", true)
+    expect(usePreferencesStore.getState().collapsedFolders).toEqual({
+      folder: true,
+    })
+    expect(set).not.toHaveBeenCalled()
   })
 
   it("a superseded session's reads do not overwrite the newer session's values", async () => {

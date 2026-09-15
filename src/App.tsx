@@ -86,7 +86,7 @@ export function App() {
   const rootFolderId = useBookmarkStore((s) => s.rootFolderId)
   const activeSourceId = useSourceStore((s) => s.activeSourceId)
   const safeMode = usePreferencesStore((s) => s.safeMode)
-  const preferencesReady = usePreferencesStore((s) => s.isReady)
+  const preferencesLoading = usePreferencesStore((s) => s.isLoading)
   const containerMode = usePreferencesStore((s) => s.containerMode)
   const openBookmarkOrganizer = useUIStore((s) => s.openBookmarkOrganizer)
   const openSearchPalette = useUIStore((s) => s.openSearchPalette)
@@ -221,7 +221,7 @@ export function App() {
             </div>
           ) : safeMode ? (
             <SafeModeNotice />
-          ) : isLoading || status === "loading" || !preferencesReady ? (
+          ) : isLoading || status === "loading" || preferencesLoading ? (
             // Until its preferences land, the grid would draw with the
             // defaults (every card open, list layout, safe mode off) and
             // then jump to the saved ones.
