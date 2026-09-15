@@ -1016,6 +1016,38 @@ pub(crate) fn open_or_create_dir(dir: &Dir, name: &str) -> io::Result<Dir> {
     })
 }
 
+/// The name of the file that keeps `.bookmarks-but-better` out of a vault's
+/// own git history.
+const STATE_GITIGNORE_NAME: &str = ".gitignore";
+
+/// The contents written into a fresh `.bookmarks-but-better/.gitignore`.
+///
+/// A lone `*` also matches the file itself, so a vault a user keeps in a git
+/// repository needs no entry of its own for `.bookmarks-but-better` — the
+/// directory ignores itself.
+const STATE_GITIGNORE_CONTENTS: &[u8] =
+    b"# Daemon-owned: lock file and staging area. Not vault content.\n*\n";
+
+/// Opens the vault's `.bookmarks-but-better` directory, creating it if it is
+/// absent, and ensures it ignores itself in git.
+///
+/// This is the one place that directory is created for a vault — taking the
+/// vault lock — so a vault that already existed before this file was
+/// introduced gets it the next time it is served.
+///
+/// # Errors
+///
+/// Returns the underlying I/O error, including a refusal when
+/// `.bookmarks-but-better` exists but is not a real directory.
+pub(crate) fn open_or_create_state_dir(dir: &Dir) -> io::Result<Dir> {
+    let state = open_or_create_dir(dir, component::STATE_DIRECTORY)?;
+    // Best-effort and non-destructive: an existing `.gitignore` — including
+    // one a user edited — is left exactly as it is, and any failure to write
+    // it must not stop the caller from using the directory.
+    let _ = create_new(&state, STATE_GITIGNORE_NAME, STATE_GITIGNORE_CONTENTS);
+    Ok(state)
+}
+
 /// Flushes a directory entry change to disk where the platform supports it.
 ///
 /// Opening a directory and syncing it is a Unix idiom. Windows has no portable
@@ -1384,6 +1416,56 @@ mod tests {
         assert!(
             error.to_string().contains("not a real directory"),
             "{error}"
+        );
+    }
+
+    #[test]
+    fn open_or_create_state_dir_writes_a_self_ignoring_gitignore() {
+        let (_directory, root) = temp_root();
+        let state = open_or_create_state_dir(&root).expect("create state dir");
+
+        let contents = read(&state, STATE_GITIGNORE_NAME).expect("gitignore");
+        assert_eq!(contents, STATE_GITIGNORE_CONTENTS);
+        assert!(
+            String::from_utf8_lossy(&contents)
+                .lines()
+                .any(|line| line == "*"),
+            "the pattern must ignore the directory itself, not just its known entries"
+        );
+    }
+
+    #[test]
+    fn open_or_create_state_dir_repairs_a_state_dir_missing_its_gitignore() {
+        let (_directory, root) = temp_root();
+        // A vault that started using the state directory before this file
+        // existed: the directory is there, the gitignore is not.
+        root.create_dir(".bookmarks-but-better")
+            .expect("create state dir");
+
+        let state = open_or_create_state_dir(&root).expect("open state dir");
+
+        assert_eq!(
+            read(&state, STATE_GITIGNORE_NAME).expect("gitignore"),
+            STATE_GITIGNORE_CONTENTS
+        );
+    }
+
+    #[test]
+    fn open_or_create_state_dir_never_overwrites_a_custom_gitignore() {
+        let (_directory, root) = temp_root();
+        root.create_dir(".bookmarks-but-better")
+            .expect("create state dir");
+        let state = root
+            .open_dir_nofollow(".bookmarks-but-better")
+            .expect("open state dir");
+        create_new(&state, STATE_GITIGNORE_NAME, b"custom\n").expect("write custom gitignore");
+
+        open_or_create_state_dir(&root).expect("open state dir again");
+
+        assert_eq!(
+            read(&state, STATE_GITIGNORE_NAME).expect("gitignore"),
+            b"custom\n",
+            "a user's own gitignore must never be rewritten"
         );
     }
 

@@ -294,6 +294,12 @@ you can see what you are losing, and then retry.
 
 - **One writer.** An advisory lock on `<vault>/.bookmarks-but-better/lock`, released by the
   operating system even if the process is killed.
+- **The daemon's own state ignores itself in git.** Taking the lock writes
+  `<vault>/.bookmarks-but-better/.gitignore` (a lone `*`) if it is missing —
+  on a new vault and on one that predates this file — so a vault kept in a
+  git repository as a backup never commits the lock file or staging entries.
+  An existing `.gitignore` is never overwritten, and a failure to write it
+  never stops the daemon from serving.
 - **No silent overwrites.** Every mutation carries a `revision`; a mismatch is a
   409 and the file is left alone.
 - **No lost bytes.** Updates use the format core's surgical patching, then a
