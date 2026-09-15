@@ -46,33 +46,36 @@ async function captureScene(browser: Browser, scene: Scene): Promise<string> {
     viewport: { width: APP_W, height: APP_H },
     deviceScaleFactor: 2,
   })
-  const page = await context.newPage()
-  await page.addInitScript(
-    (mode) => localStorage.setItem("theme", mode),
-    scene.mode
-  )
-  await page.goto(`${APP}/?scenario=browser-daemon&screenshot=true`)
-  await page.waitForLoadState("networkidle")
-  await page.addStyleTag({
-    content: `[aria-label="Open Dev Workbench"]{display:none!important}`,
-  })
-  await page.evaluate((theme) => {
-    if (theme === "default") {
-      document.documentElement.removeAttribute("data-color-theme")
-    } else {
-      document.documentElement.setAttribute("data-color-theme", theme)
-    }
-  }, scene.colorTheme)
-  // Favicons load after the first paint.
-  await page.waitForTimeout(1500)
-  if (scene.act) {
-    await scene.act(page)
+  try {
+    const page = await context.newPage()
+    await page.addInitScript(
+      (mode) => localStorage.setItem("theme", mode),
+      scene.mode
+    )
+    await page.goto(`${APP}/?scenario=browser-daemon&screenshot=true`)
     await page.waitForLoadState("networkidle")
-    await page.waitForTimeout(700)
+    await page.addStyleTag({
+      content: `[aria-label="Open Dev Workbench"]{display:none!important}`,
+    })
+    await page.evaluate((theme) => {
+      if (theme === "default") {
+        document.documentElement.removeAttribute("data-color-theme")
+      } else {
+        document.documentElement.setAttribute("data-color-theme", theme)
+      }
+    }, scene.colorTheme)
+    // Favicons load after the first paint.
+    await page.waitForTimeout(1500)
+    if (scene.act) {
+      await scene.act(page)
+      await page.waitForLoadState("networkidle")
+      await page.waitForTimeout(700)
+    }
+    const png = await page.screenshot({ type: "png" })
+    return png.toString("base64")
+  } finally {
+    await context.close()
   }
-  const png = await page.screenshot({ type: "png" })
-  await context.close()
-  return png.toString("base64")
 }
 
 /** A captioned store screenshot: headline above, the app below, bleeding off the bottom. */
@@ -203,17 +206,12 @@ test("capture store, promo and website images", async ({ browser }) => {
         organizer,
       ],
     ]
-    for (const [name, headline, sub, scene] of shots) {
+    for (const [i, [name, headline, sub, scene]] of shots.entries()) {
       await render(
         browser,
         `${STORE}/${name}.png`,
         STORE_SIZE,
-        storeShot(
-          shots.findIndex((s) => s[0] === name) + 1,
-          headline,
-          sub,
-          scene
-        ),
+        storeShot(i + 1, headline, sub, scene),
         CAPTION_CSS
       )
     }

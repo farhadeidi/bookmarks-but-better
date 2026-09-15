@@ -139,6 +139,9 @@ optional localhost access at that moment, not during extension installation.
 </p>
 
 Regenerate every store, promo and website image with `bun run screenshots`.
+`bun run video` records the walkthrough as an MP4 and a GIF into
+`marketing/output/videos/`, which stays out of git. Both need the website's
+packages for the brand fonts: run `bun install --cwd website` once first.
 
 ## Privacy
 

@@ -20,7 +20,14 @@ const FONTS = path.join(ROOT, "website/node_modules/@fontsource-variable")
 
 function fontFaces() {
   const face = (family: string, file: string, style: string) => {
-    const data = fs.readFileSync(path.join(FONTS, file)).toString("base64")
+    const fontPath = path.join(FONTS, file)
+    if (!fs.existsSync(fontPath)) {
+      // The brand fonts are the website's dependencies, not the root's.
+      throw new Error(
+        `Missing brand font ${path.relative(ROOT, fontPath)}. Run \`bun install --cwd website\` first.`
+      )
+    }
+    const data = fs.readFileSync(fontPath).toString("base64")
     return `@font-face{font-family:"${family}";font-style:${style};font-weight:100 900;src:url(data:font/woff2;base64,${data}) format("woff2")}`
   }
   return [
@@ -124,16 +131,19 @@ export async function render(
   css = ""
 ) {
   const page = await browser.newPage({ viewport: size, deviceScaleFactor: 1 })
-  await page.setContent(
-    `<!doctype html><html><head><meta charset="utf-8"><style>${fontFaces()}${BASE_CSS}
-      body{width:${size.width}px;height:${size.height}px}${css}</style></head>
-      <body><div class="glow"></div>${body}</body></html>`,
-    { waitUntil: "load" }
-  )
-  await page.evaluate(() => document.fonts.ready)
-  fs.mkdirSync(path.dirname(file), { recursive: true })
-  await page.screenshot({ path: file })
-  await page.close()
+  try {
+    await page.setContent(
+      `<!doctype html><html><head><meta charset="utf-8"><style>${fontFaces()}${BASE_CSS}
+        body{width:${size.width}px;height:${size.height}px}${css}</style></head>
+        <body><div class="glow"></div>${body}</body></html>`,
+      { waitUntil: "load" }
+    )
+    await page.evaluate(() => document.fonts.ready)
+    fs.mkdirSync(path.dirname(file), { recursive: true })
+    await page.screenshot({ path: file })
+  } finally {
+    await page.close()
+  }
 }
 
 export const CAPTION_CSS = `
