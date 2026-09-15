@@ -20,8 +20,12 @@
 
 <p align="center">
   <a href="https://chromewebstore.google.com/detail/nflojekghnganlcjncbepnnnkgakghif?utm_source=github">
-    <img src="marketing/output/01-dashboard.png" width="700" alt="Dashboard in dark mode" />
+    <img src="marketing/output/store/01-new-tab.png" width="700" alt="Dashboard in dark mode" />
   </a>
+</p>
+
+<p align="center">
+  <a href="https://bookmarks.but-better.dev/preview/">Try the live preview</a>
 </p>
 
 ## Features
@@ -115,16 +119,29 @@ optional localhost access at that moment, not during extension installation.
 ## Screenshots
 
 <p align="center">
-  <img src="marketing/output/02-organizer.png" width="700" alt="Bookmark Organizer tree editor" />
+  <img src="marketing/output/store/02-sources.png" width="700" alt="Switching between browser bookmarks and Markdown vaults" />
 </p>
 
 <p align="center">
-  <img src="marketing/output/03-themes.png" width="700" alt="10 color themes" />
+  <img src="marketing/output/store/03-search.png" width="700" alt="Search palette" />
 </p>
 
 <p align="center">
-  <img src="marketing/output/04-settings.png" width="700" alt="Settings dialog" />
+  <img src="marketing/output/store/04-organizer.png" width="700" alt="Bookmark Organizer tree editor" />
 </p>
+
+<p align="center">
+  <img src="marketing/output/store/05-themes.png" width="700" alt="Color themes in light and dark mode" />
+</p>
+
+<p align="center">
+  <img src="marketing/output/store/06-import.png" width="700" alt="Import from browsers, Raindrop and Pocket" />
+</p>
+
+Regenerate every store, promo and website image with `bun run screenshots`.
+`bun run video` records the walkthrough as an MP4 and a GIF into
+`marketing/output/videos/`, which stays out of git. Both need the website's
+packages for the brand fonts: run `bun install --cwd website` once first.
 
 ## Privacy
 

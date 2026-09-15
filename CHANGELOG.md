@@ -15,6 +15,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   shows only its name and bookmark count, is a single keyboard stop, and stays
   collapsed across sessions for that source. With Nested folders on, nested
   cards collapse on their own (#3).
+- **A native ARM64 daemon for Windows.** Releases now carry an
+  `aarch64-pc-windows-msvc` archive, and `install.ps1` picks the build for the
+  machine's architecture instead of always taking x64. On an ARM64 machine
+  installing a release from before this build existed, it falls back to the
+  x64 build, which Windows runs under emulation (#68).
+- **A vault's daemon-owned directory ignores itself in git.** `serve` writes
+  `<vault>/.bookmarks-but-better/.gitignore` when it takes the vault lock —
+  on a new vault and on one that predates this file — so a vault a user keeps
+  in a git repository as a backup never commits the lock file or staging
+  entries (#29).
 
 ### Fixed
 
@@ -24,6 +34,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and grid layouts flashed open or as lists, a toggle made in that moment was
   overwritten, and safe mode could apply only after the grid had already
   mounted (#3).
+- **Typing "d" on the dashboard only starts a search.** It used to also flip
+  between light and dark, because a single-letter D shortcut predated
+  type-ahead search. The shortcut and its hint in Settings > Appearance are
+  gone; light and dark are chosen in Settings.
 
 ## [4.3.0] - 2026-09-14
 

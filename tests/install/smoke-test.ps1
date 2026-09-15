@@ -21,9 +21,15 @@ $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $installPs1 = Join-Path $repoRoot "install.ps1"
 $repoSlug = "farhadeidi/bookmarks-but-better"
 $exe = "bookmarks-but-better"
-$target = "x86_64-pc-windows-msvc"
+$x64 = "x86_64-pc-windows-msvc"
+$arm64 = "aarch64-pc-windows-msvc"
+# The release most scenarios install. It carries the x64 build only, the shape
+# of every release from before the ARM64 build existed.
 $version = "4.0.0"
 $tag = "v$version"
+# A release carrying both Windows builds.
+$bothVersion = "4.1.0"
+$bothTag = "v$bothVersion"
 
 $pass = 0
 $fail = 0
@@ -50,38 +56,54 @@ function Stop-Fixture {
 
 try {
   # -------------------------------------------------------------------------
-  # The fake release: a real PE executable, because the whole point of this
+  # The fake releases: a real PE executable, because the whole point of this
   # test is what Windows does to an executable it has just run. A batch file
   # renamed to .exe would not be scanned, would not be locked, and would not
   # reproduce anything.
+  #
+  # Each archive also carries a TARGET file naming the build it is, which is
+  # how a scenario tells which of a release's builds was installed.
   # -------------------------------------------------------------------------
-  $serveDir = Join-Path $work "serve\$tag"
-  New-Item -ItemType Directory -Path $serveDir -Force | Out-Null
-
-  $archiveName = "$exe-$version-$target.zip"
+  $serveRoot = Join-Path $work "serve"
   $stagingRoot = Join-Path $work "staging"
-  $payload = Join-Path $stagingRoot "$exe-$version-$target"
-  New-Item -ItemType Directory -Path $payload -Force | Out-Null
 
-  Add-Type -OutputType ConsoleApplication -OutputAssembly (Join-Path $payload "$exe.exe") -TypeDefinition @"
-public class FakeDaemon {
+  function New-FakeRelease {
+    param([string]$ReleaseVersion, [string[]]$ReleaseTargets)
+    $serveDir = Join-Path $serveRoot "v$ReleaseVersion"
+    New-Item -ItemType Directory -Path $serveDir -Force | Out-Null
+    foreach ($releaseTarget in $ReleaseTargets) {
+      $archiveName = "$exe-$ReleaseVersion-$releaseTarget.zip"
+      $payload = Join-Path $stagingRoot "$exe-$ReleaseVersion-$releaseTarget"
+      New-Item -ItemType Directory -Path $payload -Force | Out-Null
+
+      # One class name per build, so no two compilations in this session
+      # define the same type.
+      $class = "FakeDaemon_" + ("$ReleaseVersion-$releaseTarget" -replace '[^A-Za-z0-9]', '_')
+      Add-Type -OutputType ConsoleApplication -OutputAssembly (Join-Path $payload "$exe.exe") -TypeDefinition @"
+public class $class {
   public static int Main(string[] args) {
     if (args.Length > 0 && args[0] == "--version") {
-      System.Console.WriteLine("bookmarks-but-better $version (smoke test)");
+      System.Console.WriteLine("bookmarks-but-better $ReleaseVersion (smoke test)");
       return 0;
     }
     return 1;
   }
 }
 "@
-  Set-Content -Path (Join-Path $payload "README.md") -Value "readme"
-  Set-Content -Path (Join-Path $payload "LICENSE") -Value "license"
+      Set-Content -Path (Join-Path $payload "README.md") -Value "readme"
+      Set-Content -Path (Join-Path $payload "LICENSE") -Value "license"
+      Set-Content -Path (Join-Path $payload "TARGET") -Value $releaseTarget
 
-  $archivePath = Join-Path $serveDir $archiveName
-  Compress-Archive -Path $payload -DestinationPath $archivePath -Force
-  $hash = (Get-FileHash -Path $archivePath -Algorithm SHA256).Hash.ToLowerInvariant()
-  # The sidecar shape install.ps1 parses: "<hash>  <filename>".
-  Set-Content -Path "$archivePath.sha256" -Value "$hash  $archiveName" -Encoding ascii
+      $archivePath = Join-Path $serveDir $archiveName
+      Compress-Archive -Path $payload -DestinationPath $archivePath -Force
+      $hash = (Get-FileHash -Path $archivePath -Algorithm SHA256).Hash.ToLowerInvariant()
+      # The sidecar shape install.ps1 parses: "<hash>  <filename>".
+      Set-Content -Path "$archivePath.sha256" -Value "$hash  $archiveName" -Encoding ascii
+    }
+  }
+
+  New-FakeRelease -ReleaseVersion $version -ReleaseTargets @($x64)
+  New-FakeRelease -ReleaseVersion $bothVersion -ReleaseTargets @($arm64, $x64)
 
   # -------------------------------------------------------------------------
   # The fake server. A raw TcpListener rather than HttpListener, which would
@@ -103,7 +125,7 @@ public class FakeDaemon {
         $reader = [IO.StreamReader]::new($stream)
         $requestLine = $reader.ReadLine()
         if (-not $requestLine) { continue }
-        $path = ($requestLine -split ' ')[1]
+        $method, $path = ($requestLine -split ' ')[0, 1]
         $body = $null
         if ($path.StartsWith($prefix)) {
           $rel = $path.Substring($prefix.Length) -replace '/', '\'
@@ -122,7 +144,9 @@ public class FakeDaemon {
         }
         $headBytes = [Text.Encoding]::ASCII.GetBytes($head)
         $stream.Write($headBytes, 0, $headBytes.Length)
-        if ($body.Length) { $stream.Write($body, 0, $body.Length) }
+        # A HEAD answer is the headers alone: install.ps1 probes which build a
+        # release carries that way before it downloads anything.
+        if ($body.Length -and $method -ne "HEAD") { $stream.Write($body, 0, $body.Length) }
         $stream.Flush()
       } finally {
         $client.Close()
@@ -143,19 +167,26 @@ public class FakeDaemon {
   }
   Assert-That $bound "fake release server accepts connections"
 
-  # Runs install.ps1 in its own process, so $env:TEMP can differ per scenario.
+  # Runs install.ps1 in its own process, so $env:TEMP -- and the architecture it
+  # detects -- can differ per scenario.
   function Invoke-Install {
-    param([string]$InstallDir, [string]$TempDir)
+    param([string]$InstallDir, [string]$TempDir, [string]$ReleaseTag = $tag, [string]$Arch = "")
     $psi = [Diagnostics.ProcessStartInfo]::new()
     $psi.FileName = (Get-Process -Id $PID).Path
     $psi.Arguments = "-NoProfile -ExecutionPolicy Bypass -File `"$installPs1`" " +
-      "-Version $tag -InstallDir `"$InstallDir`""
+      "-Version $ReleaseTag -InstallDir `"$InstallDir`""
     $psi.UseShellExecute = $false
     $psi.RedirectStandardOutput = $true
     $psi.RedirectStandardError = $true
     $psi.EnvironmentVariables["BOOKMARKS_BUT_BETTER_INSTALL_GITHUB_BASE"] = $base
     $psi.EnvironmentVariables["TEMP"] = $TempDir
     $psi.EnvironmentVariables["TMP"] = $TempDir
+    if ($Arch) {
+      # The runner is x64, so another machine's architecture is what the child
+      # process is told, exactly where install.ps1 reads it.
+      $psi.EnvironmentVariables["PROCESSOR_ARCHITECTURE"] = $Arch
+      $psi.EnvironmentVariables.Remove("PROCESSOR_ARCHITEW6432")
+    }
     $process = [Diagnostics.Process]::Start($psi)
     $stdout = $process.StandardOutput.ReadToEnd()
     $stderr = $process.StandardError.ReadToEnd()
@@ -167,18 +198,28 @@ public class FakeDaemon {
   }
 
   function Assert-InstallIsComplete {
-    param([string]$InstallDir, [string]$Label)
+    param(
+      [string]$InstallDir,
+      [string]$Label,
+      [string]$ExpectVersion = $version,
+      [string]$ExpectTarget = $x64
+    )
     $current = Join-Path $InstallDir "current"
     $installedExe = Join-Path $current "$exe.exe"
     Assert-That (Test-Path $installedExe) "$Label - current\$exe.exe exists"
     # Every file from the archive has to be there, not just the executable: a
     # half-copied version directory is the failure mode this guards against.
-    foreach ($name in @("README.md", "LICENSE")) {
+    foreach ($name in @("README.md", "LICENSE", "TARGET")) {
       Assert-That (Test-Path (Join-Path $current $name)) "$Label - current\$name exists"
     }
     if (Test-Path $installedExe) {
       $reported = (& $installedExe --version 2>&1) -join ""
-      Assert-That ($reported -match [regex]::Escape($version)) "$Label - installed exe reports $version"
+      Assert-That ($reported -match [regex]::Escape($ExpectVersion)) "$Label - installed exe reports $ExpectVersion"
+    }
+    $targetFile = Join-Path $current "TARGET"
+    if (Test-Path $targetFile) {
+      $installedTarget = (Get-Content -Path $targetFile -Raw).Trim()
+      Assert-That ($installedTarget -eq $ExpectTarget) "$Label - installed the $ExpectTarget build"
     }
   }
 
@@ -277,6 +318,34 @@ public class FakeDaemon {
     if ($result3.ExitCode -ne 0) { Write-Host $result3.Output }
     Assert-InstallIsComplete -InstallDir $installDir2 -Label "locked install"
   }
+
+  # -------------------------------------------------------------------------
+  # Scenario 3: issue #68. An ARM64 machine takes the native ARM64 build when a
+  # release carries one, and the x64 build -- which Windows runs under
+  # emulation -- when the release predates it.
+  # -------------------------------------------------------------------------
+  $tempDir3 = Join-Path $work "temp-arm64"
+  New-Item -ItemType Directory -Path $tempDir3 -Force | Out-Null
+
+  $installDir3 = Join-Path $work "install-arm64-native"
+  $result4 = Invoke-Install -InstallDir $installDir3 -TempDir $tempDir3 -ReleaseTag $bothTag -Arch "ARM64"
+  Assert-That ($result4.ExitCode -eq 0) "ARM64 install of a release with an ARM64 build exits 0"
+  if ($result4.ExitCode -ne 0) { Write-Host $result4.Output }
+  Assert-InstallIsComplete -InstallDir $installDir3 -Label "ARM64 native install" `
+    -ExpectVersion $bothVersion -ExpectTarget $arm64
+
+  $installDir4 = Join-Path $work "install-arm64-fallback"
+  $result5 = Invoke-Install -InstallDir $installDir4 -TempDir $tempDir3 -Arch "ARM64"
+  Assert-That ($result5.ExitCode -eq 0) "ARM64 install of an x64-only release exits 0"
+  if ($result5.ExitCode -ne 0) { Write-Host $result5.Output }
+  Assert-That ($result5.Output -match "under emulation") "ARM64 fallback says it installs the x64 build under emulation"
+  Assert-InstallIsComplete -InstallDir $installDir4 -Label "ARM64 fallback install" -ExpectTarget $x64
+
+  # An architecture no release is built for is refused before anything is
+  # downloaded, rather than installing an x64 build that cannot run.
+  $result6 = Invoke-Install -InstallDir (Join-Path $work "install-x86") -TempDir $tempDir3 -Arch "x86"
+  Assert-That ($result6.ExitCode -ne 0) "install on an unsupported architecture fails"
+  Assert-That ($result6.Output -match "unsupported architecture: x86") "the unsupported architecture is named"
 
   # -------------------------------------------------------------------------
   # install.ps1 has to stay ASCII. Windows PowerShell 5.1 reads a file with no

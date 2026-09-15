@@ -21,7 +21,7 @@ is the one manual publishing step, documented below.
 
 | You push        | You get                                                                                     | Stores                                       |
 | --------------- | ------------------------------------------------------------------------------------------- | -------------------------------------------- |
-| `v4.1.0-beta.N` | A GitHub **prerelease** with three extension zips, five daemon archives and both installers | **Never contacted.** The job does not exist. |
+| `v4.1.0-beta.N` | A GitHub **prerelease** with three extension zips, six daemon archives and both installers  | **Never contacted.** The job does not exist. |
 | `v4.1.0`        | A normal GitHub **Release** with the same artifacts                                         | After a maintainer approves the deployment.  |
 
 Both run the identical build and the identical test suite — the release workflow
@@ -255,7 +255,7 @@ Firefox, or you will fail again and stall Firefox a second time. If it is not
 listed, tick both. The job summary says this too, at the moment you need it.
 
 A dispatch run does not re-create the GitHub Release, which already exists. It
-does re-run the full CI suite and all five platform builds before it reaches the
+does re-run the full CI suite and all six platform builds before it reaches the
 store step, so **expect roughly 20–30 minutes** even though only one zip is being
 submitted. That is deliberate: the recovery path builds from the tag rather than
 trusting a stored artifact.
@@ -314,7 +314,7 @@ workflow**.
 
 ## The daemon archives
 
-Each release carries five, one per supported platform, each with a `.sha256`:
+Each release carries six, one per supported platform, each with a `.sha256`:
 
 | Target                      | Archive   |
 | --------------------------- | --------- |
@@ -323,6 +323,7 @@ Each release carries five, one per supported platform, each with a `.sha256`:
 | `x86_64-apple-darwin`       | `.tar.gz` |
 | `aarch64-apple-darwin`      | `.tar.gz` |
 | `x86_64-pc-windows-msvc`    | `.zip`    |
+| `aarch64-pc-windows-msvc`   | `.zip`    |
 
 Each unpacks to:
 
@@ -346,10 +347,10 @@ symlink" rule enforceable. The archive is therefore where the UI is bundled, and
 `--ui-dir ./ui` is what connects the two. Without it the daemon serves the API
 only, which is a supported way to run it.
 
-The Linux `aarch64` build is cross-compiled and, like both macOS targets, is
-built rather than tested by the release workflow. That is deliberate: `ci.yml`
-already ran the full Rust suite natively on Linux, macOS and Windows before the
-release job started.
+The Linux and Windows `aarch64` builds are cross-compiled and, like both macOS
+targets, are built rather than tested by the release workflow. That is
+deliberate: `ci.yml` already ran the full Rust suite natively on Linux, macOS
+and Windows before the release job started.
 
 ### The macOS and Windows binaries are unsigned
 

@@ -180,11 +180,7 @@ export function AppearancePanel() {
           ))}
         </RadioGroup>
         <p className="text-xs text-muted-foreground">
-          Applies to this browser profile on every source. Press{" "}
-          <kbd className="rounded border border-border/60 bg-muted px-1 font-mono text-[11px]">
-            D
-          </kbd>{" "}
-          on the dashboard to flip between light and dark.
+          Applies to this browser profile on every source.
         </p>
       </SettingSection>
 
