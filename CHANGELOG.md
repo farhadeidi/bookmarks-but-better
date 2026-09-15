@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Typing "d" on the dashboard only starts a search.** It used to also flip
+  between light and dark, because a single-letter D shortcut predated
+  type-ahead search. The shortcut and its hint in Settings > Appearance are
+  gone; light and dark are chosen in Settings.
+
 ## [4.3.0] - 2026-09-14
 
 ### Added
