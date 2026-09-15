@@ -1,4 +1,5 @@
 import type { BookmarkNode } from "@/browser"
+import type { FolderDisplay } from "@/stores/preferences-store"
 import { buildChildOrderForBookmarkReorder } from "@/features/dnd"
 
 /**
@@ -18,6 +19,7 @@ import { buildChildOrderForBookmarkReorder } from "@/features/dnd"
 export type GridNavigationItem =
   | { kind: "folder"; id: string }
   | { kind: "bookmark"; id: string; folderId: string }
+  | { kind: "folder-tile"; id: string }
 
 export interface GridPosition {
   column: number
@@ -26,12 +28,13 @@ export interface GridPosition {
 
 /**
  * The items one card contributes, in the order `BookmarkCard` paints them:
- * its heading, then its direct bookmarks, then — in nested mode only — each
- * sub-folder card in full.
+ * its heading, then its direct bookmarks, then its subfolders — each one's
+ * card in full in the nested display, one folder tile each in the tiles
+ * display, and nothing in the flat one, where they are cards of their own.
  */
 export function collectCardItems(
   folder: BookmarkNode,
-  nestedFolders: boolean
+  folderDisplay: FolderDisplay
 ): GridNavigationItem[] {
   const children = folder.children ?? []
   const items: GridNavigationItem[] = [{ kind: "folder", id: folder.id }]
@@ -42,10 +45,13 @@ export function collectCardItems(
     }
   }
 
-  if (nestedFolders) {
+  if (folderDisplay !== "flat") {
     for (const child of children) {
-      if (child.url === undefined && child.children !== undefined) {
-        items.push(...collectCardItems(child, nestedFolders))
+      if (child.url !== undefined || child.children === undefined) continue
+      if (folderDisplay === "nested") {
+        items.push(...collectCardItems(child, folderDisplay))
+      } else {
+        items.push({ kind: "folder-tile", id: child.id })
       }
     }
   }
@@ -56,10 +62,10 @@ export function collectCardItems(
 /** Flattens each rendered column into the sequence Up/Down walks. */
 export function buildNavigationColumns(
   columns: BookmarkNode[][],
-  nestedFolders: boolean
+  folderDisplay: FolderDisplay
 ): GridNavigationItem[][] {
   return columns.map((column) =>
-    column.flatMap((folder) => collectCardItems(folder, nestedFolders))
+    column.flatMap((folder) => collectCardItems(folder, folderDisplay))
   )
 }
 

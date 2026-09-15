@@ -1,5 +1,6 @@
 import * as React from "react"
 import type { BookmarkNode } from "@/browser"
+import type { FolderDisplay } from "@/stores/preferences-store"
 import { collectCardItems } from "./grid-navigation"
 import { GridNavigationContext, NO_SUBSCRIPTION } from "./use-grid-navigation"
 import { LazyCardsContext } from "./lazy-cards-gate"
@@ -126,7 +127,7 @@ function observeNear(element: Element, onNear: OnNear): () => void {
 
 interface LazyCardProps {
   folder: BookmarkNode
-  nestedFolders: boolean
+  folderDisplay: FolderDisplay
   /** The card's height before it has ever been rendered. */
   estimatedHeight: number
   /**
@@ -139,7 +140,7 @@ interface LazyCardProps {
 
 export function LazyCard({
   folder,
-  nestedFolders,
+  folderDisplay,
   estimatedHeight,
   measureRef,
   children,
@@ -155,7 +156,7 @@ export function LazyCard({
   return (
     <GatedCard
       folder={folder}
-      nestedFolders={nestedFolders}
+      folderDisplay={folderDisplay}
       estimatedHeight={estimatedHeight}
       measureRef={measureRef}
     >
@@ -166,7 +167,7 @@ export function LazyCard({
 
 function GatedCard({
   folder,
-  nestedFolders,
+  folderDisplay,
   estimatedHeight,
   measureRef,
   children,
@@ -174,8 +175,8 @@ function GatedCard({
   const navigation = React.useContext(GridNavigationContext)
 
   const itemIds = React.useMemo(
-    () => new Set(collectCardItems(folder, nestedFolders).map((i) => i.id)),
-    [folder, nestedFolders]
+    () => new Set(collectCardItems(folder, folderDisplay).map((i) => i.id)),
+    [folder, folderDisplay]
   )
   const holdsActiveItem = React.useSyncExternalStore(
     navigation?.subscribe ?? NO_SUBSCRIPTION,

@@ -26,7 +26,11 @@ import { useFolderDropTarget } from "@/features/dnd"
 import { useGridItem } from "@/features/bookmark-grid/use-grid-navigation"
 import { LazyCard } from "@/features/bookmark-grid/lazy-card"
 import { estimateCardHeight } from "@/features/bookmark-grid/card-heights"
-import { usePreferencesStore } from "@/stores/preferences-store"
+import {
+  selectFolderDisplay,
+  usePreferencesStore,
+} from "@/stores/preferences-store"
+import { FolderTile } from "./folder-tile"
 import { useBookmarkStore } from "@/stores/bookmark-store"
 import { useUIStore } from "@/stores/ui-store"
 import type { BookmarkNode } from "@/browser"
@@ -175,7 +179,7 @@ export const BookmarkCard = React.memo(function BookmarkCard({
   const layout = usePreferencesStore((s) => s.cardLayouts[folder.id] ?? "list")
   const cardLayouts = usePreferencesStore((s) => s.cardLayouts)
   const setCardLayout = usePreferencesStore((s) => s.setCardLayout)
-  const nestedFolders = usePreferencesStore((s) => s.nestedFolders)
+  const folderDisplay = usePreferencesStore(selectFolderDisplay)
   const adapter = useBookmarkStore((s) => s.adapter)
   // Dropping a bookmark onto a folder card moves it there (cross-folder),
   // which the daemon allows — this isn't a same-parent reorder.
@@ -269,13 +273,22 @@ export const BookmarkCard = React.memo(function BookmarkCard({
         </div>
       )}
 
+      {/* Subfolders as tiles that open them (tiles display only) */}
+      {folderDisplay === "tiles" && subfolders.length > 0 && (
+        <div className="flex flex-col">
+          {subfolders.map((subfolder) => (
+            <FolderTile key={subfolder.id} folder={subfolder} />
+          ))}
+        </div>
+      )}
+
       {/* Nested subfolders (only in nested mode) */}
-      {nestedFolders &&
+      {folderDisplay === "nested" &&
         subfolders.map((subfolder) => (
           <LazyCard
             key={subfolder.id}
             folder={subfolder}
-            nestedFolders
+            folderDisplay={folderDisplay}
             estimatedHeight={estimateCardHeight(subfolder, cardLayouts)}
           >
             <BookmarkCard folder={subfolder} nested />

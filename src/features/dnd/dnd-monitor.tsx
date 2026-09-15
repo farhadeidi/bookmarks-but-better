@@ -3,7 +3,10 @@ import { monitorForElements } from "@atlaskit/pragmatic-drag-and-drop/element/ad
 import { extractClosestEdge } from "@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge"
 import { getReorderDestinationIndex } from "@atlaskit/pragmatic-drag-and-drop-hitbox/util/get-reorder-destination-index"
 import { useBookmarkStore } from "@/stores/bookmark-store"
-import { usePreferencesStore } from "@/stores/preferences-store"
+import {
+  selectFolderDisplay,
+  usePreferencesStore,
+} from "@/stores/preferences-store"
 import {
   DND_TYPE,
   type BookmarkDragData,
@@ -16,6 +19,7 @@ import {
 } from "./move-operations"
 import {
   collectAllFolders,
+  findBrowsePath,
   findNodeById,
   getDisplayRoot,
 } from "@/lib/bookmark-utils"
@@ -38,7 +42,8 @@ export function DndMonitor() {
       (s.adapter?.capabilities.setChildOrder ?? false) &&
       s.adapter?.bookmarks.setChildOrder !== undefined
   )
-  const nestedFolders = usePreferencesStore((s) => s.nestedFolders)
+  const browsedFolderId = useBookmarkStore((s) => s.browsedFolderId)
+  const folderDisplay = usePreferencesStore(selectFolderDisplay)
   const folderOrder = usePreferencesStore((s) => s.folderOrder)
   const setFolderOrder = usePreferencesStore((s) => s.setFolderOrder)
 
@@ -184,15 +189,24 @@ export function DndMonitor() {
 
       if (destinationIndex === sourceData.index) return
 
-      // Get the current effective folder list
-      const displayRoot = getDisplayRoot(rootFolder, tree)
-      if (!displayRoot) return
+      // Get the current effective folder list — the grid's, which draws from
+      // the folder a folder tile opened whenever one is open.
+      const baseRoot = getDisplayRoot(rootFolder, tree)
+      if (!baseRoot) return
+      const browsePath =
+        folderDisplay === "tiles"
+          ? findBrowsePath(baseRoot, browsedFolderId)
+          : null
+      const displayRoot = browsePath
+        ? browsePath[browsePath.length - 1]
+        : baseRoot
 
-      const rawFolders = nestedFolders
-        ? (displayRoot.children ?? []).filter(
-            (c) => c.url === undefined && c.children !== undefined
-          )
-        : collectAllFolders(displayRoot)
+      const rawFolders =
+        folderDisplay === "flat"
+          ? collectAllFolders(displayRoot)
+          : (displayRoot.children ?? []).filter(
+              (c) => c.url === undefined && c.children !== undefined
+            )
 
       const sorted = sortFoldersByOrder(rawFolders, folderOrder)
       const currentIds = sorted.map((f) => f.id)
@@ -212,7 +226,8 @@ export function DndMonitor() {
     moveEnabled,
     reorderEnabled,
     setChildOrderEnabled,
-    nestedFolders,
+    browsedFolderId,
+    folderDisplay,
     folderOrder,
     setFolderOrder,
   ])

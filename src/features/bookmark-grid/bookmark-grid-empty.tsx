@@ -2,11 +2,22 @@ import * as React from "react"
 import { HugeiconsIcon } from "@hugeicons/react"
 import { Bookmark02Icon, Folder01Icon } from "@hugeicons/core-free-icons"
 import { Button } from "@/components/ui/button"
+import type { BookmarkNode } from "@/browser"
 import { useBookmarkStore } from "@/stores/bookmark-store"
 import { useUIStore } from "@/stores/ui-store"
 import { resolveCreateParentId } from "@/features/root-folder-select"
 
-export function BookmarkGridEmpty() {
+interface BookmarkGridEmptyProps {
+  /**
+   * An empty folder opened from a folder tile. It is what the grid is
+   * showing, so it is also where anything created from here belongs.
+   */
+  openFolder?: BookmarkNode | null
+}
+
+export function BookmarkGridEmpty({
+  openFolder = null,
+}: BookmarkGridEmptyProps) {
   const rootFolderId = useBookmarkStore((s) => s.rootFolderId)
   const tree = useBookmarkStore((s) => s.tree)
   const adapter = useBookmarkStore((s) => s.adapter)
@@ -16,17 +27,20 @@ export function BookmarkGridEmpty() {
 
   const createParentId = React.useMemo(
     () =>
+      openFolder?.id ??
       resolveCreateParentId(
         tree,
         rootFolderId,
         adapter?.capabilities.rootIsCreatable ?? false
       ),
-    [rootFolderId, tree, adapter]
+    [openFolder, rootFolderId, tree, adapter]
   )
 
   return (
     <div className="mx-auto flex max-w-md flex-col items-center gap-3 rounded-lg border border-dashed border-border/70 p-12 text-center">
-      <h2 className="font-medium text-foreground">No bookmarks yet</h2>
+      <h2 className="font-medium text-foreground">
+        {openFolder ? "This folder is empty" : "No bookmarks yet"}
+      </h2>
 
       {createParentId ? (
         <>

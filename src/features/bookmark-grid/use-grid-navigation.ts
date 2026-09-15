@@ -1,6 +1,7 @@
 import * as React from "react"
 import type { BookmarkNode } from "@/browser"
 import { useBookmarkStore } from "@/stores/bookmark-store"
+import type { FolderDisplay } from "@/stores/preferences-store"
 import { findNodeById } from "@/lib/bookmark-utils"
 import {
   buildNavigationColumns,
@@ -82,15 +83,15 @@ export function useGridItem(id: string): GridItemProps {
 interface GridNavigationOptions {
   /** The cards as `distributeToColumns` laid them out, i.e. in visual order. */
   columns: BookmarkNode[][]
-  nestedFolders: boolean
+  folderDisplay: FolderDisplay
 }
 
 export function useGridNavigation(options: GridNavigationOptions) {
-  const { columns, nestedFolders } = options
+  const { columns, folderDisplay } = options
 
   const navigationColumns = React.useMemo(
-    () => buildNavigationColumns(columns, nestedFolders),
-    [columns, nestedFolders]
+    () => buildNavigationColumns(columns, folderDisplay),
+    [columns, folderDisplay]
   )
 
   const tree = useBookmarkStore((s) => s.tree)
@@ -242,9 +243,9 @@ export function useGridNavigation(options: GridNavigationOptions) {
           return
         }
 
-        // Enter is deliberately absent: a bookmark row is an `<a href>`, so
-        // opening it is the browser's own default, and claiming the key here
-        // would only reimplement it.
+        // Enter is deliberately absent: a bookmark row is an `<a href>` and a
+        // folder tile a `<button>`, so opening either is the browser's own
+        // default, and claiming the key here would only reimplement it.
         const targetId = resolveNavigationTarget({
           columns: state.navigationColumns,
           activeId: id,

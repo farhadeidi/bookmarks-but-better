@@ -88,12 +88,15 @@ describe("usePreferencesStore lifetimes", () => {
 
     usePreferencesStore.getState().setMaxColumns(5)
     usePreferencesStore.getState().setNestedFolders(true)
+    usePreferencesStore.getState().setFolderTiles(true)
 
     const profile = new ProfileStorageAdapter()
     expect(await profile.get("maxColumns")).toBe(5)
     expect(await profile.get("nestedFolders")).toBe(true)
+    expect(await profile.get("folderTiles")).toBe(true)
     expect(sourceBacking.has("maxColumns")).toBe(false)
     expect(sourceBacking.has("nestedFolders")).toBe(false)
+    expect(sourceBacking.has("folderTiles")).toBe(false)
   })
 
   it("source-scoped keys stay with the source they were read from", async () => {

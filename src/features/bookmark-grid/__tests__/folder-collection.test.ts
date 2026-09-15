@@ -21,7 +21,7 @@ describe("getVisibleFolders", () => {
     expect(
       getVisibleFolders({
         displayRoot: tree,
-        nestedFolders: false,
+        folderDisplay: "flat",
         experimentalCardDrag: false,
         folderOrder: ["c", "a"],
         isTreeRoot: true,
@@ -33,12 +33,26 @@ describe("getVisibleFolders", () => {
     expect(
       getVisibleFolders({
         displayRoot: tree,
-        nestedFolders: false,
+        folderDisplay: "flat",
         experimentalCardDrag: true,
         folderOrder: ["c", "a"],
         isTreeRoot: true,
       }).map((folder) => folder.id)
     ).toEqual(["c", "a", "b", "d"])
+  })
+
+  it("gives only the direct subfolders a card with folder tiles, as nesting does", () => {
+    // Deeper folders are drawn inside those cards — as tiles, here — so
+    // lifting them to cards of their own would draw them twice.
+    expect(
+      getVisibleFolders({
+        displayRoot: tree,
+        folderDisplay: "tiles",
+        experimentalCardDrag: false,
+        folderOrder: [],
+        isTreeRoot: true,
+      }).map((folder) => folder.id)
+    ).toEqual(["a", "b", "c"])
   })
 
   describe("when the display root itself has direct bookmarks", () => {
@@ -68,7 +82,7 @@ describe("getVisibleFolders", () => {
     it("renders a bookmarks-only root as a single root card (nested on)", () => {
       const folders = getVisibleFolders({
         displayRoot: bookmarksOnlyRoot,
-        nestedFolders: true,
+        folderDisplay: "nested",
         experimentalCardDrag: false,
         folderOrder: [],
         isTreeRoot: false,
@@ -81,7 +95,7 @@ describe("getVisibleFolders", () => {
     it("renders a bookmarks-only root as a single root card (nested off)", () => {
       const folders = getVisibleFolders({
         displayRoot: bookmarksOnlyRoot,
-        nestedFolders: false,
+        folderDisplay: "flat",
         experimentalCardDrag: false,
         folderOrder: [],
         isTreeRoot: false,
@@ -93,7 +107,7 @@ describe("getVisibleFolders", () => {
     it("puts a mixed root's own bookmarks in a root card, followed by direct subfolders (nested on)", () => {
       const folders = getVisibleFolders({
         displayRoot: mixedRoot,
-        nestedFolders: true,
+        folderDisplay: "nested",
         experimentalCardDrag: false,
         folderOrder: [],
         isTreeRoot: false,
@@ -107,7 +121,7 @@ describe("getVisibleFolders", () => {
     it("puts a mixed root's own bookmarks in a root card, followed by all descendant folders (nested off)", () => {
       const folders = getVisibleFolders({
         displayRoot: mixedRoot,
-        nestedFolders: false,
+        folderDisplay: "flat",
         experimentalCardDrag: false,
         folderOrder: [],
         isTreeRoot: false,
@@ -116,10 +130,22 @@ describe("getVisibleFolders", () => {
       expect(folders[0].children?.map((c) => c.id)).toEqual(["bm1"])
     })
 
+    it("puts a mixed root's own bookmarks in a root card, followed by direct subfolders (folder tiles)", () => {
+      const folders = getVisibleFolders({
+        displayRoot: mixedRoot,
+        folderDisplay: "tiles",
+        experimentalCardDrag: false,
+        folderOrder: [],
+        isTreeRoot: false,
+      })
+      expect(folders.map((f) => f.id)).toEqual(["root", "a", "c"])
+      expect(folders[0].children?.map((c) => c.id)).toEqual(["bm1"])
+    })
+
     it("titles a user-picked root folder's card with the folder's own name", () => {
       const folders = getVisibleFolders({
         displayRoot: bookmarksOnlyRoot,
-        nestedFolders: true,
+        folderDisplay: "nested",
         experimentalCardDrag: false,
         folderOrder: [],
         isTreeRoot: false,
@@ -135,7 +161,7 @@ describe("getVisibleFolders", () => {
       const vaultRoot: BookmarkNode = { ...bookmarksOnlyRoot, title: "reading" }
       const folders = getVisibleFolders({
         displayRoot: vaultRoot,
-        nestedFolders: true,
+        folderDisplay: "nested",
         experimentalCardDrag: false,
         folderOrder: [],
         isTreeRoot: true,
@@ -149,7 +175,7 @@ describe("getVisibleFolders", () => {
       expect(
         getVisibleFolders({
           displayRoot: tree,
-          nestedFolders: true,
+          folderDisplay: "nested",
           experimentalCardDrag: false,
           folderOrder: [],
           isTreeRoot: true,
@@ -161,7 +187,7 @@ describe("getVisibleFolders", () => {
       expect(
         getVisibleFolders({
           displayRoot: tree,
-          nestedFolders: false,
+          folderDisplay: "flat",
           experimentalCardDrag: false,
           folderOrder: [],
           isTreeRoot: true,

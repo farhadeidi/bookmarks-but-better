@@ -1,9 +1,13 @@
 import * as React from "react"
 import { useBookmarkStore } from "@/stores/bookmark-store"
-import { usePreferencesStore } from "@/stores/preferences-store"
+import {
+  selectFolderDisplay,
+  usePreferencesStore,
+} from "@/stores/preferences-store"
 import { BookmarkCard } from "@/features/bookmark-card"
 import { useSortableFolder, DropIndicator } from "@/features/dnd"
 import type { BookmarkNode } from "@/browser"
+import { findBrowsePath, getDisplayRoot } from "@/lib/bookmark-utils"
 import { cn } from "@/lib/utils"
 import { getVisibleFolders } from "./folder-collection"
 import {
@@ -14,6 +18,7 @@ import {
 import { LazyCard } from "./lazy-card"
 import { LazyCardsContext, shouldGateCards } from "./lazy-cards-gate"
 import { BookmarkGridEmpty } from "./bookmark-grid-empty"
+import { FolderBreadcrumb } from "./folder-breadcrumb"
 import { GridNavigationContext, useGridNavigation } from "./use-grid-navigation"
 
 function getColumnCountForWidth(): number {
@@ -78,6 +83,7 @@ export function BookmarkGrid() {
   const rootFolder = useBookmarkStore((s) => s.rootFolder)
   const tree = useBookmarkStore((s) => s.tree)
   const isLoading = useBookmarkStore((s) => s.isLoading)
+  const browsedFolderId = useBookmarkStore((s) => s.browsedFolderId)
   // Either capability means the adapter can express an order, which is all a
   // folder-card drag needs — the card order itself is a client-local
   // preference, never written through an adapter.
@@ -86,7 +92,7 @@ export function BookmarkGrid() {
       (s.adapter?.capabilities.reorder ?? true) ||
       (s.adapter?.capabilities.setChildOrder ?? false)
   )
-  const nestedFolders = usePreferencesStore((s) => s.nestedFolders)
+  const folderDisplay = usePreferencesStore(selectFolderDisplay)
   const maxColumns = usePreferencesStore((s) => s.maxColumns)
   const containerMode = usePreferencesStore((s) => s.containerMode)
   const cardLayouts = usePreferencesStore((s) => s.cardLayouts)
@@ -95,24 +101,37 @@ export function BookmarkGrid() {
     usePreferencesStore((s) => s.experimentalCardDrag) && canOrder
 
   const columnCount = useColumnCount(maxColumns)
-  const displayRoot = rootFolder ?? (tree.length > 0 ? tree[0] : null)
+  const baseRoot = getDisplayRoot(rootFolder, tree)
+
+  // Only folder tiles open folders. The other displays keep drawing from the
+  // root even while a folder opened earlier is still remembered.
+  const browsePath = React.useMemo(
+    () =>
+      baseRoot && folderDisplay === "tiles"
+        ? findBrowsePath(baseRoot, browsedFolderId)
+        : null,
+    [baseRoot, folderDisplay, browsedFolderId]
+  )
+  const openFolder = browsePath ? browsePath[browsePath.length - 1] : null
+  const displayRoot = openFolder ?? baseRoot
 
   const folders = React.useMemo(() => {
     if (!displayRoot) return []
 
     return getVisibleFolders({
       displayRoot,
-      nestedFolders,
+      folderDisplay,
       experimentalCardDrag,
       folderOrder,
-      isTreeRoot: rootFolder === null,
+      isTreeRoot: rootFolder === null && openFolder === null,
     })
   }, [
     displayRoot,
-    nestedFolders,
+    folderDisplay,
     experimentalCardDrag,
     folderOrder,
     rootFolder,
+    openFolder,
   ])
 
   const gateCards = React.useMemo(
@@ -142,7 +161,7 @@ export function BookmarkGrid() {
   // the layout is.
   const { navigation, containerProps } = useGridNavigation({
     columns,
-    nestedFolders,
+    folderDisplay,
   })
 
   if (isLoading) {
@@ -153,55 +172,69 @@ export function BookmarkGrid() {
     )
   }
 
-  if (folders.length === 0) {
+  if (folders.length === 0 && !browsePath) {
     return <BookmarkGridEmpty />
   }
 
   return (
     <div
       className={cn(
-        "w-full min-w-0",
+        "flex w-full min-w-0 flex-col gap-4",
         containerMode === "contained" && "mx-auto max-w-[1440px]"
       )}
     >
-      <GridNavigationContext value={navigation}>
-        <LazyCardsContext value={gateCards}>
-          <div
-            {...containerProps}
-            className="grid w-full min-w-0 items-start gap-4"
-            style={{
-              gridTemplateColumns: `repeat(${columnCount}, minmax(0, 1fr))`,
-            }}
-          >
-            {columns.map((columnFolders, colIndex) => (
-              <div key={colIndex} className="flex min-w-0 flex-col gap-4">
-                {columnFolders.map((folder) => (
-                  // The lazy wrapper is what the ResizeObserver watches: it is
-                  // the only element that exists in both the draggable and
-                  // plain variants, and it is only measured while the card is
-                  // real rather than a placeholder.
-                  <LazyCard
-                    key={folder.id}
-                    folder={folder}
-                    nestedFolders={nestedFolders}
-                    estimatedHeight={estimateCardHeight(folder, cardLayouts)}
-                    measureRef={measureRefs.get(folder.id)}
-                  >
-                    {experimentalCardDrag ? (
-                      <SortableFolderCard
-                        folder={folder}
-                        sortableIndex={folderIndexMap.get(folder.id) ?? 0}
-                      />
-                    ) : (
-                      <BookmarkCard folder={folder} />
-                    )}
-                  </LazyCard>
-                ))}
-              </div>
-            ))}
-          </div>
-        </LazyCardsContext>
-      </GridNavigationContext>
+      {browsePath && (
+        // The source's own root has no name a person gave it, so the first
+        // step reads the way the filter bar's root folder control does.
+        <FolderBreadcrumb
+          path={browsePath}
+          rootLabel={rootFolder?.title ?? "All bookmarks"}
+        />
+      )}
+      {folders.length === 0 ? (
+        // An empty folder opened from a tile still needs the breadcrumb above
+        // it: without one there would be no way back out.
+        <BookmarkGridEmpty openFolder={openFolder} />
+      ) : (
+        <GridNavigationContext value={navigation}>
+          <LazyCardsContext value={gateCards}>
+            <div
+              {...containerProps}
+              className="grid w-full min-w-0 items-start gap-4"
+              style={{
+                gridTemplateColumns: `repeat(${columnCount}, minmax(0, 1fr))`,
+              }}
+            >
+              {columns.map((columnFolders, colIndex) => (
+                <div key={colIndex} className="flex min-w-0 flex-col gap-4">
+                  {columnFolders.map((folder) => (
+                    // The lazy wrapper is what the ResizeObserver watches: it
+                    // is the only element that exists in both the draggable
+                    // and plain variants, and it is only measured while the
+                    // card is real rather than a placeholder.
+                    <LazyCard
+                      key={folder.id}
+                      folder={folder}
+                      folderDisplay={folderDisplay}
+                      estimatedHeight={estimateCardHeight(folder, cardLayouts)}
+                      measureRef={measureRefs.get(folder.id)}
+                    >
+                      {experimentalCardDrag ? (
+                        <SortableFolderCard
+                          folder={folder}
+                          sortableIndex={folderIndexMap.get(folder.id) ?? 0}
+                        />
+                      ) : (
+                        <BookmarkCard folder={folder} />
+                      )}
+                    </LazyCard>
+                  ))}
+                </div>
+              ))}
+            </div>
+          </LazyCardsContext>
+        </GridNavigationContext>
+      )}
     </div>
   )
 }
