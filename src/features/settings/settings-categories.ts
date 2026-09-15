@@ -65,6 +65,7 @@ export const SETTING_HOMES: Record<string, SettingsCategoryId> = {
   containerMode: "appearance",
   rootFolderId: "sources",
   nestedFolders: "sources",
+  folderTiles: "sources",
   // Data & Migration
   importBookmarks: "data-migration",
   exportBookmarks: "data-migration",

@@ -8,6 +8,7 @@
     "b262": "grid"
   },
   "nestedFolders": false,
+  "folderTiles": false,
   "colorTheme": "default",
   "maxColumns": 4,
   "containerMode": "contained",

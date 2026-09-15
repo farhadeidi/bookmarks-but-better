@@ -44,6 +44,7 @@ describe("settings categorization", () => {
     // Bookmarks.
     expect(homes.has("rootFolderId")).toBe(true)
     expect(homes.has("nestedFolders")).toBe(true)
+    expect(homes.has("folderTiles")).toBe(true)
     // Data & Migration.
     expect(homes.has("importBookmarks")).toBe(true)
     expect(homes.has("exportBookmarks")).toBe(true)

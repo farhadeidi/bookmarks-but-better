@@ -52,6 +52,28 @@ export function getDisplayRoot(
   return rootFolder ?? (tree.length > 0 ? tree[0] : null)
 }
 
+/**
+ * The folders from the display root down to the folder a folder tile opened,
+ * both ends included, or `null` when nothing below the root is open. An id
+ * that no longer names a folder under this root — deleted, moved out, left
+ * over from another root — is nothing open rather than an error, so the
+ * dashboard falls back to the root instead of drawing a stale folder.
+ */
+export function findBrowsePath(
+  displayRoot: BookmarkNode,
+  browsedFolderId: string | null
+): BookmarkNode[] | null {
+  if (browsedFolderId === null || browsedFolderId === displayRoot.id) {
+    return null
+  }
+  const path = findNodePath([displayRoot], browsedFolderId)
+  const folder = path?.[path.length - 1]
+  if (!folder || folder.url !== undefined || folder.children === undefined) {
+    return null
+  }
+  return path
+}
+
 export function describeReadOnly(node: {
   readOnly?: boolean
   diagnostics?: { detail: string }[]

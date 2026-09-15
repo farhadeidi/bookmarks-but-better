@@ -9,6 +9,13 @@ import {
 type CardLayout = "list" | "grid"
 export type ColorTheme = ColorThemeId
 
+/**
+ * How the dashboard draws a folder's subfolders: lifted into cards of their
+ * own (`flat`), drawn in full inside their parent's card (`nested`), or as one
+ * folder tile each that opens the folder (`tiles`).
+ */
+export type FolderDisplay = "flat" | "nested" | "tiles"
+
 export const COLOR_THEMES: ColorTheme[] = [...COLOR_THEME_IDS]
 
 interface PreferencesState {
@@ -19,6 +26,12 @@ interface PreferencesState {
   // Profile-wide: this browser profile's look and feel, independent of the
   // active source. Stored in the fixed profile namespace.
   nestedFolders: boolean
+  /**
+   * Folder tiles (#72): a card lists each subfolder as a tile that opens it
+   * instead of the subfolder's contents. While on it wins over
+   * `nestedFolders`, which keeps its own value for when tiles are turned off.
+   */
+  folderTiles: boolean
   colorTheme: ColorTheme
   maxColumns: number
   containerMode: "fluid" | "contained"
@@ -40,6 +53,7 @@ interface PreferencesState {
   ): Promise<void>
   setCardLayout(folderId: string, layout: CardLayout): void
   setNestedFolders(value: boolean): void
+  setFolderTiles(value: boolean): void
   setColorTheme(theme: ColorTheme): void
   setMaxColumns(value: number): void
   setContainerMode(mode: "fluid" | "contained"): void
@@ -56,6 +70,7 @@ const profileStorage = new ProfileStorageAdapter()
 export const usePreferencesStore = create<PreferencesState>((set, get) => ({
   cardLayouts: {},
   nestedFolders: false,
+  folderTiles: false,
   colorTheme: "default",
   maxColumns: 4,
   containerMode: "contained",
@@ -75,6 +90,7 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
     const [
       cardLayouts,
       nestedFolders,
+      folderTiles,
       colorTheme,
       maxColumns,
       containerMode,
@@ -85,6 +101,7 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
     ] = await Promise.all([
       adapter.storage.get<Record<string, CardLayout>>("cardLayouts"),
       readProfilePreference<boolean>("nestedFolders", adapter.storage),
+      readProfilePreference<boolean>("folderTiles", adapter.storage),
       readProfilePreference<ColorTheme>("colorTheme", adapter.storage),
       readProfilePreference<number>("maxColumns", adapter.storage),
       readProfilePreference<"fluid" | "contained">(
@@ -108,6 +125,7 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
     const isFreshState =
       cardLayouts === null &&
       nestedFolders === null &&
+      folderTiles === null &&
       colorTheme === null &&
       maxColumns === null &&
       containerMode === null &&
@@ -141,6 +159,10 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
       nestedFolders:
         nestedFolders ??
         (seedPrefDefaults?.nestedFolders as boolean | undefined) ??
+        false,
+      folderTiles:
+        folderTiles ??
+        (seedPrefDefaults?.folderTiles as boolean | undefined) ??
         false,
       colorTheme: resolvedColorTheme,
       maxColumns: Math.max(
@@ -192,6 +214,11 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
     void profileStorage.set("nestedFolders", value)
   },
 
+  setFolderTiles(value: boolean) {
+    set({ folderTiles: value })
+    void profileStorage.set("folderTiles", value)
+  },
+
   setColorTheme(theme: ColorTheme) {
     set({ colorTheme: theme })
     void profileStorage.set("colorTheme", theme)
@@ -229,6 +256,14 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
     await profileStorage.set("safeMode", value)
   },
 }))
+
+/** The one folder display the two preferences add up to; tiles win. */
+export function selectFolderDisplay(
+  state: Pick<PreferencesState, "nestedFolders" | "folderTiles">
+): FolderDisplay {
+  if (state.folderTiles) return "tiles"
+  return state.nestedFolders ? "nested" : "flat"
+}
 
 function applyColorTheme(theme: ColorTheme) {
   const root = document.documentElement

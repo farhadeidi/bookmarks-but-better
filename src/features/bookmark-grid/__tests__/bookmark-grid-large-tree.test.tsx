@@ -75,25 +75,25 @@ function fastest(runs: number, work: () => void): number {
 }
 
 describe("BookmarkGrid with a 10,000-bookmark tree", () => {
-  it.each([false, true])(
-    "keeps the layout pass within budget (nested folders: %s)",
-    (nestedFolders) => {
+  it.each(["flat", "nested", "tiles"] as const)(
+    "keeps the layout pass within budget (folder display: %s)",
+    (folderDisplay) => {
       let folders: BookmarkNode[] = []
       const elapsed = fastest(5, () => {
         folders = getVisibleFolders({
           displayRoot: ROOT,
-          nestedFolders,
+          folderDisplay,
           experimentalCardDrag: true,
           folderOrder: [],
           isTreeRoot: true,
         })
         shouldGateCards(ROOT)
         const columns = distributeToColumns(folders, 6, {}, new Map())
-        buildNavigationColumns(columns, nestedFolders)
+        buildNavigationColumns(columns, folderDisplay)
       })
 
       // Flattened, every folder is a card: the 300 generated plus the bar.
-      expect(folders).toHaveLength(nestedFolders ? 1 : 301)
+      expect(folders).toHaveLength(folderDisplay === "flat" ? 301 : 1)
       expect(shouldGateCards(ROOT)).toBe(true)
       expect(elapsed).toBeLessThan(100)
     }

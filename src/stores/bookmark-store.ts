@@ -106,6 +106,13 @@ async function loadTree(adapter: BrowserAdapter): Promise<BookmarkNode[]> {
 interface BookmarkState {
   tree: BookmarkNode[]
   rootFolderId: string | null
+  /**
+   * The folder a folder tile opened below the display root, or `null` for
+   * the root itself. Session state rather than a preference: opening a folder
+   * never rewrites the saved Root folder, and a new session or another root
+   * starts back at the top.
+   */
+  browsedFolderId: string | null
   isLoading: boolean
   adapter: BrowserAdapter | null
   status: BookmarkStoreStatus
@@ -127,6 +134,8 @@ interface BookmarkState {
    */
   reset(): void
   setRootFolderId(id: string | null): void
+  /** Opens a folder below the display root; `null` goes back to the root. */
+  browseFolder(id: string | null): void
   refresh(): Promise<void>
   retry(): Promise<void>
   clearMutationError(): void
@@ -169,6 +178,7 @@ function findNode(nodes: BookmarkNode[], id: string): BookmarkNode | null {
 export const useBookmarkStore = create<BookmarkState>((set, get) => ({
   tree: [],
   rootFolderId: null,
+  browsedFolderId: null,
   isLoading: true,
   adapter: null,
   status: "loading",
@@ -198,6 +208,7 @@ export const useBookmarkStore = create<BookmarkState>((set, get) => ({
       // loading state: a switch is a session transition, not an overlay.
       tree: [],
       rootFolderId: null,
+      browsedFolderId: null,
       rootFolder: null,
     })
 
@@ -257,6 +268,7 @@ export const useBookmarkStore = create<BookmarkState>((set, get) => ({
     set({
       tree: [],
       rootFolderId: null,
+      browsedFolderId: null,
       rootFolder: null,
       isLoading: true,
       adapter: null,
@@ -269,8 +281,14 @@ export const useBookmarkStore = create<BookmarkState>((set, get) => ({
   setRootFolderId(id: string | null) {
     const { tree, adapter } = get()
     const rootFolder = id ? findNode(tree, id) : null
-    set({ rootFolderId: id, rootFolder })
+    // A folder opened under the previous root means nothing under the new
+    // one, even when it happens to sit below it.
+    set({ rootFolderId: id, rootFolder, browsedFolderId: null })
     adapter?.storage.set("rootFolderId", id)
+  },
+
+  browseFolder(id: string | null) {
+    set({ browsedFolderId: id })
   },
 
   async refresh() {

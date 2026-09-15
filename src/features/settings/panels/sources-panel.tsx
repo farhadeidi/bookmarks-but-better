@@ -311,6 +311,8 @@ export function SourcesPanel({
   const setRootFolderId = useBookmarkStore((s) => s.setRootFolderId)
   const nestedFolders = usePreferencesStore((s) => s.nestedFolders)
   const setNestedFolders = usePreferencesStore((s) => s.setNestedFolders)
+  const folderTiles = usePreferencesStore((s) => s.folderTiles)
+  const setFolderTiles = usePreferencesStore((s) => s.setFolderTiles)
   const caps = React.useMemo(() => platformCapabilities(), [])
 
   const [enableError, setEnableError] = React.useState<string | null>(null)
@@ -429,14 +431,27 @@ export function SourcesPanel({
                       aria-label="Show nested Browser bookmark folders"
                       checked={nestedFolders}
                       onCheckedChange={setNestedFolders}
+                      // Folder tiles replace the nested cards while on.
+                      disabled={folderTiles}
+                    />
+                  }
+                />
+                <SettingRow
+                  title="Folder tiles"
+                  description="Show subfolders as tiles that open them, instead of their contents."
+                  control={
+                    <Switch
+                      aria-label="Show subfolders as folder tiles"
+                      checked={folderTiles}
+                      onCheckedChange={setFolderTiles}
                     />
                   }
                 />
               </>
             ) : (
               <p className="p-4 text-xs text-muted-foreground">
-                Root folder and nested folders can be set while Browser
-                bookmarks is the active source.
+                Root folder and how subfolders are shown can be set while
+                Browser bookmarks is the active source.
               </p>
             )}
           </SettingGroup>
