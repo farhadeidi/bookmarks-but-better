@@ -1,10 +1,11 @@
 ---
 // The themes, shown in a real screenshot. Picking one happens in the hero's
 // live preview (its theme dots), which the link below starts.
-import { Picture } from "astro:assets"
-import themes from "../assets/screenshots/themes.png"
+import themesDark from "../assets/screenshots/themes-dark.png"
+import themesLight from "../assets/screenshots/themes-light.png"
 import { SCREENSHOT, TEXT_LINK } from "../lib/ui"
 import HeadingGroup from "./HeadingGroup.astro"
+import ModeImage from "./ModeImage.astro"
 import Section from "./Section.astro"
 ---
 
@@ -23,15 +24,14 @@ import Section from "./Section.astro"
       </p>
     </HeadingGroup>
     <div class="lg:order-first lg:col-span-2">
-      <Picture
-        src={themes}
-        formats={["avif"]}
-        fallbackFormat="webp"
+      <ModeImage
+        light={themesLight}
+        dark={themesDark}
+        alt="The dashboard in six of the color themes, each in light mode"
+        altDark="The dashboard in six of the color themes, each in dark mode"
         widths={[640, 960, 1400]}
         sizes="(min-width: 1152px) 736px, (min-width: 1024px) 64vw, calc(100vw - 48px)"
-        alt="The dashboard in six of the color themes, light and dark"
-        loading="lazy"
-        class:list={["h-auto w-full", SCREENSHOT]}
+        imageClass={`h-auto w-full ${SCREENSHOT}`}
       />
     </div>
   </div>

@@ -142,8 +142,9 @@ test.describe("marketing website artifact", () => {
 
     await page.goto("/")
     const demo = page.locator("#demo")
-    const screenshot = demo.locator("picture img")
-    await expect(screenshot).toBeVisible()
+    // Light and dark versions both render; the site mode shows exactly one.
+    const screenshot = demo.locator("picture img:visible")
+    await expect(screenshot).toHaveCount(1)
     await expect(screenshot).toHaveAttribute("fetchpriority", "high")
     await expect(demo.locator("iframe")).toHaveCount(0)
     await page.waitForLoadState("load")

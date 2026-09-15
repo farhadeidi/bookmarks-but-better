@@ -1,32 +1,43 @@
 ---
 import type { ImageMetadata } from "astro"
-import { Picture } from "astro:assets"
-import organizer from "../assets/screenshots/organizer.png"
-import search from "../assets/screenshots/search.png"
-import sources from "../assets/screenshots/sources.png"
+import organizerDark from "../assets/screenshots/organizer-dark.png"
+import organizerLight from "../assets/screenshots/organizer-light.png"
+import searchDark from "../assets/screenshots/search-dark.png"
+import searchLight from "../assets/screenshots/search-light.png"
+import sourcesDark from "../assets/screenshots/sources-dark.png"
+import sourcesLight from "../assets/screenshots/sources-light.png"
 import { SCREENSHOT } from "../lib/ui"
 import HeadingGroup from "./HeadingGroup.astro"
+import ModeImage from "./ModeImage.astro"
 import Section from "./Section.astro"
 
 // The dashboard itself is the hero's screenshot, so it is not repeated here.
-const SHOWN: { title: string; description: string; image: ImageMetadata }[] = [
+const SHOWN: {
+  title: string
+  description: string
+  light: ImageMetadata
+  dark: ImageMetadata
+}[] = [
   {
     title: "A real organizer, with drag and drop",
     description:
       "Drag bookmarks between folders, reorder, rename, create and delete in a full tree editor.",
-    image: organizer,
+    light: organizerLight,
+    dark: organizerDark,
   },
   {
     title: "Find any bookmark in a keystroke",
     description:
       "Start typing anywhere on the dashboard. The search palette finds bookmarks in the active source by title or URL.",
-    image: search,
+    light: searchLight,
+    dark: searchDark,
   },
   {
     title: "Your sources, your root folder",
     description:
       "Switch between browser bookmarks and Markdown vaults from the header, and start the dashboard from any folder.",
-    image: sources,
+    light: sourcesLight,
+    dark: sourcesDark,
   },
 ]
 
@@ -66,15 +77,13 @@ const DETAIL = "text-base/7 text-pretty text-muted-foreground sm:text-sm/6"
           <dt class={TERM}>{feature.title}</dt>
           <dd class={DETAIL}>{feature.description}</dd>
           <dd class="order-first pb-4">
-            <Picture
-              src={feature.image}
-              formats={["avif"]}
-              fallbackFormat="webp"
+            <ModeImage
+              light={feature.light}
+              dark={feature.dark}
+              alt=""
               widths={[480, 720, 1080]}
               sizes="(min-width: 1152px) 336px, (min-width: 768px) 30vw, calc(100vw - 48px)"
-              alt=""
-              loading="lazy"
-              class:list={["aspect-16/10 h-auto w-full", SCREENSHOT]}
+              imageClass={`aspect-16/10 h-auto w-full ${SCREENSHOT}`}
             />
           </dd>
         </div>

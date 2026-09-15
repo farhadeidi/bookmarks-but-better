@@ -1,0 +1,70 @@
+---
+/**
+ * A screenshot in two versions, one per site mode. Both are in the document;
+ * the `dark` class on <html> (theme-init.ts) decides which one is displayed,
+ * so the images follow the theme toggle, not only the system preference.
+ *
+ * Loading: the hero passes `eager`, which makes the light version the LCP
+ * image (eager, high priority) and leaves the dark one lazy. A hidden lazy
+ * image has no layout box, so it is fetched when the mode reveals it, and
+ * nothing below the fold competes with the hero. The trade-off is that a
+ * dark-mode visitor still fetches the light hero and then its own; that costs
+ * one extra image, while a `media` query on <source> would cost the ability to
+ * switch modes without reloading.
+ */
+import type { ImageMetadata } from "astro"
+import { Picture } from "astro:assets"
+
+interface Props {
+  light: ImageMetadata
+  dark: ImageMetadata
+  /** Alt text for the light version. Empty for decorative screenshots. */
+  alt: string
+  /** Alt text for the dark version; defaults to the light one. */
+  altDark?: string
+  widths: number[]
+  sizes: string
+  /** Classes for both <img> elements. */
+  imageClass?: string
+  /** This is the page's LCP image. */
+  eager?: boolean
+}
+
+const {
+  light,
+  dark,
+  alt,
+  altDark = alt,
+  widths,
+  sizes,
+  imageClass,
+  eager = false,
+} = Astro.props
+
+---
+
+<div class="dark:hidden">
+  <Picture
+    src={light}
+    formats={["avif"]}
+    fallbackFormat="webp"
+    widths={widths}
+    sizes={sizes}
+    alt={alt}
+    loading={eager ? "eager" : "lazy"}
+    fetchpriority={eager ? "high" : "auto"}
+    class={imageClass}
+  />
+</div>
+<div class="hidden dark:block">
+  <Picture
+    src={dark}
+    formats={["avif"]}
+    fallbackFormat="webp"
+    widths={widths}
+    sizes={sizes}
+    alt={altDark}
+    loading="lazy"
+    class={imageClass}
+  />
+</div>

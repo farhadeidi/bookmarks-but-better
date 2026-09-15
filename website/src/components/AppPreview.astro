@@ -1,7 +1,8 @@
 ---
-import { Picture } from "astro:assets"
-import dashboard from "../assets/screenshots/dashboard.png"
+import dashboardDark from "../assets/screenshots/dashboard-dark.png"
+import dashboardLight from "../assets/screenshots/dashboard-light.png"
 import { DEFAULT_DEMO_THEME, DEMO_THEMES } from "../lib/themes"
+import ModeImage from "./ModeImage.astro"
 
 const defaultTheme = DEMO_THEMES.find((theme) => theme.id === DEFAULT_DEMO_THEME)
 ---
@@ -31,16 +32,15 @@ const defaultTheme = DEMO_THEMES.find((theme) => theme.id === DEFAULT_DEMO_THEME
       </div>
     </div>
     <div class="relative" data-preview-stage>
-      <Picture
-        src={dashboard}
-        formats={["avif"]}
-        fallbackFormat="webp"
+      <ModeImage
+        light={dashboardLight}
+        dark={dashboardDark}
+        alt="The Bookmarks But Better dashboard in light mode: bookmark folders as cards in a masonry grid"
+        altDark="The Bookmarks But Better dashboard in dark mode: bookmark folders as cards in a masonry grid"
         widths={[640, 960, 1280, 1400]}
         sizes="(min-width: 1152px) 1104px, calc(100vw - 48px)"
-        alt="The Bookmarks But Better dashboard in dark mode: bookmark folders as cards in a masonry grid"
-        loading="eager"
-        fetchpriority="high"
-        class="h-auto w-full"
+        imageClass="h-auto w-full"
+        eager
       />
       <div
         class="absolute inset-0 grid place-items-center bg-linear-to-t from-black/45 via-black/10 to-transparent"
