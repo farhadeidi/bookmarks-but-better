@@ -23,10 +23,10 @@
 //! `.bookmarks-but-better` is a dot-directory, which the vault scanner already skips, so none of
 //! this appears as content.
 //!
-//! Taking the lock is also where `.bookmarks-but-better` is created for a vault
-//! that predates it, so acquiring the lock ensures a `.gitignore` in it (see
-//! [`fsx::open_or_create_state_dir`]) — a vault a user keeps in a git
-//! repository as a backup never picks up the lock file or staging entries.
+//! Taking the lock is also where `.bookmarks-but-better` is created, so
+//! acquiring it ensures a `.gitignore` in it (`fsx::open_or_create_state_dir`),
+//! on a new vault and on one that predates that file — a vault a user keeps in
+//! a git repository as a backup never picks up the lock file or staging entries.
 
 use std::fs::TryLockError;
 use std::io;
