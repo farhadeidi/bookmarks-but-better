@@ -1,12 +1,12 @@
 ---
 title: "A Raindrop alternative that needs no account"
-description: "A factual Raindrop alternative comparison: cloud account vs local bookmarks, where your data lives, supported platforms, and importing a Raindrop CSV or HTML."
+description: "Raindrop alternative compared: cloud or local bookmarks, where your data lives, supported platforms, and importing a Raindrop CSV or HTML."
 sidebar:
   label: Raindrop alternative
   order: 2
 ---
 
-Raindrop.io and Bookmarks But Better both organize bookmarks, but they are built on different ideas. Raindrop is a cloud service you sign in to, with apps on many devices. Bookmarks But Better is a browser extension with no account that keeps bookmarks in your browser or in Markdown files on your own disk. This guide compares the two factually so you can decide which fits, and shows how to bring a Raindrop export across.
+Raindrop.io and Bookmarks But Better both organize bookmarks, but they work differently. Raindrop is a cloud service you sign in to, with apps on many devices. Bookmarks But Better is a browser extension with no account that keeps bookmarks in your browser or in Markdown files on your own disk. This guide compares them and shows how to bring a Raindrop export across.
 
 Facts about Raindrop.io below come from Raindrop's own pages, as of September 2026, and are linked where they are used.
 
@@ -32,13 +32,13 @@ Bookmarks But Better has no server and no account. Your bookmarks come from one 
 
 Sources are never merged. You switch between them from the header, and every edit, import or delete affects only the source you are looking at. The [sources overview](/docs/start/sources/) explains this in detail.
 
-The trade-off is plain. With a local tool, nobody else holds your bookmarks, and nobody else carries them between your devices either. The [no-account guide](/docs/guides/bookmark-manager-without-account/) goes through that trade-off.
+With a local tool, nobody else holds your bookmarks, and nobody else carries them between your devices either. The [no-account guide](/docs/guides/bookmark-manager-without-account/) goes through that trade-off.
 
 ## Features
 
 Raindrop's free plan lists unlimited bookmarks, collections, highlights and devices, plus import and export. Its Pro plan adds features such as full-text search, a web archive, reminders, annotations, a duplicate and broken link finder, and daily backups ([Raindrop plans](https://raindrop.io/pro/buy)).
 
-Bookmarks But Better covers a narrower job, and does it on the page you open most often:
+Bookmarks But Better covers a narrower job:
 
 - **A dashboard on every new tab.** Folders appear as cards in a masonry grid, each shown as a list or an icon grid.
 - **A Bookmark Organizer.** A tree editor for dragging, reordering, renaming, creating and deleting bookmarks and folders.
@@ -48,7 +48,7 @@ Bookmarks But Better covers a narrower job, and does it on the page you open mos
 
 It has no highlights, no page archive, no full-text search of page contents, no sharing, and no phone apps. If you rely on those, Raindrop is built for them.
 
-## Where your data lives, concretely
+## Where your data lives
 
 In Bookmarks But Better:
 
@@ -76,7 +76,7 @@ CSV keeps your collection structure through the `folder` column. Either format w
 
 Raindrop is likely the better choice if you want highlights, a web archive, sharing, phone apps, or bookmarks that follow you across devices without setting anything up.
 
-Bookmarks But Better is likely the better choice if you want no account, bookmarks that stay in your browser or in Markdown files you own, and a clean dashboard every time you open a new tab.
+Bookmarks But Better is likely the better choice if you want no account, bookmarks that stay in your browser or in Markdown files you own, and a dashboard on every new tab.
 
 ## Get started
 

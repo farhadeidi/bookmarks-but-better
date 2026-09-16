@@ -6,8 +6,8 @@ sidebar:
 ---
 
 Bookmarks But Better replaces your new-tab page with a dashboard of your
-bookmarks. There is no account to create, and the extension collects no analytics
-and none of your bookmarks.
+bookmarks. There is no account to create. The extension collects no analytics,
+and it never collects your bookmarks.
 
 ## Chrome
 

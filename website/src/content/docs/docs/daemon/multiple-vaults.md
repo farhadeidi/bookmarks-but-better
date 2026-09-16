@@ -83,11 +83,11 @@ the vault roots /home/you/vaults and /home/you/vaults/work overlap; host sibling
 
 ## Why a restart is needed
 
-The daemon reads its list of Vaults once, when it starts. Adding or removing a
-Vault only takes effect after a restart. This is deliberate. The manager
-restarts the service for you when you add or remove a Vault. If you decline the
-restart, the running daemon keeps serving its current Vaults until the service
-is reinstalled, for example with `npx bookmarks-but-better@latest install`.
+The daemon reads its list of Vaults once, when it starts, so adding or removing
+a Vault only takes effect after a restart. The manager restarts the service for
+you when you add or remove a Vault. If you decline the restart, the running
+daemon keeps serving its current Vaults until the service is reinstalled, for
+example with `npx bookmarks-but-better@latest install`.
 
 ## The configuration file
 

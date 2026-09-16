@@ -1,6 +1,6 @@
 ---
 title: Safari
-description: The Safari version of Bookmarks But Better is coming soon. Until then you can build it from source on macOS 14 or later; it needs the local daemon, opens from the toolbar popup, and has no address-bar keyword.
+description: The Safari version is coming soon. Until then you can build it from source on macOS 14 or later, and it needs the local daemon.
 sidebar:
   order: 4
 ---
@@ -11,13 +11,13 @@ there is no signed download. If you need it now, you can
 [build it from source](#build-it-from-source).
 :::
 
-Safari works differently from Chrome and Firefox. This page explains what is
-different and how to build and set it up yourself.
+Safari works differently from Chrome and Firefox, and until the release you
+build and set it up yourself.
 
 ## Requirements
 
-- **macOS 14 (Sonoma) or later, with Safari 17 or later.**
-- **The Bookmarks But Better daemon.** Safari does not let extensions read its
+- macOS 14 (Sonoma) or later, with Safari 17 or later.
+- The Bookmarks But Better daemon. Safari does not let extensions read its
   bookmarks. That means there is no Browser bookmarks source in Safari, and the
   extension never reads Safari's own bookmarks. Your bookmarks live in a
   [Vault](/docs/start/sources/) served by the daemon on your Mac instead. See
@@ -51,7 +51,7 @@ extension disappears after you restart Safari, allow unsigned extensions again.
 :::
 
 GitHub releases also include a zip of the Safari extension files. That zip is
-not an app you can install. It still has to be built into one with the steps
+not an app you can install; it still has to be built into one with the steps
 above.
 
 ## First run

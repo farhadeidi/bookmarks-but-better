@@ -36,8 +36,8 @@ share. The extension reads that file and brings in:
 - bookmark titles and URLs
 - the date each item was added, when the file includes it
 
-Separators, and entries that have no URL, are left out. A bookmark with no title
-is named after its site, for example `example.com`.
+The import leaves out separators and entries that have no URL. A bookmark with
+no title is named after its site, for example `example.com`.
 
 ### From Raindrop or Pocket: CSV
 

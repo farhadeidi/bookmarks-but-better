@@ -15,7 +15,7 @@ separate [bookmark source](/docs/start/sources/). In
 ## Why keep bookmarks as files
 
 Browsers keep bookmarks in an internal database that is hard to read, back up
-or edit with your own tools. A Vault turns that around:
+or edit with your own tools. A Vault keeps them as ordinary files instead:
 
 - Each bookmark is one Markdown file, and each bookmark folder is a folder on
   disk. There is no hidden database.

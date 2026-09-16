@@ -133,10 +133,10 @@ git commit -m "Back up bookmarks"
 
 Keep the daemon's working folder out of the repository:
 
-- **Releases after 4.3.0** do this for you. The daemon writes a
+- Releases after 4.3.0 do this for you. The daemon writes a
   `.bookmarks-but-better/.gitignore` file that ignores the whole folder. If a
   `.gitignore` is already there, it is left as it is.
-- **With 4.3.0 or earlier**, add the folder to the Vault's `.gitignore` yourself
+- With 4.3.0 or earlier, add the folder to the Vault's `.gitignore` yourself
   before your first commit:
 
   ```bash

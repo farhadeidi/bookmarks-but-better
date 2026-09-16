@@ -6,20 +6,20 @@ sidebar:
   order: 4
 ---
 
-A bookmark manager without an account keeps your bookmarks on your own devices instead of on a company's server. Nobody else holds a copy, nothing needs a password, and there's no service that can shut down under you. The costs: no built-in sync between devices, and backups are up to you. This guide explains when that trade makes sense, and exactly what "local" means for Bookmarks But Better.
+A bookmark manager without an account keeps your bookmarks on your own devices instead of on a company's server. Nobody else holds a copy, nothing needs a password, and there's no service that can shut down under you. The costs: no built-in sync between devices, and backups are up to you.
 
 ## When no account makes sense
 
 It is a good fit if:
 
-- **You use one computer most of the time**, or already keep bookmarks in one browser profile.
-- **You'd rather not have your list of saved sites on someone else's server.** A bookmark list says a lot about work, health, money and interests.
-- **You want files you own.** Plain files outlive any single app, and you can open them with ordinary tools.
-- **You already sync files your own way**, and would rather reuse that than add another service.
+- You use one computer most of the time, or already keep bookmarks in one browser profile.
+- You'd rather not have your list of saved sites on someone else's server. A bookmark list says a lot about work, health, money and interests.
+- You want files you own. Plain files outlive any single app, and you can open them with ordinary tools.
+- You already sync files your own way, and would rather reuse that than add another service.
 
 It is a weaker fit if you want bookmarks on your phone, instant sync across many devices with no setup, or shared collections with other people. Account-based services are built for those.
 
-## What "local" means here, concretely
+## What "local" means here
 
 Bookmarks But Better is a free and open source (MIT) extension for Chrome and Firefox. A Safari version, which works through a local daemon, is coming soon, and you can build it from source today. There is no sign-up, and nothing to log into. Bookmarks live in one of these places:
 
@@ -29,14 +29,14 @@ Bookmarks But Better is a free and open source (MIT) extension for Chrome and Fi
 
 These sources are never merged. You switch between them in the header, and each operation affects only the active source. Settings and source choices are stored per browser profile and aren't synced anywhere. Details: [how sources work](/docs/start/sources/).
 
-## The network requests, exactly
+## The network requests
 
 From the [privacy page](/privacy/):
 
-1. **Favicon lookups, by default.** To show site icons, the extension first checks a local cache on your machine, then, in Chrome, the browser's own on-device icon store. Only if neither has the icon does it ask Google's public favicon service, sending the bookmark's **origin** (for example `https://example.com`), never the path, query or fragment. Grid tiles need larger icons than the browser stores, so they ask Google before the browser's store. Successful lookups are cached for 30 days, so a site is normally asked about about once a month. Firefox has no on-device icon store an extension may read, so it skips that step. A letter placeholder is drawn locally when nothing answers.
+1. **Favicon lookups, by default.** To show site icons, the extension first checks a local cache on your machine, then, in Chrome, the browser's own on-device icon store. Only if neither has the icon does it ask Google's public favicon service, sending the bookmark's **origin** (for example `https://example.com`), never the path, query or fragment. Grid tiles need larger icons than the browser stores, so they ask Google before the browser's store. Successful lookups are cached for 30 days, so a site is normally looked up about once a month. Firefox has no on-device icon store an extension may read, so it skips that step. A letter placeholder is drawn locally when nothing answers.
 2. **Your own daemon, if you connect one.** The extension then talks to that loopback address. The permission is requested when you click Connect, never at install.
 
-That's all. No accounts, analytics, tracking, advertising or collection of bookmark content. One honest caveat: taken together, the origins sent for icon lookups amount to a list of the sites you've bookmarked, which is why they're cached and limited to origins.
+That's all. No accounts, analytics, tracking, advertising or collection of bookmark content. One caveat: taken together, the origins sent for icon lookups amount to a list of the sites you've bookmarked, which is why they're cached and limited to origins.
 
 When the daemon serves its own web app in a browser tab (not the extension), that page can show Google's icons but can't cache them, so it fetches them again on each load.
 

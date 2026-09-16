@@ -1,6 +1,6 @@
 ---
 title: "A Pocket alternative for your saved links"
-description: "Looking for a Pocket alternative? Import your Pocket CSV into a private new-tab bookmarks dashboard. What carries over, what doesn't, and no account needed."
+description: "A Pocket alternative with no account: import your Pocket CSV into a private new-tab dashboard, and see what carries over and what doesn't."
 sidebar:
   label: Pocket alternative
   order: 1
@@ -74,14 +74,14 @@ This is also how the extension works in Safari, which does not give extensions a
 
 ## When this is not the right replacement
 
-Be clear about what you are giving up. Bookmarks But Better does not:
+Bookmarks But Better does not:
 
 - save a copy of the article or a reading view
 - work offline with saved pages (cached site icons do keep loading offline)
 - keep highlights, tags or a read/unread queue
 - have phone apps or built-in sync between devices
 
-If you mostly used Pocket to read later, look for an app built for reading. If you mostly used it to collect links and find them again, a bookmarks dashboard you see on every new tab covers that well, and your data stays with you.
+If you mostly used Pocket to read later, look for an app built for reading. If you mostly used it to collect links and find them again, a bookmarks dashboard on every new tab covers that job.
 
 ## Get started
 

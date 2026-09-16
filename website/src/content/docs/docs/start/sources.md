@@ -5,9 +5,9 @@ sidebar:
   order: 2
 ---
 
-A **source** is one collection of bookmarks the dashboard can show. Sources are
-always kept separate. Bookmarks from different sources are never mixed together,
-and switching sources never moves or copies anything.
+A **source** is one collection of bookmarks the dashboard can show. Bookmarks
+from different sources are never mixed together, and switching sources never
+moves or copies anything.
 
 ## Kinds of sources
 
@@ -53,10 +53,10 @@ to each source.
 
 In **Settings → Sources**, each source has:
 
-- **A switch** to enable or disable it. Disabling a source keeps its settings,
-  so you can turn it back on later. At least one source must stay enabled. If
-  you try to turn off the last one, you get a **Cannot disable** message.
-- **A pencil button (Rename)** to give it a display label. The label only
+- a switch to enable or disable it. Disabling a source keeps its settings, so
+  you can turn it back on later. At least one source must stay enabled. If you
+  try to turn off the last one, you get a **Cannot disable** message.
+- a pencil button (**Rename**) to give it a display label. The label only
   applies in this browser profile. Renaming a Vault's label does not rename the
   Vault itself.
 
