@@ -209,7 +209,7 @@ async function record(page: Page, clip: Clip, pointer: Pointer) {
 
 const VIDEO_CSS = `
   .caption { position: absolute; left: 0; right: 0; top: 44px; text-align: center; }
-  .caption .index { font-family: Fraunces, serif; font-style: italic; font-size: 22px; color: var(--primary); }
+  .caption .index { font-size: 22px; font-weight: 500; color: var(--primary); }
   .caption h1 { margin-top: 6px; font-size: 62px; line-height: 1.08; }
   .caption p { margin-top: 12px; font-size: 24px; color: var(--muted); }
   .bar { height: ${BAR}px; gap: 8px; padding: 0 16px; }
@@ -529,8 +529,8 @@ test("record the walkthrough video", async ({ browser }) => {
     path.join(WORK, "intro.png"),
     { width: W, height: H },
     `<div class="card">
-        <div class="eyebrow">New tab extension · Chrome · Firefox · Safari</div>
-        <h1 class="display" style="font-size:150px;margin-top:28px">Bookmarks,<br><em>but better</em></h1>
+        <div class="eyebrow">New tab extension · Chrome · Firefox</div>
+        <h1 class="display" style="font-size:150px;margin-top:28px">Bookmarks,<br>but <em>better</em></h1>
         <p style="margin-top:32px">Your bookmarks as a beautiful new tab.</p>
       </div>`,
     VIDEO_CSS
@@ -578,9 +578,9 @@ test("record the walkthrough video", async ({ browser }) => {
     path.join(WORK, "outro.png"),
     { width: W, height: H },
     `<div class="card">
-        <h1 class="display" style="font-size:120px">Bookmarks, <em>but better</em></h1>
+        <h1 class="display" style="font-size:120px">Bookmarks, but <em>better</em></h1>
         <p style="margin-top:28px">Local, private, no account. Free and open source.</p>
-        <div class="chips"><span>Chrome</span><span>Firefox</span><span>Safari</span></div>
+        <div class="chips"><span>Chrome</span><span>Firefox</span></div>
         <div class="url">bookmarks.but-better.dev</div>
       </div>`,
     VIDEO_CSS

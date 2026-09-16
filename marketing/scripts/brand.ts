@@ -18,31 +18,22 @@ export const APP_H = 800
 
 const FONTS = path.join(ROOT, "website/node_modules/@fontsource-variable")
 
+/**
+ * One face for everything, the same file the site loads (astro.config.ts): the
+ * `opsz` build carries the weight and optical size axes together, so display
+ * sizes get Inter Display's drawing without a second font.
+ */
 function fontFaces() {
-  const face = (family: string, file: string, style: string) => {
-    const fontPath = path.join(FONTS, file)
-    if (!fs.existsSync(fontPath)) {
-      // The brand fonts are the website's dependencies, not the root's.
-      throw new Error(
-        `Missing brand font ${path.relative(ROOT, fontPath)}. Run \`bun install --cwd website\` first.`
-      )
-    }
-    const data = fs.readFileSync(fontPath).toString("base64")
-    return `@font-face{font-family:"${family}";font-style:${style};font-weight:100 900;src:url(data:font/woff2;base64,${data}) format("woff2")}`
+  const file = "inter/files/inter-latin-opsz-normal.woff2"
+  const fontPath = path.join(FONTS, file)
+  if (!fs.existsSync(fontPath)) {
+    // The brand font is the website's dependency, not the root's.
+    throw new Error(
+      `Missing brand font ${path.relative(ROOT, fontPath)}. Run \`bun install --cwd website\` first.`
+    )
   }
-  return [
-    face(
-      "Fraunces",
-      "fraunces/files/fraunces-latin-wght-normal.woff2",
-      "normal"
-    ),
-    face(
-      "Fraunces",
-      "fraunces/files/fraunces-latin-wght-italic.woff2",
-      "italic"
-    ),
-    face("Inter", "inter/files/inter-latin-wght-normal.woff2", "normal"),
-  ].join("")
+  const data = fs.readFileSync(fontPath).toString("base64")
+  return `@font-face{font-family:"Inter";font-style:normal;font-weight:100 900;src:url(data:font/woff2;base64,${data}) format("woff2")}`
 }
 
 const BASE_CSS = `
@@ -64,8 +55,11 @@ const BASE_CSS = `
     position: absolute; inset: 0; pointer-events: none;
     background: radial-gradient(60% 55% at 50% 0%, oklch(0.72 0.13 70 / 0.16), transparent 70%);
   }
-  .display { font-family: Fraunces, serif; font-weight: 500; letter-spacing: -0.02em; }
-  .display em { font-style: italic; color: var(--primary); }
+  /* Display type is the body face set heavier and tighter — no second family.
+     An <em> is the hero's accent word: lighter against the semibold line,
+     never a slant (Inter's italic reads as a mistake at this size). */
+  .display { font-weight: 600; letter-spacing: -0.03em; }
+  .display em { font-style: normal; font-weight: 400; }
   .window {
     position: absolute; overflow: hidden; border-radius: 14px;
     background: #0b0b0b;
@@ -148,7 +142,7 @@ export async function render(
 
 export const CAPTION_CSS = `
   .caption { position: absolute; left: 0; right: 0; top: 58px; text-align: center; }
-  .caption .index { font-family: Fraunces, serif; font-style: italic; font-size: 19px; color: var(--primary); }
+  .caption .index { font-size: 19px; font-weight: 500; color: var(--primary); }
   .caption h1 { margin-top: 10px; font-size: 52px; line-height: 1.08; }
   .caption p { margin: 16px auto 0; max-width: 780px; font-size: 19px; line-height: 1.5; color: var(--muted); }
 `
