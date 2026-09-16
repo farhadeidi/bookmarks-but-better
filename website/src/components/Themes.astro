@@ -1,0 +1,40 @@
+---
+// The themes, shown in a real screenshot. Picking one happens on the live demo
+// page (/preview/), whose theme dots the link below leads to.
+import themesDark from "../assets/screenshots/themes-dark.png"
+import themesLight from "../assets/screenshots/themes-light.png"
+import { SCREENSHOT_MAT, SCREENSHOT_MATTED, TEXT_LINK } from "../lib/ui"
+import HeadingGroup from "./HeadingGroup.astro"
+import ModeImage from "./ModeImage.astro"
+import Section from "./Section.astro"
+---
+
+<Section id="themes" labelledby="themes-title">
+  <div class="grid gap-x-12 gap-y-10 lg:grid-cols-3 lg:items-center lg:gap-y-12">
+    <HeadingGroup
+      id="themes-title"
+      eyebrow="Themes"
+      title="Ten themes, each in light and dark"
+      description="From Vintage Paper to Cyberpunk, every theme comes with light, dark and system modes."
+    >
+      <p class="mt-6 text-base/7 sm:mt-8 sm:text-sm/6">
+        <a href="/preview/" class={TEXT_LINK}>Try them in the live demo</a>
+      </p>
+    </HeadingGroup>
+    <div class="lg:order-first lg:col-span-2">
+      {/* Every theme window in this montage is dark, so in dark mode it would
+          dissolve into the page without a surface under it. */}
+      <div class={SCREENSHOT_MAT}>
+        <ModeImage
+          light={themesLight}
+          dark={themesDark}
+          alt="The dashboard in six of the color themes, each in light mode"
+          altDark="The dashboard in six of the color themes, each in dark mode"
+          widths={[640, 960, 1400]}
+          sizes="(min-width: 1152px) 720px, (min-width: 1024px) 62vw, calc(100vw - 64px)"
+          imageClass={`h-auto w-full ${SCREENSHOT_MATTED}`}
+        />
+      </div>
+    </div>
+  </div>
+</Section>

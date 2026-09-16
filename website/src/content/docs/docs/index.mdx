@@ -1,0 +1,101 @@
+---
+title: Documentation
+description: Install Bookmarks But Better, choose your bookmark sources, import and export, and keep your bookmarks as Markdown files in a vault you own.
+---
+
+import { CardGrid, LinkCard } from "@astrojs/starlight/components"
+
+Bookmarks But Better turns your new tab into a private bookmarks dashboard,
+with no account and no tracking. These docs cover the browser extension and the
+optional daemon that keeps your bookmarks as plain Markdown files in a vault you
+own.
+
+## Getting started
+
+<CardGrid>
+  <LinkCard
+    title="Install the extension"
+    href="/docs/start/install/"
+    description="Add it to Chrome or Firefox. Safari is coming soon."
+  />
+  <LinkCard
+    title="Sources"
+    href="/docs/start/sources/"
+    description="Browser bookmarks, Markdown vaults and the active source."
+  />
+  <LinkCard
+    title="Import and export"
+    href="/docs/start/import-export/"
+    description="HTML from any browser, CSV from Raindrop and Pocket, HTML export."
+  />
+  <LinkCard
+    title="Safari"
+    href="/docs/start/safari/"
+    description="Coming soon. Build it from source to use it with a Markdown vault now."
+  />
+</CardGrid>
+
+## Markdown vaults
+
+<CardGrid>
+  <LinkCard
+    title="What is a Markdown vault?"
+    href="/docs/daemon/"
+    description="Bookmarks as plain files you own, served by a local daemon."
+  />
+  <LinkCard
+    title="Install the daemon"
+    href="/docs/daemon/install/"
+    description="Set up the local daemon with npx or an install script."
+  />
+  <LinkCard
+    title="Connect the extension"
+    href="/docs/daemon/connect/"
+    description="Point the extension at the daemon on 127.0.0.1."
+  />
+  <LinkCard
+    title="Multiple vaults"
+    href="/docs/daemon/multiple-vaults/"
+    description="Host several vaults in one daemon, each its own source."
+  />
+  <LinkCard
+    title="Back up your vault"
+    href="/docs/daemon/backups/"
+    description="What to copy, which tools work, and how to restore."
+  />
+  <LinkCard
+    title="Troubleshooting"
+    href="/docs/daemon/troubleshooting/"
+    description="Fix a daemon that does not start or connect."
+  />
+  <LinkCard
+    title="Uninstall"
+    href="/docs/daemon/uninstall/"
+    description="Remove the daemon and its service; your vault stays put."
+  />
+</CardGrid>
+
+## Guides
+
+<CardGrid>
+  <LinkCard
+    title="Pocket alternative"
+    href="/docs/guides/pocket-alternative/"
+    description="Import your Pocket CSV. What carries over and what doesn't."
+  />
+  <LinkCard
+    title="Raindrop alternative"
+    href="/docs/guides/raindrop-alternative/"
+    description="How a cloud account and local bookmarks compare."
+  />
+  <LinkCard
+    title="Obsidian bookmarks"
+    href="/docs/guides/obsidian-bookmarks/"
+    description="Keep bookmarks as Markdown next to your Obsidian notes."
+  />
+  <LinkCard
+    title="Without an account"
+    href="/docs/guides/bookmark-manager-without-account/"
+    description="What local means in practice, and the trade-offs."
+  />
+</CardGrid>

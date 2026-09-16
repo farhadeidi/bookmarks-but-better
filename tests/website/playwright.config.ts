@@ -1,7 +1,7 @@
 import { fileURLToPath } from "node:url"
 import { defineConfig } from "@playwright/test"
 
-const distDir = fileURLToPath(new URL("../../website/dist", import.meta.url))
+const server = fileURLToPath(new URL("./static-server.mjs", import.meta.url))
 
 export default defineConfig({
   testDir: ".",
@@ -14,8 +14,9 @@ export default defineConfig({
     trace: "retain-on-failure",
   },
   webServer: {
-    command: `python3 -m http.server 5180 --bind 127.0.0.1 --directory "${distDir}"`,
-    url: "http://127.0.0.1:5180",
+    // Mirrors GitHub Pages, including the site's custom 404 page.
+    command: `node "${server}"`,
+    url: "http://127.0.0.1:5180/",
     reuseExistingServer: false,
     timeout: 30_000,
   },

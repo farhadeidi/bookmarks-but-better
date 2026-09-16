@@ -1,0 +1,42 @@
+---
+// Starlight shows these at the foot of the docs' mobile menu, beside the theme
+// toggle: the site's section links, then GitHub. (The header renders its own
+// on wider screens.)
+import { Icon } from "@astrojs/starlight/components"
+import { currentSiteLink, SITE_LINKS } from "../../lib/nav"
+import { SITE } from "../../lib/site"
+
+const current = currentSiteLink(Astro.url)
+---
+
+{
+  SITE_LINKS.map((link) => (
+    <a
+      href={link.href}
+      class="site-link"
+      aria-current={link.href === current ? "page" : undefined}
+    >
+      {link.label}
+    </a>
+  ))
+}
+<a href={SITE.repository} class="site-link">
+  <Icon name="github" size="1.125rem" />
+  <span class="sr-only">GitHub</span>
+</a>
+
+<style>
+  .site-link {
+    display: inline-flex;
+    align-items: center;
+    color: var(--muted-foreground);
+    font-size: var(--sl-text-sm);
+    font-weight: 500;
+    text-decoration: none;
+    white-space: nowrap;
+  }
+  .site-link:hover,
+  .site-link[aria-current="page"] {
+    color: var(--foreground);
+  }
+</style>

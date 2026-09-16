@@ -1,0 +1,299 @@
+---
+// One header on every page, marketing and docs: the brand, the section links,
+// Starlight's search, GitHub, the theme toggle and the install button. It runs
+// full width with the same padding everywhere (starlight.css), so nothing
+// shifts between the marketing pages and the docs.
+//
+// Below 68.75rem the row collapses and every page opens the links from this
+// menu instead — except docs pages below 50rem, where Starlight's own sidebar
+// toggle is showing (restyled in starlight.css) and the foot of its menu
+// already lists the same links, so this button stands down rather than
+// doubling up.
+import { Icon } from "@astrojs/starlight/components"
+import Search from "@astrojs/starlight/components/Search.astro"
+import { currentSiteLink, SITE_LINKS } from "../../lib/nav"
+import { SITE } from "../../lib/site"
+import InstallCta from "../InstallCta.astro"
+import ThemeToggle from "../ThemeToggle.astro"
+import SiteTitle from "./SiteTitle.astro"
+
+const { hasSidebar } = Astro.locals.starlightRoute
+const current = currentSiteLink(Astro.url)
+---
+
+<div class="bbb-header">
+  <SiteTitle />
+  <nav class="links" aria-label="Site">
+    {
+      SITE_LINKS.map((link) => (
+        <a
+          href={link.href}
+          aria-current={link.href === current ? "page" : undefined}
+        >
+          {link.label}
+        </a>
+      ))
+    }
+  </nav>
+  <div class="actions print:hidden">
+    {/* A compact field in the docs; an icon on the marketing pages. */}
+    <div class:list={["search", { field: hasSidebar }]}>
+      <Search />
+    </div>
+    <div class="wide">
+      <a href={SITE.repository} class="icon-button">
+        <Icon name="github" size="1.125rem" />
+        <span class="sr-only">GitHub</span>
+      </a>
+      <ThemeToggle />
+    </div>
+    {/* The row's one action. It appears as soon as there is room for it, long
+        before the links do, so the collapsed header still leads somewhere. */}
+    <div class="cta">
+      <InstallCta />
+    </div>
+    <button
+      type="button"
+      popovertarget="bbb-site-menu"
+      class:list={["icon-button", "menu-button", { docs: hasSidebar }]}
+    >
+      <Icon name="bars" size="1.25rem" class="open-menu" />
+      <Icon name="close" size="1.25rem" class="close-menu" />
+      <span class="sr-only">Menu</span>
+    </button>
+    {/* "Site menu", not "Site": the row above is already the Site navigation,
+        and two landmarks with one name are announced identically. */}
+    <nav popover="" id="bbb-site-menu" class="site-menu" aria-label="Site menu">
+      <ul role="list">
+        {
+          SITE_LINKS.map((link) => (
+            <li>
+              <a
+                href={link.href}
+                aria-current={link.href === current ? "page" : undefined}
+              >
+                {link.label}
+              </a>
+            </li>
+          ))
+        }
+      </ul>
+      <div class="menu-cta">
+        <InstallCta block />
+      </div>
+      <div class="site-menu-footer">
+        <a href={SITE.repository} class="menu-github">
+          <Icon name="github" size="1.125rem" />
+          GitHub
+        </a>
+        <ThemeToggle />
+      </div>
+    </nav>
+  </div>
+</div>
+
+<style>
+  /* Five section links, search, GitHub, the theme toggle and the install
+     button share this row from 68.75rem up, so the gaps and the link padding
+     are kept tight enough for the whole set to fit without wrapping. */
+  .bbb-header {
+    display: flex;
+    align-items: center;
+    gap: 1.25rem;
+    height: 100%;
+  }
+
+  .links {
+    display: none;
+    align-items: center;
+    gap: 0.25rem;
+  }
+  .links a {
+    border-radius: 0.375rem;
+    padding: 0.375rem 0.5rem;
+    color: var(--muted-foreground);
+    font-size: var(--sl-text-sm);
+    font-weight: 500;
+    text-decoration: none;
+    white-space: nowrap;
+  }
+  .links a:hover,
+  .links a[aria-current="page"] {
+    color: var(--foreground);
+  }
+  .links a[aria-current="page"] {
+    background-color: var(--muted);
+  }
+
+  .actions,
+  .wide {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+  }
+  .actions {
+    margin-inline-start: auto;
+  }
+  .wide {
+    display: none;
+  }
+
+  /* Below 50rem the install button is the full-width one at the top of the
+     menu instead; there is no room for both. */
+  .cta {
+    display: none;
+  }
+  .cta :global(.install-cta) {
+    margin-inline-start: 0.5rem;
+  }
+  @media (min-width: 50rem) {
+    .cta {
+      display: flex;
+    }
+  }
+
+  /* Docs pages below 50rem already carry Starlight's sidebar toggle, and its
+     menu lists every site link (starlight/SocialIcons.astro), so this button
+     would duplicate it. From 50rem the sidebar is permanent and that toggle is
+     gone — which is exactly the band this button exists to cover. */
+  @media (max-width: 49.999rem) {
+    .menu-button.docs {
+      display: none;
+    }
+  }
+
+  .icon-button {
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    width: 2.5rem;
+    height: 2.5rem;
+    border: 0;
+    border-radius: 0.5rem;
+    background: transparent;
+    color: var(--muted-foreground);
+    cursor: pointer;
+  }
+  .icon-button:hover {
+    background-color: var(--muted);
+    color: var(--foreground);
+  }
+
+  /* Starlight's search button, reduced to an icon button. */
+  .search :global(button[data-open-modal]) {
+    justify-content: center;
+    width: 2.5rem;
+    height: 2.5rem;
+    padding: 0;
+    border: 0;
+    border-radius: 0.5rem;
+    background-color: transparent;
+    color: var(--muted-foreground);
+    font-size: 1.125rem;
+  }
+  .search :global(button[data-open-modal]:hover) {
+    background-color: var(--muted);
+    color: var(--foreground);
+  }
+  .search :global(button[data-open-modal] > :not(svg)) {
+    display: none;
+  }
+
+  .menu-button:has(~ :popover-open) {
+    background-color: var(--muted);
+    color: var(--foreground);
+  }
+  .menu-button:has(~ :popover-open) .open-menu,
+  .menu-button:not(:has(~ :popover-open)) .close-menu {
+    display: none;
+  }
+
+  .site-menu {
+    position: fixed;
+    inset: var(--sl-nav-height) 0 auto;
+    width: 100%;
+    margin: 0;
+    padding: 0.5rem var(--sl-nav-pad-x) 1rem;
+    border: 0;
+    border-bottom: 1px solid var(--border);
+    background-color: var(--background);
+    color: var(--foreground);
+  }
+  .site-menu ul {
+    padding: 0;
+    list-style: none;
+  }
+  .site-menu li a {
+    display: block;
+    padding-block: 0.75rem;
+    color: var(--foreground);
+    font-size: var(--sl-text-lg);
+    font-weight: 500;
+    text-decoration: none;
+  }
+  .site-menu li a[aria-current="page"] {
+    text-decoration: underline;
+    text-decoration-color: var(--accent);
+    text-underline-offset: 6px;
+  }
+  .menu-cta {
+    margin-top: 0.75rem;
+  }
+  .site-menu-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 1rem;
+    border-top: 1px solid var(--border);
+    padding-top: 0.75rem;
+  }
+  .menu-github {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--muted-foreground);
+    font-size: var(--sl-text-base);
+    text-decoration: none;
+  }
+  .menu-github:hover {
+    color: var(--foreground);
+  }
+
+  /* One switch, not two: below this the header is compact — brand, the search
+     icon, the install button and the menu — and at it the whole row appears at
+     once. Five links beside the brand, search, GitHub, the theme toggle and
+     the install button need about 1100px, and the project would rather move
+     the set into the menu than shrink the type or drop a link. */
+  @media (min-width: 68.75rem) {
+    .links,
+    .wide {
+      display: flex;
+    }
+    .menu-button {
+      display: none;
+    }
+
+    /* The docs keep a compact search field once the row is there to hold it. */
+    .field :global(button[data-open-modal]) {
+      justify-content: flex-start;
+      gap: 0.5rem;
+      width: 14rem;
+      padding-inline: 0.75rem 0.375rem;
+      border: 1px solid var(--border);
+      background-color: var(--card);
+      font-size: var(--sl-text-sm);
+    }
+    .field :global(button[data-open-modal]:hover) {
+      border-color: color-mix(in oklch, var(--foreground) 25%, transparent);
+      background-color: var(--card);
+    }
+    .field :global(button[data-open-modal] > span) {
+      display: block;
+    }
+    .field :global(button[data-open-modal] > kbd) {
+      display: flex;
+      margin-inline-start: auto;
+    }
+  }
+</style>

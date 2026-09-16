@@ -1,0 +1,8 @@
+---
+// Docs pages keep Starlight's footer (edit link, previous/next). Marketing
+// pages render the site footer from SiteLayout instead.
+import Default from "@astrojs/starlight/components/Footer.astro"
+import { isDocsPage } from "../../lib/nav"
+---
+
+{isDocsPage(Astro.url) && <Default />}

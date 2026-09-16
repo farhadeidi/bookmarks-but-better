@@ -84,6 +84,13 @@ jobs:
           # field, so there is one place to bump it.
           bun-version-file: package.json
 
+      # `bun run check` type-checks and builds the website, and Astro runs on
+      # Node, which Astro 7 needs at >= 22.12.
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
@@ -176,6 +183,13 @@ jobs:
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version-file: package.json
+
+      # Astro (site, Starlight docs, Pagefind search) runs on Node, which
+      # Astro 7 needs at >= 22.12.
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
 
       - name: Install dependencies
         run: bun install --frozen-lockfile

@@ -1,0 +1,62 @@
+---
+// Starlight's head (title, description, canonical, Open Graph and the
+// og:image / theme-color entries from astro.config.ts), plus the site's
+// self-hosted font, the browser check for the install buttons, and the
+// structured data for documentation pages.
+//
+// Inter is the whole type system, body and headings alike, so the one face is
+// preloaded on every page. It uses `font-display: optional`, so a face that is
+// not preloaded would likely miss first paint.
+import Default from "@astrojs/starlight/components/Head.astro"
+import { Font } from "astro:assets"
+import { article, serializeJsonLd } from "../../lib/seo"
+import { SITE } from "../../lib/site"
+
+// The marketing pages render through Starlight too, as StarlightPage splash
+// pages, so this override runs on every page of the site. They carry their own
+// structured data from SiteLayout; only the docs collection is typed here, and
+// `TechArticle` is the truthful type for it. (Google's Article rich result
+// takes Article/NewsArticle/BlogPosting only, so this is for readers that
+// resolve the graph, not for stars in a search result.)
+const { pathname } = Astro.url
+const { entry } = Astro.locals.starlightRoute
+const canonical = new URL(
+  pathname.endsWith("/") ? pathname : `${pathname}/`,
+  SITE.url
+).href
+
+const jsonLd = pathname.startsWith("/docs/")
+  ? article({
+      type: "TechArticle",
+      headline: entry.data.title,
+      description: entry.data.description,
+      url: canonical,
+    })
+  : undefined
+---
+
+<Default />
+<Font cssVariable="--font-inter" preload />
+{
+  jsonLd && (
+    <script
+      is:inline
+      type="application/ld+json"
+      set:html={serializeJsonLd(jsonLd)}
+    />
+  )
+}
+<script is:inline>
+  // Marks Firefox and Safari on <html data-browser> before first paint, so
+  // the install buttons name the visitor's browser. Chromium browsers, and
+  // visitors without JavaScript, keep the Chrome default.
+  ;(function () {
+    var ua = navigator.userAgent
+    var browser = /Firefox\//.test(ua)
+      ? "firefox"
+      : /Safari\//.test(ua) && !/Chrom|CriOS|FxiOS|EdgiOS|Android/.test(ua)
+        ? "safari"
+        : null
+    if (browser) document.documentElement.dataset.browser = browser
+  })()
+</script>

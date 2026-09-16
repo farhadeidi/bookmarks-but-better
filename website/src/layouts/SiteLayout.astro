@@ -1,0 +1,74 @@
+---
+// Marketing pages render through Starlight as splash pages, so the whole site
+// shares one header: title, search, links, theme toggle and mobile menu. The
+// overrides in components/starlight/ step aside on these pages and let the
+// content run full width.
+import StarlightPage from "@astrojs/starlight/components/StarlightPage.astro"
+import SiteFooter from "../components/SiteFooter.astro"
+import { serializeJsonLd, type JsonLd } from "../lib/seo"
+
+interface Props {
+  /** The full document title. */
+  title: string
+  description: string
+  noindex?: boolean
+  /** Include the page in the site search. */
+  searchable?: boolean
+  /**
+   * Fill the viewport below the header instead of scrolling, and leave the
+   * site footer off: for a page that is one full-height frame (/preview/).
+   */
+  fill?: boolean
+  jsonLd?: JsonLd[]
+}
+
+const {
+  title,
+  description,
+  noindex = false,
+  searchable = true,
+  fill = false,
+  jsonLd = [],
+} = Astro.props
+
+const head = [
+  // Replaces Starlight's "title — site name" with the full title as given.
+  { tag: "title" as const, content: title },
+  // Starlight hardcodes og:type=article for every page. These are site pages,
+  // not articles; the merge deduplicates on `property`, so this one wins.
+  {
+    tag: "meta" as const,
+    attrs: { property: "og:type", content: "website" },
+  },
+  ...(noindex
+    ? [{ tag: "meta" as const, attrs: { name: "robots", content: "noindex" } }]
+    : []),
+  ...jsonLd.map((data) => ({
+    tag: "script" as const,
+    attrs: { type: "application/ld+json" },
+    content: serializeJsonLd(data),
+  })),
+]
+---
+
+<StarlightPage
+  frontmatter={{
+    title,
+    description,
+    template: "splash",
+    pagefind: searchable,
+    head,
+  }}
+>
+  <div
+    id="_top"
+    tabindex="-1"
+    class:list={[
+      "bbb-site bg-background font-sans text-foreground antialiased outline-none",
+      fill && "bbb-fill",
+    ]}
+  >
+    <slot />
+    {!fill && <SiteFooter />}
+  </div>
+</StarlightPage>

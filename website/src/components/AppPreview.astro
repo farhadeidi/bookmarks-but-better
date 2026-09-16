@@ -1,0 +1,70 @@
+---
+// The hero's product shot: a real screenshot framed as a browser tab, with a
+// play affordance over it. It is a static figure and ships no JavaScript —
+// clicking through opens /preview/, where the real app runs below the site
+// header. (The screenshot itself is the Amber Minimal theme.)
+import dashboardDark from "../assets/screenshots/dashboard-dark.png"
+import dashboardLight from "../assets/screenshots/dashboard-light.png"
+import { PAGES } from "../lib/pages"
+import ModeImage from "./ModeImage.astro"
+---
+
+<figure id="demo" class="relative isolate scroll-mt-20">
+  <div
+    class="relative overflow-hidden rounded-xl bg-card shadow-2xl ring-1 shadow-foreground/10 ring-foreground/10 dark:shadow-none"
+  >
+    <div
+      class="flex items-center gap-3 border-b border-border bg-muted/60 px-4 py-2.5"
+      aria-hidden="true"
+    >
+      <div class="flex gap-1.5">
+        <span class="size-2.5 rounded-full bg-foreground/15"></span>
+        <span class="size-2.5 rounded-full bg-foreground/15"></span>
+        <span class="size-2.5 rounded-full bg-foreground/15"></span>
+      </div>
+      <div
+        class="flex h-7 max-w-xs flex-1 items-center rounded-md border border-border bg-background px-3 text-sm text-muted-foreground"
+      >
+        New Tab
+      </div>
+    </div>
+    <div class="relative">
+      <ModeImage
+        light={dashboardLight}
+        dark={dashboardDark}
+        alt="The Bookmarks But Better dashboard in light mode: bookmark folders as cards in a masonry grid"
+        altDark="The Bookmarks But Better dashboard in dark mode: bookmark folders as cards in a masonry grid"
+        widths={[640, 960, 1280, 1400]}
+        sizes="(min-width: 1152px) 1104px, calc(100vw - 48px)"
+        imageClass="h-auto w-full"
+        eager
+      />
+      <div
+        class="absolute inset-0 grid place-items-center bg-linear-to-t from-black/45 via-black/10 to-transparent"
+      >
+        <a
+          href={PAGES.preview.path}
+          class="inline-flex items-center gap-2 rounded-lg bg-white py-3 pr-5 pl-4 text-base/6 font-medium text-neutral-950 shadow-lg shadow-black/25 hover:bg-neutral-100 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white"
+        >
+          <svg
+            viewBox="0 0 24 24"
+            class="size-4 shrink-0 fill-current"
+            aria-hidden="true"
+          >
+            <path
+              d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5Z"
+            ></path>
+          </svg>
+          Try it live
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <figcaption
+    class="mt-4 text-center text-base/7 text-pretty text-muted-foreground sm:text-sm/6"
+  >
+    The real app, running on demo bookmarks. Nothing to install, and all ten
+    themes are there to try.
+  </figcaption>
+</figure>

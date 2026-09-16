@@ -3,10 +3,19 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Bookmarks But Better — live preview</title>
+    <title>Live preview app frame — Bookmarks But Better</title>
+    <meta
+      name="description"
+      content="The real Bookmarks But Better new tab running on demo data, embedded by the site's live preview."
+    />
+    <!-- Always embedded, never a destination: /preview/ is the page visitors
+         land on and the one that should be indexed. -->
     <meta name="robots" content="noindex" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <style>
-      /* The app fills the iframe; there is no marketing chrome here. */
+      /* The real app filling its iframe, at /preview/app/, which the /preview/
+         page embeds and nothing else does. There is no marketing chrome here —
+         the header belongs to the embedding page. */
       html,
       body {
         margin: 0;

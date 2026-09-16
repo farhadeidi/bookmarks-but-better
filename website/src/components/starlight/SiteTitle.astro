@@ -1,0 +1,41 @@
+---
+// The header's brand, linking home. The header leaves it room to stay spelled
+// out down to 360px.
+import { SITE } from "../../lib/site"
+---
+
+<a href="/" class="bbb-title">
+  <img src="/logo-dark.svg" alt="" width="24" height="24" class="logo light" />
+  <img src="/logo.svg" alt="" width="24" height="24" class="logo dark" />
+  <span translate="no">{SITE.name}</span>
+</a>
+
+<style>
+  .bbb-title {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    gap: 0.625rem;
+    color: var(--foreground);
+    font-size: 0.9375rem;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    text-decoration: none;
+    white-space: nowrap;
+  }
+  .bbb-title:hover {
+    color: var(--foreground);
+  }
+  .logo {
+    flex-shrink: 0;
+    width: 1.5rem;
+    height: 1.5rem;
+  }
+  .dark,
+  :global([data-theme="dark"]) .light {
+    display: none;
+  }
+  :global([data-theme="dark"]) .dark {
+    display: block;
+  }
+</style>

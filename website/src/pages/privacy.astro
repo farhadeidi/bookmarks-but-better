@@ -1,0 +1,108 @@
+---
+import ArticleLayout from "../layouts/ArticleLayout.astro"
+import { PAGES } from "../lib/pages"
+import { article } from "../lib/seo"
+import { SITE } from "../lib/site"
+---
+
+<ArticleLayout
+  title={PAGES.privacy.title}
+  description={PAGES.privacy.description}
+  jsonLd={[
+    article({
+      type: "Article",
+      headline: "Privacy",
+      description: PAGES.privacy.description,
+      url: new URL(PAGES.privacy.path, SITE.url).href,
+    }),
+  ]}
+  eyebrow={SITE.name}
+  heading="Privacy"
+  intro="Bookmarks But Better is built for people who do not want their reading habits collected. This page describes, in plain language, what the extension and this website touch."
+>
+  <h2>What we never collect</h2>
+  <p>
+    No accounts, no analytics, no tracking, no advertising, and no collection of
+    bookmark content. There is no server that receives your bookmarks, and there
+    is nothing to opt out of.
+  </p>
+
+  <h2>Where your data lives</h2>
+  <p>
+    <strong>Browser source:</strong> bookmarks stay in your browser's own bookmark
+    store and are read or changed only through its built-in APIs.
+  </p>
+  <p>
+    <strong>Vault daemon:</strong> bookmarks are Markdown files in a folder you choose
+    on your own disk. The daemon serves them to the extension over <code
+      >127.0.0.1</code
+    > / <code>localhost</code> only. Nothing is uploaded.
+  </p>
+  <p>
+    <strong>Standalone source (legacy):</strong> the collection lives in a database
+    inside your browser profile (IndexedDB) and never leaves it. It is retiring over
+    one major version; migration to a vault is an explicit copy that leaves the legacy
+    data intact.
+  </p>
+
+  <h2>Network requests the extension makes</h2>
+  <p>
+    One kind only, by default: favicon lookups against Google's public favicon
+    service. Bookmark origins (the scheme and host) are sent to find site icons;
+    full URL paths are not.
+  </p>
+  <p>
+    Icons are looked up in this order, and each step that answers stops the next
+    from running: a local cache of icon bytes stored on your machine, then the
+    browser's own on-device icon store (Chrome's favicon API; Firefox has no
+    equivalent an extension may read), then Google, then a letter placeholder
+    drawn locally. The one exception is the grid view: the browser's store only
+    holds small icons, so a grid tile asks Google before the browser's store. A
+    successful lookup is cached for 30 days, so a given site is normally asked
+    about once a month rather than on every new tab, and cached icons keep
+    working offline.
+  </p>
+  <p>
+    If you connect a local daemon, the extension talks to that loopback address.
+    Permission is requested at connect time, never at install time.
+  </p>
+
+  <h2>This website</h2>
+  <p>
+    This site is static HTML and CSS served from GitHub Pages, with a few small
+    scripts for the dark-mode toggle, copy buttons and the live preview. It
+    embeds no analytics, sets no cookies, loads no third-party scripts, and
+    serves its own fonts.
+  </p>
+  <p>
+    The live demo at <a href="/preview/">/preview/</a> runs the real app against
+    seeded demo bookmarks when you visit that page; no other page on this site
+    loads the app. It uses the same public favicon service as the extension to
+    show real site icons, and only the fixed demo origins are ever requested —
+    none of your own bookmarks are involved. Docs search runs in your browser
+    against an index served from this site, with no external search service.
+  </p>
+  <p>
+    Your dark-mode preference is stored in your browser's <code
+      >localStorage</code
+    > and nowhere else.
+  </p>
+
+  <h2>Permissions, briefly</h2>
+  <p>
+    <strong>Chrome:</strong> bookmarks, storage, activeTab, favicon and clipboardWrite.
+  </p>
+  <p><strong>Firefox:</strong> bookmarks, storage and activeTab.</p>
+  <p>
+    <strong>Safari:</strong> activeTab and storage. Safari uses the local daemon
+    source because browser bookmarks are not available to extensions there.
+  </p>
+  <p>Optional localhost permissions appear only when you connect a daemon.</p>
+
+  <h2>Questions</h2>
+  <p>
+    The source code is public: audit it at <a href={SITE.repository}
+      >{SITE.repository.replace("https://", "")}</a
+    >, and open an issue there if anything here looks wrong.
+  </p>
+</ArticleLayout>

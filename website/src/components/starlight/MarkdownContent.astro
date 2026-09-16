@@ -1,0 +1,16 @@
+---
+// Marketing pages bring their own styles; docs pages keep Starlight's
+// Markdown styles.
+import Default from "@astrojs/starlight/components/MarkdownContent.astro"
+import { isDocsPage } from "../../lib/nav"
+---
+
+{
+  isDocsPage(Astro.url) ? (
+    <Default>
+      <slot />
+    </Default>
+  ) : (
+    <slot />
+  )
+}

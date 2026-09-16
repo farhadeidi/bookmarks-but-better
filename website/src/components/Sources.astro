@@ -1,0 +1,60 @@
+---
+import { TEXT_LINK } from "../lib/ui"
+import HeadingGroup from "./HeadingGroup.astro"
+import Section from "./Section.astro"
+
+const DETAIL = "text-base/7 text-pretty text-muted-foreground sm:text-sm/6"
+---
+
+<Section id="sources" labelledby="sources-title">
+  <div class="grid gap-x-12 gap-y-10 lg:grid-cols-2 lg:gap-y-14">
+    <HeadingGroup
+      id="sources-title"
+      eyebrow="Sources"
+      title="Browser bookmarks or Markdown files. Never mixed."
+      description="Operations affect only the active source. Switching sources never merges or moves bookmarks, so what lives where is always your decision."
+    />
+    <dl class="divide-y divide-border">
+      <div class="pb-10">
+        <dt class="flex flex-wrap items-center gap-3 text-lg/7 font-medium">
+          Browser bookmarks
+          <span
+            class="inline-flex rounded-full bg-muted px-2.5 text-sm/6 font-medium text-muted-foreground"
+          >
+            Default
+          </span>
+        </dt>
+        <dd class:list={["mt-3", DETAIL]}>
+          Shows and edits the bookmarks you already have, through the browser's
+          built-in bookmarks API. Nothing to set up and nothing copied.
+        </dd>
+        <dd class="mt-4 text-base/7 sm:text-sm/6">
+          <a href="/docs/start/sources/" class={TEXT_LINK}>How sources work</a>
+        </dd>
+      </div>
+      <div class="pt-10">
+        <dt class="flex flex-wrap items-center gap-3 text-lg/7 font-medium">
+          Markdown vault
+          <span
+            class="inline-flex rounded-full bg-muted px-2.5 text-sm/6 font-medium text-muted-foreground"
+          >
+            Optional
+          </span>
+        </dt>
+        <dd class:list={["mt-3", DETAIL]}>
+          Your bookmarks as plain Markdown files in a folder you choose, served
+          by a small daemon that only accepts connections from your own
+          computer. The files stay usable in a text editor, in Obsidian and in
+          Git. In Safari it is the only source.
+        </dd>
+        <dd class="mt-5">
+          <pre
+            class="overflow-x-auto rounded-lg bg-muted px-4 py-3 text-sm/6 text-foreground"><code class="font-mono">npx bookmarks-but-better@latest</code></pre>
+        </dd>
+        <dd class="mt-4 text-base/7 sm:text-sm/6">
+          <a href="/docs/daemon/" class={TEXT_LINK}>How Markdown vaults work</a>
+        </dd>
+      </div>
+    </dl>
+  </div>
+</Section>

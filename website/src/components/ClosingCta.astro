@@ -1,0 +1,18 @@
+---
+import HeadingGroup from "./HeadingGroup.astro"
+import InstallButtons from "./InstallButtons.astro"
+import Section from "./Section.astro"
+---
+
+<Section id="install" labelledby="install-title" class="text-center">
+  <HeadingGroup
+    id="install-title"
+    eyebrow="Get started"
+    title="Your bookmarks, one tab away"
+    description="Add it from the Chrome Web Store or Firefox Add-ons in a minute. The Safari version is coming soon."
+    align="center"
+  />
+  <div class="mt-8 flex flex-col items-center md:mt-10">
+    <InstallButtons />
+  </div>
+</Section>

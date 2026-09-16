@@ -1,0 +1,33 @@
+---
+import SiteLayout from "../layouts/SiteLayout.astro"
+import { BUTTON, PRIMARY, TEXT_LINK } from "../lib/ui"
+---
+
+<SiteLayout
+  title="Page not found — Bookmarks But Better"
+  description="This page does not exist."
+  noindex
+  searchable={false}
+>
+  <div class="mx-auto max-w-6xl px-6 py-24 text-center md:py-32">
+    <p class="text-sm/6 font-medium text-accent tabular-nums">404</p>
+    <h1
+      class="font-display mx-auto mt-3 max-w-[20ch] text-5xl font-semibold tracking-[-0.035em] text-balance sm:text-6xl"
+    >
+      Nothing here.
+    </h1>
+    <p
+      class="mx-auto mt-6 max-w-[48ch] text-lg/8 text-pretty text-muted-foreground"
+    >
+      The page you were looking for has wandered off the shelf.
+    </p>
+    <div
+      class="mt-10 flex flex-col items-center justify-center gap-6 sm:flex-row"
+    >
+      <a href="/" class:list={[BUTTON, PRIMARY, "px-4"]}>Back to the homepage</a>
+      <p class="text-base/7 sm:text-sm/6">
+        <a href="/docs/" class={TEXT_LINK}>Read the docs</a>
+      </p>
+    </div>
+  </div>
+</SiteLayout>

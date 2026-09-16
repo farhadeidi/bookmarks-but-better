@@ -4,8 +4,11 @@ import { defineConfig } from "vite"
 import pkg from "../package.json"
 
 /**
- * Builds the real application — unchanged — as a static "live preview" page
- * embedded in the marketing site's hero iframe at /app-preview/.
+ * Builds the real application — unchanged — as the static app frame at
+ * /preview/app/. It is always embedded in an iframe, never visited directly,
+ * and by exactly one page: /preview/, which wraps it in the site header and a
+ * theme strip. Keeping the bare app on its own path is what lets /preview/
+ * carry the header without nesting a second one.
  *
  * `vite build --mode development` is deliberate: the app's SourceEnvironment
  * seam folds on `import.meta.env.DEV`, so a development-mode build keeps the
@@ -20,9 +23,9 @@ const rootDir = path.resolve(__dirname, "..")
 
 export default defineConfig({
   // Rooted at app-frame/ so the emitted html and assets both land under
-  // public/app-preview/, separate from the marketing page at /preview/.
+  // public/preview/app/, served as the embedded app frame at /preview/app/.
   root: path.resolve(__dirname, "app-frame"),
-  base: "/app-preview/",
+  base: "/preview/app/",
   // Mode is development (see header comment) — keep the JSX transform on the
   // production runtime so bundles stay lean.
   esbuild: { jsxDev: false },
@@ -102,7 +105,7 @@ export default defineConfig({
         warn(warning)
       },
     },
-    outDir: path.resolve(__dirname, "public/app-preview"),
+    outDir: path.resolve(__dirname, "public/preview/app"),
     emptyOutDir: true,
   },
 })

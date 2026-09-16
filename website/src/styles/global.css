@@ -1,0 +1,280 @@
+/* The site's stylesheet ("Modern editorial"), loaded on every page through
+   Starlight's customCss. Tailwind's theme and utilities sit in layers around
+   Starlight's. Tailwind's preflight is left out so the docs keep Starlight's
+   base styles; marketing pages get a scoped reset (.bbb-site).
+
+   The tokens below are the single source of truth: starlight.css derives the
+   docs' --sl-* colors from them. Primary is ink; amber (--accent) is a small
+   accent only: eyebrows, link underlines, the focus ring, selection and
+   markers. See BRAND.md. */
+@layer base, starlight, theme, components, utilities;
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);
+
+@custom-variant dark (&:is(.dark *));
+/* <html data-browser>, set before first paint in Head.astro. */
+@custom-variant firefox (&:where([data-browser="firefox"] *));
+@custom-variant safari (&:where([data-browser="safari"] *));
+
+:root {
+  color-scheme: light;
+  --background: oklch(0.99 0.002 90);
+  --foreground: oklch(0.2 0.005 80);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.2 0.005 80);
+  --muted: oklch(0.96 0.002 90);
+  --muted-foreground: oklch(0.47 0.005 80);
+  --primary: oklch(0.2 0.005 80);
+  --primary-foreground: oklch(0.99 0.002 90);
+  --accent: oklch(0.55 0.12 60);
+  --border: oklch(0.2 0.005 80 / 10%);
+  --ring: oklch(0.55 0.12 60);
+}
+
+.dark {
+  color-scheme: dark;
+  --background: oklch(0.18 0.003 90);
+  --foreground: oklch(0.95 0.002 90);
+  --card: oklch(0.21 0.003 90);
+  --card-foreground: oklch(0.95 0.002 90);
+  --muted: oklch(0.25 0.003 90);
+  --muted-foreground: oklch(0.7 0.004 90);
+  --primary: oklch(0.95 0.002 90);
+  --primary-foreground: oklch(0.2 0.005 80);
+  --accent: oklch(0.72 0.13 70);
+  --border: oklch(1 0 0 / 10%);
+  --ring: oklch(0.72 0.13 70);
+}
+
+@theme inline {
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-sans--font-feature-settings: "cv02", "cv03", "cv04", "cv11", "ss01";
+  /* Display: the hero title, section titles and page titles. The same Inter
+     as the body text, drawn at its display optical size and set heavier and
+     tighter by the headings themselves. */
+  --font-display: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-accent: var(--accent);
+  --color-border: var(--border);
+  --color-ring: var(--ring);
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+/* Marketing pages render inside Starlight's <main>; its bottom padding would
+   sit below the site footer. */
+main:has(> .bbb-site) {
+  padding: 0;
+}
+
+/* A page that is one full-height frame (/preview/): it fills what the header
+   leaves, carries no footer and does not scroll — the app inside does its own
+   scrolling, so there is never a second scrollbar. Starlight reserves room
+   below the header for a mobile table of contents on every page under 72rem;
+   a splash page has none, so the frame takes the whole remainder. */
+html:has(.bbb-fill) {
+  --sl-mobile-toc-height: 0rem;
+  overflow: hidden;
+}
+.bbb-fill {
+  height: calc(100dvh - var(--sl-nav-height));
+}
+
+/* A scoped stand-in for Tailwind's preflight on the marketing pages. Starlight
+   already resets box-sizing, margins and form fonts. */
+@layer components {
+  .bbb-site {
+    line-height: 1.5;
+  }
+  .bbb-site :where(*),
+  .bbb-site ::before,
+  .bbb-site ::after {
+    border: 0 solid;
+    padding: 0;
+  }
+  .bbb-site :where(h1, h2, h3, h4, h5, h6) {
+    font-size: inherit;
+    font-weight: inherit;
+  }
+  .bbb-site :where(ol, ul, menu) {
+    list-style: none;
+  }
+  .bbb-site :where(a) {
+    color: inherit;
+    text-decoration: inherit;
+  }
+  .bbb-site :where(b, strong) {
+    font-weight: bolder;
+  }
+  .bbb-site :where(img, svg, video, canvas, iframe, picture) {
+    display: block;
+    vertical-align: middle;
+  }
+  .bbb-site :where(img, video) {
+    max-width: 100%;
+    height: auto;
+  }
+  .bbb-site :where(button, input, select, textarea) {
+    color: inherit;
+    background-color: transparent;
+    border-radius: 0;
+  }
+  .bbb-site :where(button) {
+    cursor: pointer;
+  }
+}
+
+::selection {
+  background: color-mix(in oklch, var(--accent) 25%, transparent);
+}
+
+:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Long-form HTML the marketing pages cannot class element by element (the
+   privacy page). Width comes from a max-w-[*ch] class beside `.prose`.
+   Titles and h2s are set like the page title above them, heavier and tighter
+   than the body text. Anything inside `.not-prose` keeps its own styling. */
+@layer components {
+  .prose {
+    color: var(--color-muted-foreground);
+    font-size: var(--text-base);
+    line-height: --spacing(7);
+    overflow-wrap: break-word;
+  }
+  .prose > * + * {
+    margin-top: --spacing(5);
+  }
+  .prose > :first-child {
+    margin-top: 0;
+  }
+  .prose :where(h1, h2):not(:where(.not-prose *)) {
+    margin-top: --spacing(14);
+    color: var(--color-foreground);
+    font-family: var(--font-display);
+    font-size: var(--text-2xl);
+    font-weight: var(--font-weight-semibold);
+    line-height: var(--text-2xl--line-height);
+    letter-spacing: -0.015em;
+    text-wrap: balance;
+  }
+  .prose :where(h3, h4, h5, h6):not(:where(.not-prose *)) {
+    margin-top: --spacing(10);
+    color: var(--color-foreground);
+    font-size: var(--text-base);
+    font-weight: var(--font-weight-semibold);
+    line-height: --spacing(7);
+  }
+  .prose :where(h3):not(:where(.not-prose *)) {
+    font-size: var(--text-lg);
+  }
+  .prose > :where(h1, h2, h3, h4, h5, h6) + * {
+    margin-top: --spacing(3);
+  }
+  .prose :where(strong):not(:where(.not-prose *)) {
+    color: var(--color-foreground);
+    font-weight: var(--font-weight-semibold);
+  }
+  .prose :where(a):not(:where(.not-prose *)) {
+    color: var(--color-foreground);
+    font-weight: var(--font-weight-medium);
+    text-decoration: underline;
+    text-decoration-color: var(--color-accent);
+    text-underline-offset: 4px;
+
+    @variant hover {
+      text-decoration-color: var(--color-foreground);
+    }
+  }
+  .prose :where(ul, ol):not(:where(.not-prose *)) {
+    padding-left: --spacing(5);
+  }
+  .prose :where(ul):not(:where(.not-prose *)) {
+    list-style: disc;
+  }
+  .prose :where(ol):not(:where(.not-prose *)) {
+    list-style: decimal;
+  }
+  .prose :where(li + li):not(:where(.not-prose *)) {
+    margin-top: --spacing(2);
+  }
+  .prose :where(li)::marker {
+    color: var(--color-accent);
+  }
+  .prose :where(code):not(:where(pre *, .not-prose *)) {
+    border-radius: var(--radius-sm);
+    background: var(--color-muted);
+    padding: --spacing(0.5) --spacing(1.5);
+    color: var(--color-foreground);
+    font-family: var(--font-mono);
+    font-size: 0.875em;
+  }
+  .prose :where(pre):not(:where(.not-prose *)) {
+    overflow-x: auto;
+    border-radius: var(--radius-lg);
+    background: var(--color-muted);
+    padding: --spacing(3) --spacing(4);
+    color: var(--color-foreground);
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    line-height: --spacing(6);
+  }
+  .prose :where(blockquote):not(:where(.not-prose *)) {
+    border-left: 2px solid var(--color-accent);
+    padding-left: --spacing(4);
+    color: var(--color-foreground);
+  }
+  .prose :where(table):not(:where(.not-prose *)) {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
+    border-collapse: collapse;
+    font-size: var(--text-sm);
+    line-height: --spacing(6);
+  }
+  .prose :where(th, td):not(:where(.not-prose *)) {
+    border-bottom: 1px solid var(--color-border);
+    padding: --spacing(2) --spacing(3);
+    text-align: left;
+    vertical-align: top;
+  }
+  .prose :where(th):not(:where(.not-prose *)) {
+    color: var(--color-foreground);
+    font-weight: var(--font-weight-semibold);
+  }
+  .prose :where(hr):not(:where(.not-prose *)) {
+    margin-block: --spacing(12);
+    border-top: 1px solid var(--color-border);
+  }
+  .prose :where(img):not(:where(.not-prose *)) {
+    border-radius: min(1.5vw, var(--radius-xl));
+    outline: 1px solid color-mix(in oklch, var(--color-foreground) 10%, transparent);
+    outline-offset: -1px;
+  }
+}

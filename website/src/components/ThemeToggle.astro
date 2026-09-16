@@ -1,0 +1,108 @@
+---
+/**
+ * The dark/light toggle for the header and the mobile menus. It renders
+ * outside the marketing pages' Tailwind scope too, so it is plain CSS on the
+ * site's tokens.
+ */
+---
+
+<button
+  type="button"
+  class="theme-toggle"
+  data-theme-toggle
+  aria-label="Dark mode"
+  aria-pressed="false"
+>
+  <svg
+    class="icon-moon"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    stroke-width="1.8"
+    aria-hidden="true"
+  >
+    <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"></path>
+  </svg>
+  <svg
+    class="icon-sun"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    stroke-width="1.8"
+    aria-hidden="true"
+  >
+    <circle cx="12" cy="12" r="4"></circle>
+    <path
+      d="M12 2v2m0 16v2M4.9 4.9l1.4 1.4m11.4 11.4 1.4 1.4M2 12h2m16 0h2M4.9 19.1l1.4-1.4m11.4-11.4 1.4-1.4"
+    ></path>
+  </svg>
+</button>
+
+<script>
+  import { SITE_THEME_KEY, STARLIGHT_THEME_KEY } from "../lib/theme-init"
+
+  const root = document.documentElement
+  const buttons = document.querySelectorAll<HTMLButtonElement>(
+    "[data-theme-toggle]"
+  )
+
+  const sync = () => {
+    const dark = root.classList.contains("dark")
+    buttons.forEach((button) =>
+      button.setAttribute("aria-pressed", String(dark))
+    )
+  }
+
+  buttons.forEach((button) =>
+    button.addEventListener("click", () => {
+      const dark = !root.classList.contains("dark")
+      const mode = dark ? "dark" : "light"
+      root.classList.toggle("dark", dark)
+      root.dataset.theme = mode
+      try {
+        localStorage.setItem(SITE_THEME_KEY, mode)
+        localStorage.setItem(STARLIGHT_THEME_KEY, mode)
+      } catch {
+        /* storage unavailable */
+      }
+      sync()
+    })
+  )
+  sync()
+</script>
+
+<style>
+  .theme-toggle {
+    position: relative;
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    width: 2.5rem;
+    height: 2.5rem;
+    border: 0;
+    border-radius: 0.5rem;
+    background: transparent;
+    color: var(--muted-foreground);
+    cursor: pointer;
+  }
+  .theme-toggle:hover {
+    background: var(--muted);
+    color: var(--foreground);
+  }
+  .theme-toggle:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+  svg {
+    width: 1.125rem;
+    height: 1.125rem;
+  }
+  .icon-sun,
+  :global(.dark) .icon-moon {
+    display: none;
+  }
+  :global(.dark) .icon-sun {
+    display: block;
+  }
+</style>

@@ -1,0 +1,45 @@
+---
+import { getImage } from "astro:assets"
+import dashboardLight from "../assets/screenshots/dashboard-light.png"
+import ClosingCta from "../components/ClosingCta.astro"
+import Faq from "../components/Faq.astro"
+import Features from "../components/Features.astro"
+import Hero from "../components/Hero.astro"
+import Privacy from "../components/Privacy.astro"
+import Sources from "../components/Sources.astro"
+import Themes from "../components/Themes.astro"
+import SiteLayout from "../layouts/SiteLayout.astro"
+import { FAQ_ITEMS } from "../lib/faq-items"
+import { PAGES } from "../lib/pages"
+import { faqPage, softwareApplication, website } from "../lib/seo"
+import { SITE } from "../lib/site"
+
+// The hero's own screenshot, in one of the sizes AppPreview already emits, so
+// the SoftwareApplication node points at an image this page really shows.
+const screenshot = await getImage({
+  src: dashboardLight,
+  format: "webp",
+  width: 1280,
+})
+---
+
+<!-- The WebSite node belongs on the home page and nowhere else: Google reads
+     it from the root URI to pick the site name it shows in results. -->
+<SiteLayout
+  title={PAGES.home.title}
+  description={PAGES.home.description}
+  searchable={false}
+  jsonLd={[
+    website(),
+    softwareApplication(new URL(screenshot.src, SITE.url).href),
+    faqPage(FAQ_ITEMS),
+  ]}
+>
+  <Hero />
+  <Features />
+  <Sources />
+  <Themes />
+  <Privacy />
+  <Faq items={FAQ_ITEMS} />
+  <ClosingCta />
+</SiteLayout>

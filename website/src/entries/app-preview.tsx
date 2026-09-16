@@ -1,10 +1,11 @@
 /**
- * The marketing site's live preview: the real application, running against
- * the Dev Workbench's simulated world inside the hero iframe.
+ * The marketing site's live preview: the real application, running against the
+ * Dev Workbench's simulated world, in the frame the /preview/ page embeds. That
+ * page is the only embedder; no other page on the site loads the app.
  *
- * The parent page drives appearance over postMessage ({ type: PREVIEW_MESSAGE,
- * mode?, colorTheme? }); the initial appearance arrives as URL parameters so
- * the first paint already matches the embedding site.
+ * An embedding page drives appearance over postMessage ({ type:
+ * PREVIEW_MESSAGE, mode?, colorTheme? }); the initial appearance arrives as URL
+ * parameters so the first paint already matches the embedding site.
  */
 import * as React from "react"
 import { createRoot } from "react-dom/client"
@@ -80,7 +81,11 @@ function PreviewBridge() {
 const initialMode = (() => {
   try {
     const param = new URLSearchParams(window.location.search).get("mode")
-    return isMode(param) ? param : "dark"
+    if (isMode(param)) return param
+    // Opened on its own at /preview/: follow the site's dark-mode choice.
+    const stored = localStorage.getItem("bbb-site-theme")
+    if (isMode(stored)) return stored
+    return matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"
   } catch {
     return "dark"
   }

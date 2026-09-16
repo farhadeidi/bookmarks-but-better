@@ -1,0 +1,203 @@
+---
+title: Install the daemon
+description: Install the Bookmarks But Better daemon with npx bookmarks-but-better, or with a shell or PowerShell script, and learn what goes where.
+sidebar:
+  order: 1
+---
+
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
+The daemon is a small background program that stores your bookmarks as
+Markdown files in a folder on your computer, called a **Vault**. The extension
+connects to it as a [bookmark source](/docs/start/sources/).
+
+It is optional in Chrome and Firefox, where you can use your browser bookmarks
+instead. In [Safari](/docs/start/safari/) it is required.
+
+The daemon only accepts connections from your own computer (`127.0.0.1` or
+`localhost`). It has no accounts and sends no telemetry.
+
+## Supported systems
+
+Release builds cover:
+
+- **macOS**: Intel and Apple Silicon
+- **Linux**: x86_64 and aarch64
+- **Windows**: x86_64 and ARM64
+
+## Install with the Daemon Manager
+
+The **Daemon Manager** is a command-line tool that installs and looks after the
+daemon. It needs **Node.js 20.12 or newer**. The daemon itself does not need
+Node.js.
+
+```bash
+npx bookmarks-but-better@latest
+```
+
+On a first run, it:
+
+1. Downloads the official installer for your system from the project's GitHub
+   Release, and checks it against its published SHA-256 checksum. If the check
+   fails, it refuses to run the installer.
+2. Asks **Where should your bookmarks live?** The default is `~/Bookmarks`.
+   Type an absolute path, or one that starts with `~/`. If the folder is empty or
+   does not exist, a new Vault is created there.
+3. Shows what it is about to do and asks you to confirm.
+4. Installs the daemon into your user folder, with no `sudo` and no
+   administrator prompt.
+5. Installs and starts the background service, which also starts the daemon
+   when you log in.
+6. Shows the status.
+
+The manager never reads or changes your bookmarks. It only installs, checks and
+removes the daemon, and edits the list of Vaults the daemon serves.
+
+### Run it again later
+
+Run `npx bookmarks-but-better@latest` again at any time. Once the daemon is
+installed, the command shows the status and a menu with options to:
+
+- fix each problem it found
+- add or remove a Vault
+- update or reinstall
+- uninstall
+
+You can also run a command directly:
+
+| Command                    | What it does                                                                                               |
+| -------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `status`                   | Shows what is installed, configured, running and connected, with the command that fixes anything wrong.    |
+| `install`                  | Installs or updates the daemon and its service. An update keeps every Vault.                               |
+| `uninstall`                | Removes the service and the daemon. Your Vaults are never touched.                                         |
+| `vault list`               | Lists your Vaults.                                                                                          |
+| `vault add [<id> <path>]`  | Adds a Vault, then restarts the service so it serves it.                                                    |
+| `vault remove [<id>]`      | Removes a Vault from the list (its folder stays), then restarts the service.                                |
+
+For example:
+
+```bash
+npx bookmarks-but-better@latest status
+npx bookmarks-but-better@latest vault add work ~/Work/bookmarks
+```
+
+Each command asks for anything you leave out. For scripts, add `--yes` to accept
+every default without being asked. With `--yes`, the first Vault goes in
+`~/Bookmarks`.
+
+## Install without Node.js
+
+The install scripts do the same first run without asking anything. Tell them
+where your Vault should live:
+
+<Tabs syncKey="os">
+  <TabItem label="macOS and Linux">
+
+```bash
+curl -fsSL https://github.com/farhadeidi/bookmarks-but-better/releases/latest/download/install.sh | bash -s -- --vault ~/Bookmarks
+```
+
+Pipe the script into `bash`, not `sh`. On Debian and Ubuntu, `sh` is a different
+shell, and the script does not run in it.
+
+  </TabItem>
+  <TabItem label="Windows">
+
+Run this in PowerShell:
+
+```powershell
+& ([scriptblock]::Create((irm https://github.com/farhadeidi/bookmarks-but-better/releases/latest/download/install.ps1))) -Vault "$env:USERPROFILE\Bookmarks"
+```
+
+  </TabItem>
+</Tabs>
+
+If you leave out `--vault` (or `-Vault` on Windows), the script only installs the
+daemon program, and then prints the commands that finish the setup.
+
+The scripts are published with each GitHub Release. They also check the
+downloaded daemon against its SHA-256 checksum, and install into your user
+folder without `sudo` or an administrator prompt.
+
+## What goes where
+
+<Tabs syncKey="os">
+  <TabItem label="macOS">
+
+| What                    | Where                                                    |
+| ----------------------- | -------------------------------------------------------- |
+| Daemon versions         | `~/.local/share/bookmarks-but-better`                    |
+| The command             | `~/.local/bin/bookmarks-but-better`                      |
+| Configuration and Vault list | `~/.config/bookmarks-but-better/config.toml`        |
+| Background service      | `~/Library/LaunchAgents/dev.but-better.bookmarks.plist`  |
+
+  </TabItem>
+  <TabItem label="Linux">
+
+| What                    | Where                                                                                  |
+| ----------------------- | -------------------------------------------------------------------------------------- |
+| Daemon versions         | `~/.local/share/bookmarks-but-better`                                                  |
+| The command             | `~/.local/bin/bookmarks-but-better`                                                    |
+| Configuration and Vault list | `~/.config/bookmarks-but-better/config.toml`                                      |
+| Background service      | `~/.config/systemd/user/bookmarks-but-better.service` (a systemd user unit)            |
+
+If `systemctl --user` is not available, the service is installed as a desktop
+autostart entry instead, at
+`~/.config/autostart/bookmarks-but-better.desktop`. That starts the daemon when
+you log in, but nothing restarts it if it stops.
+
+  </TabItem>
+  <TabItem label="Windows">
+
+| What                    | Where                                                                          |
+| ----------------------- | ------------------------------------------------------------------------------ |
+| Daemon versions         | `%LOCALAPPDATA%\bookmarks-but-better`                                          |
+| The command             | `%LOCALAPPDATA%\bookmarks-but-better\current`, added to your user `Path`       |
+| Configuration and Vault list | `%USERPROFILE%\.config\bookmarks-but-better\config.toml`                  |
+| Background service      | A Scheduled Task that starts when you log in                                   |
+
+  </TabItem>
+</Tabs>
+
+On macOS and Linux, if `~/.local/bin` is not on your `PATH`, the installer shows
+a line to add to your shell profile:
+
+```bash
+export PATH="$HOME/.local/bin:$PATH"
+```
+
+Your Vaults stay wherever you chose to put them.
+
+## Update
+
+```bash
+npx bookmarks-but-better@latest install
+```
+
+This updates the daemon, restarts the service, and keeps every Vault and the
+port you use.
+
+## Choose a release
+
+By default:
+
+- `npx bookmarks-but-better@latest` installs the daemon release that version of
+  the manager was published for, so the two always match.
+- The install scripts install the latest stable release.
+
+To pick a release yourself:
+
+| What you want                | Daemon Manager               | macOS and Linux script         | Windows script     |
+| ---------------------------- | ---------------------------- | ------------------------------ | ------------------ |
+| One exact release            | `install --version v4.3.0`   | `bash -s -- --version v4.3.0`  | `-Version v4.3.0`  |
+| The latest prerelease        | `install --version <its tag>` | `bash -s -- --beta`           | `-Beta`            |
+
+With `curl … | bash`, put the options after `-s --`:
+
+```bash
+curl -fsSL https://github.com/farhadeidi/bookmarks-but-better/releases/latest/download/install.sh | bash -s -- --version v4.3.0 --vault ~/Bookmarks
+```
+
+## Next step
+
+[Connect the extension](/docs/daemon/connect/) to the running daemon.

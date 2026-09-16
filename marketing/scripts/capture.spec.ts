@@ -7,9 +7,10 @@
  * - marketing/output/store/  captioned 1280×800 screenshots (Chrome uses the
  *                            first five; AMO takes all six)
  * - marketing/output/        promo-small (440×280), promo-marquee (1400×560)
- * - website/public/          og.png (1200×630) and uncaptioned screenshots/
+ * - website/public/          og.png (1200×630)
+ * - website/src/assets/screenshots/  uncaptioned website screenshots
  *
- * Captions and visual language follow website/BRAND.md ("The Quiet Library").
+ * Captions and visual language follow website/BRAND.md ("Modern editorial").
  */
 import { test, type Browser } from "@playwright/test"
 import fs from "fs"
@@ -244,8 +245,8 @@ test("capture store, promo and website images", async ({ browser }) => {
   await test.step("promo tiles", async () => {
     const heroCss = (h1: number, sub: number) => `
       .hero { position: absolute; }
-      .hero .eyebrow { font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
-      .hero h1 { font-size: ${h1}px; line-height: 1.0; margin-top: 18px; }
+      .hero .eyebrow { font-size: 16px; line-height: 1.5; font-weight: 500; color: var(--primary); }
+      .hero h1 { font-size: ${h1}px; line-height: 1.0; margin-top: 18px; letter-spacing: -0.035em; }
       .hero p { font-size: ${sub}px; line-height: 1.5; color: var(--muted); margin-top: 20px; }
       .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 26px; }
       .chips span { font-size: 13px; color: var(--fg); padding: 6px 12px; border-radius: 999px; border: 1px solid var(--hairline); background: oklch(1 0 0 / 4%); }
@@ -258,8 +259,8 @@ test("capture store, promo and website images", async ({ browser }) => {
       `${OUT}/promo-marquee.png`,
       { width: 1400, height: 560 },
       `<div class="hero" style="left:72px;top:92px;width:520px">
-        <div class="eyebrow">New tab extension · Chrome · Firefox · Safari</div>
-        <h1 class="display">Bookmarks,<br><em>but better</em></h1>
+        <div class="eyebrow">New tab extension · Chrome · Firefox</div>
+        <h1 class="display">Bookmarks,<br>but <em>better</em></h1>
         <p>Your bookmarks as a beautiful new tab.<br>Local, private, no account.</p>
         ${chips}
       </div>` + browserWindow(dashboard, { left: 640, top: 72, width: 900 }),
@@ -271,8 +272,8 @@ test("capture store, promo and website images", async ({ browser }) => {
       `${SITE}/og.png`,
       { width: 1200, height: 630 },
       `<div class="hero" style="left:64px;top:118px;width:500px">
-        <div class="eyebrow">New tab extension · Chrome · Firefox · Safari</div>
-        <h1 class="display">Bookmarks,<br><em>but better</em></h1>
+        <div class="eyebrow">New tab extension · Chrome · Firefox</div>
+        <h1 class="display">Bookmarks,<br>but <em>better</em></h1>
         <p>Your bookmarks as a beautiful new tab.<br>Local, private, no account.</p>
         ${chips}
       </div>` + browserWindow(dashboard, { left: 580, top: 84, width: 820 }),
@@ -284,7 +285,7 @@ test("capture store, promo and website images", async ({ browser }) => {
       `${OUT}/promo-small.png`,
       { width: 440, height: 280 },
       `<div class="hero" style="left:28px;top:52px;width:250px">
-        <h1 class="display">Bookmarks,<br><em>but better</em></h1>
+        <h1 class="display">Bookmarks,<br>but <em>better</em></h1>
         <p>A beautiful, private<br>new tab for your bookmarks.</p>
       </div>` + browserWindow(dashboard, { left: 250, top: 40, width: 420 }),
       heroCss(38, 13) +
@@ -294,7 +295,9 @@ test("capture store, promo and website images", async ({ browser }) => {
 
   // ─── Website screenshots (uncaptioned, the site supplies the copy) ────
   await test.step("website screenshots", async () => {
-    const dir = `${SITE}/screenshots`
+    // Imported by the site through astro:assets, which emits responsive
+    // AVIF/WebP variants at build time.
+    const dir = path.join(ROOT, "website/src/assets/screenshots")
     fs.rmSync(dir, { recursive: true, force: true })
     const SIZE = { width: 1400, height: 875 }
     const cropTo = (scene: string, region: Region) =>

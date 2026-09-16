@@ -1,0 +1,79 @@
+---
+/**
+ * The header's install button, also at the top of both mobile menus. It names
+ * the visitor's browser from <html data-browser> (set in Head.astro): Chrome
+ * by default and without JavaScript, Firefox, or Safari, whose version is
+ * coming soon and links to its guide. It renders outside the marketing pages' Tailwind scope, so it
+ * is plain CSS on the site's tokens.
+ */
+import { SITE } from "../lib/site"
+import BrowserIcon from "./BrowserIcon.astro"
+
+interface Props {
+  /** Full width and touch-sized, for the mobile menus. */
+  block?: boolean
+}
+
+const { block = false } = Astro.props
+const classes = ["install-cta", { block }]
+---
+
+<a href={SITE.chromeStore} class:list={classes} data-for="chrome">
+  <BrowserIcon name="chrome" />
+  Add to Chrome
+</a>
+<a href={SITE.firefoxStore} class:list={classes} data-for="firefox">
+  <BrowserIcon name="firefox" />
+  Add to Firefox
+</a>
+<a href="/docs/start/safari/" class:list={classes} data-for="safari">
+  <BrowserIcon name="safari" />
+  Safari: coming soon
+</a>
+
+<style>
+  .install-cta {
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    height: 2.25rem;
+    padding-inline: 0.75rem 0.875rem;
+    border-radius: 0.5rem;
+    background-color: var(--primary);
+    color: var(--primary-foreground);
+    font-size: var(--sl-text-sm);
+    font-weight: 500;
+    text-decoration: none;
+    white-space: nowrap;
+  }
+  .install-cta:hover {
+    background-color: color-mix(in oklch, var(--primary) 90%, var(--background));
+    color: var(--primary-foreground);
+  }
+  .install-cta:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+  .install-cta :global(svg) {
+    flex-shrink: 0;
+    width: 1rem;
+    height: 1rem;
+  }
+  .block {
+    width: 100%;
+    height: 3rem;
+    font-size: var(--sl-text-base);
+  }
+
+  [data-for="firefox"],
+  [data-for="safari"],
+  :global(:root[data-browser]) [data-for="chrome"] {
+    display: none;
+  }
+  :global(:root[data-browser="firefox"]) [data-for="firefox"],
+  :global(:root[data-browser="safari"]) [data-for="safari"] {
+    display: inline-flex;
+  }
+</style>

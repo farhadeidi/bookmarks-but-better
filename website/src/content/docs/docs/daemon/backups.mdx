@@ -1,0 +1,219 @@
+---
+title: Back up your vault
+description: What to back up in a Vault, how to take a consistent copy, which tools work (copy, rsync, Time Machine, git), and how to restore safely.
+sidebar:
+  order: 4
+---
+
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
+A Vault is a folder of ordinary files. There is no hidden database: each time the
+daemon starts, it reads everything it needs from the files. That means the
+backup tools you already use will work. The daemon has no backup feature of its
+own.
+
+## What to back up
+
+Back up the **whole Vault folder**. That includes:
+
+- **Bookmark files**: one `*.md` file per bookmark.
+- **`.bookmarks-but-better-folder.md`**: one in the Vault's top folder and in
+  each subfolder, holding that folder's details.
+- **`.bookmarks-but-better-state.json`**: one per folder, recording the order
+  you arranged its contents in. It cannot be rebuilt from the other files, so
+  without it your custom order is lost.
+- **`*.assets/` folders**: files that belong to a bookmark, stored next to its
+  `.md` file.
+
+You can leave out **`.bookmarks-but-better/`**. It holds the daemon's own
+working files, such as its lock file, and is not part of your bookmarks.
+
+:::tip
+Many of these names start with a dot, and many file browsers and tools hide such
+files by default. Make sure your backup tool includes hidden files.
+:::
+
+## Make a consistent copy
+
+A copy taken while the daemon is running is usually fine, but it is not a
+snapshot of a single moment. If a change happens while the copy is being made,
+the copy can catch a move halfway through. After a restore, that can show up as
+a duplicate bookmark or a problem reported by `doctor`.
+
+To be sure a copy is consistent, stop the service while you copy:
+
+1. Stop the service:
+
+   ```bash
+   bookmarks-but-better service stop
+   ```
+
+2. Copy the Vault folder with the tool of your choice (see below).
+3. Start the service again:
+
+   ```bash
+   bookmarks-but-better service start
+   ```
+
+These commands are the same on macOS, Linux and Windows. To check whether the
+service is running, use `bookmarks-but-better service status`.
+
+If your shell cannot find `bookmarks-but-better`, use its full path:
+
+- macOS and Linux: `~/.local/bin/bookmarks-but-better`
+- Windows: `%LOCALAPPDATA%\bookmarks-but-better\current\bookmarks-but-better.exe`
+
+:::note[Linux without systemd]
+If `bookmarks-but-better service status` says
+`installed; starts at your next login (nothing supervises it)`, the service is
+a desktop autostart entry, which `service stop` and `service start` cannot
+control. Stop the running `bookmarks-but-better` process yourself before
+copying, then log out and back in (or run `bookmarks-but-better serve --from-config`)
+to start it again.
+:::
+
+:::note[Windows]
+While the daemon runs, it holds a lock on `.bookmarks-but-better\lock`. That file
+is part of the daemon's working folder you leave out of backups. If a copy tool
+complains about a file in `.bookmarks-but-better`, excluding that folder fixes
+it.
+:::
+
+## Tools that work
+
+### Copy or archive the folder
+
+<Tabs syncKey="os">
+  <TabItem label="macOS and Linux">
+
+Make a compressed archive, leaving out the daemon's working folder:
+
+```bash
+tar -czf ~/Bookmarks-backup.tar.gz --exclude='.bookmarks-but-better' -C ~ Bookmarks
+```
+
+  </TabItem>
+  <TabItem label="Windows">
+
+Copy the folder to another drive, leaving out the daemon's working folder:
+
+```powershell
+robocopy "$env:USERPROFILE\Bookmarks" "D:\Backups\Bookmarks" /E /XD .bookmarks-but-better
+```
+
+  </TabItem>
+</Tabs>
+
+Replace `~/Bookmarks` or `%USERPROFILE%\Bookmarks` with your Vault's path. Your
+Vault paths are listed by `npx bookmarks-but-better@latest vault list`.
+
+### Time Machine or rsync
+
+Time Machine can back up your Vault folder like any other folder. As with any
+copy made while the daemon runs, see
+[Make a consistent copy](#make-a-consistent-copy) above.
+
+With `rsync`, copy the Vault to a backup drive:
+
+```bash
+rsync -a --exclude '.bookmarks-but-better/' ~/Bookmarks/ /Volumes/Backup/Bookmarks/
+```
+
+### Git
+
+Git works well for a Vault. The daemon only rewrites a file when something in it
+actually changes, so each commit shows your real changes and nothing else.
+
+```bash
+cd ~/Bookmarks
+git init
+git add -A
+git commit -m "Back up bookmarks"
+```
+
+Keep the daemon's working folder out of the repository:
+
+- Releases after 4.3.0 do this for you. The daemon writes a
+  `.bookmarks-but-better/.gitignore` file that ignores the whole folder. If a
+  `.gitignore` is already there, it is left as it is.
+- With 4.3.0 or earlier, add the folder to the Vault's `.gitignore` yourself
+  before your first commit:
+
+  ```bash
+  echo '.bookmarks-but-better/' >> .gitignore
+  ```
+
+Commit regularly. To keep a copy on another machine, push to a remote you
+control. Remember that whoever hosts the remote can read your bookmarks.
+
+## Sync is not backup
+
+Services such as iCloud Drive, Dropbox, Syncthing and Obsidian Sync keep copies
+in step. That also means a deletion or a mistake is copied everywhere. A synced
+folder only protects you if the service keeps a history of earlier versions you
+can go back to. Otherwise, use one of the backup methods above as well.
+
+## Obsidian
+
+A Vault is made of Markdown files, so you can open it in Obsidian. Obsidian does
+not back up the folder by itself, so back it up the same way as any other Vault.
+
+## Restore a backup
+
+1. Stop the service:
+
+   ```bash
+   bookmarks-but-better service stop
+   ```
+
+2. Replace the **contents** of the Vault folder with the backup, and keep the
+   folder at the same path.
+3. Start the service:
+
+   ```bash
+   bookmarks-but-better service start
+   ```
+
+4. Check the Vault, using its id (from `vault list`) or its path:
+
+   ```bash
+   bookmarks-but-better doctor default
+   ```
+
+   A good result ends with `the vault is healthy`. If `doctor` reports problems,
+   see [Troubleshooting](/docs/daemon/troubleshooting/#check-a-vault-with-doctor).
+5. Reload the dashboard tab.
+
+:::caution[Never swap the folder while the daemon runs]
+Do not rename, move or swap the Vault folder while the daemon is running. The
+running daemon keeps working with the folder it opened when it started. Changes
+could end up in the folder you moved away instead of the restored one. Always
+stop the service first.
+:::
+
+### Restore to a different path
+
+If the restored Vault lives at a new path, update the list of Vaults. Keep the
+same id, so the extension still finds the same source:
+
+```bash
+npx bookmarks-but-better@latest vault remove default
+npx bookmarks-but-better@latest vault add default ~/Restored/Bookmarks
+```
+
+If that was your only Vault, `vault remove` also removes the background service.
+In that case, set the service up again with:
+
+```bash
+npx bookmarks-but-better@latest install
+```
+
+Then run `npx bookmarks-but-better@latest status` to confirm everything is in
+place.
+
+## An HTML export is not a backup
+
+**Settings → Data & Migration → Export…** also works for a Vault, but the HTML
+format cannot hold everything a Vault has. It leaves out notes, `*.assets/`
+folders, and the order files. The export is useful for moving bookmarks to
+another browser, not as a backup. See [Import and export](/docs/start/import-export/#export).

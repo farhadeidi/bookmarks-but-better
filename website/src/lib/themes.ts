@@ -21,9 +21,12 @@ const THEME_DETAILS: Record<ColorTheme, Omit<DemoTheme, "id">> = {
   "vintage-paper": { name: "Vintage Paper", accent: "#d97706" },
 }
 
+/**
+ * The ten themes, as the live preview's strip of dots shows them. The app
+ * itself owns which one is active: a dot asks it to switch and the app reports
+ * back, so nothing here is a default. (The hero screenshot is Amber Minimal.)
+ */
 export const DEMO_THEMES: DemoTheme[] = COLOR_THEME_IDS.map((id) => ({
   id,
   ...THEME_DETAILS[id],
 }))
-
-export const PICK_THEME_EVENT = "bbb:pick-theme"

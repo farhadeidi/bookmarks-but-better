@@ -1,0 +1,100 @@
+---
+import { SITE } from "../lib/site"
+
+const COLUMNS = [
+  {
+    title: "Product",
+    links: [
+      { href: SITE.chromeStore, label: "Chrome Web Store" },
+      { href: SITE.firefoxStore, label: "Firefox Add-ons" },
+      { href: "/docs/start/safari/", label: "Safari (coming soon)" },
+      { href: "/preview/", label: "Live demo" },
+    ],
+  },
+  {
+    title: "Docs",
+    links: [
+      { href: "/docs/", label: "Documentation" },
+      { href: "/docs/daemon/", label: "Markdown vaults" },
+      { href: "/docs/guides/", label: "Guides" },
+      { href: "/docs/daemon/troubleshooting/", label: "Troubleshooting" },
+    ],
+  },
+  {
+    title: "Project",
+    links: [
+      { href: SITE.repository, label: "GitHub" },
+      { href: SITE.releases, label: "Releases" },
+      { href: SITE.issues, label: "Report an issue" },
+      { href: "/privacy/", label: "Privacy" },
+    ],
+  },
+]
+
+const LINK =
+  "text-muted-foreground underline-offset-4 hover:text-foreground hover:underline hover:decoration-accent"
+---
+
+<footer class="border-t border-border">
+  <div
+    class="mx-auto grid max-w-6xl grid-cols-2 gap-x-6 gap-y-10 px-6 py-14 sm:grid-cols-3 lg:grid-cols-[2fr_repeat(3,1fr)]"
+  >
+    <div class="col-span-2 sm:col-span-3 lg:col-span-1">
+      <a
+        href="/"
+        class="inline-flex items-center gap-2.5 text-[0.9375rem] font-semibold tracking-tight"
+      >
+        <img
+          src="/logo-dark.svg"
+          alt=""
+          width="20"
+          height="20"
+          class="size-5 dark:hidden"
+        />
+        <img
+          src="/logo.svg"
+          alt=""
+          width="20"
+          height="20"
+          class="hidden size-5 dark:block"
+        />
+        {SITE.name}
+      </a>
+      <p
+        class="mt-4 max-w-[40ch] text-base/7 text-pretty text-muted-foreground sm:text-sm/6"
+      >
+        A calm, private dashboard for your bookmarks, kept in your browser or in
+        Markdown files you own.
+      </p>
+    </div>
+    {
+      COLUMNS.map((column) => (
+        <nav aria-label={column.title}>
+          <h2 class="text-base/7 font-medium text-foreground sm:text-sm/6">
+            {column.title}
+          </h2>
+          <ul role="list" class="mt-4 space-y-3 text-base/7 sm:text-sm/6">
+            {column.links.map((link) => (
+              <li>
+                <a href={link.href} class={LINK}>
+                  {link.label}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </nav>
+      ))
+    }
+  </div>
+  <div class="border-t border-border">
+    <div
+      class="mx-auto flex max-w-6xl flex-wrap items-center gap-x-6 gap-y-2 px-6 py-6 text-base/7 text-muted-foreground sm:text-sm/6"
+    >
+      <a href={SITE.license} class={LINK}>MIT License</a>
+      <a href={SITE.releases} class:list={[LINK, "tabular-nums"]}>
+        v{SITE.version}
+      </a>
+      <span class="sm:ml-auto">This site is static and loads no analytics.</span>
+    </div>
+  </div>
+</footer>

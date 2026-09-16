@@ -1,0 +1,198 @@
+---
+title: Troubleshooting
+description: Diagnose the daemon with status and doctor, fix common errors such as an unreachable daemon or a busy port, and report an issue.
+sidebar:
+  order: 5
+---
+
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
+## Start with status
+
+```bash
+npx bookmarks-but-better@latest status
+```
+
+`status` checks what is installed, configured and running, and whether a browser
+is connected. It ends with either `everything is in place`, or a list of things
+to fix, each followed by the command that fixes it. For example:
+
+```text
+one thing to fix:
+  - the background service is installed but not running
+    npx bookmarks-but-better install
+```
+
+Running `npx bookmarks-but-better@latest` with no command shows the same status,
+then a menu that can apply each fix for you. Add `--json` to `status` to get
+machine-readable output.
+
+| `status` says                                                          | Fix                                                                                         |
+| ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `the daemon is not installed`                                          | `npx bookmarks-but-better@latest install`                                                   |
+| `the installed daemon is …; this tool installs …`                      | `npx bookmarks-but-better@latest install` updates it.                                       |
+| `the installed daemon is …, newer than the … this tool knows`          | Run `npx bookmarks-but-better@latest` to get the latest manager.                            |
+| `no vault is configured`                                               | `npx bookmarks-but-better@latest install`                                                   |
+| `` vault `…`: … does not exist ``                                       | Put the folder back, or remove it from the list with `vault remove <id>`.                   |
+| `` vault `…`: … is not a vault yet ``                                   | `vault remove <id>`, then `vault add <id> <path>`, and agree to create a Vault.             |
+| `the background service is not installed`                              | `npx bookmarks-but-better@latest install`                                                   |
+| `the background service is installed but not running`                  | `npx bookmarks-but-better@latest install`                                                   |
+| `the daemon is not answering at …`                                     | `npx bookmarks-but-better@latest install`, which restarts it.                               |
+| `` `…` is configured but the running daemon does not host it ``         | `npx bookmarks-but-better@latest install`, which restarts it.                               |
+| `the service was installed for a different set of vaults than is configured` | `npx bookmarks-but-better@latest install`                                             |
+
+If the same problem comes back after the fix, see
+[The daemon will not start](#the-daemon-will-not-start).
+
+## Check a vault with doctor
+
+`doctor` reads a Vault and reports anything wrong. It never changes anything.
+Give it the Vault's id or its path:
+
+```bash
+bookmarks-but-better doctor default
+bookmarks-but-better doctor --vault ~/Bookmarks
+```
+
+It shows how many bookmarks and folders it found, and how many errors and
+warnings. It ends with `the vault is healthy`, or with
+`the vault has problems that require attention`, and explains each finding.
+Common findings:
+
+- **`root metadata  MISSING`**: the folder is not a Vault. `doctor` prints the
+  `bookmarks-but-better init --vault …` command that makes it one.
+- **`order  [state_read_only]`**: that folder's
+  `.bookmarks-but-better-state.json` contains something the daemon must not
+  overwrite, so you cannot rearrange that folder. Adding, renaming, moving and
+  deleting still work. Moving that file somewhere else puts the folder back in
+  its default order.
+- **`staged_entries_retained`**: something was deleted or moved when the
+  daemon stopped unexpectedly, and the daemon could not finish or undo it on its
+  own. Nothing was thrown away: the files are kept inside
+  `.bookmarks-but-better/staging`, listed in
+  `.bookmarks-but-better/staging/recovery.txt`. `doctor` explains how to recover
+  them.
+
+If a daemon is serving the Vault while `doctor` runs, it says so, because the
+Vault can change while you read the report.
+
+## Common problems
+
+### The extension says the daemon is unreachable
+
+In **Settings → Sources**, the daemon's card shows **Unreachable**. If a Vault is
+the Active Source, the dashboard shows **Bookmarks are unavailable.** with
+**Retry** and **Switch source**. The extension does not quietly switch to your
+browser bookmarks instead.
+
+1. Run `npx bookmarks-but-better@latest status` and apply the fix it names.
+2. Click **Retry** in Settings or on the dashboard.
+
+For errors while connecting, see
+[Connection errors](/docs/daemon/connect/#connection-errors).
+
+### The daemon will not start
+
+To see why, stop the service and run the daemon in your terminal, where it
+prints its error:
+
+```bash
+bookmarks-but-better service stop
+bookmarks-but-better serve --from-config
+```
+
+Press Ctrl+C to stop it, fix the problem, then run
+`bookmarks-but-better service start`. Common errors:
+
+| Error                                                                                         | Cause and fix                                                                                                   |
+| --------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `127.0.0.1:52222 could not be bound: …`                                                       | Another program uses the port. See [Port 52222 is already in use](#port-52222-is-already-in-use).               |
+| `another bookmarks-but-better daemon already holds this vault (lock: …)`                      | A daemon is already serving that Vault, often the background service. Stop one of them.                         |
+| `` the vault `…` at … is not an initialized vault (no .bookmarks-but-better-folder.md at its root) `` | The folder is not a Vault. Run the `bookmarks-but-better init --vault …` command the error prints.       |
+| `` the vault roots … and … overlap; host sibling directories instead ``                        | One Vault's folder is inside another. See [Multiple vaults](/docs/daemon/multiple-vaults/#folders-must-not-overlap). |
+| `the configuration lists no vault to serve; …`                                                | Add a Vault with `npx bookmarks-but-better@latest vault add`.                                                   |
+| `… could not be read: …`                                                                      | `config.toml` has a mistake, such as a mistyped setting name. The message names the line.                       |
+
+### Port 52222 is already in use
+
+1. Open the [configuration file](/docs/daemon/multiple-vaults/#the-configuration-file)
+   and set another port at the top, for example:
+
+   ```toml
+   port = 52223
+   ```
+
+2. Reinstall the service so it uses the new port:
+
+   ```bash
+   npx bookmarks-but-better@latest install
+   ```
+
+3. In the extension, open **Settings → Sources**, forget the old daemon, and
+   connect to `127.0.0.1:52223`.
+
+### `bookmarks-but-better: command not found`
+
+<Tabs syncKey="os">
+  <TabItem label="macOS and Linux">
+
+The command is installed in `~/.local/bin`, which may not be on your `PATH`. Add
+this line to your shell profile, then open a new terminal:
+
+```bash
+export PATH="$HOME/.local/bin:$PATH"
+```
+
+Or use the full path, `~/.local/bin/bookmarks-but-better`.
+
+  </TabItem>
+  <TabItem label="Windows">
+
+The installer adds `%LOCALAPPDATA%\bookmarks-but-better\current` to your user
+`Path`. Open a new terminal so it picks up the change.
+
+  </TabItem>
+</Tabs>
+
+### Linux: the service only starts when you log in
+
+If `bookmarks-but-better service status` says
+`installed; starts at your next login (nothing supervises it)`, your system has
+no usable `systemctl --user`. The service was installed as a desktop autostart
+entry instead. It starts when you log in, but nothing restarts it if it stops,
+and `service start` and `service stop` cannot control it. Until your next login,
+run `bookmarks-but-better serve --from-config` yourself.
+
+### `vault_required` from the HTTP API
+
+You only see this if you use the daemon's HTTP API directly, with your own
+scripts. When the daemon serves more than one Vault, the older routes that do
+not name a Vault (such as `/api/v1/tree`) answer with the error `vault_required`,
+so a Vault is never picked at random. Use the routes that name the Vault instead,
+under `/api/v1/vaults/{id}/`. `GET /api/v1/vaults` lists the Vault ids.
+
+## Where things live
+
+| What                         | macOS and Linux                                  | Windows                                                  |
+| ---------------------------- | ------------------------------------------------ | -------------------------------------------------------- |
+| Configuration and Vault list | `~/.config/bookmarks-but-better/config.toml`     | `%USERPROFILE%\.config\bookmarks-but-better\config.toml` |
+| Daemon versions              | `~/.local/share/bookmarks-but-better`            | `%LOCALAPPDATA%\bookmarks-but-better`                    |
+| The daemon's working files   | `.bookmarks-but-better/` inside each Vault       | `.bookmarks-but-better\` inside each Vault               |
+
+For the background service's location on each system, see
+[What goes where](/docs/daemon/install/#what-goes-where).
+
+## Report an issue
+
+If you are still stuck, open an issue at
+[github.com/farhadeidi/bookmarks-but-better/issues](https://github.com/farhadeidi/bookmarks-but-better/issues).
+It helps to include:
+
+- your operating system and browser
+- the output of `npx bookmarks-but-better@latest status`
+- the exact error message
+
+The daemon's logs never contain bookmark titles, URLs or file contents. They
+only record counts, ids, error codes and paths. Output from `status` and `doctor`
+includes the paths to your Vaults, so check that you are happy to share them
+before you post.

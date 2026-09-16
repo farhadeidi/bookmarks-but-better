@@ -1,0 +1,142 @@
+/* The Starlight docs on the site's own tokens (global.css): Inter throughout,
+   body and headings alike, ink text and one small
+   amber accent. Every --sl-* color derives from the site variables, which
+   already follow the theme, so one block serves light and dark. Both selectors
+   are needed to beat Starlight's own light-theme values. */
+:root,
+:root[data-theme="light"] {
+  --sl-font: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --bbb-font-display: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+
+  --sl-color-white: var(--foreground);
+  --sl-color-gray-1: color-mix(
+    in oklch,
+    var(--foreground) 88%,
+    var(--background)
+  );
+  --sl-color-gray-2: color-mix(
+    in oklch,
+    var(--foreground) 76%,
+    var(--background)
+  );
+  --sl-color-gray-3: var(--muted-foreground);
+  --sl-color-gray-4: color-mix(
+    in oklch,
+    var(--foreground) 40%,
+    var(--background)
+  );
+  --sl-color-gray-5: color-mix(
+    in oklch,
+    var(--foreground) 16%,
+    var(--background)
+  );
+  --sl-color-gray-6: var(--muted);
+  --sl-color-gray-7: color-mix(in oklch, var(--muted) 50%, var(--background));
+  --sl-color-black: var(--background);
+
+  --sl-color-accent-low: color-mix(
+    in oklch,
+    var(--accent) 16%,
+    var(--background)
+  );
+  --sl-color-accent: var(--accent);
+  --sl-color-accent-high: color-mix(
+    in oklch,
+    var(--accent) 55%,
+    var(--foreground)
+  );
+
+  /* Links, the table of contents and the skip link stay ink. */
+  --sl-color-text-accent: var(--foreground);
+  --sl-color-text-invert: var(--background);
+  --sl-color-bg: var(--background);
+  --sl-color-bg-nav: var(--background);
+  --sl-color-bg-sidebar: var(--background);
+  --sl-color-bg-inline-code: var(--muted);
+  --sl-color-bg-accent: var(--primary);
+  --sl-color-hairline-light: var(--border);
+  --sl-color-hairline: var(--border);
+  --sl-color-hairline-shade: var(--border);
+
+  /* Tip asides (purple) take the accent and note asides (blue) go neutral.
+     Caution and danger keep their semantic colors. */
+  --sl-color-purple-low: var(--sl-color-accent-low);
+  --sl-color-purple: var(--sl-color-accent);
+  --sl-color-purple-high: var(--sl-color-accent-high);
+  --sl-color-blue-low: var(--sl-color-gray-6);
+  --sl-color-blue: var(--sl-color-gray-3);
+  --sl-color-blue-high: var(--sl-color-gray-1);
+
+  /* The docs' menu button matches the header's 40px icon buttons. */
+  --sl-menu-button-size: 2.5rem;
+}
+
+/* One header row on every page: full width, with the marketing pages'
+   1.5rem gutter at every size, so the logo never moves between pages. */
+:root {
+  --sl-nav-pad-x: 1.5rem;
+}
+
+/* Below 50rem Starlight keeps a 1rem content gutter while the header above it
+   uses 1.5rem, so docs body text started 8px inside the logo. Match them, and
+   pin --sl-nav-gap, which Starlight derives from the content gutter, to the
+   value it had — it sets the docs header's right-hand padding, which should
+   not move either. Above 50rem Starlight's own gutters already agree. */
+@media (max-width: 49.999rem) {
+  :root {
+    --sl-content-pad-x: 1.5rem;
+    --sl-nav-gap: 1rem;
+  }
+}
+
+/* Inter carries the headings: semibold and tighter than the body text, at
+   Starlight's own sizes (the serif needed sizing up, Inter does not). */
+h1#_top,
+.sl-markdown-content h2 {
+  font-family: var(--bbb-font-display);
+  font-weight: 600;
+}
+h1#_top {
+  font-size: var(--sl-text-h1);
+  line-height: 1.1;
+  letter-spacing: -0.025em;
+}
+/* Starlight's h1 and h2 sit close together; with one face carrying both, the
+   section headings step down so the page title still leads. */
+.sl-markdown-content h2 {
+  font-size: calc(var(--sl-text-h2) * 0.9);
+  letter-spacing: -0.02em;
+}
+
+.sl-markdown-content a:not(:where(.not-content *)) {
+  text-decoration-color: var(--accent);
+  text-underline-offset: 3px;
+}
+.sl-markdown-content a:not(:where(.not-content *)):hover {
+  text-decoration-color: currentColor;
+}
+
+/* The current sidebar page: a quiet muted row, not an accent block. */
+#starlight__sidebar .top-level a[aria-current="page"],
+#starlight__sidebar .top-level a[aria-current="page"]:hover,
+#starlight__sidebar .top-level a[aria-current="page"]:focus {
+  background-color: var(--muted);
+  color: var(--foreground);
+}
+
+/* Starlight's mobile sidebar toggle: a plain icon button in the header row. */
+.sl-menu-button {
+  border-radius: 0.5rem;
+  padding: 0.625rem;
+  background-color: transparent;
+  color: var(--foreground);
+  box-shadow: none;
+}
+.sl-menu-button svg {
+  width: 1.25rem;
+  height: 1.25rem;
+}
+.sl-menu-button:hover,
+.sl-menu-button:has(~ :popover-open) {
+  background-color: var(--muted);
+}

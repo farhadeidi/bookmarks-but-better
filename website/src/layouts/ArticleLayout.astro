@@ -1,0 +1,37 @@
+---
+import type { JsonLd } from "../lib/seo"
+import SiteLayout from "./SiteLayout.astro"
+
+interface Props {
+  /** The full document title. */
+  title: string
+  description: string
+  eyebrow: string
+  heading: string
+  intro: string
+  jsonLd?: JsonLd[]
+}
+
+const { title, description, eyebrow, heading, intro, jsonLd } = Astro.props
+---
+
+<SiteLayout title={title} description={description} jsonLd={jsonLd}>
+  <article class="px-6 pt-16 pb-24 md:pt-24 md:pb-32">
+    <div class="mx-auto max-w-2xl">
+      <header class="border-b border-border pb-12">
+        <p class="text-sm/6 font-medium text-accent">{eyebrow}</p>
+        <h1
+          class="font-display mt-3 text-4xl font-semibold tracking-[-0.03em] text-pretty sm:text-5xl"
+        >
+          {heading}
+        </h1>
+        <p class="mt-6 max-w-[48ch] text-lg/8 text-pretty text-muted-foreground">
+          {intro}
+        </p>
+      </header>
+      <div class="prose mt-12 max-w-[70ch]">
+        <slot />
+      </div>
+    </div>
+  </article>
+</SiteLayout>
