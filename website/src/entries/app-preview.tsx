@@ -1,7 +1,7 @@
 /**
- * The marketing site's live preview: the real application, running against
- * the Dev Workbench's simulated world, full screen at /preview/ and inside the
- * home page's hero iframe.
+ * The marketing site's live preview: the real application, running against the
+ * Dev Workbench's simulated world, in the frame the /preview/ page embeds. That
+ * page is the only embedder; no other page on the site loads the app.
  *
  * An embedding page drives appearance over postMessage ({ type:
  * PREVIEW_MESSAGE, mode?, colorTheme? }); the initial appearance arrives as URL

@@ -25,7 +25,7 @@ Bookmarks But Better is a free and open source (MIT) extension for Chrome and Fi
 
 - **Browser source.** Your browser's own bookmark store. The extension reads and changes bookmarks only through the browser's built-in bookmark APIs.
 - **Vault.** A folder of Markdown files on your disk. A small optional program, the daemon, serves the folder to the extension over `127.0.0.1`/`localhost` only. It binds to loopback and makes no outbound requests of its own.
-- **Standalone source (legacy).** An older collection in the browser profile's local storage, which is being retired. Moving off it is an explicit copy that leaves the old data intact.
+- **Standalone source (legacy).** An older collection in a database inside the browser profile (IndexedDB), which is being retired. Moving off it is an explicit copy that leaves the old data intact.
 
 These sources are never merged. You switch between them in the header, and each operation affects only the active source. Settings and source choices are stored per browser profile and aren't synced anywhere. Details: [how sources work](/docs/start/sources/).
 

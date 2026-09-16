@@ -11,13 +11,13 @@ and it never collects your bookmarks.
 
 ## Chrome
 
-1. Open the [Chrome Web Store listing](https://chromewebstore.google.com/detail/nflojekghnganlcjncbepnnnkgakghif).
+1. Open the [Chrome Web Store listing](https://chromewebstore.google.com/detail/nflojekghnganlcjncbepnnnkgakghif?utm_source=website).
 2. Add the extension to Chrome.
 3. Open a new tab. The setup wizard starts on its own.
 
 ## Firefox
 
-1. Open the [Firefox Add-ons listing](https://addons.mozilla.org/firefox/addon/bookmarks-but-better/).
+1. Open the [Firefox Add-ons listing](https://addons.mozilla.org/firefox/addon/bookmarks-but-better/?utm_source=website).
 2. Add the extension to Firefox.
 3. Open a new tab. The setup wizard starts on its own.
 

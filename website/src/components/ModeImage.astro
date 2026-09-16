@@ -4,12 +4,14 @@
  * the `dark` class on <html> (theme-init.ts) decides which one is displayed,
  * so the images follow the theme toggle, not only the system preference.
  *
- * Loading: the hero passes `eager`, which makes the light version the LCP
- * image (eager, high priority) and leaves the dark one lazy. A hidden lazy
- * image has no layout box, so it is fetched when the mode reveals it, and
- * nothing below the fold competes with the hero. The trade-off is that a
- * dark-mode visitor still fetches the light hero and then its own; that costs
- * one extra image, while a `media` query on <source> would cost the ability to
+ * Loading: `eager` applies to both versions, because either one can be the LCP
+ * element and the mode is only known in the browser. Marking just one of them
+ * would hand the high-priority slot to an image the visitor may not be shown
+ * and demote the one they are. `display:none` keeps the unused variant off the
+ * page either way.
+ *
+ * The trade-off is that a visitor fetches both versions of an `eager` image
+ * rather than one, while a `media` query on <source> would cost the ability to
  * switch modes without reloading.
  */
 import type { ImageMetadata } from "astro"
@@ -64,7 +66,8 @@ const {
     widths={widths}
     sizes={sizes}
     alt={altDark}
-    loading="lazy"
+    loading={eager ? "eager" : "lazy"}
+    fetchpriority={eager ? "high" : "auto"}
     class={imageClass}
   />
 </div>

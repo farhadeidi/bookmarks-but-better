@@ -14,7 +14,8 @@ export const SITE = {
   tagline:
     "Your bookmarks as a beautiful new tab. Local, private, no account. Optionally stored as Markdown you own.",
   ogImage: "https://bookmarks.but-better.dev/og.png",
-  ogImageAlt: "Bookmarks But Better dashboard in dark mode",
+  ogImageAlt:
+    "Bookmarks, but better: a new tab extension for Chrome and Firefox, beside its bookmarks dashboard in dark mode",
   /** Canonical store listings, for structured data. */
   chromeStoreUrl: CHROME_STORE,
   firefoxStoreUrl: FIREFOX_STORE,

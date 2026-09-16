@@ -80,6 +80,35 @@ const LLMS_SECTIONS = [
   "Optional",
 ]
 
+/**
+ * The install buttons read `<html data-browser>`, which Head.astro sets from
+ * the user agent before first paint, so the user agent is how the site's own
+ * logic is driven. Chromium, and a visitor without JavaScript, keep the Chrome
+ * default the other tests see.
+ */
+const BROWSER_CTAS = [
+  {
+    label: "Firefox",
+    userAgent:
+      "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:133.0) Gecko/20100101 Firefox/133.0",
+    browser: "firefox",
+    /** The header's one button. */
+    header: "Add to Firefox",
+    /** Every hero install button, left to right. */
+    buttons: ["Add to Firefox", "Add to Chrome"],
+    buildFromSource: false,
+  },
+  {
+    label: "Safari",
+    userAgent:
+      "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.6 Safari/605.1.15",
+    browser: "safari",
+    header: "Safari: coming soon",
+    buttons: ["Safari version coming soon", "Add to Chrome", "Add to Firefox"],
+    buildFromSource: true,
+  },
+] as const
+
 /** Every JSON-LD block in raw HTML, parsed. Throws on invalid JSON. */
 function structuredData(html: string): Record<string, unknown>[] {
   return [
@@ -185,7 +214,7 @@ test.describe("marketing website artifact", () => {
     await page.setViewportSize({ width: 390, height: 844 })
     await page.goto("/")
     await page.getByRole("button", { name: "Menu" }).click()
-    const menu = page.getByRole("navigation", { name: "Site" })
+    const menu = page.getByRole("navigation", { name: "Site menu" })
     for (const label of NAV_LABELS) {
       await expect(menu.getByRole("link", { name: label })).toBeVisible()
     }
@@ -243,7 +272,7 @@ test.describe("marketing website artifact", () => {
       ).toHaveCount(1)
 
       await page.getByRole("button", { name: "Menu" }).click()
-      const menu = page.getByRole("navigation", { name: "Site" })
+      const menu = page.getByRole("navigation", { name: "Site menu" })
       for (const label of NAV_LABELS) {
         await expect(
           menu.getByRole("link", { name: label }),
@@ -254,7 +283,7 @@ test.describe("marketing website artifact", () => {
     // The current section is still marked inside the menu.
     await expect(
       page
-        .getByRole("navigation", { name: "Site" })
+        .getByRole("navigation", { name: "Site menu" })
         .getByRole("link", { name: "Docs" })
     ).toHaveAttribute("aria-current", "page")
   })
@@ -290,6 +319,84 @@ test.describe("marketing website artifact", () => {
     await expect(page).toHaveURL(/\/preview\/$/)
   })
 
+  test("the hero screenshot shows the variant that matches the site mode", async ({
+    page,
+  }) => {
+    await page.goto("/")
+
+    // Both versions carry the hero's loading hints: either one can be the LCP
+    // element, so marking only the light one would hand the high-priority slot
+    // to an image a dark-mode visitor never sees.
+    expect(
+      await page
+        .locator("#demo picture img")
+        .evaluateAll((images) =>
+          images.map((image) => [
+            image.getAttribute("loading"),
+            image.getAttribute("fetchpriority"),
+          ])
+        )
+    ).toEqual([
+      ["eager", "high"],
+      ["eager", "high"],
+    ])
+
+    // Exactly one is displayed, and it is the file for the mode on screen:
+    // counting visible images alone would pass if both slots showed the light
+    // version.
+    const shot = page.locator("#demo picture img:visible")
+    await expect(shot).toHaveCount(1)
+    await expect(shot).toHaveAttribute("src", /dashboard-light\./)
+
+    await page.getByRole("button", { name: "Dark mode" }).click()
+    await expect(shot).toHaveCount(1)
+    await expect(shot).toHaveAttribute("src", /dashboard-dark\./)
+  })
+
+  for (const cta of BROWSER_CTAS) {
+    test.describe(`a ${cta.label} visitor`, () => {
+      test.use({ userAgent: cta.userAgent })
+
+      test("gets install buttons that name their own browser", async ({
+        page,
+      }) => {
+        await page.goto("/")
+        await expect(page.locator("html")).toHaveAttribute(
+          "data-browser",
+          cta.browser
+        )
+
+        // The header's one button names the same browser, smaller.
+        await expect(page.locator(".bbb-header .cta a:visible")).toHaveText(
+          cta.header
+        )
+
+        // The hero's row, read left to right: the primary button leads it
+        // whatever its place in the markup, which is what `order-first` does.
+        const hero = page.locator("section:has(#hero-title)")
+        const buttons = await hero
+          .locator("a:visible")
+          .filter({ hasText: /Add to |coming soon/ })
+          .evaluateAll((links) =>
+            links
+              .map((link) => ({
+                x: link.getBoundingClientRect().x,
+                label: (link.textContent ?? "").replace(/\s+/g, " ").trim(),
+              }))
+              .sort((a, b) => a.x - b.x)
+              .map((link) => link.label)
+          )
+        expect(buttons).toEqual([...cta.buttons])
+
+        // Only Safari, whose version is not released yet, is offered the
+        // source build.
+        await expect(
+          hero.getByRole("link", { name: "build it from source" })
+        ).toBeVisible({ visible: cta.buildFromSource })
+      })
+    })
+  }
+
   test("the preview page carries the site header and runs the live app", async ({
     page,
   }) => {
@@ -297,7 +404,9 @@ test.describe("marketing website artifact", () => {
     await expect(page).toHaveTitle("Live preview — Bookmarks But Better")
 
     // Not a dead end: the whole site header is here, marking the current page.
-    const nav = page.getByRole("navigation", { name: "Site" }).first()
+    // `exact`, because the collapsed menu is the "Site menu" landmark: the two
+    // are named apart so a screen reader does not announce them identically.
+    const nav = page.getByRole("navigation", { name: "Site", exact: true })
     await expect(nav.getByRole("link", { name: "Demo" })).toHaveAttribute(
       "aria-current",
       "page"
@@ -333,6 +442,32 @@ test.describe("marketing website artifact", () => {
     await expect(dot).toHaveAttribute("aria-pressed", "true")
     await expect(page).toHaveURL(/\?theme=cyberpunk$/)
     await expect.poll(primary).not.toBe(before)
+  })
+
+  test("the preview page's dots follow a theme chosen inside the app", async ({
+    page,
+  }) => {
+    await page.goto("/preview/")
+    const app = page.frameLocator(APP_FRAME)
+    await expect(app.getByRole("button", { name: "Settings" })).toBeVisible()
+
+    const dot = (theme: string) =>
+      page.locator(`[data-preview-theme="${theme}"]`)
+
+    // Nothing here asked for a theme — no `?theme=`, no dot clicked — so a
+    // marked dot can only be the app reporting the one it settled on.
+    await expect(dot("default")).toHaveAttribute("aria-pressed", "true")
+
+    // Change it where a visitor would: the app's own appearance settings.
+    await app.getByRole("button", { name: "Settings" }).click()
+    await app.getByRole("tab", { name: "Appearance" }).click()
+    await app.getByRole("radio", { name: "Cyberpunk" }).click()
+
+    await expect(dot("cyberpunk")).toHaveAttribute("aria-pressed", "true")
+    await expect(dot("default")).toHaveAttribute("aria-pressed", "false")
+    // The dots followed the app rather than drove it, so the shareable
+    // `?theme=` — which only a dot writes — is still absent.
+    await expect(page).toHaveURL(/\/preview\/$/)
   })
 
   test("docs render and Pagefind search finds a docs page", async ({
@@ -478,8 +613,17 @@ test.describe("marketing website artifact", () => {
       "https://chromewebstore.google.com/detail/nflojekghnganlcjncbepnnnkgakghif"
     )
     expect(app.softwareHelp).toMatchObject({ url: `${SITE}/docs/` })
-    // Chrome and Firefox are browsers, not operating systems.
-    expect(app.operatingSystem).not.toContain("Chrome")
+    // No `operatingSystem` at all: Chrome and Firefox are browsers, not
+    // operating systems, and the page names no system for the extension —
+    // which browsers it runs in is in `featureList`.
+    expect(app.operatingSystem).toBeUndefined()
+    // A screenshot of the app as this page serves it, not the composed social
+    // card, which is a marketing image rather than a view of the product.
+    expect(String(app.screenshot)).toMatch(/\/_astro\/dashboard-light\./)
+    expect(String(app.screenshot)).not.toContain("og.png")
+    // Store listings belong in `installUrl`; schema.org's `downloadUrl` means
+    // a URL that yields a downloadable binary.
+    expect(app.downloadUrl).toBeUndefined()
     // The project has no ratings, and inventing them is against Google's
     // structured-data policy.
     expect(app.aggregateRating).toBeUndefined()
@@ -522,6 +666,28 @@ test.describe("marketing website artifact", () => {
         'rel="alternate" type="text/plain" href="/llms.txt"'
       )
     }
+  })
+
+  test("serves a social card at the size its meta tags declare", async ({
+    request,
+  }) => {
+    const html = await (await request.get("/")).text()
+    const declared = (dimension: "width" | "height") =>
+      Number(
+        html.match(
+          new RegExp(`<meta property="og:image:${dimension}" content="(\\d+)"`)
+        )?.[1]
+      )
+    expect(declared("width")).toBeGreaterThan(0)
+    expect(declared("height")).toBeGreaterThan(0)
+
+    // A PNG's IHDR chunk holds the real size as two big-endian uint32s, at
+    // bytes 16 and 20, so the file answers for itself: the card cannot be
+    // regenerated at another size without this failing.
+    const png = await (await request.get("/og.png")).body()
+    expect(png.subarray(1, 4).toString()).toBe("PNG")
+    expect(png.readUInt32BE(16)).toBe(declared("width"))
+    expect(png.readUInt32BE(20)).toBe(declared("height"))
   })
 
   test("gives every product screenshot alt text", async ({ page }) => {

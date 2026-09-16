@@ -75,10 +75,10 @@ instead, because that would look like your Vault had lost its bookmarks. See
 ## The Standalone source is retiring
 
 The Standalone source is an older collection that was stored inside the browser
-itself. It is being removed in version 5.0:
+itself. It is being removed in the next major version:
 
 - New users cannot choose it.
-- If your profile was already using it, you keep access until version 5.0.
+- If your profile was already using it, you keep access until that release.
   While it is active, the dashboard shows a notice titled
   **Standalone bookmarks are going away**.
 - Moving your bookmarks is a **copy**. Your Standalone bookmarks are never

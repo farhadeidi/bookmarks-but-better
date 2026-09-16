@@ -5,10 +5,10 @@ import pkg from "../package.json"
 
 /**
  * Builds the real application — unchanged — as the static app frame at
- * /preview/app/. It is always embedded in an iframe, never visited directly:
- * by the home page's hero and by the /preview/ page, which wraps it in the
- * site header and a theme strip. Keeping the bare app on its own path is what
- * lets /preview/ carry the header without nesting a second one.
+ * /preview/app/. It is always embedded in an iframe, never visited directly,
+ * and by exactly one page: /preview/, which wraps it in the site header and a
+ * theme strip. Keeping the bare app on its own path is what lets /preview/
+ * carry the header without nesting a second one.
  *
  * `vite build --mode development` is deliberate: the app's SourceEnvironment
  * seam folds on `import.meta.env.DEV`, so a development-mode build keeps the

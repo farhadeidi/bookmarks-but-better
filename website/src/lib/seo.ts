@@ -43,7 +43,12 @@ const FEATURES = [
   "No account, analytics, tracking or bookmark-content collection",
 ]
 
-export function softwareApplication(): JsonLd {
+/**
+ * The product entity. The caller passes the hero's dashboard capture as the
+ * page actually serves it: only the page can resolve the built image URL, and
+ * a `screenshot` has to be an image the reader of this page can see.
+ */
+export function softwareApplication(screenshot: string): JsonLd {
   return {
     "@context": "https://schema.org",
     "@type": "SoftwareApplication",
@@ -52,9 +57,11 @@ export function softwareApplication(): JsonLd {
     url: `${SITE.url}/`,
     description: SITE.tagline,
     applicationCategory: "BrowserApplication",
-    // Chrome and Firefox are browsers, not operating systems. The extension
-    // runs wherever they do; which browsers is in `featureList` and on the page.
-    operatingSystem: "Windows, macOS, Linux",
+    // No `operatingSystem`: Chrome and Firefox are browsers, not operating
+    // systems, and the extension runs wherever they do — Firefox for Android
+    // included (`gecko_android` in manifest.firefox.json). Naming three desktop
+    // systems would be both unsupported by this page and short of the truth.
+    // Which browsers it runs in is in `featureList` and on the page.
     softwareVersion: SITE.version,
     isAccessibleForFree: true,
     // The documented way to say "free". There is no `aggregateRating` or
@@ -63,11 +70,12 @@ export function softwareApplication(): JsonLd {
     offers: { "@type": "Offer", price: 0, priceCurrency: "USD" },
     license: SITE.license,
     featureList: FEATURES,
+    // `installUrl` alone: these are store listings, and schema.org's
+    // `downloadUrl` means a URL that yields a downloadable binary.
     installUrl: [SITE.chromeStoreUrl, SITE.firefoxStoreUrl],
-    downloadUrl: [SITE.chromeStoreUrl, SITE.firefoxStoreUrl],
     releaseNotes: SITE.releases,
     softwareHelp: { "@type": "CreativeWork", url: `${SITE.url}/docs/` },
-    screenshot: SITE.ogImage,
+    screenshot,
     sameAs: [SITE.repository],
     author: AUTHOR,
     maintainer: { "@id": ID.person },

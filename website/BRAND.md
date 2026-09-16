@@ -105,8 +105,11 @@ ring, list markers, selection. Buttons are ink.
   the footer does not render on docs pages, so the header is the only place it
   is reachable from the docs. Below 1100px the whole row moves into the menu
   and the header is compact: brand, the search icon, the install button and the
-  menu button. `/preview/` is "Demo" because even in the full row it is the
-  widest label that fits.
+  menu button. Below 50rem (800px) the install button steps out of the row too,
+  so from 360px to 799px it is only the full-width one at the top of the menu
+  and the header carries the brand, the search icon and the menu button.
+  `/preview/` is "Demo" because even in the full row it is the widest label that
+  fits.
 - **Two menus, never both.** Every page carries the header's own menu below
   1100px, except docs pages below 50rem: there Starlight's sidebar toggle is
   showing and its foot already lists the same links

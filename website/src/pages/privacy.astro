@@ -39,9 +39,10 @@ import { SITE } from "../lib/site"
     > / <code>localhost</code> only. Nothing is uploaded.
   </p>
   <p>
-    <strong>Standalone source (legacy):</strong> the collection lives in your browser
-    profile's local storage and never leaves it. It is retiring over one major version;
-    migration to a vault is an explicit copy that leaves the legacy data intact.
+    <strong>Standalone source (legacy):</strong> the collection lives in a database
+    inside your browser profile (IndexedDB) and never leaves it. It is retiring over
+    one major version; migration to a vault is an explicit copy that leaves the legacy
+    data intact.
   </p>
 
   <h2>Network requests the extension makes</h2>
@@ -74,12 +75,12 @@ import { SITE } from "../lib/site"
     serves its own fonts.
   </p>
   <p>
-    The live preview on the home page loads only when you start it. It runs the
-    real app against seeded demo bookmarks and uses the same public favicon
-    service as the extension to show real site icons; only fixed demo origins
-    are requested and no bookmarks of yours are involved. Docs search runs in
-    your browser against an index served from this site, with no external search
-    service.
+    The live demo at <a href="/preview/">/preview/</a> runs the real app against
+    seeded demo bookmarks when you visit that page; no other page on this site
+    loads the app. It uses the same public favicon service as the extension to
+    show real site icons, and only the fixed demo origins are ever requested —
+    none of your own bookmarks are involved. Docs search runs in your browser
+    against an index served from this site, with no external search service.
   </p>
   <p>
     Your dark-mode preference is stored in your browser's <code
@@ -93,7 +94,7 @@ import { SITE } from "../lib/site"
   </p>
   <p><strong>Firefox:</strong> bookmarks, storage and activeTab.</p>
   <p>
-    <strong>Safari:</strong> activeTab, storage and tabs. Safari uses the local daemon
+    <strong>Safari:</strong> activeTab and storage. Safari uses the local daemon
     source because browser bookmarks are not available to extensions there.
   </p>
   <p>Optional localhost permissions appear only when you connect a daemon.</p>

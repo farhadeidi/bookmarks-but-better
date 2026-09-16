@@ -61,7 +61,9 @@ const current = currentSiteLink(Astro.url)
       <Icon name="close" size="1.25rem" class="close-menu" />
       <span class="sr-only">Menu</span>
     </button>
-    <nav popover="" id="bbb-site-menu" class="site-menu" aria-label="Site">
+    {/* "Site menu", not "Site": the row above is already the Site navigation,
+        and two landmarks with one name are announced identically. */}
+    <nav popover="" id="bbb-site-menu" class="site-menu" aria-label="Site menu">
       <ul role="list">
         {
           SITE_LINKS.map((link) => (

@@ -48,7 +48,7 @@ export const FAQ_ITEMS: FaqItem[] = [
   {
     question: "Where do my bookmarks actually live?",
     answer:
-      "In your browser's own bookmarks, or in a folder of Markdown files you choose. The legacy Standalone source, which is retiring, keeps its collection in the browser profile's local storage; moving off it is an explicit copy that leaves that data intact. Nothing is uploaded anywhere.",
+      "In your browser's own bookmarks, or in a folder of Markdown files you choose. The legacy Standalone source, which is retiring, keeps its collection in a database inside the browser profile (IndexedDB); moving off it is an explicit copy that leaves that data intact. Nothing is uploaded anywhere.",
     link: { href: "/docs/start/sources/", label: "Bookmark sources" },
   },
   {
