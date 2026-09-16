@@ -8,28 +8,125 @@ export function serializeJsonLd(data: JsonLd): string {
   return JSON.stringify(data).replace(/</g, "\\u003c")
 }
 
+/**
+ * Stable node ids, so the blocks across the site read as one graph rather than
+ * unconnected objects: a docs page's `isPartOf` and `about` point at the
+ * `WebSite` and `SoftwareApplication` nodes the home page defines.
+ */
+const ID = {
+  website: `${SITE.url}/#website`,
+  app: `${SITE.url}/#app`,
+  person: `${SITE.url}/#person`,
+} as const
+
 const AUTHOR = {
   "@type": "Person",
+  "@id": ID.person,
   name: SITE.author,
   url: "https://github.com/farhadeidi",
 }
+
+/**
+ * What the landing page claims, in the same terms. Structured data may only
+ * describe what a reader of the page can see, so this list follows the page
+ * rather than leading it.
+ */
+const FEATURES = [
+  "Replaces the new-tab page with a dashboard where every bookmark folder is a card",
+  "Drag-and-drop organizer: move, reorder, rename, create and delete bookmarks and folders",
+  "Search palette: find a bookmark in the active source by title or URL",
+  "Imports a bookmarks HTML file from any browser, and CSV exports from Raindrop and Pocket; exports to HTML",
+  "Quick capture: save the page you are on from the toolbar popup",
+  "Address-bar keyword search in Chrome and Firefox",
+  "Bookmark sources: your browser's own bookmarks, or Markdown vaults served by a local daemon",
+  "Ten themes, each in light, dark and system mode",
+  "No account, analytics, tracking or bookmark-content collection",
+]
 
 export function softwareApplication(): JsonLd {
   return {
     "@context": "https://schema.org",
     "@type": "SoftwareApplication",
+    "@id": ID.app,
     name: SITE.name,
     url: `${SITE.url}/`,
     description: SITE.tagline,
     applicationCategory: "BrowserApplication",
-    operatingSystem: "Chrome, Firefox",
+    // Chrome and Firefox are browsers, not operating systems. The extension
+    // runs wherever they do; which browsers is in `featureList` and on the page.
+    operatingSystem: "Windows, macOS, Linux",
     softwareVersion: SITE.version,
     isAccessibleForFree: true,
+    // The documented way to say "free". There is no `aggregateRating` or
+    // `review` here because the project has none, so this will not produce a
+    // rich result — it is here for entity clarity.
+    offers: { "@type": "Offer", price: 0, priceCurrency: "USD" },
     license: SITE.license,
+    featureList: FEATURES,
+    installUrl: [SITE.chromeStoreUrl, SITE.firefoxStoreUrl],
     downloadUrl: [SITE.chromeStoreUrl, SITE.firefoxStoreUrl],
+    releaseNotes: SITE.releases,
+    softwareHelp: { "@type": "CreativeWork", url: `${SITE.url}/docs/` },
     screenshot: SITE.ogImage,
     sameAs: [SITE.repository],
     author: AUTHOR,
+    maintainer: { "@id": ID.person },
+  }
+}
+
+/**
+ * The site itself. Google reads this from the home page, and nowhere else, to
+ * choose the site name it shows in results. No `potentialAction`: the sitelinks
+ * search box was retired in 2024 and the markup is ignored.
+ */
+export function website(): JsonLd {
+  return {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    "@id": ID.website,
+    name: SITE.name,
+    url: `${SITE.url}/`,
+    description: SITE.tagline,
+    inLanguage: "en",
+    publisher: AUTHOR,
+  }
+}
+
+export interface ArticleOptions {
+  /** `TechArticle` for documentation, `Article` for a site page. */
+  type: "TechArticle" | "Article"
+  headline: string
+  description?: string
+  /** The page's canonical URL. */
+  url: string
+}
+
+/**
+ * One documentation page or site article. No `datePublished` or `dateModified`:
+ * the site has no last-updated data, and an invented date is worse than none.
+ */
+export function article({
+  type,
+  headline,
+  description,
+  url,
+}: ArticleOptions): JsonLd {
+  return {
+    "@context": "https://schema.org",
+    "@type": type,
+    headline,
+    ...(description ? { description } : {}),
+    url,
+    inLanguage: "en",
+    isPartOf: { "@id": ID.website },
+    about: {
+      "@type": "SoftwareApplication",
+      "@id": ID.app,
+      name: SITE.name,
+      url: `${SITE.url}/`,
+    },
+    author: AUTHOR,
+    publisher: { "@id": ID.person },
   }
 }
 

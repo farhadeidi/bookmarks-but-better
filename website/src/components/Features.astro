@@ -12,11 +12,16 @@ import ModeImage from "./ModeImage.astro"
 import Section from "./Section.astro"
 
 // The dashboard itself is the hero's screenshot, so it is not repeated here.
+// Each screenshot demonstrates the feature its text names, so each describes
+// itself for a reader who cannot see it. The description names the mode, the
+// way the hero and themes shots do: both versions are in the document and the
+// site's mode decides which one is displayed.
 const SHOWN: {
   title: string
   description: string
   light: ImageMetadata
   dark: ImageMetadata
+  alt: (mode: "light" | "dark") => string
 }[] = [
   {
     title: "A real organizer, with drag and drop",
@@ -24,6 +29,8 @@ const SHOWN: {
       "Drag bookmarks between folders, reorder, rename, create and delete in a full tree editor.",
     light: organizerLight,
     dark: organizerDark,
+    alt: (mode) =>
+      `The Bookmark Organizer in ${mode} mode: a root folder picker above a bookmark tree, with the Bookmarks Bar folder expanded over Gmail, Outlook and Proton Mail, and a drag handle, a rename and a delete button on every row`,
   },
   {
     title: "Find any bookmark in a keystroke",
@@ -31,6 +38,8 @@ const SHOWN: {
       "Start typing anywhere on the dashboard. The search palette finds bookmarks in the active source by title or URL.",
     light: searchLight,
     dark: searchDark,
+    alt: (mode) =>
+      `The search palette in ${mode} mode, open over the dashboard: the query git matching GitHub, GitLab, GitHub Trending and GitHub Actions, each result showing its folder path and URL`,
   },
   {
     title: "Your sources, your root folder",
@@ -38,6 +47,8 @@ const SHOWN: {
       "Switch between browser bookmarks and Markdown vaults from the header, and start the dashboard from any folder.",
     light: sourcesLight,
     dark: sourcesDark,
+    alt: (mode) =>
+      `The source menu in ${mode} mode, open over the dashboard: Browser bookmarks selected, the archive and reading vaults under it, and Manage sources at the foot`,
   },
 ]
 
@@ -80,7 +91,8 @@ const DETAIL = "text-base/7 text-pretty text-muted-foreground sm:text-sm/6"
             <ModeImage
               light={feature.light}
               dark={feature.dark}
-              alt=""
+              alt={feature.alt("light")}
+              altDark={feature.alt("dark")}
               widths={[480, 720, 1080]}
               sizes="(min-width: 1152px) 336px, (min-width: 768px) 30vw, calc(100vw - 48px)"
               imageClass={`aspect-16/10 h-auto w-full ${SCREENSHOT}`}

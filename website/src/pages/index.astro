@@ -9,14 +9,16 @@ import Themes from "../components/Themes.astro"
 import SiteLayout from "../layouts/SiteLayout.astro"
 import { FAQ_ITEMS } from "../lib/faq-items"
 import { PAGES } from "../lib/pages"
-import { faqPage, softwareApplication } from "../lib/seo"
+import { faqPage, softwareApplication, website } from "../lib/seo"
 ---
 
+<!-- The WebSite node belongs on the home page and nowhere else: Google reads
+     it from the root URI to pick the site name it shows in results. -->
 <SiteLayout
   title={PAGES.home.title}
   description={PAGES.home.description}
   searchable={false}
-  jsonLd={[softwareApplication(), faqPage(FAQ_ITEMS)]}
+  jsonLd={[website(), softwareApplication(), faqPage(FAQ_ITEMS)]}
 >
   <Hero />
   <Features />

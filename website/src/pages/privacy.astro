@@ -1,12 +1,21 @@
 ---
 import ArticleLayout from "../layouts/ArticleLayout.astro"
 import { PAGES } from "../lib/pages"
+import { article } from "../lib/seo"
 import { SITE } from "../lib/site"
 ---
 
 <ArticleLayout
   title={PAGES.privacy.title}
   description={PAGES.privacy.description}
+  jsonLd={[
+    article({
+      type: "Article",
+      headline: "Privacy",
+      description: PAGES.privacy.description,
+      url: new URL(PAGES.privacy.path, SITE.url).href,
+    }),
+  ]}
   eyebrow={SITE.name}
   heading="Privacy"
   intro="Bookmarks But Better is built for people who do not want their reading habits collected. This page describes, in plain language, what the extension and this website touch."

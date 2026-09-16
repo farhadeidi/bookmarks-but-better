@@ -43,6 +43,62 @@ const NAV_LABELS = ["Home", "Demo", "Docs", "Guides", "Privacy"]
 /** The app's frame on the preview page. */
 const APP_FRAME = "[data-preview-stage] iframe"
 
+/** The structured data each kind of page carries, in document order. */
+const STRUCTURED_DATA = [
+  { path: "/", types: ["WebSite", "SoftwareApplication", "FAQPage"] },
+  { path: "/preview/", types: [] },
+  { path: "/privacy/", types: ["Article"] },
+  { path: "/docs/", types: ["TechArticle"] },
+  { path: "/docs/start/install/", types: ["TechArticle"] },
+  { path: "/docs/guides/raindrop-alternative/", types: ["TechArticle"] },
+] as const
+
+/** Every user agent robots.txt names, each of which needs its own rules. */
+const CRAWLERS = [
+  "*",
+  "OAI-SearchBot",
+  "ChatGPT-User",
+  "Claude-SearchBot",
+  "Claude-User",
+  "PerplexityBot",
+  "Perplexity-User",
+  "Applebot",
+  "GPTBot",
+  "ClaudeBot",
+  "Google-Extended",
+  "Applebot-Extended",
+  "CCBot",
+  "meta-externalagent",
+]
+
+/** The H2 file lists in llms.txt, in order. */
+const LLMS_SECTIONS = [
+  "Pages",
+  "Getting started",
+  "Markdown vaults",
+  "Guides",
+  "Optional",
+]
+
+/** Every JSON-LD block in raw HTML, parsed. Throws on invalid JSON. */
+function structuredData(html: string): Record<string, unknown>[] {
+  return [
+    ...html.matchAll(
+      /<script type="application\/ld\+json">([\s\S]*?)<\/script>/g
+    ),
+  ].map(([, json]) => JSON.parse(json) as Record<string, unknown>)
+}
+
+/** The node of a given type, failing where it is asked for if it is missing. */
+function node(
+  blocks: Record<string, unknown>[],
+  type: string
+): Record<string, unknown> {
+  const found = blocks.find((block) => block["@type"] === type)
+  expect(found, type).toBeDefined()
+  return found ?? {}
+}
+
 /** The text of every <h1> in raw HTML, tags stripped and whitespace collapsed. */
 function headings(html: string): string[] {
   return [...html.matchAll(/<h1[\s>][\s\S]*?<\/h1>/g)].map(([h1]) =>
@@ -291,10 +347,7 @@ test.describe("marketing website artifact", () => {
     await expect(dialog.locator(".pagefind-ui__result").first()).toBeVisible()
   })
 
-  test("publishes a sitemap, robots.txt and llms.txt", async ({ request }) => {
-    const robots = await (await request.get("/robots.txt")).text()
-    expect(robots).toContain(`Sitemap: ${SITE}/sitemap-index.xml`)
-
+  test("publishes a sitemap of every public page", async ({ request }) => {
     const index = await (await request.get("/sitemap-index.xml")).text()
     const sitemaps = [...index.matchAll(/<loc>([^<]+)<\/loc>/g)].map(
       ([, loc]) => new URL(loc).pathname
@@ -312,16 +365,176 @@ test.describe("marketing website artifact", () => {
     // app it embeds is not a page and carries noindex.
     expect(urls).toContain(`<loc>${SITE}/preview/</loc>`)
     expect(urls).not.toContain(`<loc>${SITE}/daemon/</loc>`)
+    expect(urls).not.toContain(`<loc>${SITE}/404/</loc>`)
 
     const appFrame = await request.get("/preview/app/")
     expect(appFrame.status()).toBe(200)
     expect(await appFrame.text()).toContain('name="robots" content="noindex"')
+  })
 
-    const llms = await (await request.get("/llms.txt")).text()
-    expect(llms).toContain(`(${SITE}/docs/)`)
-    expect(llms).toContain(`(${SITE}/docs/daemon/)`)
+  test("allows every crawler in robots.txt, the AI ones by name", async ({
+    request,
+  }) => {
+    const response = await request.get("/robots.txt")
+    expect(response.status()).toBe(200)
+    expect(response.headers()["content-type"]).toContain("text/plain")
+    const robots = await response.text()
+
+    expect(robots).toContain(`Sitemap: ${SITE}/sitemap-index.xml`)
+    // Nothing is disallowed anywhere, /preview/app/ included: that page
+    // carries a noindex meta, which a crawler only reads if it may fetch it.
+    expect(robots).not.toContain("Disallow")
+
+    // A named user-agent group inherits nothing from the `*` group (RFC 9309),
+    // so every group has to repeat the rules it needs.
+    const named: string[] = []
+    for (const group of robots.split(/\n\s*\n/)) {
+      const agents = [...group.matchAll(/^User-agent: (.+)$/gm)].map(
+        ([, agent]) => agent
+      )
+      if (agents.length === 0) continue
+      expect(group, agents.join(", ")).toContain("Allow: /")
+      named.push(...agents)
+    }
+    for (const agent of CRAWLERS) expect(named, agent).toContain(agent)
+  })
+
+  test("publishes an llms.txt in the structure llmstxt.org describes", async ({
+    request,
+  }) => {
+    const response = await request.get("/llms.txt")
+    expect(response.status()).toBe(200)
+    expect(response.headers()["content-type"]).toContain("text/plain")
+    const llms = await response.text()
+    const lines = llms.split("\n")
+
+    // An H1, then a blockquote summary, then free prose. Headings start at H2.
+    expect(lines[0]).toBe("# Bookmarks But Better")
+    expect(lines[2]).toMatch(/^> \S/)
+    expect(lines.filter((line) => line.startsWith("# "))).toHaveLength(1)
+    expect(
+      lines
+        .filter((line) => line.startsWith("## "))
+        .map((line) => line.slice(3))
+    ).toEqual(LLMS_SECTIONS)
+
+    // An H2 section is a file list: every line under one is a link, so the
+    // prose and the product constraints stay in the preamble where an agent
+    // reads them without following anything.
+    let section = ""
+    for (const line of lines) {
+      if (line.startsWith("## ")) section = line.slice(3)
+      else if (section && line.trim()) {
+        const where = `${section}: ${line}`
+        expect(line.startsWith("- ["), where).toBe(true)
+        expect(line.match(/\((https:\/\/[^)]+)\)/)?.[1], where).toBeTruthy()
+      }
+    }
+
+    // The facts worth having before any link is followed.
+    const preamble = llms.slice(0, llms.indexOf("## "))
+    expect(preamble).toContain("MIT")
+    expect(preamble).toContain("127.0.0.1:52222")
+
+    // Every page it lists is really there.
+    const links = [...llms.matchAll(/\((https:\/\/[^)]+)\)/g)]
+      .map(([, url]) => url)
+      .filter((url) => url.startsWith(`${SITE}/`))
+    expect(links.length).toBeGreaterThan(15)
+    for (const url of links) {
+      const page = await request.get(url.slice(SITE.length))
+      expect(page.status(), url).toBe(200)
+    }
     expect(llms).not.toContain(`(${SITE}/daemon/)`)
-    expect(llms).toContain("## Product constraints")
+  })
+
+  test("marks up each kind of page with valid structured data", async ({
+    request,
+  }) => {
+    for (const { path, types } of STRUCTURED_DATA) {
+      const blocks = structuredData(await (await request.get(path)).text())
+      expect(
+        blocks.map((block) => block["@type"]),
+        path
+      ).toEqual([...types])
+      for (const block of blocks) {
+        expect(block["@context"], path).toBe("https://schema.org")
+      }
+    }
+  })
+
+  test("describes the app, and names the site on the home page only", async ({
+    request,
+  }) => {
+    const home = structuredData(await (await request.get("/")).text())
+
+    const app = node(home, "SoftwareApplication")
+    expect(app.name).toBe("Bookmarks But Better")
+    // Free, said the way Google documents it.
+    expect(app.offers).toMatchObject({ price: 0, priceCurrency: "USD" })
+    expect(app.isAccessibleForFree).toBe(true)
+    expect(Array.isArray(app.featureList)).toBe(true)
+    expect(app.installUrl).toContain(
+      "https://chromewebstore.google.com/detail/nflojekghnganlcjncbepnnnkgakghif"
+    )
+    expect(app.softwareHelp).toMatchObject({ url: `${SITE}/docs/` })
+    // Chrome and Firefox are browsers, not operating systems.
+    expect(app.operatingSystem).not.toContain("Chrome")
+    // The project has no ratings, and inventing them is against Google's
+    // structured-data policy.
+    expect(app.aggregateRating).toBeUndefined()
+    expect(app.review).toBeUndefined()
+
+    // Google reads WebSite from the site's root URI and ignores it elsewhere.
+    expect(node(home, "WebSite")).toMatchObject({
+      url: `${SITE}/`,
+      publisher: { "@type": "Person" },
+    })
+    for (const { path } of STRUCTURED_DATA.slice(1)) {
+      const blocks = structuredData(await (await request.get(path)).text())
+      expect(
+        blocks.map((block) => block["@type"]),
+        path
+      ).not.toContain("WebSite")
+    }
+  })
+
+  test("declares og:type by page kind and points at llms.txt", async ({
+    request,
+  }) => {
+    for (const [path, type] of [
+      ["/", "website"],
+      ["/preview/", "website"],
+      ["/privacy/", "website"],
+      ["/docs/", "article"],
+      ["/docs/start/install/", "article"],
+    ] as const) {
+      const html = await (await request.get(path)).text()
+      // Starlight hardcodes `article` everywhere; the site pages override it,
+      // and exactly one tag survives the merge.
+      expect(
+        [...html.matchAll(/<meta property="og:type" content="([^"]+)"/g)].map(
+          ([, content]) => content
+        ),
+        path
+      ).toEqual([type])
+      expect(html, path).toContain(
+        'rel="alternate" type="text/plain" href="/llms.txt"'
+      )
+    }
+  })
+
+  test("gives every product screenshot alt text", async ({ page }) => {
+    await page.goto("/")
+    // Both mode versions of every screenshot are in the document, and each one
+    // demonstrates a named feature, so none of them is decorative.
+    const images = page.locator("#demo img, #features img, #themes img")
+    const count = await images.count()
+    expect(count).toBeGreaterThan(5)
+    for (let index = 0; index < count; index++) {
+      const alt = await images.nth(index).getAttribute("alt")
+      expect(alt?.length, `image ${index}`).toBeGreaterThan(20)
+    }
   })
 
   test("serves the custom 404 page for unknown URLs", async ({ page }) => {

@@ -34,6 +34,12 @@ const {
 const head = [
   // Replaces Starlight's "title — site name" with the full title as given.
   { tag: "title" as const, content: title },
+  // Starlight hardcodes og:type=article for every page. These are site pages,
+  // not articles; the merge deduplicates on `property`, so this one wins.
+  {
+    tag: "meta" as const,
+    attrs: { property: "og:type", content: "website" },
+  },
   ...(noindex
     ? [{ tag: "meta" as const, attrs: { name: "robots", content: "noindex" } }]
     : []),

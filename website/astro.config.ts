@@ -78,6 +78,18 @@ export default defineConfig({
         },
       ],
       head: [
+        // llmstxt.org asks for the plain-text summary to be discoverable
+        // through a standard link relation. Starlight only deduplicates
+        // canonical and sitemap links, so this passes through on every page.
+        {
+          tag: "link",
+          attrs: {
+            rel: "alternate",
+            type: "text/plain",
+            href: "/llms.txt",
+            title: "llms.txt",
+          },
+        },
         { tag: "meta", attrs: { property: "og:image", content: SITE.ogImage } },
         { tag: "meta", attrs: { property: "og:image:width", content: "1200" } },
         { tag: "meta", attrs: { property: "og:image:height", content: "630" } },
