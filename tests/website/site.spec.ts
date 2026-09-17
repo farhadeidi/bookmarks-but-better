@@ -5,7 +5,7 @@ const SITE = "https://bookmarks.but-better.dev"
 const PAGES = [
   {
     path: "/",
-    title: "Bookmarks But Better — Your bookmarks as a beautiful new tab",
+    title: "Bookmarks But Better — A bookmark manager on your new tab",
     h1: "Bookmarks, but better",
   },
   {
@@ -48,9 +48,12 @@ const STRUCTURED_DATA = [
   { path: "/", types: ["WebSite", "SoftwareApplication", "FAQPage"] },
   { path: "/preview/", types: [] },
   { path: "/privacy/", types: ["Article"] },
-  { path: "/docs/", types: ["TechArticle"] },
-  { path: "/docs/start/install/", types: ["TechArticle"] },
-  { path: "/docs/guides/raindrop-alternative/", types: ["TechArticle"] },
+  { path: "/docs/", types: ["TechArticle", "BreadcrumbList"] },
+  { path: "/docs/start/install/", types: ["TechArticle", "BreadcrumbList"] },
+  {
+    path: "/docs/guides/raindrop-alternative/",
+    types: ["TechArticle", "BreadcrumbList"],
+  },
 ] as const
 
 /** Every user agent robots.txt names, each of which needs its own rules. */
@@ -581,6 +584,32 @@ test.describe("marketing website artifact", () => {
       expect(page.status(), url).toBe(200)
     }
     expect(llms).not.toContain(`(${SITE}/daemon/)`)
+  })
+
+  test("publishes an llms-full.txt carrying every docs page", async ({
+    request,
+  }) => {
+    const response = await request.get("/llms-full.txt")
+    expect(response.status()).toBe(200)
+    expect(response.headers()["content-type"]).toContain("text/plain")
+    const full = await response.text()
+
+    // The same preamble as llms.txt, so one fetch answers the same questions.
+    expect(full.split("\n")[0]).toBe("# Bookmarks But Better")
+    const preamble = full.slice(0, full.indexOf("# Documentation"))
+    expect(preamble).toContain("MIT")
+    expect(preamble).toContain("127.0.0.1:52222")
+
+    // Every page llms.txt links under /docs/ has its text here, not just a
+    // link to it, and the MDX component wrappers are gone.
+    const llms = await (await request.get("/llms.txt")).text()
+    const docs = [...llms.matchAll(/\((https:\/\/[^)]+)\)/g)]
+      .map(([, url]) => url)
+      .filter((url) => url.startsWith(`${SITE}/docs/`))
+    expect(docs.length).toBeGreaterThan(10)
+    for (const url of docs) expect(full, url).toContain(`Source: ${url}`)
+    expect(full).not.toMatch(/^import .* from .*$/m)
+    expect(full).not.toMatch(/^\s*<\/?[A-Z]\w*[^>]*>\s*$/m)
   })
 
   test("marks up each kind of page with valid structured data", async ({

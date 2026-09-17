@@ -12,7 +12,7 @@ export const SITE = {
   version: pkg.version,
   author: "Farhad Eidi",
   tagline:
-    "Your bookmarks as a beautiful new tab. Local, private, no account. Optionally stored as Markdown you own.",
+    "A bookmark manager on your new tab page. Nothing to set up, no account, no cloud. Optionally stored as Markdown you own.",
   ogImage: "https://bookmarks.but-better.dev/og.png",
   ogImageAlt:
     "Bookmarks, but better: a new tab extension for Chrome and Firefox, beside its bookmarks dashboard in dark mode",

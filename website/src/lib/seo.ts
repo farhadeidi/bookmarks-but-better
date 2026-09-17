@@ -107,17 +107,21 @@ export interface ArticleOptions {
   description?: string
   /** The page's canonical URL. */
   url: string
+  /** The commit that last touched the page's source, from git. */
+  dateModified?: Date
 }
 
 /**
- * One documentation page or site article. No `datePublished` or `dateModified`:
- * the site has no last-updated data, and an invented date is worse than none.
+ * One documentation page or site article. `dateModified` is only present where
+ * git history supplies it; there is still no `datePublished`, because the first
+ * commit that added a file is a poor stand-in for when the page went live.
  */
 export function article({
   type,
   headline,
   description,
   url,
+  dateModified,
 }: ArticleOptions): JsonLd {
   return {
     "@context": "https://schema.org",
@@ -126,6 +130,7 @@ export function article({
     ...(description ? { description } : {}),
     url,
     inLanguage: "en",
+    ...(dateModified ? { dateModified: dateModified.toISOString() } : {}),
     isPartOf: { "@id": ID.website },
     about: {
       "@type": "SoftwareApplication",
@@ -146,6 +151,24 @@ export function faqPage(items: FaqItem[]): JsonLd {
       "@type": "Question",
       name: item.question,
       acceptedAnswer: { "@type": "Answer", text: item.answer },
+    })),
+  }
+}
+
+/**
+ * The trail above a documentation page. Only sections that are real pages
+ * appear, so every entry resolves: /docs/start/ has no index page of its own
+ * and is left out rather than linked into nothing.
+ */
+export function breadcrumbs(trail: { name: string; path: string }[]): JsonLd {
+  return {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: trail.map(({ name, path }, index) => ({
+      "@type": "ListItem",
+      position: index + 1,
+      name,
+      item: new URL(path, SITE.url).href,
     })),
   }
 }

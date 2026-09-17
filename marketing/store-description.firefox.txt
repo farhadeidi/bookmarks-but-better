@@ -1,6 +1,8 @@
 Bookmarks But Better replaces your new tab page with a clean, organized dashboard for the bookmarks you already have. It can also be set as your Firefox homepage.
 
-Open a new tab and see your folders in a responsive masonry layout instead of digging through browser menus. There is no account, no advertising, no analytics and no tracking.
+Open a new tab and see your folders in a responsive masonry layout instead of digging through browser menus.
+
+Install it and it works. There is no account to create and nothing to configure first: the dashboard shows the bookmarks this browser already has. There is no advertising, no analytics and no tracking. Everything past that is optional, and every part of it is free and open source.
 
 WHAT'S NEW IN VERSION 4
 

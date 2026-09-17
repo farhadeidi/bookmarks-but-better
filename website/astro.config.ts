@@ -2,6 +2,7 @@ import sitemap from "@astrojs/sitemap"
 import starlight from "@astrojs/starlight"
 import tailwindcss from "@tailwindcss/vite"
 import { defineConfig, fontProviders } from "astro/config"
+import { lastModified } from "./src/lib/lastmod"
 import { SITE, THEME_COLORS } from "./src/lib/site"
 
 /** Built pages that stay out of the sitemap. */
@@ -57,6 +58,9 @@ export default defineConfig({
       description:
         "Documentation for Bookmarks But Better: install the extension, choose sources, import and export, and keep bookmarks as Markdown with the local daemon.",
       titleDelimiter: "—",
+      // Read from git history, so docs carry a date a reader and a crawler
+      // can both trust. Needs a full checkout; see src/lib/lastmod.ts.
+      lastUpdated: true,
       favicon: "/favicon.svg",
       // The site's own 404 page serves every missing URL, docs included.
       disable404Route: true,
@@ -88,6 +92,15 @@ export default defineConfig({
             type: "text/plain",
             href: "/llms.txt",
             title: "llms.txt",
+          },
+        },
+        {
+          tag: "link",
+          attrs: {
+            rel: "alternate",
+            type: "text/plain",
+            href: "/llms-full.txt",
+            title: "llms-full.txt",
           },
         },
         { tag: "meta", attrs: { property: "og:image", content: SITE.ogImage } },
@@ -134,6 +147,10 @@ export default defineConfig({
     }),
     sitemap({
       filter: (page) => !UNLISTED_PATHS.has(new URL(page).pathname),
+      serialize: (item) => {
+        const lastmod = lastModified(new URL(item.url).pathname)
+        return lastmod ? { ...item, lastmod } : item
+      },
     }),
   ],
 

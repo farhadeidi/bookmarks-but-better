@@ -9,7 +9,8 @@
 // not preloaded would likely miss first paint.
 import Default from "@astrojs/starlight/components/Head.astro"
 import { Font } from "astro:assets"
-import { article, serializeJsonLd } from "../../lib/seo"
+import { DOCS_SECTIONS } from "../../lib/llms"
+import { article, breadcrumbs, serializeJsonLd } from "../../lib/seo"
 import { SITE } from "../../lib/site"
 
 // The marketing pages render through Starlight too, as StarlightPage splash
@@ -19,32 +20,59 @@ import { SITE } from "../../lib/site"
 // takes Article/NewsArticle/BlogPosting only, so this is for readers that
 // resolve the graph, not for stars in a search result.)
 const { pathname } = Astro.url
-const { entry } = Astro.locals.starlightRoute
+const { entry, lastUpdated } = Astro.locals.starlightRoute
 const canonical = new URL(
   pathname.endsWith("/") ? pathname : `${pathname}/`,
   SITE.url
 ).href
 
-const jsonLd = pathname.startsWith("/docs/")
-  ? article({
-      type: "TechArticle",
-      headline: entry.data.title,
-      description: entry.data.description,
-      url: canonical,
-    })
-  : undefined
+// Sidebar groups that also have an index page, so a crumb can link to them.
+// The docs/start/ group has no page of its own and never appears. Labels come
+// from the same list llms.txt uses, so a rename cannot desync the two.
+const LINKABLE_SECTIONS = new Set(["daemon", "guides"])
+
+const isDoc = pathname.startsWith("/docs/")
+
+/** "/docs/guides/pocket-alternative/" -> Home, Documentation, Guides, page. */
+function docsTrail() {
+  const segments = pathname.slice("/docs/".length).split("/").filter(Boolean)
+  const [group] = segments
+  const section =
+    segments.length > 1 && LINKABLE_SECTIONS.has(group)
+      ? DOCS_SECTIONS.find((candidate) => candidate.prefix === `docs/${group}/`)
+      : undefined
+  return [
+    { name: SITE.name, path: "/" },
+    { name: "Documentation", path: "/docs/" },
+    ...(section ? [{ name: section.label, path: `/docs/${group}/` }] : []),
+    ...(segments.length ? [{ name: entry.data.title, path: pathname }] : []),
+  ]
+}
+
+const jsonLd = isDoc
+  ? [
+      article({
+        type: "TechArticle",
+        headline: entry.data.title,
+        description: entry.data.description,
+        url: canonical,
+        dateModified: lastUpdated,
+      }),
+      breadcrumbs(docsTrail()),
+    ]
+  : []
 ---
 
 <Default />
 <Font cssVariable="--font-inter" preload />
 {
-  jsonLd && (
+  jsonLd.map((data) => (
     <script
       is:inline
       type="application/ld+json"
-      set:html={serializeJsonLd(jsonLd)}
+      set:html={serializeJsonLd(data)}
     />
-  )
+  ))
 }
 <script is:inline>
   // Marks Firefox and Safari on <html data-browser> before first paint, so
