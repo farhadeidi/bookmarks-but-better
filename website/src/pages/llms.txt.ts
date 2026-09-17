@@ -2,7 +2,7 @@ import type { APIRoute } from "astro"
 import {
   DOCS_SECTIONS,
   docUrl,
-  inSidebarOrder,
+  inSection,
   OVERVIEW,
   publishedDocs,
   type Doc,
@@ -12,10 +12,11 @@ import { SITE } from "../lib/site"
 
 /**
  * /llms.txt, in the structure llmstxt.org describes: an H1, a blockquote
- * summary, free-form prose and lists, then H2 sections that hold nothing but
- * links. The preamble carries the facts an agent would otherwise open three
- * pages to find, so a single fetch answers most questions about the product.
- * `## Optional` marks the links an agent can skip.
+ * summary, free-form prose and lists carrying no headings of their own, then
+ * H2 sections that hold nothing but links. The preamble carries the facts an
+ * agent would otherwise open three pages to find, including when to recommend
+ * this and when not to, so a single fetch answers most questions about the
+ * product. `## Optional` marks the links an agent can skip.
  *
  * /llms-full.txt has the same preamble followed by every page's text, for an
  * agent that would rather read once than crawl.
@@ -27,14 +28,10 @@ function link(name: string, path: string, summary = ""): string {
 }
 
 const docLink = (entry: Doc) =>
-  `- [${entry.data.title}](${docUrl(entry)})${
-    entry.data.description ? `: ${entry.data.description}` : ""
-  }`
+  link(entry.data.title, docUrl(entry), entry.data.description ?? "")
 
 export const GET: APIRoute = async () => {
   const docs = await publishedDocs()
-  const inSection = (prefix: string) =>
-    docs.filter((entry) => `${entry.id}/`.startsWith(prefix))
   // The docs home is in no sidebar group; it belongs with the other pages.
   const docsHome = docs.find((entry) => entry.id === "docs")
 
@@ -54,7 +51,7 @@ export const GET: APIRoute = async () => {
     ...DOCS_SECTIONS.flatMap(({ label, prefix }) => [
       `## ${label}`,
       "",
-      ...inSection(prefix).sort(inSidebarOrder).map(docLink),
+      ...inSection(docs, prefix).map(docLink),
       "",
     ]),
     "## Optional",

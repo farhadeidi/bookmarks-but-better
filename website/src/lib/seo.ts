@@ -130,9 +130,7 @@ export function article({
     ...(description ? { description } : {}),
     url,
     inLanguage: "en",
-    ...(dateModified
-      ? { dateModified: dateModified.toISOString().slice(0, 10) }
-      : {}),
+    ...(dateModified ? { dateModified: dateModified.toISOString() } : {}),
     isPartOf: { "@id": ID.website },
     about: {
       "@type": "SoftwareApplication",

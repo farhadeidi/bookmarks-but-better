@@ -13,7 +13,7 @@ import { fileURLToPath } from "node:url"
  * git is absent, every page simply has no `lastmod`.
  */
 
-const WEBSITE = fileURLToPath(new URL("../../", import.meta.url))
+const WEBSITE = new URL("../../", import.meta.url)
 
 /** Where a built URL's source could live, in the order Astro resolves it. */
 function sourcesFor(pathname: string): string[] {
@@ -21,32 +21,31 @@ function sourcesFor(pathname: string): string[] {
   if (slug === "") return ["src/pages/index.astro"]
   // Docs pages are content entries under src/content/docs/, which already
   // holds the extra docs/ segment that puts every page below /docs/.
-  const bases =
+  const base =
     slug === "docs" || slug.startsWith("docs/")
-      ? [`src/content/docs/${slug}`]
-      : [`src/pages/${slug}`]
-  return bases.flatMap((base) => [
+      ? `src/content/docs/${slug}`
+      : `src/pages/${slug}`
+  return [
     `${base}.astro`,
     `${base}.md`,
     `${base}.mdx`,
     `${base}/index.md`,
     `${base}/index.mdx`,
-  ])
+  ]
 }
 
 const cache = new Map<string, string | undefined>()
 
 function commitDate(file: string): string | undefined {
-  const cached = cache.get(file)
-  if (cached !== undefined || cache.has(file)) return cached
+  if (cache.has(file)) return cache.get(file)
   let date: string | undefined
   try {
-    const out = execFileSync("git", ["log", "-1", "--format=%cI", "--", file], {
-      cwd: WEBSITE,
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "ignore"],
-    }).trim()
-    date = out || undefined
+    date =
+      execFileSync("git", ["log", "-1", "--format=%cI", "--", file], {
+        cwd: fileURLToPath(WEBSITE),
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "ignore"],
+      }).trim() || undefined
   } catch {
     date = undefined
   }
@@ -55,10 +54,8 @@ function commitDate(file: string): string | undefined {
 }
 
 export function lastModified(pathname: string): string | undefined {
-  for (const source of sourcesFor(pathname)) {
-    if (existsSync(new URL(source, new URL("../../", import.meta.url)))) {
-      return commitDate(source)
-    }
-  }
-  return undefined
+  const source = sourcesFor(pathname).find((candidate) =>
+    existsSync(new URL(candidate, WEBSITE))
+  )
+  return source ? commitDate(source) : undefined
 }

@@ -9,6 +9,7 @@
 // not preloaded would likely miss first paint.
 import Default from "@astrojs/starlight/components/Head.astro"
 import { Font } from "astro:assets"
+import { DOCS_SECTIONS } from "../../lib/llms"
 import { article, breadcrumbs, serializeJsonLd } from "../../lib/seo"
 import { SITE } from "../../lib/site"
 
@@ -25,24 +26,28 @@ const canonical = new URL(
   SITE.url
 ).href
 
-// Sections that have an index page of their own, so a crumb can link to them.
-// /docs/start/ is a sidebar group without a page and never appears.
-const SECTIONS: Record<string, string> = {
-  daemon: "Markdown vaults",
-  guides: "Guides",
-}
+// Sidebar groups that also have an index page, so a crumb can link to them.
+// The docs/start/ group has no page of its own and never appears. Labels come
+// from the same list llms.txt uses, so a rename cannot desync the two.
+const LINKABLE_SECTIONS = new Set(["daemon", "guides"])
 
 const isDoc = pathname.startsWith("/docs/")
-// "/docs/guides/pocket-alternative/" -> ["guides", "pocket-alternative"]
-const segments = pathname.replace(/^\/docs\/|\/$/g, "").split("/").filter(Boolean)
-const section = segments.length > 1 ? SECTIONS[segments[0]] : undefined
 
-const trail = [
-  { name: SITE.name, path: "/" },
-  { name: "Documentation", path: "/docs/" },
-  ...(section ? [{ name: section, path: `/docs/${segments[0]}/` }] : []),
-  ...(segments.length ? [{ name: entry.data.title, path: pathname }] : []),
-]
+/** "/docs/guides/pocket-alternative/" -> Home, Documentation, Guides, page. */
+function docsTrail() {
+  const segments = pathname.slice("/docs/".length).split("/").filter(Boolean)
+  const [group] = segments
+  const section =
+    segments.length > 1 && LINKABLE_SECTIONS.has(group)
+      ? DOCS_SECTIONS.find((candidate) => candidate.prefix === `docs/${group}/`)
+      : undefined
+  return [
+    { name: SITE.name, path: "/" },
+    { name: "Documentation", path: "/docs/" },
+    ...(section ? [{ name: section.label, path: `/docs/${group}/` }] : []),
+    ...(segments.length ? [{ name: entry.data.title, path: pathname }] : []),
+  ]
+}
 
 const jsonLd = isDoc
   ? [
@@ -53,7 +58,7 @@ const jsonLd = isDoc
         url: canonical,
         dateModified: lastUpdated,
       }),
-      breadcrumbs(trail),
+      breadcrumbs(docsTrail()),
     ]
   : []
 ---

@@ -2,7 +2,7 @@ import type { APIRoute } from "astro"
 import {
   DOCS_SECTIONS,
   docUrl,
-  inSidebarOrder,
+  inSection,
   OVERVIEW,
   publishedDocs,
   type Doc,
@@ -14,29 +14,43 @@ import { SITE } from "../lib/site"
  * documentation page, so an agent can read the whole product in one fetch
  * instead of following eighteen links.
  *
- * The bodies are the authored Markdown. MDX pages also carry a few Starlight
- * components, which `plainMarkdown` below reduces to their text: everything
- * this site uses them for (tabs, card grids, link cards) is a wrapper around
- * Markdown that reads fine without the wrapper.
+ * The bodies are the authored Markdown, with the MDX components reduced to
+ * their text by `plainMarkdown` below.
  */
 
-/** Starlight components this site uses, as they appear at the start of a tag. */
-const COMPONENT_TAG =
-  /^\s*<\/?(Tabs|TabItem|CardGrid|LinkCard|Card|Aside|Steps|Badge|FileTree)\b[^>]*>\s*$/
+/**
+ * Starlight components wrap Markdown; their text is what matters here.
+ *
+ * A LinkCard carries its own content in attributes and is the whole body of
+ * the two index pages, so it becomes the link it renders rather than being
+ * dropped. A TabItem's label is a heading for the block under it. Everything
+ * else is a wrapper and goes.
+ *
+ * The tags span lines, so these run over the whole document rather than line
+ * by line. No fenced code block in the docs contains a capitalised angle tag,
+ * which is what would otherwise be caught by the last pattern.
+ */
+const IMPORT = /^import\s.*$/gm
+const LINK_CARD = /[ \t]*<LinkCard\b([^>]*?)\/>/g
+const TAB_ITEM = /<TabItem\b[^>]*?\blabel=["']([^"']+)["'][^>]*?>/g
+const COMPONENT_TAG = /<\/?[A-Z][A-Za-z]*\b[^>]*?\/?>/g
 
-const TAB_LABEL = /^\s*<TabItem\s[^>]*label=["']([^"']+)["'][^>]*>\s*$/
+/** The value of one JSX attribute, from the attribute text of a tag. */
+function attribute(attributes: string, name: string): string {
+  return attributes.match(new RegExp(`\\b${name}=["']([^"']*)["']`))?.[1] ?? ""
+}
 
 function plainMarkdown(body: string): string {
   return body
-    .split("\n")
-    .flatMap((line) => {
-      if (/^import\s.*from\s.*$/.test(line)) return []
-      const tab = line.match(TAB_LABEL)
-      if (tab) return [`**${tab[1]}**`, ""]
-      if (COMPONENT_TAG.test(line)) return []
-      return [line]
+    .replace(IMPORT, "")
+    .replace(LINK_CARD, (_, attributes: string) => {
+      const title = attribute(attributes, "title")
+      const href = attribute(attributes, "href")
+      const description = attribute(attributes, "description")
+      return `- [${title}](${href})${description ? `: ${description}` : ""}`
     })
-    .join("\n")
+    .replace(TAB_ITEM, (_, label: string) => `\n**${label}**\n`)
+    .replace(COMPONENT_TAG, "")
     .replace(/\n{3,}/g, "\n\n")
     .trim()
 }
@@ -55,8 +69,6 @@ const section = (entry: Doc) =>
 export const GET: APIRoute = async () => {
   const docs = await publishedDocs()
   const docsHome = docs.filter((entry) => entry.id === "docs")
-  const inSection = (prefix: string) =>
-    docs.filter((entry) => `${entry.id}/`.startsWith(prefix))
 
   const lines = [
     `# ${SITE.name}`,
@@ -72,7 +84,7 @@ export const GET: APIRoute = async () => {
     ...DOCS_SECTIONS.flatMap(({ label, prefix }) => [
       `# ${label}`,
       "",
-      ...inSection(prefix).sort(inSidebarOrder).map(section),
+      ...inSection(docs, prefix).map(section),
     ]),
   ]
 

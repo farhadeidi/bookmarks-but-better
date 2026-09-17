@@ -38,7 +38,7 @@ You can see all of it before installing anything, on the [live preview](/preview
 
 Most people's bookmarks are years of accumulation, and putting all of it on the new tab is not an improvement. The dashboard has a root folder for this: it draws only what is inside the folder you choose.
 
-Set it from the control next to the source switcher in the header, or from **Settings → Sources → Root folder**. Choose **All bookmarks** to go back to everything.
+Set it from the control next to the source switcher in the header. There is also **Settings → Sources → Root folder**, which only appears while Browser bookmarks is the active source. Choose **All bookmarks** to go back to everything.
 
 A folder like `Daily` or `Personal Bookmarks` with six or seven subfolders makes a far better new tab than a dump of everything you ever saved. The rest stays in your browser, searchable, just not on screen. Each source remembers its own root folder, so switching sources does not reset it.
 
