@@ -1,26 +1,49 @@
-Bookmarks But Better replaces your new tab page with a clean, organized dashboard for the bookmarks you already have.
+Bookmarks But Better is a bookmark manager that turns your new tab into the bookmarks you already have, with every folder as a card.
 
-Open a new tab and see your folders in a responsive masonry layout instead of digging through browser menus.
+Install it and it works. There is no account to create and nothing to configure first. Open a new tab and your folders are there in a responsive masonry layout, with a search palette and a full drag-and-drop organizer, instead of digging through browser menus.
 
-Install it and it works. There is no account to create and nothing to configure first: the dashboard shows the bookmarks this browser already has. There is no advertising, no analytics and no tracking. Everything past that is optional, and every part of it is free and open source.
+No advertising, no analytics, no tracking. Everything past that is optional and every part of it is free and open source, including a local daemon that keeps your bookmarks as plain Markdown files in a folder you own.
 
-WHAT'S NEW IN VERSION 4
+WHAT'S NEW
 
-- Use your browser bookmarks, a local Markdown vault, or both, and switch between them from the top of the dashboard
-- A guided setup that asks which sources to use and walks you through connecting a vault, or lets you skip straight to your bookmarks
-- Set up the optional vault daemon with one command: npx bookmarks-but-better@latest
-- Choose the dashboard's root folder right from the new tab
-- Search your bookmarks from the address bar: type “bb”, press Tab, then search by title or URL
-- Save the active page to your bookmarks from the extension popup
-- Import and export standard browser bookmark HTML files, plus CSV import from Raindrop and Pocket
-- Site icons cached on your device, so each site's icon is fetched about once a month
-- Safe mode, and a Settings page you can open from the extensions page, for a new tab that will not load
-- Upgrades keep your completed setup and existing preferences
+4.3.0 (14 September 2026)
+
+- Choose the dashboard's root folder from the new tab itself. A control beside the source switcher shows the folder in view, and narrowing it adds one click back to all bookmarks
+- Import from Raindrop and Pocket CSV exports. Raindrop's folder paths become nested folders, Pocket's items land under one folder, and both reuse the preview, destination picker and duplicate handling that HTML import uses
+- A Settings page you can open from the browser's extensions page, even when the new tab itself is unusable
+- Safe mode, which opens the new tab without drawing bookmarks so you can change the source or folder that caused the trouble
+- Setup asks which sources you want as two switches instead of one either-or choice, shows a step counter, and offers Skip for now on the vault step
+- Settings > Sources now shows each daemon's live status and where to manage its vaults
+- The app actions moved into the header row, and float as a bottom toolbar on phones
+- A crash while drawing the dashboard shows a card with the error and a way out, instead of a blank tab
+- Mounting a 10,000-bookmark collection asks the browser for far fewer computed styles
+
+4.2.1 (13 September 2026)
+
+- Collections of thousands of bookmarks no longer hang the new tab. Above 500 bookmarks the dashboard lays out every card but builds only the ones near the viewport, releasing them as they scroll away. The keyboard still reaches every item
+
+4.2.0 (13 September 2026)
+
+- The website moved to bookmarks.but-better.dev
+- The daemon install command in Settings fetches its installer from the project's GitHub Releases, instead of a domain the project does not own
+
+4.1.1 (11 September 2026)
+
+- Grid icons are sharp again in Chrome, which was scaling a 16-pixel icon up to fill a 64-pixel tile
+
+4.1.0 (11 September 2026)
+
+- npx bookmarks-but-better is now the Daemon Manager. It reports what is installed, configured, running and connected, installs or updates the daemon, uninstalls it without ever touching a vault, and adds, removes or lists vaults
+- One daemon can serve several vaults, each of them a separate source
+
+Full history: https://github.com/farhadeidi/bookmarks-but-better/blob/main/CHANGELOG.md
 
 FEATURES
 
 - Responsive masonry dashboard
 - Full Bookmark Organizer tree editor
+- Search palette: start typing anywhere on the dashboard to find a bookmark by title or URL
+- Quick capture: save the page you are on from the toolbar popup
 - Drag bookmarks between folders and reorder them
 - Create, rename and delete bookmarks and folders
 - List and icon-grid views per folder
@@ -30,6 +53,7 @@ FEATURES
 - Browser bookmarks and optional local Markdown vaults, never silently mixed
 - Address-bar search with the “bb” keyword
 - Standard HTML import and export, plus CSV import from Raindrop and Pocket
+- Safe mode, and a Settings page reachable from the browser's extensions page, for a new tab that will not load
 
 UPGRADING
 
