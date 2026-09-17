@@ -11,6 +11,18 @@ export interface FaqItem {
 
 export const FAQ_ITEMS: FaqItem[] = [
   {
+    question: "Do I have to set anything up?",
+    answer:
+      "No. Install it, open a new tab, and the bookmarks you already have are there as folder cards. The first run offers to walk you through the options, and you can skip straight past it.",
+    link: { href: "/docs/start/install/", label: "Install the extension" },
+  },
+  {
+    question: "Do I need the Markdown vault or the daemon?",
+    answer:
+      "No. The dashboard runs on your browser's own bookmarks with nothing installed beyond the extension, and most people leave it that way. Set up a vault only if you want your bookmarks as files you can open in a text editor, keep in Git or read in Obsidian. Safari is the exception: it gives extensions no access to its bookmarks, so a vault is the only source there.",
+    link: { href: "/docs/daemon/", label: "How Markdown vaults work" },
+  },
+  {
     question: "Does it change my existing bookmarks?",
     answer:
       "It displays and edits the bookmarks you already have, through your browser's built-in bookmark APIs. Nothing is moved, merged or deleted unless you do it yourself in the organizer.",
@@ -18,7 +30,7 @@ export const FAQ_ITEMS: FaqItem[] = [
   {
     question: "Is it free?",
     answer:
-      "Yes. Bookmarks But Better is free and open source under the MIT license, and it needs no account. The source code is on GitHub if you prefer to build it yourself.",
+      "Yes, all of it. Bookmarks But Better is free and open source under the MIT license, and it needs no account. The source code is on GitHub if you prefer to build it yourself.",
   },
   {
     question:

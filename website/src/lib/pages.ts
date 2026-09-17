@@ -17,9 +17,9 @@ export interface PageMeta {
 export const PAGES = {
   home: {
     path: "/",
-    title: "Bookmarks But Better — Your bookmarks as a beautiful new tab",
+    title: "Bookmarks But Better — A bookmark manager on your new tab",
     description:
-      "Your bookmarks as a beautiful new tab page. A local, private bookmarks dashboard with no account, optionally stored as Markdown you own. Free and open source.",
+      "A free bookmark manager that replaces your new tab with the bookmarks you already have. No account, nothing to set up, and optionally stored as Markdown you own.",
     name: "Home",
     summary: "product overview, features and installation links",
   },

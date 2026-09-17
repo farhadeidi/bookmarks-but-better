@@ -9,7 +9,8 @@
 <h1 align="center">Bookmarks But Better</h1>
 
 <p align="center">
-  A clean, beautiful bookmarks dashboard that replaces your new tab page.
+  A bookmark manager on your new tab page. Nothing to set up, no account, no
+  cloud. Optionally stored as Markdown you own.
 </p>
 
 <p align="center">
@@ -25,8 +26,19 @@
 </p>
 
 <p align="center">
-  <a href="https://bookmarks.but-better.dev/preview/">Try the live preview</a>
+  <a href="https://bookmarks.but-better.dev/">Website</a> ·
+  <a href="https://bookmarks.but-better.dev/docs/">Docs</a> ·
+  <a href="https://bookmarks.but-better.dev/preview/">Live preview</a>
 </p>
+
+Install it and it works. The dashboard shows the bookmarks Chrome or Firefox
+already has, as folder cards on every new tab, with drag-and-drop organizing and
+a search palette. There is no account to create and nothing to configure first.
+
+Everything past that is optional, and all of it is free. The largest optional
+piece is a small daemon that runs on your own computer and keeps your bookmarks
+as plain Markdown files in a folder you choose, for Obsidian, git or any text
+editor. Most people never turn it on.
 
 ## Features
 

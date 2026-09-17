@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Bookmarks But Better",
-  "description": "A bookmarks dashboard backed by a local daemon. Themes, dark mode, full management. Reads the current page only when you click Save.",
+  "description": "Bookmark manager backed by a local Markdown vault. Folder cards, search and drag-and-drop. Free, no account. Reads the current page only when you click Save.",
   "version": "4.3.0",
   "action": {
     "default_popup": "popup.html",
