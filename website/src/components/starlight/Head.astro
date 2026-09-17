@@ -9,7 +9,7 @@
 // not preloaded would likely miss first paint.
 import Default from "@astrojs/starlight/components/Head.astro"
 import { Font } from "astro:assets"
-import { article, serializeJsonLd } from "../../lib/seo"
+import { article, breadcrumbs, serializeJsonLd } from "../../lib/seo"
 import { SITE } from "../../lib/site"
 
 // The marketing pages render through Starlight too, as StarlightPage splash
@@ -19,32 +19,55 @@ import { SITE } from "../../lib/site"
 // takes Article/NewsArticle/BlogPosting only, so this is for readers that
 // resolve the graph, not for stars in a search result.)
 const { pathname } = Astro.url
-const { entry } = Astro.locals.starlightRoute
+const { entry, lastUpdated } = Astro.locals.starlightRoute
 const canonical = new URL(
   pathname.endsWith("/") ? pathname : `${pathname}/`,
   SITE.url
 ).href
 
-const jsonLd = pathname.startsWith("/docs/")
-  ? article({
-      type: "TechArticle",
-      headline: entry.data.title,
-      description: entry.data.description,
-      url: canonical,
-    })
-  : undefined
+// Sections that have an index page of their own, so a crumb can link to them.
+// /docs/start/ is a sidebar group without a page and never appears.
+const SECTIONS: Record<string, string> = {
+  daemon: "Markdown vaults",
+  guides: "Guides",
+}
+
+const isDoc = pathname.startsWith("/docs/")
+// "/docs/guides/pocket-alternative/" -> ["guides", "pocket-alternative"]
+const segments = pathname.replace(/^\/docs\/|\/$/g, "").split("/").filter(Boolean)
+const section = segments.length > 1 ? SECTIONS[segments[0]] : undefined
+
+const trail = [
+  { name: SITE.name, path: "/" },
+  { name: "Documentation", path: "/docs/" },
+  ...(section ? [{ name: section, path: `/docs/${segments[0]}/` }] : []),
+  ...(segments.length ? [{ name: entry.data.title, path: pathname }] : []),
+]
+
+const jsonLd = isDoc
+  ? [
+      article({
+        type: "TechArticle",
+        headline: entry.data.title,
+        description: entry.data.description,
+        url: canonical,
+        dateModified: lastUpdated,
+      }),
+      breadcrumbs(trail),
+    ]
+  : []
 ---
 
 <Default />
 <Font cssVariable="--font-inter" preload />
 {
-  jsonLd && (
+  jsonLd.map((data) => (
     <script
       is:inline
       type="application/ld+json"
-      set:html={serializeJsonLd(jsonLd)}
+      set:html={serializeJsonLd(data)}
     />
-  )
+  ))
 }
 <script is:inline>
   // Marks Firefox and Safari on <html data-browser> before first paint, so
