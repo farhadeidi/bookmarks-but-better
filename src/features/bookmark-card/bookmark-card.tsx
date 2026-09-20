@@ -295,13 +295,14 @@ export const BookmarkCard = React.memo(function BookmarkCard({
           </span>
         )}
         {/* Tucked against the menu, and out of the way until wanted: shown
-            while the card is hovered or holds keyboard focus, on touch screens
-            (no hover), and whenever the card is collapsed, so a closed card
-            always says so. Keyboard focus only (`:focus-visible`), so a mouse
-            click does not leave it showing once the pointer moves on. The card
-            is this button's grandparent (card > header > button); matching
-            that rather than any ancestor card keeps a nested card's chevron
-            hidden while only its parent is hovered. */}
+            while the card header is hovered or the card holds keyboard focus,
+            on touch screens (no hover), and whenever the card is collapsed, so
+            a closed card always says so. Keyboard focus only (`:focus-visible`),
+            so a mouse click does not leave it showing once the pointer moves
+            on. The header is this button's parent, the card its grandparent
+            (card > header > button); matching the parent keeps the chevron
+            hidden while the pointer is only over the card body, and keeps a
+            nested card's chevron hidden while only its parent is hovered. */}
         <CollapsibleTrigger
           render={
             <Button
@@ -313,7 +314,7 @@ export const BookmarkCard = React.memo(function BookmarkCard({
                 "-mr-2 flex-shrink-0 bg-transparent text-muted-foreground transition-opacity hover:bg-transparent aria-expanded:bg-transparent dark:hover:bg-transparent",
                 isCollapsed
                   ? "opacity-100"
-                  : "opacity-0 pointer-coarse:opacity-100 [:has(:focus-visible)>*>&]:opacity-100 [:hover>*>&]:opacity-100"
+                  : "opacity-0 pointer-coarse:opacity-100 [:has(:focus-visible)>*>&]:opacity-100 [:hover>&]:opacity-100"
               )}
             />
           }
