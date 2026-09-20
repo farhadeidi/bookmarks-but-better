@@ -7,10 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.4.0] - 2026-09-20
+
 ### Added
 
-- **Collapsible folder cards.** A chevron appears in a card's header on
-  hover, and Enter on a focused card heading does the same. Cards animate
+- **Collapsible folder cards.** A chevron appears in a card's header when the
+  header is hovered, and Enter on a focused card heading does the same. Cards
+  animate
   open and closed without the other cards changing columns. A collapsed card
   shows only its name and bookmark count, is a single keyboard stop, and stays
   collapsed across sessions for that source. With Nested folders on, nested
@@ -25,6 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   on a new vault and on one that predates this file — so a vault a user keeps
   in a git repository as a backup never commits the lock file or staging
   entries (#29).
+- **`npx bookmarks-but-better` 1.1.3 installs daemon 4.4.0.**
 
 ### Fixed
 
