@@ -6,6 +6,13 @@ No advertising, no analytics, no tracking. Everything past that is optional and 
 
 WHAT'S NEW
 
+4.4.0 (20 September 2026)
+
+- Collapsible folder cards. Hover a card's header and a chevron folds the card to its name and bookmark count; Enter on a focused heading does the same. A card stays folded across sessions, and with nested folders on, each card folds on its own
+- The dashboard waits for your saved preferences before drawing, so cards no longer flash open or as lists before your choices apply
+- Typing "d" now only starts a search; it no longer also flips light and dark
+- The daemon ships a native ARM64 build for Windows
+
 4.3.0 (14 September 2026)
 
 - Choose the dashboard's root folder from the new tab itself. A control beside the source switcher shows the folder in view, and narrowing it adds one click back to all bookmarks
