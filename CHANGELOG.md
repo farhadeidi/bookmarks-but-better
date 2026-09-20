@@ -13,11 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Collapsible folder cards.** A chevron appears in a card's header when the
   header is hovered, and Enter on a focused card heading does the same. Cards
-  animate
-  open and closed without the other cards changing columns. A collapsed card
-  shows only its name and bookmark count, is a single keyboard stop, and stays
-  collapsed across sessions for that source. With Nested folders on, nested
-  cards collapse on their own (#3).
+  animate open and closed without the other cards changing columns. A
+  collapsed card shows only its name and bookmark count, is a single keyboard
+  stop, and stays collapsed across sessions for that source. With Nested
+  folders on, nested cards collapse on their own (#3).
 - **A native ARM64 daemon for Windows.** Releases now carry an
   `aarch64-pc-windows-msvc` archive, and `install.ps1` picks the build for the
   machine's architecture instead of always taking x64. On an ARM64 machine
@@ -519,6 +518,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Rewrote README for end users with screenshots and badges
 
+[4.4.0]: https://github.com/farhadeidi/bookmarks-but-better/compare/v4.3.0...v4.4.0
 [4.3.0]: https://github.com/farhadeidi/bookmarks-but-better/compare/v4.2.1...v4.3.0
 [4.2.1]: https://github.com/farhadeidi/bookmarks-but-better/compare/v4.2.0...v4.2.1
 [4.2.0]: https://github.com/farhadeidi/bookmarks-but-better/compare/v4.1.1...v4.2.0
