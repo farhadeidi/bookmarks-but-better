@@ -19,18 +19,28 @@ tracking and size, not by a second family; `font-display` stays the token for
 display type (`--font-display` in `global.css`, `--bbb-font-display` in the
 docs) and points at Inter.
 
-- Display sizes: hero `text-5xl`→`text-8xl`; section titles
+- Display sizes: hero `clamp(3.75rem, 12vw, 11rem)` at `leading-[0.9]`, a
+  poster-scale title that leads the whole page; section titles
   `text-3xl`/`sm:text-4xl`; page titles `text-4xl`/`sm:text-5xl`; prose h1/h2
   `text-2xl`. Docs page titles keep Starlight's own size and its h2s step down
   to 0.9 of theirs, so the title still leads.
 - Display tuning: `font-semibold` everywhere, with tracking pulled in as the
-  size grows — `-0.035em` on the hero and the 404, `-0.03em` on page titles,
-  `-0.025em` on section titles and docs h1, `-0.02em` on docs h2, `-0.015em`
-  on prose h1/h2. Default line height, `text-balance` (article titles use
-  `text-pretty`).
+  size grows — `-0.045em` on the hero, `-0.035em` on the 404, `-0.03em` on
+  page titles, `-0.025em` on section titles and docs h1, `-0.02em` on docs h2,
+  `-0.015em` on prose h1/h2. Default line height (the hero sets its own),
+  `text-balance` (article titles use `text-pretty`).
 - The hero's "but better" sets *better* apart with weight, not a slant:
   `font-normal` against the semibold line. Inter's italic is a sloped
   grotesque, not an editorial italic, and it reads as a mistake at hero size.
+- **Hero motion** (home page only, all of it off under
+  `prefers-reduced-motion`): the title's words rise in on load, and the
+  letters of *better* arrive at 800 and settle one after another to its
+  `font-normal` weight on Inter's variable axis; hovering the title sends the
+  wave through them again. The server HTML keeps *better* whole and a small
+  script splits it into letters, so crawlers read the heading as written. The
+  hero screenshot starts tipped back in perspective and lays flat
+  over the first half-screen of scrolling (scroll-driven, so browsers without
+  scroll timelines show it flat).
 - Eyebrows: `text-sm/6 font-medium` in amber, sentence case.
 - Body text is `text-base` on mobile and may step down to `text-sm` at `sm:`.
 

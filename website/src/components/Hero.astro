@@ -1,27 +1,38 @@
 ---
+// The centered title over the product shot, which starts tipped back in
+// perspective and lays flat as the page scrolls. The title's words rise in,
+// and the letters of "better" settle from heavy to light one after another;
+// hovering the title sends that wave through them again. The server HTML keeps
+// "better" whole, so crawlers and the raw heading read the word; the script
+// below splits it into letters in the browser.
 import { SITE } from "../lib/site"
 import { TEXT_LINK } from "../lib/ui"
 import AppPreview from "./AppPreview.astro"
 import InstallButtons from "./InstallButtons.astro"
 ---
 
-<section aria-labelledby="hero-title" class="pt-12 pb-14 md:pt-24 md:pb-28">
+<section aria-labelledby="hero-title" class="overflow-hidden pt-12 pb-14 md:pt-24 md:pb-28">
   <div class="mx-auto max-w-6xl px-6 text-center">
     <p class="text-sm/6 font-medium text-accent">
       A free and open source bookmark manager for Chrome and Firefox
     </p>
     <h1
       id="hero-title"
-      class="font-display mx-auto mt-5 max-w-[20ch] text-6xl font-semibold tracking-[-0.035em] text-balance sm:text-7xl md:text-8xl"
+      class="title font-display mx-auto mt-5 text-[clamp(3.75rem,12vw,11rem)] leading-[0.9] font-semibold tracking-[-0.045em]"
     >
-      Bookmarks,{" "}<br />but <em class="font-normal not-italic">better</em>
+      <span class="word" style="--i:0">Bookmarks,</span>{" "}<br />
+      <span class="word" style="--i:1">but</span>{" "}<em
+        class="word font-normal not-italic"
+        style="--i:2"
+        data-ripple>better</em
+      >
     </h1>
     <p
-      class="mx-auto mt-6 max-w-[48ch] text-lg/8 text-pretty text-muted-foreground md:mt-8"
+      class="intro mx-auto mt-8 max-w-[48ch] text-lg/8 text-pretty text-muted-foreground md:mt-10"
     >
       {SITE.tagline}
     </p>
-    <div class="mt-8 flex flex-col items-center gap-6 md:mt-10">
+    <div class="intro mt-8 flex flex-col items-center gap-6 md:mt-10">
       <InstallButtons />
       <p
         class="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-base/7 sm:text-sm/6"
@@ -35,8 +46,85 @@ import InstallButtons from "./InstallButtons.astro"
         </a>
       </p>
     </div>
-    <div class="mt-12 md:mt-20">
-      <AppPreview />
+    <div class="stage mt-12 md:mt-20">
+      <div class="tilt">
+        <AppPreview />
+      </div>
     </div>
   </div>
 </section>
+
+<script>
+  // Letters for the weight ripple, each with its place in the wave.
+  for (const word of document.querySelectorAll<HTMLElement>("[data-ripple]")) {
+    word.replaceChildren(
+      ...[...(word.textContent ?? "")].map((char, c) => {
+        const letter = document.createElement("span")
+        letter.className = "ch"
+        letter.style.setProperty("--c", String(c))
+        letter.textContent = char
+        return letter
+      })
+    )
+  }
+</script>
+
+<style>
+  .word,
+  .title :global(.ch) {
+    display: inline-block;
+  }
+  .stage {
+    perspective: 1800px;
+  }
+  .tilt {
+    transform-origin: 50% 0;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .word {
+      animation: hero-rise 0.9s calc(var(--i) * 90ms) cubic-bezier(0.2, 0.7, 0.1, 1) backwards;
+    }
+    .title :global(.ch) {
+      animation: hero-relax 1s calc(0.6s + var(--c) * 80ms) cubic-bezier(0.6, 0, 0.2, 1) backwards;
+    }
+    /* A new animation name restarts the wave on hover. */
+    .title:hover :global(.ch) {
+      animation: hero-wave 0.9s calc(var(--c) * 60ms) ease-in-out;
+    }
+    .intro {
+      animation: hero-rise 0.9s 0.35s cubic-bezier(0.2, 0.7, 0.1, 1) backwards;
+    }
+
+    @supports (animation-timeline: scroll()) {
+      .tilt {
+        animation: hero-flatten linear both;
+        animation-timeline: scroll(root);
+        animation-range: 0 55vh;
+      }
+    }
+  }
+
+  @keyframes hero-rise {
+    from {
+      opacity: 0;
+      transform: translateY(0.35em);
+      filter: blur(10px);
+    }
+  }
+  @keyframes hero-relax {
+    from {
+      font-weight: 800;
+    }
+  }
+  @keyframes hero-wave {
+    50% {
+      font-weight: 800;
+    }
+  }
+  @keyframes hero-flatten {
+    from {
+      transform: rotateX(26deg) scale(0.9);
+    }
+  }
+</style>
